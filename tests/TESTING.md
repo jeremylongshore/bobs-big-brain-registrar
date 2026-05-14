@@ -24,19 +24,20 @@
 
 ## Installed gates
 
-| Gate         | Tool                                 | Status                                 |
-| ------------ | ------------------------------------ | -------------------------------------- |
-| Harness      | @intentsolutions/audit-harness 0.1.0 | Installed                              |
-| Format       | Prettier 3.8.3                       | Enforced in CI + pre-commit            |
-| Lint         | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit            |
-| Typecheck    | tsc -b (composite, strict)           | Enforced in CI                         |
-| Unit test    | Vitest 4.1.4                         | Enforced in CI                         |
-| Dead code    | Knip 6.4.1                           | Available, not in CI gate              |
-| Coverage     | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor |
-| Mutation     | Stryker (vitest runner)              | Installed, 70% break threshold         |
-| Pre-commit   | husky 9.1.7 + lint-staged 16.4.0     | Installed                              |
-| Architecture | —                                    | Not installed                          |
-| SAST         | Semgrep (security.yml)               | Installed                              |
+| Gate         | Tool                                 | Status                                                           |
+| ------------ | ------------------------------------ | ---------------------------------------------------------------- |
+| Harness      | @intentsolutions/audit-harness 0.1.0 | Installed                                                        |
+| Format       | Prettier 3.8.3                       | Enforced in CI + pre-commit                                      |
+| Lint         | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit                                      |
+| Typecheck    | tsc -b (composite, strict)           | Enforced in CI                                                   |
+| Unit test    | Vitest 4.1.4                         | Enforced in CI                                                   |
+| Dead code    | Knip 6.4.1                           | Available, not in CI gate                                        |
+| Coverage     | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor                           |
+| Mutation     | Stryker (vitest runner)              | Installed, 70% break threshold                                   |
+| Pre-commit   | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                        |
+| Architecture | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants) |
+| Secrets      | gitleaks-action v2                   | Enforced in CI on every PR                                       |
+| SAST         | Semgrep (security.yml)               | Advisory (artifact upload)                                       |
 
 ## Frameworks
 

@@ -38,6 +38,9 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Architecture rules (dependency-cruiser)
+        run: pnpm depcruise
+
       - name: Test
         run: pnpm test:ci
 

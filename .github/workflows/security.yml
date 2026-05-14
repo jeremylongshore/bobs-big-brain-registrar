@@ -1,13 +1,10 @@
 name: Security
 
 on:
-  # schedule:
-  #   - cron: '0 6 * * 1' # Weekly Monday 6am UTC
-  workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    paths:
-      - 'pnpm-lock.yaml'
-      - '**/package.json'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,6 +13,11 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Dependency / lockfile checks only run when deps change OR on main pushes.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'dependencies')
     steps:
       - uses: actions/checkout@v6
 
@@ -40,13 +42,21 @@ jobs:
             exit 1
           fi
 
-      - name: No secrets in tracked files
-        run: |
-          PATTERNS='(PRIVATE.KEY|sk-[a-zA-Z0-9]{20,}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|password\s*=\s*["\x27][^"\x27]{8,})'
-          if git grep -E "$PATTERNS" -- ':!.github/workflows/security.yml' ':!*.md' ':!*.test.ts' ':!**/patterns.ts'; then
-            echo "::error::Potential secrets detected in tracked files"
-            exit 1
-          fi
+  gitleaks:
+    # Real secret scanner — replaces the prior homegrown git-grep regex.
+    # Runs on EVERY PR (not just dep-touching ones), because secrets can land
+    # in any file. gitleaks ships hundreds of curated provider rules.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   semgrep:
     runs-on: ubuntu-latest

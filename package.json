@@ -25,6 +25,7 @@
     "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
+    "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -34,6 +35,7 @@
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^4.1.5",
+    "dependency-cruiser": "17.4.0",
     "eslint": "^10.2.0",
     "husky": "^9.1.7",
     "knip": "^6.4.1",

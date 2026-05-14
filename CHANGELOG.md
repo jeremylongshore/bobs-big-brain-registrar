@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Intent Solutions Testing SOP — Batch 1** (PR #126): `tests/TESTING.md` policy file, `tests/RTM.md` requirements traceability matrix seed, husky + lint-staged pre-commit hooks, vitest coverage thresholds (line 80, branch 70, function 75), Stryker mutation testing config, Semgrep SAST job, CLAUDE.md Testing SOP section. Closes GH #90/#91/#92/#93/#94/#97.
+- **Intent Solutions Testing SOP — Batch 2**: dependency-cruiser monorepo architecture rules (`.dependency-cruiser.cjs`) enforced in CI via `pnpm depcruise`. Encodes 6 invariants from `000-docs/003-AT-DSGN-system-thesis.md` as machine-verifiable import-graph rules: packages must not depend on apps; no cross-app imports except apps/curator (which publishes a workspace package); no circular deps; test-fixtures may only be imported by tests; no dist/ imports; all imports must resolve. Closes GH #95.
+- **Real gitleaks secret scanning** via `gitleaks-action@v2` on every PR — replaces the prior homegrown `git grep` regex scanner that only fired on PRs touching `package.json`/`pnpm-lock.yaml`. Closes GH #96.
+
+### Changed
+
+- **`.github/workflows/security.yml`** broadened: gitleaks runs on every PR (secrets can land in any file). `audit` + `lockfile-integrity` jobs continue to gate dep-touching PRs only (their narrow scope is intentional).
+- **`.github/workflows/ci.yml`**: new `Architecture rules (dependency-cruiser)` step between `Type check` and `Test`.
+
+### Fixed
+
+- **`apps/api/tsconfig.json` + `apps/mcp-server/tsconfig.json`**: added the missing `{ "path": "../curator" }` project reference. Both apps import from `@qmd-team-intent-kb/curator` (an `apps/curator`-exported workspace package) but lacked the project reference, so clean CI builds failed with `TS2307: Cannot find module '@qmd-team-intent-kb/curator'`. Local builds masked the issue via composite-build cache. This had been the root cause of CI redness on main since the 2026-04-16 v0.5.0 wiki-link PR introduced the imports.
+- **`package.json` `pnpm.onlyBuiltDependencies`**: added `better-sqlite3`, `esbuild`, `husky` so that pnpm 9's build-script security model allows the native bindings to compile on clean install. Without this, 451 of 1,312 tests fail with "Could not locate the bindings file" on every fresh clone.
+
 ## [0.5.0] - 2026-04-16
 
 ### Added
