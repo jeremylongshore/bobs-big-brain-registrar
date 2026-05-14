@@ -47,3 +47,23 @@ jobs:
             echo "::error::Potential secrets detected in tracked files"
             exit 1
           fi
+
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Semgrep SAST scan
+        run: semgrep scan --config auto --error --json --output semgrep-results.json .
+        continue-on-error: true
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 14

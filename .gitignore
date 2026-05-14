@@ -48,3 +48,9 @@ tmp/
 .dolt/
 *.db
 .beads/.beads-credential-key
+.beads/export-state.json
+
+# Stryker mutation-testing output
+.stryker-tmp/
+reports/mutation/
+stryker.log
