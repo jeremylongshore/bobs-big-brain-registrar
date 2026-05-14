@@ -22,12 +22,22 @@
     "dev:api": "cd apps/api && pnpm dev",
     "build:check": "tsc -b --noEmit",
     "clean": "rm -rf node_modules dist coverage **/dist **/node_modules **/*.tsbuildinfo",
-    "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "test:coverage": "vitest run --coverage",
+    "test:mutation": "stryker run",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@intentsolutions/audit-harness": "^0.1.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/typescript-checker": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^10.2.0",
+    "husky": "^9.1.7",
     "knip": "^6.4.1",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.58.2",
@@ -35,5 +45,14 @@
   },
   "dependencies": {
     "zod": "^4.3.6"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

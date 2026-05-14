@@ -18,6 +18,35 @@ A governed team memory platform for Claude Code powered by qmd. TypeScript/Node.
 6. Default search targets curated knowledge only
 7. Inbox/archive content must not pollute default search
 
+## Testing SOP (Intent Solutions)
+
+This repo follows the Intent Solutions Testing SOP (see `~/000-projects/CLAUDE.md` § "Intent Solutions Testing SOP"):
+
+- **Harness package:** `@intentsolutions/audit-harness` (pending install per issues #90–#103)
+- **Audit skill:** `/audit-tests` — run for repo-level diagnostics
+- **Install skill:** `/implement-tests` — run to install missing layers
+
+### Current audit state (2026-04-21 baseline)
+
+Grade C (~65/100). 119 test files exist but no enforcement:
+
+- P0 gaps: `tests/TESTING.md` missing · no coverage thresholds · no pre-commit hooks · no `tests/RTM.md`
+- P1 gaps: no Stryker mutation · no dep-cruiser · no gitleaks · no Semgrep · no testcontainers · no PERSONAS/JOURNEYS
+- Full tracking: GitHub issues #90–#103 (see meta issue #103 for roadmap)
+- Beads: 12 issues under `qmd-team-intent-kb-*`
+
+### Once audit-harness is installed
+
+Replace `~/.claude/` references in hooks/CI with in-repo commands:
+
+```bash
+pnpm exec audit-harness verify
+pnpm exec audit-harness escape-scan --staged
+pnpm exec audit-harness init          # only after engineer-reviewed policy edits
+```
+
+See `.husky/pre-commit` + `.github/workflows/ci.yml` for wiring patterns.
+
 ## Build Commands
 
 ```
