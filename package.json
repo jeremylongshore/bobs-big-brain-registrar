@@ -26,6 +26,7 @@
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
+    "crap": "tsx scripts/crap-score.ts",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -41,6 +42,7 @@
     "knip": "^6.4.1",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
+    "tsx": "4.22.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.58.2",
     "vitest": "^4.1.4"

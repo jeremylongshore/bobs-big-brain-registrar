@@ -41,6 +41,9 @@ jobs:
       - name: Architecture rules (dependency-cruiser)
         run: pnpm depcruise
 
+      - name: Complexity gate (CRAP / Wall 5)
+        run: pnpm crap
+
       - name: Test
         run: pnpm test:ci
 

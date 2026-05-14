@@ -8,14 +8,14 @@
 
 ## Thresholds
 
-| Metric          | Floor |
-| --------------- | ----- |
-| coverage.line   | 80    |
-| coverage.branch | 70    |
-| mutation.kill   | 70    |
-| crap.prod       | 30    |
-| crap.test       | 15    |
-| crap.average    | 10    |
+| Metric          | Floor | Note                                                                                                                         |
+| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
+| coverage.line   | 80    |                                                                                                                              |
+| coverage.branch | 70    |                                                                                                                              |
+| mutation.kill   | 70    |                                                                                                                              |
+| crap.prod       | 40    | Initial; tighten to 30 (Wall 5 ideal) once `apps/edge-daemon` `runCycle` is refactored — tracked in `qmd-team-intent-kb-igs` |
+| crap.test       | 15    |                                                                                                                              |
+| crap.average    | 10    |                                                                                                                              |
 
 ## Waived layers
 
@@ -24,20 +24,21 @@
 
 ## Installed gates
 
-| Gate         | Tool                                 | Status                                                           |
-| ------------ | ------------------------------------ | ---------------------------------------------------------------- |
-| Harness      | @intentsolutions/audit-harness 0.1.0 | Installed                                                        |
-| Format       | Prettier 3.8.3                       | Enforced in CI + pre-commit                                      |
-| Lint         | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit                                      |
-| Typecheck    | tsc -b (composite, strict)           | Enforced in CI                                                   |
-| Unit test    | Vitest 4.1.4                         | Enforced in CI                                                   |
-| Dead code    | Knip 6.4.1                           | Available, not in CI gate                                        |
-| Coverage     | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor                           |
-| Mutation     | Stryker (vitest runner)              | Installed, 70% break threshold                                   |
-| Pre-commit   | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                        |
-| Architecture | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants) |
-| Secrets      | gitleaks-action v2                   | Enforced in CI on every PR                                       |
-| SAST         | Semgrep (security.yml)               | Advisory (artifact upload)                                       |
+| Gate         | Tool                                 | Status                                                                                         |
+| ------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Harness      | @intentsolutions/audit-harness 0.1.0 | Installed                                                                                      |
+| Format       | Prettier 3.8.3                       | Enforced in CI + pre-commit                                                                    |
+| Lint         | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit                                                                    |
+| Typecheck    | tsc -b (composite, strict)           | Enforced in CI                                                                                 |
+| Unit test    | Vitest 4.1.4                         | Enforced in CI                                                                                 |
+| Dead code    | Knip 6.4.1                           | Available, not in CI gate                                                                      |
+| Coverage     | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor                                                         |
+| Mutation     | Stryker (vitest runner)              | Installed, 70% break threshold                                                                 |
+| Pre-commit   | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                                                      |
+| Architecture | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants)                               |
+| Complexity   | scripts/crap-score.ts (TS AST)       | Enforced in CI at threshold 40 (initial; tightening to 30 tracked in `qmd-team-intent-kb-igs`) |
+| Secrets      | gitleaks-action v2                   | Enforced in CI on every PR                                                                     |
+| SAST         | Semgrep (security.yml)               | Advisory (artifact upload)                                                                     |
 
 ## Frameworks
 
