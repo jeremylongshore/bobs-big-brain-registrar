@@ -22,7 +22,17 @@
 - L6 (E2E/BDD) — CLI-first backend with no UI; API tested via Fastify inject
 - L7 (Acceptance/UAT) — no user-facing frontend; governance validated by policy-engine unit tests
 
-### L4 — partial waiver on container-based integration (Batch 5, PR forthcoming)
+### Contract testing — Pact replaced by OpenAPI snapshot (Batch 6)
+
+Per `qmd-team-intent-kb-apt`, a Pact-tool install would be the wrong fit for this monorepo. A 2026-05-15 survey confirmed: no service-to-service HTTP boundary exists internally (`apps/mcp-server` imports `@qmd-team-intent-kb/store` and `curator` in-process; every cross-module call is TypeScript-imports-with-shared-types). The only HTTP surface is `apps/api`'s REST endpoints, exposed for eventual external consumers — but no consumer code lives in this repo or any sibling yet.
+
+Pact's value (catching breaking changes across deployment boundaries with different release cadences) has no current target. But the `apps/api` surface still wants stability — an SDK generator pointing at `/openapi.json` should not see surprise schema changes between releases.
+
+**Shipped instead:** `apps/api/src/__tests__/openapi-contract.test.ts` — snapshots the structural parts of the OpenAPI 3.1 spec (paths × methods, schema names, security schemes, tag names). Any unintentional change to the API surface fails CI until a contributor explicitly runs `pnpm vitest --update-snapshots` and the diff becomes a code-review signal.
+
+**Forward trigger to install actual Pact:** when an external consumer repo (SDK, web UI, partner integration) is created AND that consumer is deployed independently from `apps/api` with a different release cadence. Tracked in `qmd-team-intent-kb-4zw`.
+
+### L4 — partial waiver on container-based integration (Batch 5)
 
 Per the 2026-04-24 audit and a 2026-05-15 re-survey, this repo has no current code path with a real-service dependency that testcontainers buys us:
 
@@ -66,6 +76,7 @@ The integration test suite lives at `tests/integration/`, runs under `pnpm test:
 | Secrets        | gitleaks-action v2                   | Enforced in CI on every PR                                                                                         |
 | SAST           | Semgrep (security.yml)               | Advisory (artifact upload)                                                                                         |
 | L4 Integration | testcontainers 11.x + pg client      | Enforced in CI `integration` job on push to main / `integration`-labeled PRs (see §Waived layers — partial waiver) |
+| Contract       | OpenAPI snapshot (vitest)            | Enforced in CI (apps/api openapi-contract.test.ts). Replaces Pact for this repo — see §Contract testing            |
 
 ## Frameworks
 
