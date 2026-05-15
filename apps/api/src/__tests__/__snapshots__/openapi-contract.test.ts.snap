@@ -1,0 +1,111 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] = `
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/audit": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/candidates": {
+      "methods": [
+        "get",
+        "post",
+      ],
+    },
+    "/api/candidates/{id}": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/health": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/import": {
+      "methods": [
+        "post",
+      ],
+    },
+    "/api/import/batches": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/import/batches/{id}": {
+      "methods": [
+        "delete",
+        "get",
+      ],
+    },
+    "/api/import/preview": {
+      "methods": [
+        "post",
+      ],
+    },
+    "/api/memories": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/memories/by-hash/{hash}": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/memories/{id}": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/memories/{id}/graph": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/memories/{id}/neighbors": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/memories/{id}/transition": {
+      "methods": [
+        "post",
+      ],
+    },
+    "/api/policies": {
+      "methods": [
+        "get",
+        "post",
+      ],
+    },
+    "/api/policies/{id}": {
+      "methods": [
+        "delete",
+        "get",
+        "put",
+      ],
+    },
+    "/api/search": {
+      "methods": [
+        "post",
+      ],
+    },
+  },
+  "schemas": [],
+  "securitySchemes": [
+    "bearerAuth",
+  ],
+  "tags": [
+    "audit",
+    "candidates",
+    "health",
+    "memories",
+    "policies",
+    "search",
+  ],
+}
+`;
