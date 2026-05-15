@@ -2,7 +2,14 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    exclude: ['**/dist/**', '**/node_modules/**', '.claude/worktrees/**'],
+    exclude: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '.claude/worktrees/**',
+      // L4 integration suite has its own config (vitest.integration.config.ts).
+      // It pulls Docker images via testcontainers — keep out of the fast loop.
+      'tests/integration/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],

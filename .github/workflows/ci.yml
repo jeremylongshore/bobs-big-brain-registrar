@@ -54,3 +54,39 @@ jobs:
           name: test-results
           path: coverage/
           retention-days: 14
+
+  integration:
+    # L4 integration tests via testcontainers. Pulls real Docker images
+    # (~50MB postgres:16-alpine for now). Slower than the validate job;
+    # runs only on:
+    #   - push to main / develop (full belt-and-suspenders)
+    #   - pull_request with the 'integration' label (opt-in for PRs that
+    #     touch L4 surfaces — store schema, future postgres backend,
+    #     container-based dependencies)
+    # Tracked in qmd-team-intent-kb-oqd. Triggers documented in
+    # tests/TESTING.md §"Integration tests (L4)".
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'integration')
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify Docker available
+        run: docker version
+
+      - name: Build workspace (integration tests import compiled workspace packages)
+        run: pnpm build
+
+      - name: Integration tests (testcontainers / L4)
+        run: pnpm test:integration
