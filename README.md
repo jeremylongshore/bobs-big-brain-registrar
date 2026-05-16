@@ -79,9 +79,11 @@ qmd-team-intent-kb/
 
 ## Status
 
-**v0.4.0 — Production-ready platform with supply-chain signing.**
+**v0.6.0 — Production-ready platform with full Intent Solutions Testing SOP enforced in CI.**
 
-All core subsystems are functional with 1164 tests passing:
+All core subsystems functional. 1,313 unit tests + 4 testcontainers-based L4 integration tests passing. CI enforces 10 gates per PR: typecheck → lint → format → architecture (dep-cruiser) → complexity (CRAP) → unit tests → coverage 80% line / 70% branch → secrets (gitleaks) → npm audit (when deps change) → SAST (Semgrep advisory). Policy artifacts hash-pinned via `scripts/harness-pin.sh` so the testing-SOP is self-defending against silent AI policy edits.
+
+Highlights:
 
 - **Schema & Domain Model** — Zod schemas, lifecycle state machine, 12 enum types (Phase 1)
 - **Claude Runtime Capture** — Session capture, local JSONL spool, 11-pattern secret detection (Phase 2)

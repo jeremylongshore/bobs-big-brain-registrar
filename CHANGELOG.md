@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-15
+
+### Security
+
+- **Cleared 6 high-severity dev-tooling CVEs.** `pnpm.overrides` block pins `picomatch@2: ^2.3.2` (closes ReDoS via micromatch/fast-glob/knip path), `picomatch@4: ^4.0.4` (closes ReDoS in newer path via vite/fdir), `fast-uri: ^3.1.2` (closes path traversal + host confusion via ajv/Stryker). Direct `vite: ^7.3.2` devDep added to pull patched vite for vitest peer (closes `server.fs.deny` bypass + arbitrary file read via dev server). `pnpm audit --audit-level=high` is now clean.
+
 ### Added
 
 - **Intent Solutions Testing SOP — Batch 1** (PR #126): `tests/TESTING.md` policy file, `tests/RTM.md` requirements traceability matrix seed, husky + lint-staged pre-commit hooks, vitest coverage thresholds (line 80, branch 70, function 75), Stryker mutation testing config, Semgrep SAST job, CLAUDE.md Testing SOP section. Closes GH #90/#91/#92/#93/#94/#97.
