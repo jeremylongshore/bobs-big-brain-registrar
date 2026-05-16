@@ -28,6 +28,8 @@
     "test:mutation": "stryker run",
     "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
     "crap": "tsx scripts/crap-score.ts",
+    "harness-pin": "bash scripts/harness-pin.sh --verify",
+    "harness-pin:init": "bash scripts/harness-pin.sh --init",
     "prepare": "husky"
   },
   "devDependencies": {

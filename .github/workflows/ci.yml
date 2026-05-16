@@ -44,6 +44,9 @@ jobs:
       - name: Complexity gate (CRAP / Wall 5)
         run: pnpm crap
 
+      - name: Policy-artifact hash pin (harness-pin --verify)
+        run: pnpm harness-pin
+
       - name: Test
         run: pnpm test:ci
 

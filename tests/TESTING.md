@@ -60,23 +60,57 @@ The integration test suite lives at `tests/integration/`, runs under `pnpm test:
 
 ## Installed gates
 
-| Gate           | Tool                                 | Status                                                                                                             |
-| -------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Harness        | @intentsolutions/audit-harness 0.1.0 | Installed                                                                                                          |
-| Format         | Prettier 3.8.3                       | Enforced in CI + pre-commit                                                                                        |
-| Lint           | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit                                                                                        |
-| Typecheck      | tsc -b (composite, strict)           | Enforced in CI                                                                                                     |
-| Unit test      | Vitest 4.1.4                         | Enforced in CI                                                                                                     |
-| Dead code      | Knip 6.4.1                           | Available, not in CI gate                                                                                          |
-| Coverage       | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor                                                                             |
-| Mutation       | Stryker (vitest runner)              | Installed, 70% break threshold                                                                                     |
-| Pre-commit     | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                                                                          |
-| Architecture   | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants)                                                   |
-| Complexity     | scripts/crap-score.ts (TS AST)       | Enforced in CI at threshold 40 (initial; tightening to 30 tracked in `qmd-team-intent-kb-igs`)                     |
-| Secrets        | gitleaks-action v2                   | Enforced in CI on every PR                                                                                         |
-| SAST           | Semgrep (security.yml)               | Advisory (artifact upload)                                                                                         |
-| L4 Integration | testcontainers 11.x + pg client      | Enforced in CI `integration` job on push to main / `integration`-labeled PRs (see §Waived layers — partial waiver) |
-| Contract       | OpenAPI snapshot (vitest)            | Enforced in CI (apps/api openapi-contract.test.ts). Replaces Pact for this repo — see §Contract testing            |
+| Gate           | Tool                                 | Status                                                                                                                                                                   |
+| -------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Harness        | @intentsolutions/audit-harness 0.1.0 | Installed                                                                                                                                                                |
+| Format         | Prettier 3.8.3                       | Enforced in CI + pre-commit                                                                                                                                              |
+| Lint           | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit                                                                                                                                              |
+| Typecheck      | tsc -b (composite, strict)           | Enforced in CI                                                                                                                                                           |
+| Unit test      | Vitest 4.1.4                         | Enforced in CI                                                                                                                                                           |
+| Dead code      | Knip 6.4.1                           | Available, not in CI gate                                                                                                                                                |
+| Coverage       | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor                                                                                                                                   |
+| Mutation       | Stryker (vitest runner)              | Installed, 70% break threshold                                                                                                                                           |
+| Pre-commit     | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                                                                                                                                |
+| Architecture   | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants)                                                                                                         |
+| Complexity     | scripts/crap-score.ts (TS AST)       | Enforced in CI at threshold 40 (initial; tightening to 30 tracked in `qmd-team-intent-kb-igs`)                                                                           |
+| Secrets        | gitleaks-action v2                   | Enforced in CI on every PR                                                                                                                                               |
+| SAST           | Semgrep (security.yml)               | Advisory (artifact upload)                                                                                                                                               |
+| L4 Integration | testcontainers 11.x + pg client      | Enforced in CI `integration` job on push to main / `integration`-labeled PRs (see §Waived layers — partial waiver)                                                       |
+| Contract       | OpenAPI snapshot (vitest)            | Enforced in CI (apps/api openapi-contract.test.ts). Replaces Pact for this repo — see §Contract testing                                                                  |
+| Policy pin     | scripts/harness-pin.sh               | Enforced in CI (Wall 7) — SHA-256 hash of every engineer-owned policy artifact; AI can't silently change policy without an engineer-initiated re-pin. See §Hash manifest |
+
+## Hash manifest
+
+`scripts/harness-pin.sh` maintains `.harness-hash` — a SHA-256 manifest of every engineer-owned policy artifact in this repo. Files pinned:
+
+| Pinned file               | Why it's policy                            |
+| ------------------------- | ------------------------------------------ |
+| `tests/TESTING.md`        | Thresholds, classification, waivers        |
+| `tests/RTM.md`            | Requirements with MoSCoW tags              |
+| `tests/PERSONAS.md`       | Persona declarations + critical-tier flags |
+| `tests/JOURNEYS.md`       | End-to-end journey contracts               |
+| `.dependency-cruiser.cjs` | Architecture rules (Wall 7)                |
+| `stryker.config.mjs`      | Mutation-testing thresholds                |
+| `vitest.config.ts`        | Coverage thresholds                        |
+| `scripts/crap-score.ts`   | CRAP complexity threshold                  |
+
+### Why this matters
+
+The AI agent assisting in this repo can update **observational** sections (Installed gates, Last audit, Traceability counts, test files) freely. But it cannot silently change **policy** (thresholds, MoSCoW tags, waiver rationale, architecture rules) without leaving a visible trail.
+
+The CI step `Policy-artifact hash pin (harness-pin --verify)` fails if any pinned file's bytes change without a fresh `.harness-hash`. To re-pin (engineer-initiated, with full review):
+
+```bash
+pnpm harness-pin:init     # re-pin: writes new SHA-256s to .harness-hash
+git add .harness-hash <the policy file you changed>
+git commit -m "policy: <what changed and why>"
+```
+
+The diff in the commit makes the policy change visible at code-review time. An AI-proposed PR that touches a pinned file without also updating `.harness-hash` fails CI.
+
+### Why a repo-local script
+
+The upstream `@intentsolutions/audit-harness` ships `harness-hash.sh` with a hardcoded PATTERNS array that pins only generic patterns (Java/CS arch tests, `.c8rc.json`, etc.) and misses this repo's actual policy files. No env override or config file. Repo-local `scripts/harness-pin.sh` encodes the correct pin set for THIS repo. Upstreaming pattern-configurability is tracked in `qmd-team-intent-kb-tpp`.
 
 ## Frameworks
 
