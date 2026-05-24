@@ -16,20 +16,20 @@ Default coverage threshold: 85% of steps across all journeys have a linked test.
 **Trigger:** Claude Code session produces an insight worth retaining as durable team memory.
 **Linked RTM:** REQ-001 (deterministic governance), REQ-003 (explicit lifecycle), REQ-004 (tenant isolation), REQ-005 (auditability)
 
-| #   | Step                                                                          | Layer  | Test file                                                            | Status                                |
-| --- | ----------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------- | ------------------------------------- |
-| 1   | Claude Code session generates a memory candidate (proposal)                   | n/a    | external — Claude Code internals                                     | (out of scope)                        |
-| 2   | ICOS compiles candidate to L2 / L4 artifact and writes to spool               | L4     | external — ICOS (Epic 16 wires this end)                             | ⚠ deferred (`qmd-team-intent-kb-pw9`) |
-| 3   | Curator's `ingestFromSpool` reads spool file, validates schema                | L3     | `apps/curator/src/intake/spool-intake.ts` + tests                    | ⚠ needs step-to-test linking          |
-| 4   | Policy-engine evaluates candidate (secret detection, dedup, tenant isolation) | L3     | `packages/policy-engine/src/__tests__/**`                            | ⚠ needs step-to-test linking          |
-| 5   | Candidate written to inbox with policy evaluation results attached            | L3, L4 | `apps/api/src/routes/candidates.ts`, `apps/curator/src/__tests__/**` | ⚠ needs step-to-test linking          |
-| 6   | Curator reviews inbox via `GET /api/candidates`                               | L4     | `apps/api/src/routes/candidates.ts` + tests                          | ⚠ needs step-to-test linking          |
-| 7   | Curator promotes — `apps/curator/src/promotion/promoter.ts` runs              | L3     | `apps/curator/src/__tests__/promoter*.test.ts`                       | ⚠ needs step-to-test linking          |
-| 8   | Curated memory persisted with `Active` lifecycle state                        | L3     | `packages/store/src/__tests__/memory-repository.test.ts`             | ⚠ needs step-to-test linking          |
-| 9   | qmd index updated via edge-daemon sync                                        | L4, L5 | `apps/edge-daemon/src/__tests__/cycle*.test.ts`                      | ⚠ needs step-to-test linking          |
-| 10  | Git exporter mirrors curated memory to git on next export run                 | L4     | `apps/git-exporter/src/__tests__/**`                                 | ⚠ needs step-to-test linking          |
+| #   | Step                                                                          | Layer  | Test file                                                                                                                        | Status                                    |
+| --- | ----------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1   | Claude Code session generates a memory candidate (proposal)                   | n/a    | external — Claude Code internals                                                                                                 | (out of scope)                            |
+| 2   | ICOS compiles candidate to L2 / L4 artifact and writes to spool               | L4     | `apps/curator/src/__tests__/spool-intake-ico-contract.test.ts` (cross-repo round-trip) + ICO `packages/kernel/src/spool.test.ts` | ✓ wired (oaa.3 + ziz.3 closed 2026-05-24) |
+| 3   | Curator's `ingestFromSpool` reads spool file, validates schema                | L3     | `apps/curator/src/intake/spool-intake.ts` + tests                                                                                | ⚠ needs step-to-test linking              |
+| 4   | Policy-engine evaluates candidate (secret detection, dedup, tenant isolation) | L3     | `packages/policy-engine/src/__tests__/**`                                                                                        | ⚠ needs step-to-test linking              |
+| 5   | Candidate written to inbox with policy evaluation results attached            | L3, L4 | `apps/api/src/routes/candidates.ts`, `apps/curator/src/__tests__/**`                                                             | ⚠ needs step-to-test linking              |
+| 6   | Curator reviews inbox via `GET /api/candidates`                               | L4     | `apps/api/src/routes/candidates.ts` + tests                                                                                      | ⚠ needs step-to-test linking              |
+| 7   | Curator promotes — `apps/curator/src/promotion/promoter.ts` runs              | L3     | `apps/curator/src/__tests__/promoter*.test.ts`                                                                                   | ⚠ needs step-to-test linking              |
+| 8   | Curated memory persisted with `Active` lifecycle state                        | L3     | `packages/store/src/__tests__/memory-repository.test.ts`                                                                         | ⚠ needs step-to-test linking              |
+| 9   | qmd index updated via edge-daemon sync                                        | L4, L5 | `apps/edge-daemon/src/__tests__/cycle*.test.ts`                                                                                  | ⚠ needs step-to-test linking              |
+| 10  | Git exporter mirrors curated memory to git on next export run                 | L4     | `apps/git-exporter/src/__tests__/**`                                                                                             | ⚠ needs step-to-test linking              |
 
-**Coverage:** 0/10 fully linked. Step 1 is external (out of scope). Step 2 is blocked by Epic 16. Architecture exists for steps 3-10.
+**Coverage:** 1/10 fully linked (step 2 — the ICOS → INTKB spool boundary). Step 1 is external (out of scope). Architecture exists for steps 3-10; cross-repo contract test exercises the spool intake end-to-end (cross-repo contract bead pair oaa.3 + ziz.3, both closed 2026-05-24).
 
 ---
 
@@ -143,7 +143,7 @@ Default coverage threshold: 85% of steps across all journeys have a linked test.
 
 | Journey              | Critical | Steps | In scope | Linked | Status                              |
 | -------------------- | -------- | ----- | -------- | ------ | ----------------------------------- |
-| memory-capture       | yes      | 10    | 9        | 0      | ⚠ linking pass + Epic 16 blocker    |
+| memory-capture       | yes      | 10    | 9        | 1      | ⚠ linking pass — step 2 wired       |
 | memory-retrieval     | yes      | 8     | 8        | 0      | ⚠ linking pass needed               |
 | vault-import         | no       | 10    | 9        | 0      | ⚠ linking pass needed               |
 | policy-update        | yes      | 7     | 6        | 0      | ⚠ linking pass needed               |
@@ -151,15 +151,15 @@ Default coverage threshold: 85% of steps across all journeys have a linked test.
 | wiki-link-resolution | no       | 6     | 6        | 0      | ⚠ linking pass needed               |
 
 **Total in-scope steps:** 43 across 6 journeys.
-**Linked:** 0 (linking infrastructure deferred — same situation as RTM.md and PERSONAS.md).
-**Real coverage gaps:** 2 (audit-verification steps 4–5 — hash-chain verifier primitive not yet built).
-**Blocked by other work:** 1 (memory-capture step 2 — ICOS→qmd spool bridge, Epic 16).
+**Linked:** 1 (memory-capture step 2 — cross-repo spool boundary; bd chain `oaa.3` + ICO `ziz.3` closed 2026-05-24).
+**Real coverage gaps:** 2 (audit-verification steps 4–5 — INTKB-side hash-chain verifier primitive not yet built; ICO ships its own equivalent `ico audit verify` in bead `intentional-cognition-os-ziz.4`).
+**Blocked by other work:** 0 (Epic 16 work superseded by Build Item A; bd `qmd-team-intent-kb-6wk` and `pw9` closed 2026-05-24, `vj6` remains open as the opposite-direction feedback loop, out of scope for current pass).
 
 ## Next pass
 
 1. **Step-to-test linking** — same infrastructure as PERSONAS coverage: decide on annotation convention (JSDoc on `describe` blocks recommended), then `journey-mapper-agent` walks tests and populates the Linked column.
 2. **File a bd for the hash-chain verifier gap** — CCSC's `--verify-audit-log` is the reference. This repo should ship the analogous primitive (probably a CLI script in `apps/api` or `packages/store`).
-3. **Wait on Epic 16** — memory-capture step 2 (ICOS→qmd spool) is blocked by `qmd-team-intent-kb-6wk` → `pw9` → `vj6`. That chain is the wire from ICOS into this repo. Comes after the testing-SOP work is done.
+3. ~~**Wait on Epic 16** — memory-capture step 2 (ICOS→qmd spool) is blocked by `qmd-team-intent-kb-6wk` → `pw9` → `vj6`. That chain is the wire from ICOS into this repo. Comes after the testing-SOP work is done.~~ **Done as of 2026-05-24.** The ICO→INTKB spool boundary shipped as Build Item A: ICO bead `intentional-cognition-os-ziz.3` (writer side) + this repo's `oaa.3` (reader side + cross-repo contract test). Step 2 is now wired; the only remaining Epic 16 piece is `vj6` (INTKB → ICO feedback loop), which is intentionally deferred as a separate direction of flow.
 
 ---
 
