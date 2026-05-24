@@ -44,7 +44,11 @@ jobs:
         uses: errata-ai/vale-action@reviewdog
         with:
           version: 3.9.1
-          files: '000-docs CLAUDE.md README.md'
+          # Scoping lives in .vale.ini per-directory sections, not here —
+          # the action's `files:` input only accepts a single path and we
+          # need to scan 000-docs + CLAUDE.md + README.md. The .vale.ini
+          # default `[*.md] BasedOnStyles =` (empty) suppresses linting
+          # for unscoped paths; per-dir sections opt back in.
           fail_on_error: true
           filter_mode: nofilter
           reporter: github-check
@@ -60,10 +64,12 @@ jobs:
       - name: Run lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          # File discovery lives in .lychee.toml (`include = ["**/*.md"]`).
-          # Passing a literal `**/*.md` arg here trips lychee's regex parser
-          # because the action shell doesn't expand the glob.
-          args: --config .lychee.toml --no-progress
+          # lychee REQUIRES at least one positional input. Pass `.` and let
+          # `.lychee.toml`'s `include`/`exclude_path` do the actual filtering.
+          # An earlier attempt passed `'**/*.md'` as the input, but the
+          # action's shell doesn't expand globs and lychee then tries to
+          # parse it as a regex (which fails on the `**` operator).
+          args: --config .lychee.toml --no-progress .
           fail: true
           format: markdown
           output: ./lychee-report.md
