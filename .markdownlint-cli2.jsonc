@@ -11,7 +11,7 @@
     "MD036": false, // emphasis-as-heading — used in figure captions
     "MD040": false, // fenced-code-language — ASCII diagrams have no language
     "MD041": false, // first line h1 — many docs start with frontmatter
-    "MD046": false  // code block style — both fenced and indented appear
+    "MD046": false, // code block style — both fenced and indented appear
   },
   "globs": [
     "000-docs/**/*.md",
@@ -25,6 +25,6 @@
     "!**/dist/**",
     "!.audit-harness/**",
     "!coverage/**",
-    "!reports/**"
-  ]
+    "!reports/**",
+  ],
 }

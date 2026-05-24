@@ -28,6 +28,12 @@ jobs:
       - uses: DavidAnson/markdownlint-cli2-action@v17
         with:
           config: '.markdownlint-cli2.jsonc'
+          # Empty globs argument forces the action to honour ONLY the globs
+          # in .markdownlint-cli2.jsonc; without this the action layers its
+          # default `*.{md,markdown}` glob on top of the config's globs and
+          # picks up legacy root-level docs (AGENTS.md, CONTRIBUTING.md) we
+          # haven't curated yet.
+          globs: ' '
 
   vale:
     name: Vale prose lint
@@ -54,7 +60,10 @@ jobs:
       - name: Run lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --config .lychee.toml --no-progress '**/*.md'
+          # File discovery lives in .lychee.toml (`include = ["**/*.md"]`).
+          # Passing a literal `**/*.md` arg here trips lychee's regex parser
+          # because the action shell doesn't expand the glob.
+          args: --config .lychee.toml --no-progress
           fail: true
           format: markdown
           output: ./lychee-report.md
