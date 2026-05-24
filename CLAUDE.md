@@ -238,3 +238,19 @@ Incremental export of curated memories to `kb-export/` as Markdown with YAML fro
 - All PRs require review (human + Gemini automated review)
 - Security considerations documented for every new subsystem
 - Dependency updates reviewed, not auto-merged
+
+## Ecosystem positioning — INTKB is the governance layer of ICO + INTKB
+
+INTKB is the **governance layer** of a two-layer ecosystem with `intentional-cognition-os` (ICO) as the upstream compilation layer:
+
+```
+ICO (compile) → spool → INTKB (govern, dedupe, score) → qmd (retrieve) → MCP/REST
+```
+
+The canonical reference for this positioning is the peer-reviewed thesis paper:
+
+- `000-docs/034-AT-NTRP-ecosystem-thesis.md` — **"Compile, Then Govern: A Two-Layer Local-First Architecture for Team Institutional Memory"** (2026-05-23). Byte-identical copy lives in `intentional-cognition-os/000-docs/034-AT-NTRP-ecosystem-thesis.md`. Cross-repo epic: bead `qmd-team-intent-kb-oaa` ↔ `intentional-cognition-os-ziz`. GitHub: this-repo#140 ↔ ICO#99. Plane: INTKB-6 ↔ ICOS-23.
+
+When making INTKB-side architectural decisions, the thesis paper is load-bearing: it names the 7 thesis properties + 7 design principles INTKB commits to, the spool-boundary discipline that defines the ICO → INTKB hand-off, and the why-not-just-git / why-not-just-prompt-memory arguments. New design work should not contradict the thesis without an explicit ADR.
+
+The ICO → INTKB spool bridge itself is currently deferred (`qmd-team-intent-kb-pw9` → `vj6`, Epic 16). The thesis is honest about this gap.
