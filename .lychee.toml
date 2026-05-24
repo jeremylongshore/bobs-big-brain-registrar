@@ -1,0 +1,49 @@
+# lychee link-checker config — broken-link gate for the docs corpus.
+# v1: conservative — accepts 429 (rate limited) as success; long retry on transient errors.
+
+# Verbose for CI logs.
+verbose = "info"
+
+# Don't follow link rel=nofollow.
+no_progress = true
+
+# Retry transient failures.
+max_retries = 2
+retry_wait_time = 5
+
+# Treat these HTTP codes as success. 429 = rate-limited (not broken).
+accept = [200, 206, 301, 302, 303, 304, 307, 308, 429]
+
+# Files to check.
+include = ["**/*.md"]
+exclude_path = [
+  "node_modules/",
+  "dist/",
+  ".audit-harness/",
+  "coverage/",
+  "reports/",
+  ".vale/",
+]
+
+# URL patterns to skip.
+exclude = [
+  # Local/private hosts that lychee can't resolve in CI.
+  "^https?://(localhost|127\\.0\\.0\\.1)",
+  "^https?://intentsolutions(\\.io)?/(internal|admin)",
+  # Workspace placeholder URLs that appear in examples.
+  "^file://",
+  # Private GitHub repos that lychee can't auth into without a token.
+  "^https?://github\\.com/jeremylongshore/.*-private",
+  # Anthropic API docs auth-walled.
+  "^https?://docs\\.anthropic\\.com/internal",
+]
+
+# Authoritative cache for repeated runs.
+cache = true
+max_cache_age = "1d"
+
+# Timeout per link.
+timeout = 20
+
+# Concurrency.
+max_concurrency = 8

@@ -1,0 +1,30 @@
+{
+  // markdownlint-cli2 config — conservative ruleset compatible with technical prose.
+  // Tighten over time by removing entries from the `config` block.
+  "config": {
+    "default": true,
+    "MD013": false, // line length — irrelevant for prose with hard-wrap by editor
+    "MD024": false, // duplicate headings — common in changelog-style docs
+    "MD025": false, // multiple h1 — allowed (bilingual docs with EN+zh-TW h1)
+    "MD033": false, // inline HTML — used in tables and diagrams
+    "MD034": false, // bare URLs — used in references
+    "MD036": false, // emphasis-as-heading — used in figure captions
+    "MD040": false, // fenced-code-language — ASCII diagrams have no language
+    "MD041": false, // first line h1 — many docs start with frontmatter
+    "MD046": false  // code block style — both fenced and indented appear
+  },
+  "globs": [
+    "000-docs/**/*.md",
+    "CLAUDE.md",
+    "README.md",
+    "CHANGELOG.md",
+    "IDEA-CHANGELOG.md",
+    "!node_modules/**",
+    "!**/node_modules/**",
+    "!dist/**",
+    "!**/dist/**",
+    "!.audit-harness/**",
+    "!coverage/**",
+    "!reports/**"
+  ]
+}

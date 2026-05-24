@@ -1,0 +1,74 @@
+name: Docs Quality
+
+# Quality gates for the docs corpus.
+# Four tools in this workflow:
+#   1. markdownlint-cli2 — markdown linting
+#   2. Vale              — prose linting (built-in ruleset + IS vocab)
+#   3. lychee            — broken-link checking
+#   4. frontmatter validator (scripts/validate-frontmatter.py) — YAML frontmatter schema check
+#
+# All four are BLOCKING on PRs. Conservative rulesets so the existing corpus passes.
+# Tighten over time by editing the per-tool config files at repo root.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  markdownlint:
+    name: markdownlint-cli2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DavidAnson/markdownlint-cli2-action@v17
+        with:
+          config: '.markdownlint-cli2.jsonc'
+
+  vale:
+    name: Vale prose lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run Vale
+        uses: errata-ai/vale-action@reviewdog
+        with:
+          version: 3.9.1
+          files: '000-docs CLAUDE.md README.md'
+          fail_on_error: true
+          filter_mode: nofilter
+          reporter: github-check
+          vale_flags: '--minAlertLevel=warning'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lychee:
+    name: lychee link check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --config .lychee.toml --no-progress '**/*.md'
+          fail: true
+          format: markdown
+          output: ./lychee-report.md
+
+  frontmatter:
+    name: Frontmatter validator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML
+        run: pip install pyyaml
+      - name: Validate frontmatter
+        run: python3 scripts/validate-frontmatter.py

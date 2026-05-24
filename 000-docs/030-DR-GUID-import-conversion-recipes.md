@@ -53,6 +53,7 @@ Valid categories: `decision`, `pattern`, `convention`, `architecture`, `troubles
 1. **Export**: Settings → Workspace → Export all workspace content → Markdown & CSV
 2. **Unzip** the export to a local directory
 3. **Import**:
+
    ```
    teamkb_vault_import { "sourcePath": "/path/to/notion-export" }
    ```
@@ -68,12 +69,14 @@ Notion exports to clean Obsidian-compatible Markdown with proper wiki-links.
 
 1. **Download** as .docx: File → Download → Microsoft Word (.docx)
 2. **Convert** with pandoc:
+
    ```bash
    pandoc input.docx -t markdown -o output.md
    ```
+
 3. **Import** the output directory
 
-### Batch conversion for Google Drive exports:
+### Batch conversion for Google Drive exports
 
 ```bash
 mkdir converted
@@ -87,9 +90,11 @@ teamkb_vault_import { "sourcePath": "/path/to/converted" }
 
 1. **Export**: Space Settings → Content Tools → Export → HTML or XML
 2. **Convert** with pandoc:
+
    ```bash
    pandoc input.html -t markdown -o output.md
    ```
+
 3. **Import** the converted directory
 
 Or use Confluence's Markdown export plugin if available in your instance.

@@ -519,28 +519,28 @@ Prepare the repo for stable releases, packaging, and broader team adoption.
 
 The key decisions locked in before implementation:
 
-### Decision 1
+## Decision 1
 
 This project is not a qmd fork.
 
-### Decision 2
+## Decision 2
 
 This project is not git as the canonical database.
 
-### Decision 3
+## Decision 3
 
 This project uses a hybrid architecture:
 control plane + qmd edge + Claude runtime + git export mirror.
 
-### Decision 4
+## Decision 4
 
 Default search targets curated knowledge only.
 
-### Decision 5
+## Decision 5
 
 Hooks and deterministic code enforce policy; CLAUDE.md guides behavior.
 
-### Decision 6
+## Decision 6
 
 Security, changelog discipline, release hygiene, Beads, doc filing, and AARs are first-class from day one.
 
