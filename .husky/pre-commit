@@ -1,1 +1,41 @@
+#!/usr/bin/env sh
+# Pre-commit hook for qmd-team-intent-kb.
+#
+# Two gates run on every commit:
+#   1. lint-staged (existing) — eslint + prettier on staged files
+#   2. verify-policy-hash.sh --verify — policy ruleset hash-pin gate per
+#      036-AT-THRT C10 / bead dmj.1. Only runs when the staged set touches
+#      a policy-engine source file (cheap fast-path).
+
+set -e
+
+# Always run lint-staged.
 pnpm lint-staged
+
+# Policy hash gate — only when the commit touches the ruleset surface.
+# Exit code 2 from verify-policy-hash.sh = POLICY_TAMPERED → block commit
+# with a clear message pointing at the canonical fix.
+if git diff --cached --name-only | grep -qE '^packages/policy-engine/src/(rules/|policy-engine\.ts$)'; then
+  if ! bash scripts/verify-policy-hash.sh --verify; then
+    cat >&2 <<'MSG'
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  Commit BLOCKED: governance policy ruleset has changed without re-init   ║
+║                                                                          ║
+║  A staged file under packages/policy-engine/src/rules/ has changed,      ║
+║  but .policy-hash no longer matches the current files. This is the       ║
+║  hash-pin tripwire from 036-AT-THRT control C10 (CISO seat §2.5(2)).    ║
+║                                                                          ║
+║  To fix:                                                                 ║
+║    1. Review the policy change with care — this is governance code.     ║
+║    2. Re-pin the manifest:                                               ║
+║         bash scripts/verify-policy-hash.sh --init                        ║
+║    3. Stage the updated .policy-hash and commit alongside the change.    ║
+║                                                                          ║
+║  Skipping this gate (--no-verify) is allowed in emergencies but the      ║
+║  next CI run will fail on the same check.                                ║
+╚══════════════════════════════════════════════════════════════════════════╝
+MSG
+    exit 2
+  fi
+fi
