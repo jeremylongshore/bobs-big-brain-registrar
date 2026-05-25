@@ -105,36 +105,90 @@ WORKSPACE="$WS_PARENT/quickstart"
 echo "      ok"
 
 # ---------------------------------------------------------------------------
-# Stage 2 — copy / link corpus into the workspace's raw/ dir
+# Stage 2 — get content into the workspace
+#
+# Two modes:
+#   (a) ANTHROPIC_API_KEY set    → full pipeline: mount + ingest + Claude compile.
+#                                  Produces REAL compiled wiki pages with
+#                                  real frontmatter, real content-derived
+#                                  category mappings. Slow (~minutes), costs
+#                                  per-token Claude $.
+#   (b) ANTHROPIC_API_KEY unset  → stub pipeline: copy corpus to raw/ and seed
+#                                  one stub wiki page per source. Fast (~secs),
+#                                  free. Demoes the pipeline shape; INTKB
+#                                  ingests the same way. Not real compiled
+#                                  knowledge.
+#
+# Per bead intentional-cognition-os-zcc.3 (closed 2026-05-24).
 # ---------------------------------------------------------------------------
-echo "[2/4] Mounting corpus into workspace raw/"
-mkdir -p "$WORKSPACE/raw/corpus"
-# Copy markdown files (not symlinks — the operator's corpus must be readable
-# without further indirection from the workspace process).
-find "$CORPUS" -type f \( -name "*.md" -o -name "*.markdown" \) | while read -r f; do
-  cp -n "$f" "$WORKSPACE/raw/corpus/" 2>/dev/null || true
-done
-count=$(find "$WORKSPACE/raw/corpus" -type f | wc -l | tr -d ' ')
-echo "      copied $count markdown file(s) to workspace raw/"
 
-# Seed at least one wiki page so the spool emit step has something concrete
-# to emit even when the source corpus hasn't been Claude-compiled yet.
-# (Real compile requires ANTHROPIC_API_KEY; the quickstart degrades gracefully
-# to a "no compile, just demo the pipeline shape" mode if the key is absent.)
-# Seed at least one wiki page per source file so the pipeline shape is
-# demoable WITHOUT a real Claude compile (which requires ANTHROPIC_API_KEY
-# + ico mount/ingest setup and would push the quickstart well past 15 min).
-# To run the full compile pipeline, follow the post-demo instructions
-# printed at the end of the script.
-mkdir -p "$WORKSPACE/wiki/topics" "$WORKSPACE/wiki/concepts"
-stub_count=0
-find "$WORKSPACE/raw/corpus" -type f \( -name "*.md" -o -name "*.markdown" \) | head -10 | while read -r src; do
-  fn="$(basename "$src" .md)"
-  fn="${fn%.markdown}"
-  # Slugify filename for the wiki target.
-  slug="$(echo "$fn" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')"
-  body="$(head -c 1024 "$src" || true)"
-  cat > "$WORKSPACE/wiki/topics/$slug.md" <<EOF
+CORPUS_FILE_COUNT=$(find "$CORPUS" -type f \( -name "*.md" -o -name "*.markdown" \) | wc -l | tr -d ' ')
+
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  # -------------------------------------------------------------------------
+  # Mode (a) — full Claude compile pipeline
+  # -------------------------------------------------------------------------
+  echo "[2/4] ANTHROPIC_API_KEY detected → running full Claude compile pipeline"
+  echo ""
+  # Cost expectation. The ICO compiler does 6 passes (summarise / extract /
+  # synthesise / contradict / gap / link). Sonnet-4.6 is typically a few
+  # cents per source for small docs; budget grows linearly with corpus.
+  est_min_cents=$(( CORPUS_FILE_COUNT * 2 ))
+  est_max_cents=$(( CORPUS_FILE_COUNT * 15 ))
+  est_min_minutes=$(( (CORPUS_FILE_COUNT + 9) / 10 ))
+  est_max_minutes=$(( CORPUS_FILE_COUNT / 2 + 1 ))
+  echo "      Corpus has $CORPUS_FILE_COUNT markdown file(s)."
+  echo "      Estimated cost (claude-sonnet-4-6, all 6 passes):"
+  echo "        \$$(printf '%.2f' "$(awk "BEGIN{print $est_min_cents/100}")")"' – '"\$$(printf '%.2f' "$(awk "BEGIN{print $est_max_cents/100}")")"' (rough order-of-magnitude)'
+  echo "      Estimated wall time: ${est_min_minutes}–${est_max_minutes} min"
+  echo "      Press Ctrl-C now to cancel; otherwise compile starts in 5s..."
+  sleep 5 || true
+  echo ""
+  echo "      → ico mount add corpus $CORPUS"
+  cd "$WORKSPACE"
+  node "$ICO_CLI" mount add corpus "$CORPUS" 2>&1 | tail -3
+  echo ""
+  echo "      → ico ingest <every file> (with --yes to skip per-file prompts)"
+  i=0
+  while IFS= read -r src; do
+    i=$((i + 1))
+    printf '      [%d/%d] ico ingest %s\n' "$i" "$CORPUS_FILE_COUNT" "$(basename "$src")"
+    node "$ICO_CLI" ingest "$src" --yes >/dev/null 2>&1 \
+      || echo "        (ingest failed for this file — continuing)"
+  done < <(find "$CORPUS" -type f \( -name "*.md" -o -name "*.markdown" \))
+  echo ""
+  echo "      → ico compile all (this is the slow step — running all 6 passes)"
+  if ! node "$ICO_CLI" compile all 2>&1 | tail -5; then
+    echo "      compile non-zero exit — continuing with whatever shipped to wiki/"
+  fi
+  cd - >/dev/null
+  compiled_count=$(find "$WORKSPACE/wiki" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+  echo "      produced $compiled_count compiled wiki page(s) (real Claude output)"
+else
+  # -------------------------------------------------------------------------
+  # Mode (b) — stub pipeline (no API key)
+  # -------------------------------------------------------------------------
+  echo "[2/4] No ANTHROPIC_API_KEY → stub pipeline (pipeline-shape demo only)"
+  mkdir -p "$WORKSPACE/raw/corpus"
+  # Copy markdown files (not symlinks — the operator's corpus must be
+  # readable without further indirection from the workspace process).
+  find "$CORPUS" -type f \( -name "*.md" -o -name "*.markdown" \) | while read -r f; do
+    cp -n "$f" "$WORKSPACE/raw/corpus/" 2>/dev/null || true
+  done
+  count=$(find "$WORKSPACE/raw/corpus" -type f | wc -l | tr -d ' ')
+  echo "      copied $count markdown file(s) to workspace raw/"
+
+  # Seed at least one wiki page per source file so the pipeline shape is
+  # demoable without a real Claude compile. Each stub gets the source
+  # body's first 1KB and is marked model=stub.
+  mkdir -p "$WORKSPACE/wiki/topics" "$WORKSPACE/wiki/concepts"
+  stub_count=0
+  find "$WORKSPACE/raw/corpus" -type f \( -name "*.md" -o -name "*.markdown" \) | head -10 | while read -r src; do
+    fn="$(basename "$src" .md)"
+    fn="${fn%.markdown}"
+    slug="$(echo "$fn" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9-')"
+    body="$(head -c 1024 "$src" || true)"
+    cat > "$WORKSPACE/wiki/topics/$slug.md" <<EOF
 ---
 type: topic
 title: "Quickstart — $fn"
@@ -147,13 +201,13 @@ $body
 
 ---
 *Generated by quickstart-compile-then-govern.sh — no real Claude compile ran.
-To run the full compile pipeline, set ANTHROPIC_API_KEY and use
-\`ico mount add\` + \`ico ingest\` + \`ico compile all\` against the workspace.*
+Set ANTHROPIC_API_KEY and re-run for the full ICO compile pipeline.*
 EOF
-  stub_count=$((stub_count + 1))
-done
-stub_count=$(find "$WORKSPACE/wiki/topics" -type f -name '*.md' | wc -l | tr -d ' ')
-echo "      seeded $stub_count stub wiki page(s) (pipeline-shape demo; no real Claude compile)"
+    stub_count=$((stub_count + 1))
+  done
+  stub_count=$(find "$WORKSPACE/wiki/topics" -type f -name '*.md' | wc -l | tr -d ' ')
+  echo "      seeded $stub_count stub wiki page(s) (no real Claude compile)"
+fi
 
 # ---------------------------------------------------------------------------
 # Stage 3 — ICO emits to the shared spool
@@ -194,4 +248,9 @@ echo "  DONE. Quickstart pipeline complete."
 echo "  workspace:  $WORKSPACE"
 echo "  spool dir:  $SHARED/spool"
 echo "  cleanup:    rm -rf $WORK"
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+echo ""
+echo "  Next: re-run with ANTHROPIC_API_KEY set to exercise the full"
+echo "  ICO Claude compile pipeline (real wiki pages, not stubs)."
+fi
 echo "================================================================"
