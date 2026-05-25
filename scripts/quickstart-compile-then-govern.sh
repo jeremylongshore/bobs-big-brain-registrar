@@ -220,11 +220,27 @@ spool_files=$(find "$SHARED/spool" -maxdepth 1 -type f -name 'spool-*.jsonl' | w
 echo "      $spool_files spool file(s) written"
 
 # ---------------------------------------------------------------------------
-# Stage 4 — INTKB ingests from the same dir
+# Stage 4 — INTKB ingests from the same dir; write a curated/ dir for qmd
+#
+# The Stage-4 node script does two things:
+#   (1) ingestFromSpool — puts candidates in CandidateRepository (in-memory)
+#   (2) writes each candidate to $WORK/curated/<id>.md for stage 5 indexing
+#
+# QUICKSTART SHORTCUT: real production runs each candidate through the
+# Curator's policy pipeline (apps/curator/src/curator.ts processBatch) which
+# applies secret detection / dedup / tenant isolation, then promotes
+# approved candidates to CuratedMemory via promote(). For the demo we
+# write the ingested candidates straight to the curated/ dir so qmd has
+# something to index without seeding a policy ruleset. The pipeline shape
+# is honest; only the policy gate is short-circuited.
 # ---------------------------------------------------------------------------
-echo "[4/4] INTKB ingestFromSpool against $SHARED/spool"
+echo "[4/5] INTKB ingestFromSpool against $SHARED/spool"
+CURATED_DIR="$WORK/curated"
+mkdir -p "$CURATED_DIR"
 node -e "
 (async () => {
+  const { writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
   const c = await import('$INTKB_CURATOR_DIST');
   const store = await import('$INTKB_STORE_DIST');
   const db = store.createTestDatabase();
@@ -237,16 +253,85 @@ node -e "
   console.log('      ingested', r.value.length, 'candidate(s)');
   for (const cand of r.value) {
     console.log('       -', cand.id.slice(0,8) + '...', '['+cand.category+']', cand.title);
+    // Write a markdown file per candidate for qmd to index.
+    // QUICKSTART SHORTCUT: real production runs the Curator policy pipeline
+    // first. Here we skip that gate so the demo has something for qmd to
+    // index without seeding a tenant policy ruleset.
+    const fm = [
+      '---',
+      'title: ' + JSON.stringify(cand.title),
+      'category: ' + cand.category,
+      'tenantId: ' + cand.tenantId,
+      'source: ' + cand.source,
+      'capturedAt: ' + cand.capturedAt,
+      'id: ' + cand.id,
+      '---',
+      '',
+      cand.content,
+      '',
+    ].join('\n');
+    writeFileSync(join('$CURATED_DIR', cand.id + '.md'), fm, 'utf8');
   }
   console.log('      INTKB repo count:', repo.count());
+  console.log('      curated/ dir:', '$CURATED_DIR', '(' + r.value.length + ' file(s))');
 })();
 "
+
+# ---------------------------------------------------------------------------
+# Stage 5 — qmd local-search index + sample query (the curated-answer loop)
+#
+# Per bead qmd-team-intent-kb-dmj.2. Completes the 035-AT-DECR §4.3 spec:
+# 'a real outside operator-developer ... within 15 minutes [sees] (1) compiled
+# wiki produced, (2) governance-promoted candidate memories visible via qmd
+# search, (3) a sample query returning a curated answer with source attribution.'
+# ---------------------------------------------------------------------------
+echo ""
+echo "[5/5] qmd local-search index + sample query"
+
+if ! command -v qmd >/dev/null 2>&1; then
+  cat <<'QMDHINT'
+      ✗ qmd is not on PATH — skipping stage 5.
+
+      qmd is the upstream local-search tool that this stack retrieves
+      curated memory through. To install:
+        - macOS / Linux:  curl -sSL https://qmd.sh/install.sh | bash
+        - or via bun:     bun install -g @qmd-cli/qmd
+      Then re-run this script.
+
+      The pipeline above (ingestFromSpool) still ran; only the search
+      demo is skipped.
+QMDHINT
+else
+  COLLECTION_NAME="quickstart-demo-$$"
+  echo "      qmd version: $(qmd --version 2>&1 | head -1)"
+  # qmd's CLI signature: `collection add <PATH> --name <NAME>` (path first,
+  # name is a flag — easy to get backwards).
+  echo "      → qmd collection add $CURATED_DIR --name $COLLECTION_NAME"
+  if ! qmd collection add "$CURATED_DIR" --name "$COLLECTION_NAME" 2>&1 | tail -3; then
+    echo "      (collection add failed — see above; continuing)"
+  fi
+  echo "      → qmd update (index the new collection)"
+  qmd update 2>&1 | tail -3 || true
+
+  # Pick a query: use the first non-empty word from the first candidate's title.
+  QUERY="$(find "$CURATED_DIR" -maxdepth 1 -type f -name '*.md' | head -1 | xargs -I {} awk -F': ' '/^title:/ {gsub(/[\"]/, "", $2); print $2; exit}' {} 2>/dev/null | awk '{print $1}')"
+  QUERY="${QUERY:-quickstart}"
+  echo ""
+  echo "      → qmd search '$QUERY' (curated-answer query)"
+  qmd search "$QUERY" 2>&1 | head -15 || echo "      (no results)"
+
+  # Cleanup: remove the temp collection so it doesn't accumulate in qmd's state.
+  echo ""
+  echo "      → qmd collection remove $COLLECTION_NAME (cleanup)"
+  qmd collection remove "$COLLECTION_NAME" 2>&1 | tail -2 || true
+fi
 
 echo ""
 echo "================================================================"
 echo "  DONE. Quickstart pipeline complete."
 echo "  workspace:  $WORKSPACE"
 echo "  spool dir:  $SHARED/spool"
+echo "  curated/:   $CURATED_DIR"
 echo "  cleanup:    rm -rf $WORK"
 if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
 echo ""
