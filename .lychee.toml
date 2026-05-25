@@ -14,8 +14,11 @@ retry_wait_time = 5
 # Treat these HTTP codes as success. 429 = rate-limited (not broken).
 accept = [200, 206, 301, 302, 303, 304, 307, 308, 429]
 
-# Files to check.
-include = ["**/*.md"]
+# Files to check. `include` takes REGEX patterns, not globs — the earlier
+# `**/*.md` form was interpreted as a regex and triggered 'repetition
+# operator missing expression' because `**` has no preceding expression
+# in a regex. The positional `.` arg passed by the workflow walks all
+# files; `exclude_path` (below) prunes the legacy / generated dirs.
 exclude_path = [
   "node_modules/",
   "dist/",
@@ -23,6 +26,10 @@ exclude_path = [
   "coverage/",
   "reports/",
   ".vale/",
+  ".husky/",
+  ".github/",
+  "packages/.*/dist/",
+  "packages/.*/coverage/",
 ]
 
 # URL patterns to skip.
