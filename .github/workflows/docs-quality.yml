@@ -25,15 +25,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: DavidAnson/markdownlint-cli2-action@v17
+      # Invoke markdownlint-cli2 directly rather than via the
+      # DavidAnson/markdownlint-cli2-action@v17 wrapper. The action's
+      # `globs:` input layers a default `*.{md,markdown}` on top of the
+      # config's globs (picking up legacy root docs we haven't curated),
+      # and the workaround of passing `globs: ' '` was undocumented and
+      # fragile across action versions. Calling the CLI directly with no
+      # `globs` argument means the config's globs are the only source of
+      # truth.
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
         with:
-          config: '.markdownlint-cli2.jsonc'
-          # Empty globs argument forces the action to honour ONLY the globs
-          # in .markdownlint-cli2.jsonc; without this the action layers its
-          # default `*.{md,markdown}` glob on top of the config's globs and
-          # picks up legacy root-level docs (AGENTS.md, CONTRIBUTING.md) we
-          # haven't curated yet.
-          globs: ' '
+          node-version: '22'
+      - name: Run markdownlint-cli2
+        run: npx -y markdownlint-cli2
 
   vale:
     name: Vale prose lint
