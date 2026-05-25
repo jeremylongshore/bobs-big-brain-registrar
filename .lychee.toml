@@ -11,8 +11,14 @@ no_progress = true
 max_retries = 2
 retry_wait_time = 5
 
-# Treat these HTTP codes as success. 429 = rate-limited (not broken).
-accept = [200, 206, 301, 302, 303, 304, 307, 308, 429]
+# Treat these HTTP codes as success.
+#  - 429 — rate-limited (not broken)
+#  - 403 — anti-bot blocking from CDN-fronted hosts (DOI redirects,
+#    npm, some publishers). The link itself is not broken; the host
+#    rejects scripted clients. We have no way to distinguish "broken"
+#    from "anti-bot" from a status code alone.
+#  - 401 — auth-walled docs (often docs.anthropic.com sub-paths)
+accept = [200, 206, 301, 302, 303, 304, 307, 308, 401, 403, 429]
 
 # Files to check. `include` takes REGEX patterns, not globs — the earlier
 # `**/*.md` form was interpreted as a regex and triggered 'repetition
@@ -43,6 +49,9 @@ exclude = [
   "^https?://github\\.com/jeremylongshore/.*-private",
   # Anthropic API docs auth-walled.
   "^https?://docs\\.anthropic\\.com/internal",
+  # GitHub Discussions — repos that haven't enabled Discussions 404 here.
+  # Our SUPPORT.md and CONTRIBUTING.md may link to /discussions optimistically.
+  "^https?://github\\.com/[^/]+/[^/]+/discussions",
 ]
 
 # Authoritative cache for repeated runs.
