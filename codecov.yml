@@ -1,0 +1,71 @@
+# Codecov configuration for qmd-team-intent-kb.
+#
+# Reference: https://docs.codecov.com/docs/codecov-yaml
+#
+# Per-package coverage floors enforced locally in `vitest.config.ts`
+# (lines 80%) — those gate test runs even before upload. Codecov's
+# role here is the PR-side delta gate: surface coverage changes per
+# PR, fail the project gate if total coverage drops more than the
+# tolerance.
+
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: '70...90'
+
+  status:
+    project:
+      default:
+        # Project-level: total coverage of the repo. Allow a small drop
+        # to absorb refactors that move tests, but flag anything bigger.
+        target: auto
+        threshold: 1%
+        if_ci_failed: error
+        only_pulls: false
+    patch:
+      default:
+        # Patch-level: coverage of lines changed/added by the PR itself.
+        # New code must be 80% covered to merge.
+        target: 80%
+        threshold: 0%
+        if_ci_failed: error
+        only_pulls: true
+
+# Per-component flags so the PR comment breaks coverage down by the
+# pieces that actually ship independently — apps (services that get
+# deployed) and packages (libraries the apps consume).
+flag_management:
+  default_rules:
+    carryforward: true
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+  individual_flags:
+    - name: apps
+      paths:
+        - apps/
+    - name: packages
+      paths:
+        - packages/
+
+comment:
+  layout: 'header, diff, flags, components, files, footer'
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+  show_carryforward_flags: true
+
+ignore:
+  - '**/*.test.ts'
+  - '**/*.d.ts'
+  - '**/dist/**'
+  - '**/node_modules/**'
+  - 'tests/integration/fixtures/**'
+  - 'kb-export/**'

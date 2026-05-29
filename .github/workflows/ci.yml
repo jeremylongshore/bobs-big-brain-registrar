@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Codecov needs the full history to attribute coverage to commits.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
 
@@ -47,10 +50,21 @@ jobs:
       - name: Policy-artifact hash pin (harness-pin --verify)
         run: pnpm harness-pin
 
-      - name: Test
-        run: pnpm test:ci
+      - name: Test (with coverage)
+        # Switched from pnpm test:ci to pnpm test:coverage so coverage/lcov.info
+        # is produced for the Codecov upload step below. test:coverage runs the
+        # same test set; only the coverage instrumentation is added.
+        run: pnpm test:coverage
 
-      - name: Upload test results
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Upload test results (artifact)
         if: always()
         uses: actions/upload-artifact@v7
         with:
