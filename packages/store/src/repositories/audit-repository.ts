@@ -2,9 +2,16 @@ import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { AuditEvent } from '@qmd-team-intent-kb/schema';
 
+import { computeEntryHash } from '../audit-chain.js';
+
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
  * Validates the flat DB representation before domain parsing.
+ *
+ * `entry_hash` / `prev_entry_hash` are nullable to keep migration-5
+ * backward-compatible: pre-migration rows have both as NULL; new rows
+ * have both populated (modulo the first chained row, where
+ * prev_entry_hash is NULL by design).
  */
 const AuditRowSchema = z.object({
   id: z.string(),
@@ -15,7 +22,23 @@ const AuditRowSchema = z.object({
   reason: z.string().nullable(),
   details_json: z.string(),
   timestamp: z.string(),
+  entry_hash: z.string().nullable().optional(),
+  prev_entry_hash: z.string().nullable().optional(),
 });
+
+/** Raw chronological row used by the audit verifier. */
+export interface AuditChainRow {
+  id: string;
+  action: string;
+  memory_id: string;
+  tenant_id: string;
+  actor_json: string;
+  reason: string | null;
+  details_json: string;
+  timestamp: string;
+  entry_hash: string | null;
+  prev_entry_hash: string | null;
+}
 
 /**
  * Parse a raw SQLite row into a validated AuditEvent domain object.
@@ -80,14 +103,34 @@ export class AuditRepository {
   private readonly stmtCountByAction: Database.Statement;
   private readonly stmtFindInRange: Database.Statement;
   private readonly stmtCountByTenantAndAction: Database.Statement;
+  private readonly stmtLastHash: Database.Statement;
+  private readonly stmtFindAllChronological: Database.Statement;
 
   constructor(db: Database.Database) {
     this.stmtInsert = db.prepare(`
       INSERT INTO audit_events (
-        id, action, memory_id, tenant_id, actor_json, reason, details_json, timestamp
+        id, action, memory_id, tenant_id, actor_json, reason, details_json,
+        timestamp, entry_hash, prev_entry_hash
       ) VALUES (
-        @id, @action, @memory_id, @tenant_id, @actor_json, @reason, @details_json, @timestamp
+        @id, @action, @memory_id, @tenant_id, @actor_json, @reason, @details_json,
+        @timestamp, @entry_hash, @prev_entry_hash
       )
+    `);
+
+    // Most-recent hashed row, by (timestamp, id) order. Used by insert() to
+    // anchor a new row's prev_entry_hash. Returns NULL when no chained
+    // history exists yet (first post-migration insert, or empty table).
+    this.stmtLastHash = db.prepare(`
+      SELECT entry_hash FROM audit_events
+      WHERE entry_hash IS NOT NULL
+      ORDER BY timestamp DESC, id DESC
+      LIMIT 1
+    `);
+
+    // Chronological walk used by verifyAuditChain. Order is (timestamp, id)
+    // so ties on timestamp resolve deterministically by primary key.
+    this.stmtFindAllChronological = db.prepare(`
+      SELECT * FROM audit_events ORDER BY timestamp ASC, id ASC
     `);
 
     this.stmtFindByMemory = db.prepare(`
@@ -115,18 +158,54 @@ export class AuditRepository {
     `);
   }
 
-  /** Append a new audit event. This is the only write operation permitted. */
+  /**
+   * Append a new audit event. This is the only write operation permitted.
+   *
+   * Computes the SHA-256 hash chain at insert time: each new row's
+   * `prev_entry_hash` equals the chronologically previous row's
+   * `entry_hash`, or NULL if this is the first chained row in the table.
+   * Tampering with any stored row will be detected by `verifyAuditChain`.
+   */
   insert(event: AuditEvent): void {
+    const actor_json = JSON.stringify(event.actor);
+    const details_json = JSON.stringify(event.details);
+    const reason = event.reason ?? null;
+
+    const prevRow = this.stmtLastHash.get() as { entry_hash: string | null } | undefined;
+    const prev_entry_hash = prevRow?.entry_hash ?? null;
+
+    const entry_hash = computeEntryHash({
+      id: event.id,
+      action: event.action,
+      memory_id: event.memoryId,
+      tenant_id: event.tenantId,
+      actor_json,
+      reason,
+      details_json,
+      timestamp: event.timestamp,
+      prev_entry_hash,
+    });
+
     this.stmtInsert.run({
       id: event.id,
       action: event.action,
       memory_id: event.memoryId,
       tenant_id: event.tenantId,
-      actor_json: JSON.stringify(event.actor),
-      reason: event.reason ?? null,
-      details_json: JSON.stringify(event.details),
+      actor_json,
+      reason,
+      details_json,
       timestamp: event.timestamp,
+      entry_hash,
+      prev_entry_hash,
     });
+  }
+
+  /**
+   * Return every audit row in chronological (timestamp, id) order with
+   * the raw hash-chain columns intact. Used by the chain verifier.
+   */
+  findAllChronological(): AuditChainRow[] {
+    return this.stmtFindAllChronological.all() as AuditChainRow[];
   }
 
   /** Return all events associated with the given memory, in chronological order. */

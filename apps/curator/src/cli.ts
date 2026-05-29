@@ -27,6 +27,7 @@ import {
   PolicyRepository,
   AuditRepository,
   MemoryLinksRepository,
+  verifyAuditChain,
 } from '@qmd-team-intent-kb/store';
 import type { createDatabase as CreateDatabase } from '@qmd-team-intent-kb/store';
 
@@ -52,6 +53,9 @@ Subcommands:
   ingest <spool-dir> --tenant <id> [--db <path>] [--json]
     Drive ingest → policy → promote pipeline against a spool directory.
 
+  verify-audit-chain [--db <path>] [--json]
+    Walk the audit_events hash chain and exit 2 if AUDIT_TAMPERED.
+
   help | --help | -h
     Print this message.
 
@@ -60,6 +64,11 @@ Options for 'ingest':
   --db <path>     Persistent SQLite path. Default: in-memory.
   --json          Emit machine-readable JSON envelope to stdout in place
                   of human-readable summary.
+
+Options for 'verify-audit-chain':
+  --db <path>     SQLite path (required for any meaningful verify run;
+                  an in-memory db is always empty).
+  --json          Emit a structured AuditVerifyResult JSON envelope.
 `;
 
 // ---------------------------------------------------------------------------
@@ -75,6 +84,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
   switch (subcommand) {
     case 'ingest':
       return cmdIngest(argv.slice(1), deps);
+    case 'verify-audit-chain':
+      return cmdVerifyAuditChain(argv.slice(1), deps);
     case 'help':
     case '--help':
     case '-h':
@@ -221,6 +232,103 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
       (db as unknown as { close?: () => void }).close?.();
     } catch {
       // closing twice or on a torn-down db is a non-fatal cleanup error.
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// verify-audit-chain
+// ---------------------------------------------------------------------------
+
+interface VerifyOpts {
+  dbPath?: string;
+  json: boolean;
+}
+
+function parseVerifyArgs(
+  args: string[],
+): { ok: true; opts: VerifyOpts } | { ok: false; message: string } {
+  let dbPath: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    switch (arg) {
+      case '--db':
+        dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--json':
+        json = true;
+        i += 1;
+        break;
+      default:
+        return { ok: false, message: `unknown flag: ${arg}` };
+    }
+  }
+
+  return { ok: true, opts: { dbPath, json } };
+}
+
+async function cmdVerifyAuditChain(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseVerifyArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli verify-audit-chain: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { dbPath, json } = parsed.opts;
+
+  const db = deps.createDb(dbPath !== undefined ? { dbPath } : {});
+  try {
+    const auditRepo = new AuditRepository(db);
+    const result = verifyAuditChain(auditRepo);
+    const isClean = result.breaks.length === 0;
+
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({
+          ok: isClean,
+          totalRows: result.totalRows,
+          unverifiedRows: result.unverifiedRows,
+          cleanRows: result.cleanRows,
+          breaks: result.breaks,
+        }) + '\n',
+      );
+      return isClean ? 0 : 2;
+    }
+
+    if (isClean) {
+      process.stdout.write(`audit chain OK\n`);
+      process.stdout.write(`Total rows:      ${result.totalRows}\n`);
+      process.stdout.write(`Clean rows:      ${result.cleanRows}\n`);
+      process.stdout.write(`Unverified rows: ${result.unverifiedRows} (pre-migration)\n`);
+      return 0;
+    }
+
+    process.stderr.write(
+      `AUDIT_TAMPERED: ${result.breaks.length} chain break(s) detected in ${result.totalRows} row(s)\n\n`,
+    );
+    for (const b of result.breaks) {
+      process.stderr.write(
+        `  index ${b.index}  id=${b.id}  action=${b.action}  ts=${b.timestamp}  tenant=${b.tenantId}\n`,
+      );
+      process.stderr.write(`    reason:               ${b.reason}\n`);
+      process.stderr.write(
+        `    expected entry_hash: ${b.expectedEntryHash}\n` +
+          `    actual entry_hash:   ${b.actualEntryHash ?? 'null'}\n`,
+      );
+      process.stderr.write(
+        `    expected prev_hash:  ${b.expectedPrevEntryHash ?? 'null'}\n` +
+          `    actual prev_hash:    ${b.actualPrevEntryHash ?? 'null'}\n`,
+      );
+    }
+    return 2;
+  } finally {
+    try {
+      (db as unknown as { close?: () => void }).close?.();
+    } catch {
+      // non-fatal
     }
   }
 }

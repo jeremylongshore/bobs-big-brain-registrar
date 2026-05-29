@@ -14,7 +14,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createTestDatabase } from '@qmd-team-intent-kb/store';
+import { AuditRepository, createTestDatabase } from '@qmd-team-intent-kb/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch, type CuratorCliDeps } from '../cli.js';
@@ -230,5 +230,108 @@ describe('dispatch ingest — hand-crafted spool file', () => {
     expect(rc).toBe(0);
     const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
     expect(parsed['ingested_count']).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// verify-audit-chain subcommand (bead gvt — wires the chain verifier
+// surfaced in packages/store as a CLI-accessible primitive)
+// ---------------------------------------------------------------------------
+
+describe('dispatch verify-audit-chain', () => {
+  it('exits 0 + reports clean on an empty database', async () => {
+    const rc = await dispatch(['verify-audit-chain', '--json'], testDeps);
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(true);
+    expect(parsed['totalRows']).toBe(0);
+    expect(parsed['breaks']).toEqual([]);
+  });
+
+  it('exits 0 on an intact chain populated by repo.insert', async () => {
+    // Seed the chain via a shared db that the CLI then reads.
+    const sharedDb = createTestDatabase();
+    const auditRepo = new AuditRepository(sharedDb);
+    for (let i = 0; i < 3; i++) {
+      auditRepo.insert({
+        id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        action: 'promoted',
+        memoryId: '11111111-1111-4111-8111-111111111111',
+        tenantId: 'demo-e2e',
+        actor: { type: 'human', id: 'curator-1' },
+        reason: `test ${i}`,
+        details: {},
+        timestamp: `2026-05-29T08:0${i}:00.000Z`,
+      });
+    }
+
+    const rc = await dispatch(['verify-audit-chain', '--json'], {
+      createDb: () => sharedDb,
+    });
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(true);
+    expect(parsed['totalRows']).toBe(3);
+    expect(parsed['cleanRows']).toBe(3);
+    expect(parsed['breaks']).toEqual([]);
+    sharedDb.close();
+  });
+
+  it('exits 2 + names the offending row on a tampered chain', async () => {
+    const sharedDb = createTestDatabase();
+    const auditRepo = new AuditRepository(sharedDb);
+    const ids = [
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000003',
+    ];
+    for (let i = 0; i < ids.length; i++) {
+      auditRepo.insert({
+        id: ids[i]!,
+        action: 'promoted',
+        memoryId: '11111111-1111-4111-8111-111111111111',
+        tenantId: 'demo-e2e',
+        actor: { type: 'human', id: 'curator-1' },
+        reason: `original ${i}`,
+        details: {},
+        timestamp: `2026-05-29T08:0${i}:00.000Z`,
+      });
+    }
+    // Tamper row 2's content without updating its entry_hash.
+    sharedDb.prepare(`UPDATE audit_events SET reason = 'TAMPERED' WHERE id = ?`).run(ids[1]);
+
+    const rc = await dispatch(['verify-audit-chain', '--json'], {
+      createDb: () => sharedDb,
+    });
+    expect(rc).toBe(2);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    const breaks = parsed['breaks'] as Array<Record<string, unknown>>;
+    expect(breaks.length).toBe(1);
+    expect(breaks[0]!['id']).toBe(ids[1]);
+    expect(breaks[0]!['index']).toBe(1);
+    sharedDb.close();
+  });
+
+  it('rejects unknown flags with exit 2', async () => {
+    const rc = await dispatch(['verify-audit-chain', '--bogus'], testDeps);
+    expect(rc).toBe(2);
+    expect(stderrText()).toMatch(/unknown flag: --bogus/);
+  });
+
+  it('emits human-readable output when --json is absent', async () => {
+    const rc = await dispatch(['verify-audit-chain'], testDeps);
+    expect(rc).toBe(0);
+    const out = stdoutText();
+    expect(out).toMatch(/audit chain OK/);
+    expect(out).toMatch(/Total rows:\s+0/);
+  });
+});
+
+describe('dispatch usage — verify-audit-chain in help', () => {
+  it('lists the verify-audit-chain subcommand in the help text', async () => {
+    const rc = await dispatch(['help'], testDeps);
+    expect(rc).toBe(0);
+    expect(stdoutText()).toMatch(/verify-audit-chain/);
   });
 });

@@ -77,6 +77,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
   details_json TEXT NOT NULL DEFAULT '{}',
   timestamp TEXT NOT NULL
 );
+-- entry_hash / prev_entry_hash columns added via MIGRATIONS[5] so the
+-- migration runs against both fresh and pre-existing databases. Adding
+-- them here would cause a 'duplicate column' error when migration 5
+-- replays on a fresh DB.
 CREATE INDEX IF NOT EXISTS idx_audit_memory ON audit_events(memory_id);
 CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_events(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_events(action);
@@ -211,6 +215,28 @@ CREATE INDEX IF NOT EXISTS idx_batches_status ON import_batches(status);
     sql: `
 ALTER TABLE candidates ADD COLUMN import_batch_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_candidates_batch ON candidates(import_batch_id);
+    `.trim(),
+  },
+  {
+    // Adds a SHA-256 hash chain to audit_events so auditors can verify
+    // integrity end-to-end (bead qmd-team-intent-kb-kmr / gvt).
+    //
+    // Each post-migration row carries:
+    //   entry_hash       — sha256 of canonical JSON of the row fields
+    //                       plus the previous row's entry_hash
+    //   prev_entry_hash  — the entry_hash of the chronologically previous
+    //                       row, NULL for the first hashed row
+    //
+    // Pre-migration rows retain both columns NULL — the verifier flags
+    // these as `unverified` rather than `broken` because they predate
+    // the hash-chain contract. Operators can backfill via a separate
+    // tool if cryptographic continuity over pre-migration history is
+    // required for compliance.
+    version: 5,
+    name: 'add_audit_hash_chain',
+    sql: `
+ALTER TABLE audit_events ADD COLUMN entry_hash TEXT;
+ALTER TABLE audit_events ADD COLUMN prev_entry_hash TEXT;
     `.trim(),
   },
 ];
