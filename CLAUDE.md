@@ -254,3 +254,17 @@ The canonical reference for this positioning is the peer-reviewed thesis paper:
 When making INTKB-side architectural decisions, the thesis paper is load-bearing: it names the 7 thesis properties + 7 design principles INTKB commits to, the spool-boundary discipline that defines the ICO → INTKB hand-off, and the why-not-just-git / why-not-just-prompt-memory arguments. New design work should not contradict the thesis without an explicit ADR.
 
 The ICO → INTKB spool bridge itself is currently deferred (`qmd-team-intent-kb-pw9` → `vj6`, Epic 16). The thesis is honest about this gap.
+
+**Note (2026-05-24):** the spool wire shipped via Build Item A — `qmd-team-intent-kb-oaa.3` (reader + cross-repo contract test) + `intentional-cognition-os-ziz.3` (writer). Only the reverse-direction feedback loop (`vj6`) remains deferred. The thesis §6.2 prose is one day stale on this point.
+
+## Current cross-repo build — proof-of-work demo (next milestone)
+
+Twin cross-repo epic with ICO. The end-to-end proof-of-work demo drives a real corpus through ICO compile → INTKB curator → qmd index → MCP retrieval → audit verify. Tracked as:
+
+- INTKB epic: `qmd-team-intent-kb-66t` ↔ ICO twin `intentional-cognition-os-73m`
+- GH: `jeremylongshore/qmd-team-intent-kb#149` ↔ ICO `#114`
+- INTKB children: `9jx` (curator CLI for the demo), `gvt` (promote `kmr` audit-log hash-chain verifier to load-bearing), `6yg` (smoke test — blocked on 9jx + gvt)
+
+Parallel hygiene epic on INTKB only: `qmd-team-intent-kb-2x0` / GH `#150` — wire every `tests/JOURNEYS.md` step to its proving test via JSDoc annotations + rebuild via `journey-mapper-agent`. Closes the 42-of-43 unlinked journey-step gap.
+
+When `66t` ships, the demo doubles as the nightly CI smoke that prevents regression of any link in the ICO → INTKB → qmd chain.
