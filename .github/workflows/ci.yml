@@ -64,6 +64,18 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
+      - name: Upload test results to Codecov Test Analytics
+        # JUnit XML produced by vitest's junit reporter (see vitest.config.ts).
+        # Codecov Test Analytics gives flaky-test detection + slow-test
+        # ranking + failure trends — surfaced in the PR comment alongside
+        # the coverage delta. Always runs so failed test runs still report.
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./test-results.junit.xml
+          fail_ci_if_error: false
+
       - name: Upload test results (artifact)
         if: always()
         uses: actions/upload-artifact@v7

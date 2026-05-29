@@ -10,6 +10,10 @@ export default defineConfig({
       // It pulls Docker images via testcontainers — keep out of the fast loop.
       'tests/integration/**',
     ],
+    // JUnit XML for Codecov Test Analytics (flaky-test detection, slow-test
+    // ranking, failure trends). 'default' keeps the human-readable terminal
+    // output the rest of the toolchain expects.
+    reporters: ['default', ['junit', { outputFile: './test-results.junit.xml' }]],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],

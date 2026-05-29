@@ -54,6 +54,26 @@ flag_management:
       paths:
         - packages/
 
+# Codecov components — semantic groupings used for status checks and PR
+# comment breakdown. For INTKB, the meaningful axis is apps (services that
+# deploy) vs packages (libraries the apps consume) — same as the flags.
+# Components give cleaner status-check labels than bare flags.
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: apps
+      name: Apps (services)
+      paths:
+        - apps/**
+    - component_id: packages
+      name: Packages (libraries)
+      paths:
+        - packages/**
+
 comment:
   layout: 'header, diff, flags, components, files, footer'
   behavior: default
