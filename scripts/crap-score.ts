@@ -48,11 +48,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
-// Aligned with tests/TESTING.md §Thresholds `crap.prod`. Initial 40 (4 points
-// of headroom over the current ceiling of 36). Tighten to 30 (Wall 5 ideal)
-// once apps/edge-daemon runCycle is refactored — tracked in
-// qmd-team-intent-kb-igs.
-const DEFAULT_THRESHOLD = 40;
+// Aligned with tests/TESTING.md §Thresholds `crap.prod`. Tightened 40 → 30
+// (Wall 5 ideal) once apps/edge-daemon runCycle was refactored from
+// cyclomatic 36 to a thin coordinator over named per-step helpers (bead
+// qmd-team-intent-kb-igs). Current repo-wide max is well under 30.
+const DEFAULT_THRESHOLD = 30;
 const REPO_ROOT = process.cwd();
 
 const SOURCE_ROOTS = ['packages', 'apps'];

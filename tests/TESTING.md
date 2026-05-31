@@ -8,14 +8,14 @@
 
 ## Thresholds
 
-| Metric          | Floor | Note                                                                                                                         |
-| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
-| coverage.line   | 80    |                                                                                                                              |
-| coverage.branch | 70    |                                                                                                                              |
-| mutation.kill   | 70    |                                                                                                                              |
-| crap.prod       | 40    | Initial; tighten to 30 (Wall 5 ideal) once `apps/edge-daemon` `runCycle` is refactored — tracked in `qmd-team-intent-kb-igs` |
-| crap.test       | 15    |                                                                                                                              |
-| crap.average    | 10    |                                                                                                                              |
+| Metric          | Floor | Note                                                                                                                               |
+| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| coverage.line   | 80    |                                                                                                                                    |
+| coverage.branch | 70    |                                                                                                                                    |
+| mutation.kill   | 70    |                                                                                                                                    |
+| crap.prod       | 30    | Wall 5 ideal. Tightened from 40 once `apps/edge-daemon` `runCycle` was refactored 36 → thin coordinator (`qmd-team-intent-kb-igs`) |
+| crap.test       | 15    |                                                                                                                                    |
+| crap.average    | 10    |                                                                                                                                    |
 
 ## Waived layers
 
@@ -72,7 +72,7 @@ The integration test suite lives at `tests/integration/`, runs under `pnpm test:
 | Mutation       | Stryker (vitest runner)              | Installed, 70% break threshold                                                                                                                                           |
 | Pre-commit     | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                                                                                                                                |
 | Architecture   | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants)                                                                                                         |
-| Complexity     | scripts/crap-score.ts (TS AST)       | Enforced in CI at threshold 40 (initial; tightening to 30 tracked in `qmd-team-intent-kb-igs`)                                                                           |
+| Complexity     | scripts/crap-score.ts (TS AST)       | Enforced in CI at threshold 30 (Wall 5 ideal; tightened from 40 after `runCycle` refactor — `qmd-team-intent-kb-igs`)                                                    |
 | Secrets        | gitleaks-action v2                   | Enforced in CI on every PR                                                                                                                                               |
 | SAST           | Semgrep (security.yml)               | Advisory (artifact upload)                                                                                                                                               |
 | L4 Integration | testcontainers 11.x + pg client      | Enforced in CI `integration` job on push to main / `integration`-labeled PRs (see §Waived layers — partial waiver)                                                       |
