@@ -11,6 +11,7 @@
   "references": [
     { "path": "../../packages/schema" },
     { "path": "../../packages/common" },
-    { "path": "../../packages/store" }
+    { "path": "../../packages/store" },
+    { "path": "../../packages/test-fixtures" }
   ]
 }
