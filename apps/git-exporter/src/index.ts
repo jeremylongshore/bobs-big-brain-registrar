@@ -9,3 +9,4 @@ export {
 export { detectChanges } from './diff/change-detector.js';
 export { writeFile, archiveFile, removeFile } from './writer/file-writer.js';
 export { runExport } from './exporter.js';
+export { dispatch, type ExporterCliDeps, type DatabaseFactory } from './cli.js';

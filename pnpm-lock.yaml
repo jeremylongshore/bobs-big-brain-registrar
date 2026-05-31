@@ -190,6 +190,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/store
     devDependencies:
+      '@qmd-team-intent-kb/test-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/test-fixtures
       '@types/better-sqlite3':
         specifier: ^7.6.0
         version: 7.6.13
