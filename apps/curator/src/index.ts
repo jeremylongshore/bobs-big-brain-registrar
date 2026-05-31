@@ -1,7 +1,12 @@
 export type { CurationResult, CurationBatchResult, CuratorConfig } from './types.js';
 export { Curator } from './curator.js';
 export type { CuratorDependencies } from './curator.js';
-export { ingestFromSpool } from './intake/spool-intake.js';
+export { ingestFromSpool, ingestFromSpoolDetailed } from './intake/spool-intake.js';
+export type {
+  IngestFromSpoolOptions,
+  IngestResult,
+  SpoolTamperRecord,
+} from './intake/spool-intake.js';
 export { checkDuplicate } from './dedup/dedup-checker.js';
 export type { DedupResult } from './dedup/dedup-checker.js';
 export {

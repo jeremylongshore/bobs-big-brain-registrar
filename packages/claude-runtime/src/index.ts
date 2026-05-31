@@ -32,7 +32,13 @@ export { DefaultContextProvider } from './capture/context-provider.js';
 
 // Spool
 export { writeToSpool } from './spool/spool-writer.js';
-export { readSpoolFile, listSpoolFiles } from './spool/spool-reader.js';
+export {
+  readSpoolFile,
+  listSpoolFiles,
+  verifySpoolManifest,
+  type SpoolManifestStatus,
+  type SpoolManifestResult,
+} from './spool/spool-reader.js';
 export { writeToFailureBucket } from './spool/failure-bucket.js';
 export type { FailureRecord } from './spool/failure-bucket.js';
 export { writeRedactionAudit } from './spool/redaction-audit.js';
