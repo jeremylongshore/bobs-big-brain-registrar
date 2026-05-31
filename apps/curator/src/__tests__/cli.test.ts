@@ -181,6 +181,32 @@ describe('dispatch ingest — hand-crafted spool file', () => {
     expect(batch['promoted']).toBe(1);
     expect(batch['rejected']).toBe(0);
     expect(Array.isArray(batch['results'])).toBe(true);
+    // dmj.4: manifest-less spool files ingest cleanly, zero tampered.
+    expect(parsed['tampered_count']).toBe(0);
+    expect(parsed['tampered']).toEqual([]);
+  });
+
+  it('reports tampered_count + refuses ingest when a manifest mismatch is present (dmj.4)', async () => {
+    const { createHash } = await import('node:crypto');
+    const { writeFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    // Write a spool file + a manifest pinning a WRONG hash → tamper.
+    const spoolName = 'spool-2026-05-30T090000Z.jsonl';
+    await writeSpoolFile(spoolName, [makeSpoolLine()]);
+    const wrong = createHash('sha256').update('not the real content', 'utf8').digest('hex');
+    await writeFile(
+      join(spoolDir, `${spoolName}.manifest.json`),
+      JSON.stringify({ schemaVersion: '1', spoolFileSha256: wrong }),
+      'utf8',
+    );
+
+    const rc = await dispatch(['ingest', spoolDir, '--tenant', 'demo-e2e', '--json'], testDeps);
+    expect(rc).toBe(0); // ingest still "succeeds" — the tampered file is just refused
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ingested_count']).toBe(0); // refused
+    expect(parsed['tampered_count']).toBe(1);
+    const tampered = parsed['tampered'] as Array<Record<string, unknown>>;
+    expect(tampered[0]!['spoolFile']).toContain(spoolName);
   });
 
   it('processes a multi-candidate spool file end-to-end', async () => {

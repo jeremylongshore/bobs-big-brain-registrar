@@ -32,7 +32,7 @@ import {
 import type { createDatabase as CreateDatabase } from '@qmd-team-intent-kb/store';
 
 import { Curator } from './curator.js';
-import { ingestFromSpool } from './intake/spool-intake.js';
+import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -180,10 +180,12 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     const auditRepo = new AuditRepository(db);
     const linksRepo = new MemoryLinksRepository(db);
 
-    // Stage A: ingestFromSpool — reads JSONL, validates, writes to candidates.
-    const ingestResult = await ingestFromSpool(candidateRepo, spoolDir);
+    // Stage A: ingestFromSpoolDetailed — reads JSONL, verifies each file's
+    // manifest SHA-256 (tampered files refused + quarantined per dmj.4),
+    // validates, writes surviving candidates to the store.
+    const ingestResult = await ingestFromSpoolDetailed(candidateRepo, spoolDir);
     if (!ingestResult.ok) {
-      // ingestFromSpool returns Result<_, string> — message IS the error.
+      // ingestFromSpoolDetailed returns Result<_, string> — message IS the error.
       const msg = ingestResult.error;
       if (json) {
         process.stdout.write(
@@ -194,7 +196,8 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
       }
       return 1;
     }
-    const candidates = ingestResult.value;
+    const candidates = ingestResult.value.ingested;
+    const tampered = ingestResult.value.tampered;
 
     // Stage B: Curator.processBatch — dedup + policy + promote.
     const curator = new Curator(
@@ -210,6 +213,8 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           spool_dir: spoolDir,
           tenant_id: tenantId,
           ingested_count: candidates.length,
+          tampered_count: tampered.length,
+          tampered,
           batch,
         }) + '\n',
       );
@@ -223,6 +228,16 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           `Flagged:   ${batch.flagged}\n` +
           `Duplicates: ${batch.duplicates}\n`,
       );
+      if (tampered.length > 0) {
+        process.stderr.write(
+          `\nSPOOL_TAMPERED: ${tampered.length} file(s) refused (manifest SHA-256 mismatch):\n`,
+        );
+        for (const t of tampered) {
+          process.stderr.write(
+            `  ${t.spoolFile}\n    quarantined → ${t.quarantinedTo ?? '(quarantine failed)'}\n`,
+          );
+        }
+      }
     }
     return 0;
   } finally {
