@@ -1,14 +1,13 @@
+import { join } from 'node:path';
+
 import type { Result } from '@qmd-team-intent-kb/common';
 import type { QmdError } from '../types.js';
 import type { QmdExecutor } from '../executor/executor.js';
-import { getAllCollectionNames } from './collection-registry.js';
+import { getExportableCollections } from './collection-registry.js';
 
 /** Manage qmd collections (add, remove, list) */
 export class CollectionManager {
-  constructor(
-    private readonly executor: QmdExecutor,
-    readonly dataPath: string,
-  ) {}
+  constructor(private readonly executor: QmdExecutor) {}
 
   /** Add a collection pointing to a directory */
   async addCollection(name: string, path: string): Promise<Result<void, QmdError>> {
@@ -66,18 +65,27 @@ export class CollectionManager {
     return { ok: true, value: collections };
   }
 
-  /** Ensure all known collections exist, creating missing ones */
-  async ensureCollections(basePath: string): Promise<Result<string[], QmdError>> {
+  /**
+   * Ensure every exportable collection exists, creating missing ones.
+   *
+   * Each collection's source is `<exportBaseDir>/<sourceSubdir>` — the
+   * git-exporter output tree — so `qmd update` indexes the markdown the
+   * exporter actually writes. Collections with no exported source (e.g.
+   * `kb-inbox`) are skipped. Callers must ensure the source subdirs exist
+   * before this runs (the adapter facade does this); `qmd collection add`
+   * against a missing dir would fail.
+   */
+  async ensureCollections(exportBaseDir: string): Promise<Result<string[], QmdError>> {
     const listResult = await this.listCollections();
     const existing = listResult.ok ? listResult.value : [];
 
     const created: string[] = [];
-    for (const name of getAllCollectionNames()) {
-      if (!existing.some((e) => e.includes(name))) {
-        const path = `${basePath}/${name}`;
-        const addResult = await this.addCollection(name, path);
+    for (const def of getExportableCollections()) {
+      if (!existing.some((e) => e.includes(def.name))) {
+        const path = join(exportBaseDir, def.sourceSubdir);
+        const addResult = await this.addCollection(def.name, path);
         if (!addResult.ok) return { ok: false, error: addResult.error };
-        created.push(name);
+        created.push(def.name);
       }
     }
     return { ok: true, value: created };

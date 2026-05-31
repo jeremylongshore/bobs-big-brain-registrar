@@ -3,6 +3,7 @@ import type { SearchScope } from '@qmd-team-intent-kb/schema';
 import type { QmdError, QmdSearchResult } from '../types.js';
 import type { QmdExecutor } from '../executor/executor.js';
 import { getDefaultSearchCollections } from '../collections/collection-registry.js';
+import { parseQueryOutput } from './result-parser.js';
 
 /** Search client with curated-only default scope enforcement */
 export class SearchClient {
@@ -15,9 +16,10 @@ export class SearchClient {
   ): Promise<Result<QmdSearchResult[], QmdError>> {
     const collections = this.resolveCollections(scope);
 
-    // Use '--' to terminate option parsing so query strings like '--version'
-    // are not interpreted as CLI flags
-    const args = ['search', '--', query];
+    // `--json` gives machine-parseable output (qmd's default output is a
+    // human-readable block). `--` terminates option parsing so a query like
+    // '--version' is treated as a search term, not a flag.
+    const args = ['search', '--json', '--', query];
     const result = await this.executor.execute(args);
 
     if (result.exitCode !== 0) {
@@ -32,7 +34,7 @@ export class SearchClient {
       };
     }
 
-    const parsed = this.parseSearchResults(result.stdout);
+    const parsed = parseQueryOutput(result.stdout);
     // Filter to only allowed collections based on scope
     const filtered =
       scope === 'all' ? parsed : parsed.filter((r) => collections.includes(r.collection));
@@ -54,36 +56,5 @@ export class SearchClient {
       default:
         return getDefaultSearchCollections();
     }
-  }
-
-  /** Parse qmd search output into typed results */
-  private parseSearchResults(stdout: string): QmdSearchResult[] {
-    const results: QmdSearchResult[] = [];
-    const lines = stdout.trim().split('\n').filter(Boolean);
-
-    for (const line of lines) {
-      // qmd search output format: score\tfile\tsnippet
-      const parts = line.split('\t');
-      if (parts.length >= 2) {
-        const score = parseFloat(parts[0] ?? '0');
-        const file = parts[1] ?? '';
-        const snippet = parts.slice(2).join('\t');
-
-        // Derive collection from file path
-        const collection = this.deriveCollection(file);
-
-        results.push({ file, score: isNaN(score) ? 0 : score, snippet, collection });
-      }
-    }
-
-    return results;
-  }
-
-  /** Derive collection name from file path */
-  private deriveCollection(filePath: string): string {
-    for (const name of ['kb-curated', 'kb-decisions', 'kb-guides', 'kb-inbox', 'kb-archive']) {
-      if (filePath.includes(name)) return name;
-    }
-    return 'unknown';
   }
 }

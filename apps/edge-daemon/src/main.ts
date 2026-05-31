@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { createDatabase } from '@qmd-team-intent-kb/store';
 import {
   CandidateRepository,
@@ -42,7 +44,14 @@ async function main(): Promise<void> {
     policyRepo: new PolicyRepository(db),
     auditRepo: new AuditRepository(db),
     exportStateRepo: new ExportStateRepository(db),
-    qmdAdapter: new QmdAdapter({ tenantId: config.tenantId }),
+    // Point the adapter at the SAME dir the exporter writes to (resolved to
+    // absolute so qmd's collection sources match git-exporter's output
+    // regardless of cwd). git-exporter's file-writer resolves the same
+    // relative `exportOutputDir` from this process's cwd.
+    qmdAdapter: new QmdAdapter({
+      tenantId: config.tenantId,
+      exportDir: resolve(config.exportOutputDir),
+    }),
   };
 
   const exitCode = await dispatch(process.argv.slice(2), { config, daemonDeps, logger });

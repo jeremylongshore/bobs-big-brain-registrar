@@ -1,6 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockQmdExecutor } from '../executor/mock-executor.js';
 import { SearchClient } from '../search/search-client.js';
+import type { QmdSearchResult } from '../types.js';
+
+/** Build a qmd `search --json` stdout payload from partial hits. */
+function jsonHits(hits: Array<Partial<QmdSearchResult>>): string {
+  return JSON.stringify(
+    hits.map((h, i) => ({
+      docid: `#${i}`,
+      score: h.score ?? 0.9,
+      file: h.file ?? '',
+      title: 'T',
+      snippet: h.snippet ?? '',
+    })),
+  );
+}
 
 describe('SearchClient', () => {
   let mock: MockQmdExecutor;
@@ -11,8 +25,10 @@ describe('SearchClient', () => {
     client = new SearchClient(mock);
   });
 
-  it('executes a search and returns results', async () => {
-    mock.queueSuccess('0.95\t/path/kb-curated/doc.md\tSome snippet');
+  it('executes a search (with --json) and returns results', async () => {
+    mock.queueSuccess(
+      jsonHits([{ score: 0.95, file: 'qmd://kb-curated/doc.md', snippet: 'snip' }]),
+    );
     const result = await client.search('test query');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -20,15 +36,21 @@ describe('SearchClient', () => {
       expect(result.value[0]!.score).toBe(0.95);
       expect(result.value[0]!.collection).toBe('kb-curated');
     }
+    // The client must request JSON output and terminate option parsing
+    expect(mock.lastCommand).toEqual(['search', '--json', '--', 'test query']);
   });
 
   it('defaults scope to curated', async () => {
-    // Return results from mixed collections
-    mock.queueSuccess('0.9\t/kb-curated/a.md\tA\n0.8\t/kb-inbox/b.md\tB\n0.7\t/kb-guides/c.md\tC');
+    mock.queueSuccess(
+      jsonHits([
+        { file: 'qmd://kb-curated/a.md' },
+        { file: 'qmd://kb-inbox/b.md' },
+        { file: 'qmd://kb-guides/c.md' },
+      ]),
+    );
     const result = await client.search('test');
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // Should filter out kb-inbox
       const collections = result.value.map((r) => r.collection);
       expect(collections).not.toContain('kb-inbox');
       expect(collections).toContain('kb-curated');
@@ -37,7 +59,13 @@ describe('SearchClient', () => {
   });
 
   it('scope "all" returns everything', async () => {
-    mock.queueSuccess('0.9\t/kb-curated/a.md\tA\n0.8\t/kb-inbox/b.md\tB\n0.7\t/kb-archive/c.md\tC');
+    mock.queueSuccess(
+      jsonHits([
+        { file: 'qmd://kb-curated/a.md' },
+        { file: 'qmd://kb-inbox/b.md' },
+        { file: 'qmd://kb-archive/c.md' },
+      ]),
+    );
     const result = await client.search('test', 'all');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -46,7 +74,9 @@ describe('SearchClient', () => {
   });
 
   it('scope "inbox" only returns inbox results', async () => {
-    mock.queueSuccess('0.9\t/kb-curated/a.md\tA\n0.8\t/kb-inbox/b.md\tB');
+    mock.queueSuccess(
+      jsonHits([{ file: 'qmd://kb-curated/a.md' }, { file: 'qmd://kb-inbox/b.md' }]),
+    );
     const result = await client.search('test', 'inbox');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -56,7 +86,9 @@ describe('SearchClient', () => {
   });
 
   it('scope "archived" only returns archive results', async () => {
-    mock.queueSuccess('0.9\t/kb-curated/a.md\tA\n0.8\t/kb-archive/b.md\tB');
+    mock.queueSuccess(
+      jsonHits([{ file: 'qmd://kb-curated/a.md' }, { file: 'qmd://kb-archive/b.md' }]),
+    );
     const result = await client.search('test', 'archived');
     expect(result.ok).toBe(true);
     if (result.ok) {

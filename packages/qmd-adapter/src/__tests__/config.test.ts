@@ -6,6 +6,7 @@ import {
   getQmdIndexBasePath,
   getQmdTenantIndexPath,
   getQmdCollectionIndexPath,
+  getQmdTenantEnv,
 } from '../config.js';
 
 describe('qmd-adapter config', () => {
@@ -45,5 +46,13 @@ describe('qmd-adapter config', () => {
   it('respects TEAMKB_BASE_PATH override', () => {
     process.env['TEAMKB_BASE_PATH'] = '/custom';
     expect(getQmdTenantIndexPath('t1')).toBe('/custom/qmd-index/t1');
+  });
+
+  it('getQmdTenantEnv points XDG dirs at the tenant index path', () => {
+    process.env['TEAMKB_BASE_PATH'] = '/custom';
+    expect(getQmdTenantEnv('t1')).toEqual({
+      XDG_CONFIG_HOME: '/custom/qmd-index/t1/config',
+      XDG_CACHE_HOME: '/custom/qmd-index/t1/cache',
+    });
   });
 });
