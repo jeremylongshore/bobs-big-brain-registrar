@@ -10,21 +10,30 @@ const execFileAsync = promisify(execFile);
 export class RealQmdExecutor implements QmdExecutor {
   private readonly binary: string;
   private readonly timeout: number;
-  private readonly dataDir: string | null;
+  private readonly env: Record<string, string> | null;
 
-  constructor(options?: { binary?: string; timeout?: number; dataDir?: string }) {
+  /**
+   * @param options.env Environment overrides merged over `process.env` for every
+   *   qmd invocation. qmd 2.0.1 has **no `--data-dir` flag** — per-tenant index
+   *   and registry isolation is achieved by pointing `XDG_CONFIG_HOME`
+   *   (collection registry) and `XDG_CACHE_HOME` (BM25 index) at tenant-scoped
+   *   dirs. See `getQmdTenantEnv` in `config.ts` and ADR
+   *   `000-docs/037-AT-DSGN-qmd-adapter-source-index-separation.md`.
+   */
+  constructor(options?: { binary?: string; timeout?: number; env?: Record<string, string> }) {
     this.binary = options?.binary ?? DEFAULT_QMD_BINARY;
     this.timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-    this.dataDir = options?.dataDir ?? null;
+    this.env = options?.env ?? null;
   }
 
   async execute(args: string[]): Promise<CommandResult> {
-    const fullArgs = this.dataDir ? ['--data-dir', this.dataDir, ...args] : args;
-
     try {
-      const { stdout, stderr } = await execFileAsync(this.binary, fullArgs, {
+      const { stdout, stderr } = await execFileAsync(this.binary, args, {
         timeout: this.timeout,
         maxBuffer: 10 * 1024 * 1024,
+        // Merge over process.env so PATH (qmd discovery) is preserved while
+        // tenant-scoped XDG_* vars isolate the registry + index.
+        ...(this.env ? { env: { ...process.env, ...this.env } } : {}),
       });
       return { stdout, stderr, exitCode: 0 };
     } catch (e: unknown) {

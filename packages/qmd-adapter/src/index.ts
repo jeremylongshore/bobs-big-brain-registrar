@@ -8,6 +8,7 @@ export {
   getQmdIndexBasePath,
   getQmdTenantIndexPath,
   getQmdCollectionIndexPath,
+  getQmdTenantEnv,
   DEFAULT_QMD_BINARY,
   DEFAULT_TIMEOUT,
 } from './config.js';
@@ -23,6 +24,7 @@ export {
   KNOWN_COLLECTIONS,
   getDefaultSearchCollections,
   getAllCollectionNames,
+  getExportableCollections,
   isKnownCollection,
   isDefaultSearchCollection,
 } from './collections/collection-registry.js';

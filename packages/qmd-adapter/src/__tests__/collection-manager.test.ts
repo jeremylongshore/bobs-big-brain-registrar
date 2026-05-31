@@ -8,7 +8,7 @@ describe('CollectionManager', () => {
 
   beforeEach(() => {
     mock = new MockQmdExecutor();
-    manager = new CollectionManager(mock, '/tmp/test-data');
+    manager = new CollectionManager(mock);
   });
 
   describe('addCollection', () => {
@@ -65,24 +65,51 @@ describe('CollectionManager', () => {
   });
 
   describe('ensureCollections', () => {
-    it('creates missing collections', async () => {
+    it('creates the 4 exportable collections, sourced from export subdirs', async () => {
       // listCollections returns empty
       mock.queueSuccess('');
-      // 5 addCollection calls
-      for (let i = 0; i < 5; i++) {
+      // 4 addCollection calls (kb-inbox has no exported source)
+      for (let i = 0; i < 4; i++) {
         mock.queueSuccess('');
       }
-      const result = await manager.ensureCollections('/base/path');
+      const result = await manager.ensureCollections('/exports');
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toHaveLength(5);
+        expect(result.value).toEqual(['kb-curated', 'kb-decisions', 'kb-guides', 'kb-archive']);
       }
+      // Each collection sources from its git-exporter subdir, not <base>/<name>
+      const addCommands = mock.commands.filter((c) => c[0] === 'collection' && c[1] === 'add');
+      expect(addCommands).toContainEqual([
+        'collection',
+        'add',
+        '/exports/curated',
+        '--name',
+        'kb-curated',
+      ]);
+      expect(addCommands).toContainEqual([
+        'collection',
+        'add',
+        '/exports/archive',
+        '--name',
+        'kb-archive',
+      ]);
+    });
+
+    it('does not register kb-inbox (no exported source)', async () => {
+      mock.queueSuccess(''); // list
+      for (let i = 0; i < 4; i++) mock.queueSuccess(''); // adds
+      const result = await manager.ensureCollections('/exports');
+      expect(result.ok).toBe(true);
+      const addedNames = mock.commands
+        .filter((c) => c[0] === 'collection' && c[1] === 'add')
+        .map((c) => c[c.length - 1]);
+      expect(addedNames).not.toContain('kb-inbox');
     });
 
     it('skips existing collections', async () => {
-      // listCollections returns all 5
-      mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-inbox\nkb-archive');
-      const result = await manager.ensureCollections('/base/path');
+      // listCollections returns all exportable collections already present
+      mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive');
+      const result = await manager.ensureCollections('/exports');
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value).toHaveLength(0);
