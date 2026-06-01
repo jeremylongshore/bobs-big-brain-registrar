@@ -32,6 +32,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Set up Bun (for qmd)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install qmd 2.0.1
+        # qmd is an offline BM25 search binary (no API key). Installing it here
+        # makes HAS_QMD=true so the describe.skipIf(!HAS_QMD) integration suites
+        # actually run instead of silently skipping — covering the qmd-adapter
+        # (e3q) + git-exporter→qmd citation paths. Bead qmd-team-intent-kb-8md.
+        run: |
+          bun add -g @tobilu/qmd@2.0.1
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Verify qmd on PATH
+        run: qmd --version
+
       - name: Format check
         run: pnpm format:check
 
