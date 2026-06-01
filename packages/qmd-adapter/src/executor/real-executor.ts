@@ -14,7 +14,7 @@ export class RealQmdExecutor implements QmdExecutor {
 
   /**
    * @param options.env Environment overrides merged over `process.env` for every
-   *   qmd invocation. qmd 2.0.1 has **no `--data-dir` flag** — per-tenant index
+   *   qmd invocation. qmd 2.x has **no `--data-dir` flag** — per-tenant index
    *   and registry isolation is achieved by pointing `XDG_CONFIG_HOME`
    *   (collection registry) and `XDG_CACHE_HOME` (BM25 index) at tenant-scoped
    *   dirs. See `getQmdTenantEnv` in `config.ts` and ADR

@@ -7,7 +7,7 @@
  * returns curated memories with a `qmd://<collection>/...` citation. It closes
  * the original e3q root cause: the adapter used to register collections at a
  * per-tenant index path git-exporter never wrote to, and prepended a
- * `--data-dir` flag qmd 2.0.1 does not have.
+ * `--data-dir` flag qmd 2.x does not have.
  *
  * What it exercises:
  *   - `ensureCollections()` registers each `kb-*` collection at

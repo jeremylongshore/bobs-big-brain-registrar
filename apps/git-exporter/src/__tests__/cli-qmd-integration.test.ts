@@ -8,7 +8,7 @@
  * file-backed store, exactly the pattern the curator pipeline produces in
  * the live demo.
  *
- * It drives the REAL `qmd` binary (2.0.1+) with an isolated
+ * It drives the REAL `qmd` binary (2.x) with an isolated
  * XDG_CACHE_HOME so the test never touches the operator's personal qmd
  * index. The whole test is skipped if `qmd` is not on PATH (so CI without
  * qmd stays green) — but it runs locally + anywhere qmd is installed.

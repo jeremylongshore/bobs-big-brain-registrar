@@ -42,7 +42,7 @@ describe('RealQmdExecutor', () => {
     }, 15000);
 
     it('does not pass the (nonexistent) --data-dir flag to qmd', async () => {
-      // qmd 2.0.1 rejects unknown flags; --version must still succeed, proving
+      // qmd 2.x rejects unknown flags; --version must still succeed, proving
       // we no longer prepend --data-dir. Isolation is via XDG_* env instead.
       const exec = new RealQmdExecutor({
         env: { XDG_CONFIG_HOME: '/tmp/qmd-iso-cfg', XDG_CACHE_HOME: '/tmp/qmd-iso-cache' },
