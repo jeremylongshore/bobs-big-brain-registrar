@@ -1,7 +1,7 @@
 import type { QmdSearchResult } from '../types.js';
 
 /**
- * One entry of qmd 2.0.1's `search --json` output.
+ * One entry of qmd 2.x's `search --json` output.
  *
  * Example:
  * ```json
@@ -20,7 +20,7 @@ interface QmdJsonHit {
 /**
  * Parse qmd's `search --json` / `query --json` output into typed results.
  *
- * qmd 2.0.1's default (non-JSON) output is a human-readable block that is not
+ * qmd 2.x's default (non-JSON) output is a human-readable block that is not
  * machine-parseable; the adapter always passes `--json` and parses the array
  * here. Tolerant by design: empty input, non-array JSON, or a parse failure all
  * yield `[]` rather than throwing, so a malformed qmd response degrades to "no

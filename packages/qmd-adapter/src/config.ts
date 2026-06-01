@@ -23,7 +23,7 @@ export function getQmdCollectionIndexPath(tenantId: string, collection: string):
 /**
  * Environment overrides that isolate a tenant's qmd registry + index.
  *
- * qmd 2.0.1 reads its collection registry from `$XDG_CONFIG_HOME/qmd/index.yml`
+ * qmd 2.x reads its collection registry from `$XDG_CONFIG_HOME/qmd/index.yml`
  * and its BM25 index from `$XDG_CACHE_HOME/qmd/index.sqlite`. Pointing both at
  * tenant-scoped subdirs of the tenant index path gives full per-tenant
  * isolation without the (nonexistent) `--data-dir` flag, and keeps the team
