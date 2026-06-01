@@ -4,6 +4,8 @@
 
 Turn ephemeral Claude Code session insights into persistent, governed, team-wide memory. qmd-team-intent-kb captures institutional knowledge generated during AI-assisted development, applies deterministic governance policies, and makes curated knowledge searchable through qmd's local full-text indexing.
 
+> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/compile-then-govern) stack** — INTKB is the **govern** layer. Upstream, [intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os) (compile) emits the spool it consumes; downstream, [qmd](https://github.com/tobi/qmd) (retrieve) serves the curated result with `qmd://` citations. → [Ecosystem overview](https://github.com/intent-solutions-io/compile-then-govern)
+
 ## Positioning
 
 This project has a clear separation of responsibilities:
