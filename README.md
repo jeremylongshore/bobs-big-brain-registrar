@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img alt="qmd-team-intent-kb — governed team memory for Claude Code. The govern layer." src="assets/banner-light.svg" width="860">
+  </picture>
+</p>
+
 # qmd-team-intent-kb
 
 **A governed team memory platform for Claude Code powered by qmd.**
