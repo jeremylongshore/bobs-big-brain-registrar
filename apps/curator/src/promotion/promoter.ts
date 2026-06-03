@@ -22,6 +22,34 @@ export interface PromotionInput {
 }
 
 /**
+ * Verdict shape an {@link EvalCallback} may return — a structurally-minimal
+ * mirror of the eval-surface EvaluatorResult, kept local so the promoter does
+ * not take a hard dependency on the eval-surface package (the callback is
+ * supplied by the caller, who owns that dependency). Each returned result is
+ * written to the append-only audit chain as an `eval-result` event.
+ */
+export interface EvalResultRecord {
+  readonly name: string;
+  readonly passed: boolean;
+  readonly score: number;
+  readonly threshold: number;
+  readonly details: Record<string, number | string | boolean>;
+}
+
+/**
+ * Optional hook invoked after a memory is inserted (non-dry-run only). Returns
+ * eval verdicts that are emitted into the audit chain as `eval-result` events —
+ * the QMD side of the unification thesis (DR-010 Q3). Emission only: the audit
+ * chain SHA-256-chains each row; signing the resulting bundle is a downstream
+ * step. A throwing callback is contained — it is logged via a best-effort path
+ * and never aborts the promotion (the memory is already safely persisted).
+ */
+export type EvalCallback = (
+  memory: CuratedMemory,
+  pipelineResult: PipelineResult,
+) => EvalResultRecord[];
+
+/**
  * Promotes a candidate to a CuratedMemory and persists everything to the store.
  *
  * Steps:
@@ -43,6 +71,7 @@ export function promote(
   auditRepo: AuditRepository,
   dryRun: boolean = false,
   linksRepo?: MemoryLinksRepository,
+  evalCallback?: EvalCallback,
 ): CuratedMemory {
   const now = new Date().toISOString();
   const memoryId = randomUUID();
@@ -167,6 +196,40 @@ export function promote(
         timestamp: now,
       }),
     );
+
+    // Evidence emission (DR-010 Q3 unification thesis): if an eval callback is
+    // supplied, run it and write each verdict as an `eval-result` audit event.
+    // The audit chain SHA-256-chains these rows, making them tamper-evident and
+    // signable downstream. Contained by design — a throwing/faulty callback must
+    // NOT abort a promotion whose memory is already persisted; failures are
+    // swallowed here (the memory + 'promoted' event stand regardless).
+    if (evalCallback !== undefined) {
+      try {
+        for (const verdict of evalCallback(memory, input.pipelineResult)) {
+          auditRepo.insert(
+            AuditEventSchema.parse({
+              id: randomUUID(),
+              action: 'eval-result',
+              memoryId,
+              tenantId: input.candidate.tenantId,
+              actor: { type: 'system', id: 'curator' },
+              reason: `eval ${verdict.name}: ${verdict.passed ? 'pass' : 'fail'}`,
+              details: {
+                evaluator: verdict.name,
+                passed: verdict.passed,
+                score: verdict.score,
+                threshold: verdict.threshold,
+                ...verdict.details,
+              },
+              timestamp: now,
+            }),
+          );
+        }
+      } catch {
+        // Eval emission is best-effort; the promotion itself has already
+        // succeeded. Do not let an eval-surface fault corrupt the curation path.
+      }
+    }
   }
 
   return memory;
