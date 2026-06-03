@@ -151,4 +151,4 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting, threat model, and 
 
 ## License
 
-[MIT License](./LICENSE) -- Copyright 2026 Jeremy Longshore
+[Apache License 2.0](./LICENSE) -- Copyright 2026 Jeremy Longshore

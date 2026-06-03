@@ -121,6 +121,9 @@ importers:
 
   apps/curator:
     dependencies:
+      '@intentsolutions/core':
+        specifier: ^0.1.1
+        version: 0.1.1
       '@qmd-team-intent-kb/claude-runtime':
         specifier: workspace:*
         version: link:../../packages/claude-runtime
@@ -1053,6 +1056,10 @@ packages:
     resolution: {integrity: sha512-7YNrX4KLEPwJUT41yKa4w94/bqWS3Bdcvxa57GfQOEF/yUtu39Yl59t+bijx+7lO3HmWS5gc/llU1Nca1+QGtg==}
     engines: {node: '>=18'}
     hasBin: true
+
+  '@intentsolutions/core@0.1.1':
+    resolution: {integrity: sha512-q6FQCgzRqHG/uEo9L9LpCrNDX1BSahgu+XT5bt1d+NyVwzTG7CVk71JwMCEkRGUzAtSnWNT7+hGUo87GIC6Ziw==}
+    engines: {node: '>=20.0.0', pnpm: '>=9.0.0'}
 
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -4783,6 +4790,10 @@ snapshots:
       '@types/node': 25.6.0
 
   '@intentsolutions/audit-harness@0.1.0': {}
+
+  '@intentsolutions/core@0.1.1':
+    dependencies:
+      zod: 4.4.3
 
   '@isaacs/cliui@8.0.2':
     dependencies:

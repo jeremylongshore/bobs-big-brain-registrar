@@ -49,6 +49,9 @@ export const AuditAction = z.enum([
   'deleted',
   'searched',
   'exported',
+  // Evidence Bundle emission on a curation/promotion cycle (IEP unification
+  // thesis, DR-010 Q3). Added for the eval-surface emit path (bead tr08.15/.17/.19).
+  'eval-result',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 
