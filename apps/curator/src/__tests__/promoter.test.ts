@@ -8,7 +8,7 @@ import {
 } from '@qmd-team-intent-kb/store';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
-import { promote } from '../promotion/promoter.js';
+import { promote, type EvalResultRecord } from '../promotion/promoter.js';
 import { makeCandidate, makeCuratedMemory, TENANT } from './fixtures.js';
 
 function makePipelineResult(overrides?: Partial<PipelineResult>): PipelineResult {
@@ -292,5 +292,91 @@ describe('promote', () => {
     expect(memory.promotedAt >= before).toBe(true);
     expect(memory.promotedAt <= after).toBe(true);
     expect(memory.updatedAt).toBe(memory.promotedAt);
+  });
+});
+
+describe('promote — eval callback (Evidence emission)', () => {
+  let memoryRepo: MemoryRepository;
+  let auditRepo: AuditRepository;
+
+  beforeEach(() => {
+    const db = createTestDatabase();
+    memoryRepo = new MemoryRepository(db);
+    auditRepo = new AuditRepository(db);
+  });
+
+  it('emits an eval-result audit event per verdict the callback returns', () => {
+    const candidate = makeCandidate();
+    const contentHash = computeContentHash(candidate.content);
+    const memory = promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult() },
+      memoryRepo,
+      auditRepo,
+      false,
+      undefined,
+      (): EvalResultRecord[] => [
+        { name: 'memory-utility', passed: true, score: 1, threshold: 0.8, details: { probes: 3 } },
+        { name: 'provenance-integrity', passed: true, score: 1, threshold: 1, details: {} },
+      ],
+    );
+
+    const evalEvents = auditRepo.findByMemory(memory.id).filter((e) => e.action === 'eval-result');
+    expect(evalEvents).toHaveLength(2);
+    expect(evalEvents.map((e) => e.details.evaluator).sort()).toEqual([
+      'memory-utility',
+      'provenance-integrity',
+    ]);
+    expect(evalEvents.every((e) => e.details.passed === true)).toBe(true);
+  });
+
+  it('does not emit eval-result events when no callback is supplied', () => {
+    const candidate = makeCandidate();
+    const memory = promote(
+      {
+        candidate,
+        contentHash: computeContentHash(candidate.content),
+        pipelineResult: makePipelineResult(),
+      },
+      memoryRepo,
+      auditRepo,
+    );
+    expect(auditRepo.findByAction('eval-result')).toHaveLength(0);
+    expect(memoryRepo.findById(memory.id)).not.toBeNull();
+  });
+
+  it('does not emit eval-result events in dry-run mode', () => {
+    const candidate = makeCandidate();
+    promote(
+      {
+        candidate,
+        contentHash: computeContentHash(candidate.content),
+        pipelineResult: makePipelineResult(),
+      },
+      memoryRepo,
+      auditRepo,
+      true,
+      undefined,
+      () => [{ name: 'x', passed: true, score: 1, threshold: 1, details: {} }],
+    );
+    expect(auditRepo.findByAction('eval-result')).toHaveLength(0);
+  });
+
+  it('contains a throwing callback — the promotion still succeeds', () => {
+    const candidate = makeCandidate();
+    const contentHash = computeContentHash(candidate.content);
+    const memory = promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult() },
+      memoryRepo,
+      auditRepo,
+      false,
+      undefined,
+      () => {
+        throw new Error('eval-surface fault');
+      },
+    );
+    // Memory persisted + 'promoted' event present; no eval-result events written.
+    expect(memoryRepo.findById(memory.id)).not.toBeNull();
+    expect(auditRepo.findByMemory(memory.id).some((e) => e.action === 'promoted')).toBe(true);
+    expect(auditRepo.findByAction('eval-result')).toHaveLength(0);
   });
 });
