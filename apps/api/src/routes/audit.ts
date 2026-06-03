@@ -5,11 +5,13 @@ import type { AuditRepository } from '@qmd-team-intent-kb/store';
  * Register audit event query routes.
  * The audit log is append-only; this endpoint only supports reads.
  *
- * GET /api/audit — query by tenantId, memoryId, or action (query params)
+ * GET /api/audit — query the tenant's audit events (query params)
  *
- * When multiple filters are supplied the most specific wins:
- * memoryId > action > tenantId. If none are supplied an empty array
- * is returned — a tenant scope is recommended for production use.
+ * TENANT SCOPING (bead tr08.21): `tenantId` is REQUIRED. Every result is scoped
+ * to that tenant. `memoryId` and `action` further narrow WITHIN the tenant —
+ * they never widen across tenants. Without `tenantId` the endpoint returns 400,
+ * not a global cross-tenant dump. This closes the prior leak where a bare
+ * `memoryId` / `action` query returned rows regardless of ownership.
  */
 export function registerAuditRoutes(app: FastifyInstance, repo: AuditRepository): void {
   app.get(
@@ -17,9 +19,10 @@ export function registerAuditRoutes(app: FastifyInstance, repo: AuditRepository)
     {
       schema: {
         tags: ['audit'],
-        summary: 'Query the immutable audit event log',
+        summary: 'Query the immutable audit event log (tenant-scoped)',
         description:
-          'Filter precedence: `memoryId` > `action` > `tenantId`. Returns `[]` if no filter is provided.',
+          '`tenantId` is REQUIRED. `memoryId` or `action` narrow within that tenant. ' +
+          'Omitting `tenantId` returns 400 — this endpoint never serves cross-tenant rows.',
       },
     },
     async (request, reply) => {
@@ -29,19 +32,24 @@ export function registerAuditRoutes(app: FastifyInstance, repo: AuditRepository)
         action?: string;
       };
 
+      // Tenant scope is mandatory — refuse rather than leak across tenants.
+      if (tenantId === undefined || tenantId.length === 0) {
+        return reply.code(400).send({
+          error: 'tenantId is required',
+          message: 'Audit queries are tenant-scoped; supply a tenantId query parameter.',
+        });
+      }
+
+      // memoryId / action narrow WITHIN the tenant via tenant-scoped lookups.
       if (memoryId !== undefined && memoryId.length > 0) {
-        return reply.send(repo.findByMemory(memoryId));
+        return reply.send(repo.findByMemoryAndTenant(memoryId, tenantId));
       }
 
       if (action !== undefined && action.length > 0) {
-        return reply.send(repo.findByAction(action));
+        return reply.send(repo.findByTenantAndAction(tenantId, action));
       }
 
-      if (tenantId !== undefined && tenantId.length > 0) {
-        return reply.send(repo.findByTenant(tenantId));
-      }
-
-      return reply.send([]);
+      return reply.send(repo.findByTenant(tenantId));
     },
   );
 }
