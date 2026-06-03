@@ -264,6 +264,22 @@ importers:
 
   packages/common: {}
 
+  packages/eval-surface:
+    dependencies:
+      '@qmd-team-intent-kb/common':
+        specifier: workspace:*
+        version: link:../common
+      '@qmd-team-intent-kb/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@qmd-team-intent-kb/store':
+        specifier: workspace:*
+        version: link:../store
+    devDependencies:
+      '@qmd-team-intent-kb/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+
   packages/policy-engine:
     dependencies:
       '@qmd-team-intent-kb/claude-runtime':
