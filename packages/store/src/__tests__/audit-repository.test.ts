@@ -144,4 +144,35 @@ describe('AuditRepository — aggregation queries', () => {
     repo.insert(makeAuditEvent({ tenantId: 'team-alpha', memoryId: randomUUID() }));
     expect(repo.countByTenantAndAction('team-unknown')).toEqual({});
   });
+
+  // Tenant-scoped lookups (bead tr08.21) — the safe path for single-tenant callers.
+
+  it('findByMemoryAndTenant returns only the matching tenant rows for a memory', () => {
+    const memoryId = randomUUID();
+    repo.insert(makeAuditEvent({ memoryId, tenantId: 'team-alpha' }));
+    repo.insert(makeAuditEvent({ memoryId, tenantId: 'team-other' }));
+
+    const alpha = repo.findByMemoryAndTenant(memoryId, 'team-alpha');
+    expect(alpha).toHaveLength(1);
+    expect(alpha[0]?.tenantId).toBe('team-alpha');
+  });
+
+  it('findByMemoryAndTenant returns [] when the memory belongs to another tenant', () => {
+    const memoryId = randomUUID();
+    repo.insert(makeAuditEvent({ memoryId, tenantId: 'team-other' }));
+    expect(repo.findByMemoryAndTenant(memoryId, 'team-alpha')).toEqual([]);
+  });
+
+  it('findByTenantAndAction scopes an action query to one tenant', () => {
+    repo.insert(
+      makeAuditEvent({ tenantId: 'team-alpha', action: 'promoted', memoryId: randomUUID() }),
+    );
+    repo.insert(
+      makeAuditEvent({ tenantId: 'team-other', action: 'promoted', memoryId: randomUUID() }),
+    );
+
+    const alpha = repo.findByTenantAndAction('team-alpha', 'promoted');
+    expect(alpha).toHaveLength(1);
+    expect(alpha[0]?.tenantId).toBe('team-alpha');
+  });
 });

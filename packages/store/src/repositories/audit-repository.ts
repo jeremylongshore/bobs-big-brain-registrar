@@ -98,8 +98,10 @@ function rowToEvent(row: unknown): AuditEvent {
 export class AuditRepository {
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindByMemory: Database.Statement;
+  private readonly stmtFindByMemoryAndTenant: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByAction: Database.Statement;
+  private readonly stmtFindByTenantAndAction: Database.Statement;
   private readonly stmtCountByAction: Database.Statement;
   private readonly stmtFindInRange: Database.Statement;
   private readonly stmtCountByTenantAndAction: Database.Statement;
@@ -137,12 +139,25 @@ export class AuditRepository {
       SELECT * FROM audit_events WHERE memory_id = ? ORDER BY timestamp ASC
     `);
 
+    // Tenant-scoped memory lookup — the safe path for any caller serving a
+    // single tenant (e.g. an HTTP read API). Prevents a cross-tenant leak where
+    // a known memory_id returns rows the caller's tenant does not own.
+    this.stmtFindByMemoryAndTenant = db.prepare(`
+      SELECT * FROM audit_events WHERE memory_id = ? AND tenant_id = ? ORDER BY timestamp ASC
+    `);
+
     this.stmtFindByTenant = db.prepare(`
       SELECT * FROM audit_events WHERE tenant_id = ? ORDER BY timestamp ASC
     `);
 
     this.stmtFindByAction = db.prepare(`
       SELECT * FROM audit_events WHERE action = ? ORDER BY timestamp ASC
+    `);
+
+    // Tenant-scoped action lookup — the safe path; an unscoped action query
+    // returns every tenant's rows for that action.
+    this.stmtFindByTenantAndAction = db.prepare(`
+      SELECT * FROM audit_events WHERE tenant_id = ? AND action = ? ORDER BY timestamp ASC
     `);
 
     this.stmtCountByAction = db.prepare(`
@@ -208,9 +223,26 @@ export class AuditRepository {
     return this.stmtFindAllChronological.all() as AuditChainRow[];
   }
 
-  /** Return all events associated with the given memory, in chronological order. */
+  /**
+   * Return all events associated with the given memory, in chronological order.
+   *
+   * NOTE: this is NOT tenant-scoped — it returns rows across all tenants for the
+   * given memory_id. Any caller serving a single tenant (e.g. an HTTP read API)
+   * MUST use {@link findByMemoryAndTenant} instead to avoid leaking another
+   * tenant's audit rows. This unscoped method exists for internal /
+   * operator-global use only.
+   */
   findByMemory(memoryId: string): AuditEvent[] {
     const rows = this.stmtFindByMemory.all(memoryId);
+    return rows.map(rowToEvent);
+  }
+
+  /**
+   * Tenant-scoped memory lookup — the safe path for single-tenant callers.
+   * Returns only the given tenant's audit events for the memory.
+   */
+  findByMemoryAndTenant(memoryId: string, tenantId: string): AuditEvent[] {
+    const rows = this.stmtFindByMemoryAndTenant.all(memoryId, tenantId);
     return rows.map(rowToEvent);
   }
 
@@ -220,9 +252,23 @@ export class AuditRepository {
     return rows.map(rowToEvent);
   }
 
-  /** Return all events of the given action type, in chronological order. */
+  /**
+   * Return all events of the given action type, in chronological order.
+   *
+   * NOTE: NOT tenant-scoped — returns every tenant's rows for the action.
+   * Single-tenant callers MUST use {@link findByTenantAndAction}.
+   */
   findByAction(action: string): AuditEvent[] {
     const rows = this.stmtFindByAction.all(action);
+    return rows.map(rowToEvent);
+  }
+
+  /**
+   * Tenant-scoped action lookup — the safe path for single-tenant callers.
+   * Returns only the given tenant's audit events for the action.
+   */
+  findByTenantAndAction(tenantId: string, action: string): AuditEvent[] {
+    const rows = this.stmtFindByTenantAndAction.all(tenantId, action);
     return rows.map(rowToEvent);
   }
 
