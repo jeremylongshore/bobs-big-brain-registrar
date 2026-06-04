@@ -33,7 +33,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@intentsolutions/audit-harness": "^0.1.0",
+    "@intentsolutions/audit-harness": "^1.1.5",
     "@qmd-team-intent-kb/store": "workspace:*",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/typescript-checker": "^9.6.1",
