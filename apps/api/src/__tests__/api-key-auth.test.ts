@@ -150,8 +150,10 @@ describe('API key auth — malformed Authorization headers', () => {
   });
 
   it('health endpoint is always exempt regardless of missing auth', async () => {
-    // Health is always exempt — no Authorization required
-    const res = await app.inject({ method: 'GET', url: '/health' });
-    expect(res.statusCode).not.toBe(401);
+    // /api/health is always reachable without a token so liveness probes work
+    // even when an API key is configured. Asserting 200 (not merely "not 401")
+    // proves the real route is exempt, not that a 404 happens to dodge auth.
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(200);
   });
 });

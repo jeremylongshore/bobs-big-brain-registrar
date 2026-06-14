@@ -14,6 +14,7 @@ import { MemoryService } from './services/memory-service.js';
 import { PolicyService } from './services/policy-service.js';
 import { HealthService } from './services/health-service.js';
 import { SearchService } from './services/search-service.js';
+import type { QmdQueryPort } from './services/search-service.js';
 import { registerCandidateRoutes } from './routes/candidates.js';
 import { registerMemoryRoutes } from './routes/memories.js';
 import { registerPolicyRoutes } from './routes/policies.js';
@@ -42,6 +43,12 @@ export interface AppDependencies {
   rateLimitWindowMs?: number;
   /** Max body size in bytes (default 1MB) */
   maxBodySize?: number;
+  /**
+   * Optional qmd query port. When provided, search runs through qmd so every
+   * hit carries a `qmd://` citation. When omitted, search falls back to SQLite
+   * text-match over the curated store.
+   */
+  qmdAdapter?: QmdQueryPort;
 }
 
 /**
@@ -74,7 +81,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const memoryService = new MemoryService(memoryRepo, auditRepo);
   const policyService = new PolicyService(policyRepo);
   const healthService = new HealthService(deps.db);
-  const searchService = new SearchService(memoryRepo);
+  const searchService = new SearchService(memoryRepo, deps.qmdAdapter);
   const importService = new ImportService(candidateRepo, memoryRepo, batchRepo, linksRepo);
 
   // Routes are wrapped in an inner register() so they load AFTER the

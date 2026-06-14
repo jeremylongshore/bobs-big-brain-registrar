@@ -43,7 +43,10 @@ export function registerApiKeyAuth(app: FastifyInstance, apiKey: string | undefi
   }
 
   app.addHook('onRequest', async (request, reply) => {
-    if (request.url === '/health' || request.url === '/health/') {
+    // The health endpoint is always public so liveness probes (tailnet
+    // monitoring, deploy smokes) can reach it without a token. The route is
+    // registered at /api/health.
+    if (request.url === '/api/health' || request.url === '/api/health/') {
       return;
     }
 

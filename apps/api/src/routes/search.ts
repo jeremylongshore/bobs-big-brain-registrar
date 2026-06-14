@@ -26,7 +26,7 @@ export function registerSearchRoutes(app: FastifyInstance, service: SearchServic
           return reply.status(400).send({ error: `Invalid search query: ${parsed.error.message}` });
         }
 
-        const result = service.search(parsed.data);
+        const result = await service.search(parsed.data);
         return reply.send(result);
       } catch (err) {
         if (err instanceof ApiError) {
