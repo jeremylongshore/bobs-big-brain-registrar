@@ -4,7 +4,7 @@ description: |
   Runs an end-of-session capture sweep for the governed knowledge brain: reviews what
   happened, classifies insights, checks for conflicts, and proposes governed memories
   via the teamkb MCP tools. Admin capture workflow that complements the one-shot
-  /brain-promote. Use when wrapping up a session with team-relevant discoveries, or
+  /brain-save. Use when wrapping up a session with team-relevant discoveries, or
   when importing existing docs into the brain. Trigger with "/teamkb", "capture this
   session", or "sweep for team knowledge".
 allowed-tools: 'Read, Glob, Grep, Agent'
@@ -21,7 +21,7 @@ argument-hint: '[capture | import | status | review]'
 Capture team memory at the end of a session: review what happened, classify the
 insights worth keeping, check them against existing memories for conflicts, and queue
 them for governance review. This is the multi-step, subagent-driven capture workflow
-that sits alongside the one-shot `/brain-promote`.
+that sits alongside the one-shot `/brain-save`.
 
 ## Overview
 
@@ -131,5 +131,5 @@ Do NOT propose:
 ## Resources
 
 - The read counterpart: the `/brain` skill (cited, member-safe queries).
-- The one-shot capture: the `/brain-promote` skill.
+- The one-shot capture: the `/brain-save` skill.
 - [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance plane.

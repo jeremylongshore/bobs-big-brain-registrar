@@ -78,7 +78,7 @@ Each `citation` is a `qmd://COLLECTION/FILENAME` URI — the receipt for that hi
 
 If `results` is empty, say so plainly: the brain has nothing governed on that topic.
 Do **not** fall back to general knowledge and present it as the team's answer.
-Optionally note that the topic may need to be captured (an admin runs `/brain-promote`).
+Optionally note that the topic may need to be saved (an admin runs `/brain-save`).
 
 ## Output
 
@@ -107,7 +107,7 @@ Sources:
 
 → The brain has nothing governed on a refund policy. I won't guess from general
   knowledge. If this should be team knowledge, an admin can capture it with
-  /brain-promote.
+  /brain-save.
 ```
 
 ## Error Handling
@@ -117,12 +117,12 @@ Sources:
 | `teamkb_search` returns empty `results`           | State the brain has nothing governed; do not fabricate.                               |
 | Tool reports `source: "brain-api"` with 0 results | The remote brain answered but had no match — treat as empty, not as an error.         |
 | MCP tool unavailable                              | The plugin/MCP server is not enabled; tell the user to install/enable `intent-brain`. |
-| User asks to write/capture                        | Out of scope here — direct them to `/brain-promote` (admin-only).                     |
+| User asks to write/capture                        | Out of scope here — direct them to `/brain-save` (admin-only).                        |
 
 ## Guardrails
 
 - Read-only. This skill never writes to the corpus — capture and promotion are
-  admin-only (`/brain-promote`).
+  admin-only (`/brain-save`).
 - Never invent a qmd:// URI. Cite only URIs returned by `teamkb_search`.
 - Prefer fewer, well-cited claims over a broad answer that cannot be anchored.
 
