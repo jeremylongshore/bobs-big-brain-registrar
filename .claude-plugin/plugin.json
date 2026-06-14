@@ -6,7 +6,7 @@
     "name": "Intent Solutions",
     "email": "jeremy@intentsolutions.io"
   },
-  "homepage": "https://github.com/jeremylongshore/compile-then-govern",
+  "homepage": "https://github.com/intent-solutions-io/compile-then-govern",
   "repository": "https://github.com/jeremylongshore/qmd-team-intent-kb",
   "license": "Apache-2.0",
   "keywords": ["memory", "team", "knowledge", "governance", "qmd", "brain", "citations", "rag"],

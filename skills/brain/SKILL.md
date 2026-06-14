@@ -128,6 +128,6 @@ Sources:
 
 ## Resources
 
-- [Compile-Then-Govern](https://github.com/jeremylongshore/compile-then-govern) — the stack this brain belongs to.
+- [Compile-Then-Govern](https://github.com/intent-solutions-io/compile-then-govern) — the stack this brain belongs to.
 - [intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os) — the compiler (ICO).
 - [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance + retrieval plane (this plugin's home).

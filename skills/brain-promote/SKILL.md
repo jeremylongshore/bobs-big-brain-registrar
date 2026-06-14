@@ -127,6 +127,6 @@ before or after a batch of proposals.
 
 ## Resources
 
-- [Compile-Then-Govern](https://github.com/jeremylongshore/compile-then-govern) — the stack and its governance thesis.
+- [Compile-Then-Govern](https://github.com/intent-solutions-io/compile-then-govern) — the stack and its governance thesis.
 - [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance plane (this plugin's home).
 - The read counterpart: the `/brain` skill (cited, member-safe queries).
