@@ -1,8 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { MemoryCategory, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
+import { MemoryCategory, MemoryLifecycleState, SearchScope } from '@qmd-team-intent-kb/schema';
 import type { McpServerConfig } from './config.js';
 import { propose } from './tools/propose.js';
+import { searchTool } from './tools/search.js';
 import { importFiles } from './tools/import.js';
 import { getStatus } from './tools/status.js';
 import { applyTransition } from './tools/transition.js';
@@ -49,6 +50,41 @@ export function createServer(
           category: params.category,
           filePaths: params.filePaths,
         },
+        config,
+      );
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // teamkb_search — cited retrieval over the governed corpus
+  // -------------------------------------------------------------------------
+  server.tool(
+    'teamkb_search',
+    'Search the governed team knowledge base and return qmd:// citations. Every hit is anchored to a verifiable source — this is how the brain answers with receipts, not just recall. Read-only; defaults to the curated scope.',
+    {
+      query: z.string().min(1).describe('Natural-language search query'),
+      scope: SearchScope.optional().describe(
+        'Search scope: curated (default, governed memories), all, inbox, or archived',
+      ),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe('Maximum number of cited hits to return (default 10)'),
+    },
+    async (params) => {
+      const result = await searchTool(
+        { query: params.query, scope: params.scope, limit: params.limit },
         config,
       );
       return {

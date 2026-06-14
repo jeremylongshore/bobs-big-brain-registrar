@@ -14,6 +14,21 @@ export interface McpServerConfig {
   dbPath: string;
   /** Absolute path to the feedback directory */
   feedbackPath: string;
+  /**
+   * Absolute path to the git-exporter output dir qmd indexes (local search
+   * mode). Optional on the type so test configs can omit it; `resolveConfig`
+   * always populates it and `teamkb_search` falls back to `<basePath>/kb-export`.
+   */
+  exportDir?: string;
+  /**
+   * The brain API base URL. When set, `teamkb_search` proxies to the remote
+   * brain over HTTP (team mode, e.g. http://dev:3847). When unset, search runs
+   * qmd in-process against the local index (demo/local mode). This is the
+   * hosting flip: config, not a rewrite.
+   */
+  apiUrl?: string;
+  /** Per-user bearer token sent to the remote brain API (team mode). */
+  apiToken?: string;
 }
 
 /**
@@ -41,11 +56,19 @@ export function resolveConfig(): McpServerConfig {
     throw new Error(`TEAMKB_BASE_PATH is invalid: ${pathCheck.reason}`);
   }
 
+  const apiUrlRaw = process.env['TEAMKB_API_URL'];
+  const apiTokenRaw = process.env['TEAMKB_API_TOKEN'] ?? process.env['TEAMKB_API_KEY'];
+
   return {
     tenantId: tenantId.trim(),
     basePath,
     spoolPath: join(basePath, 'spool'),
     dbPath: join(basePath, 'teamkb.db'),
     feedbackPath: join(basePath, 'feedback'),
+    exportDir: process.env['TEAMKB_EXPORT_DIR']
+      ? resolve(process.env['TEAMKB_EXPORT_DIR'])
+      : join(basePath, 'kb-export'),
+    apiUrl: apiUrlRaw !== undefined && apiUrlRaw !== '' ? apiUrlRaw : undefined,
+    apiToken: apiTokenRaw !== undefined && apiTokenRaw !== '' ? apiTokenRaw : undefined,
   };
 }
