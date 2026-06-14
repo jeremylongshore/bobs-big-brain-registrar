@@ -13,8 +13,9 @@ import { createServer, isQmdAvailable } from './server.js';
 async function main(): Promise<void> {
   const config = resolveConfig();
   const withSync = await isQmdAvailable();
+  const canWrite = config.role === 'admin';
 
-  const server = createServer(config, { withSync });
+  const server = createServer(config, { withSync, canWrite });
   const transport = new StdioServerTransport();
 
   // Graceful shutdown — close the transport cleanly before exiting
@@ -34,7 +35,9 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   await server.connect(transport);
-  process.stderr.write(`[teamkb-mcp] Started — tenant=${config.tenantId} sync=${withSync}\n`);
+  process.stderr.write(
+    `[teamkb-mcp] Started — tenant=${config.tenantId} role=${config.role ?? 'member'} write=${canWrite} sync=${withSync}\n`,
+  );
 }
 
 main().catch((err: unknown) => {

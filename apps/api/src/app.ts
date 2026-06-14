@@ -26,7 +26,10 @@ import { ImportService } from './services/import-service.js';
 import { registerGraphRoutes } from './routes/graph.js';
 import { registerRateLimiter } from './middleware/rate-limiter.js';
 import { registerApiKeyAuth } from './middleware/api-key-auth.js';
+import { registerWriteGate } from './middleware/write-gate.js';
 import { registerInputSanitizer } from './middleware/input-sanitizer.js';
+import { InMemoryTokenRegistry, loadTokenRecords } from './auth/token-registry.js';
+import type { TokenRecord } from './auth/token-registry.js';
 import { registerOpenApi } from './openapi.js';
 
 /** External dependencies injected into the application factory. */
@@ -35,8 +38,18 @@ export interface AppDependencies {
   db: Database.Database;
   /** Suppress Fastify's built-in logger — useful in tests. Default: false. */
   silent?: boolean;
-  /** Optional API key for bearer token auth. If unset, auth is skipped. */
+  /**
+   * Optional single shared key for bearer auth — back-compat. Promoted to one
+   * admin token (actor "shared"). If both this and `tokens` are unset, auth is
+   * skipped (dev mode).
+   */
   apiKey?: string;
+  /**
+   * Per-user token records (token → actor + role). Takes precedence over
+   * `apiKey`. This is the per-user identity + revocation path: drop a record
+   * to cut off one person.
+   */
+  tokens?: TokenRecord[];
   /** Max requests per rate limit window (default 100) */
   rateLimitMax?: number;
   /** Rate limit window in ms (default 60000) */
@@ -63,7 +76,17 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: !deps.silent, bodyLimit });
 
   registerRateLimiter(app, deps.rateLimitMax ?? 100, deps.rateLimitWindowMs ?? 60000);
-  registerApiKeyAuth(app, deps.apiKey);
+  const tokenRegistry = new InMemoryTokenRegistry(
+    loadTokenRecords({
+      records: deps.tokens,
+      apiKey: deps.apiKey,
+      tokensJson: process.env['TEAMKB_TOKENS'],
+      tokensFile: process.env['TEAMKB_TOKENS_FILE'],
+    }),
+  );
+  registerApiKeyAuth(app, tokenRegistry);
+  // Must follow auth so `request.role` is set before the gate inspects it.
+  registerWriteGate(app);
   registerInputSanitizer(app, deps.maxBodySize ?? 1_048_576);
 
   // OpenAPI must be registered BEFORE routes so their schema metadata

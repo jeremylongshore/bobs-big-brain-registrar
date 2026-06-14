@@ -1,51 +1,53 @@
-import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import type { TokenRegistry, TokenRole } from '../auth/token-registry.js';
 
-/**
- * Compare two strings in constant time to prevent timing attacks.
- * Pads the shorter string to match lengths before comparison.
- */
-function timingSafeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-
-  // timingSafeEqual requires equal-length buffers.
-  // If lengths differ, compare against a dummy buffer (constant-time rejection).
-  if (bufA.length !== bufB.length) {
-    // Still call timingSafeEqual so the timing profile stays constant
-    timingSafeEqual(bufA, Buffer.alloc(bufA.length));
-    return false;
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** Audit actor resolved from the bearer token (undefined in dev no-auth). */
+    actor?: string;
+    /** Role granted by the token. `admin` may write/promote. */
+    role?: TokenRole;
   }
-
-  return timingSafeEqual(bufA, bufB);
 }
 
 /**
- * Bearer token authentication middleware.
+ * Per-user bearer token authentication middleware.
  *
  * Security model:
- * - **Production (NODE_ENV=production)**: API key is REQUIRED. If not set,
+ * - **Production (NODE_ENV=production)**: the registry must be non-empty, or
  *   the server refuses to start (fail-closed).
- * - **Development**: If TEAMKB_API_KEY is not set, authentication is skipped.
- * - Token comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
- * - The health endpoint is always exempt.
+ * - **Development**: an empty registry means auth is skipped; requests run as
+ *   actor `dev`.
+ * - Each request's bearer token is resolved to an identity (actor + role) in
+ *   constant time. Unknown/revoked tokens get 401.
+ * - `/api/health` is always exempt so liveness probes work without a token.
+ *
+ * The resolved `actor`/`role` are decorated onto the request for downstream
+ * audit logging and the admin-only write gate.
  */
-export function registerApiKeyAuth(app: FastifyInstance, apiKey: string | undefined): void {
+export function registerApiKeyAuth(app: FastifyInstance, registry: TokenRegistry): void {
   const isProduction = process.env['NODE_ENV'] === 'production';
 
-  if (apiKey === undefined || apiKey === '') {
+  app.decorateRequest('actor', undefined);
+  app.decorateRequest('role', undefined);
+
+  if (registry.isEmpty()) {
     if (isProduction) {
       throw new Error(
-        'TEAMKB_API_KEY must be set in production. Refusing to start without authentication.',
+        'TEAMKB_API_KEY (or a token registry) must be set in production. Refusing to start without authentication.',
       );
     }
-    return; // Dev mode — no auth required
+    // Dev mode — no auth, but stamp a known actor so audit logs are populated.
+    app.addHook('onRequest', async (request) => {
+      request.actor = 'dev';
+      request.role = 'admin';
+    });
+    return;
   }
 
   app.addHook('onRequest', async (request, reply) => {
     // The health endpoint is always public so liveness probes (tailnet
-    // monitoring, deploy smokes) can reach it without a token. The route is
-    // registered at /api/health.
+    // monitoring, deploy smokes) can reach it without a token.
     if (request.url === '/api/health' || request.url === '/api/health/') {
       return;
     }
@@ -75,9 +77,18 @@ export function registerApiKeyAuth(app: FastifyInstance, apiKey: string | undefi
     const scheme = authHeader.slice(0, spaceIndex);
     const token = authHeader.slice(spaceIndex + 1);
 
-    if (scheme !== 'Bearer' || !timingSafeCompare(token, apiKey)) {
+    if (scheme !== 'Bearer') {
       reply.status(401);
       throw new Error('Invalid API key');
     }
+
+    const identity = registry.resolve(token);
+    if (identity === undefined) {
+      reply.status(401);
+      throw new Error('Invalid API key');
+    }
+
+    request.actor = identity.actor;
+    request.role = identity.role;
   });
 }

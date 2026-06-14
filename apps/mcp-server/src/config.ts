@@ -29,6 +29,12 @@ export interface McpServerConfig {
   apiUrl?: string;
   /** Per-user bearer token sent to the remote brain API (team mode). */
   apiToken?: string;
+  /**
+   * Install role. `admin` registers write tools (propose/import/transition/
+   * vault) — "Jeremy-only promote". `member` (default) gets read tools only.
+   * Client-side UX gate; the brain API enforces the same boundary server-side.
+   */
+  role?: 'admin' | 'member';
 }
 
 /**
@@ -70,5 +76,6 @@ export function resolveConfig(): McpServerConfig {
       : join(basePath, 'kb-export'),
     apiUrl: apiUrlRaw !== undefined && apiUrlRaw !== '' ? apiUrlRaw : undefined,
     apiToken: apiTokenRaw !== undefined && apiTokenRaw !== '' ? apiTokenRaw : undefined,
+    role: process.env['TEAMKB_ROLE'] === 'admin' ? 'admin' : 'member',
   };
 }

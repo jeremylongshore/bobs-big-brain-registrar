@@ -25,6 +25,7 @@ import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
+import { loadTokenRecords } from './auth/token-registry.js';
 import type { QmdQueryPort } from './services/search-service.js';
 
 async function main(): Promise<void> {
@@ -50,7 +51,20 @@ async function main(): Promise<void> {
     );
   }
 
-  const app = buildApp({ db, apiKey: config.apiKey, qmdAdapter });
+  // Per-user tokens: TEAMKB_TOKENS (json) / TEAMKB_TOKENS_FILE / default
+  // ~/.teamkb/tokens.json, falling back to the single TEAMKB_API_KEY. Each
+  // record maps token → actor + role; revocation = drop a record + restart.
+  const tokens = loadTokenRecords({
+    apiKey: config.apiKey,
+    tokensJson: process.env['TEAMKB_TOKENS'],
+    tokensFile: process.env['TEAMKB_TOKENS_FILE'] ?? resolveTeamKbPath('tokens.json'),
+  });
+  if (tokens.length > 0) {
+    const roles = tokens.map((t) => `${t.actor}:${t.role}`).join(', ');
+    process.stderr.write(`[teamkb-api] auth: ${tokens.length} token(s) loaded — ${roles}\n`);
+  }
+
+  const app = buildApp({ db, tokens, qmdAdapter });
   await app.ready();
 
   const shutdown = async (signal: string): Promise<void> => {
