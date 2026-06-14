@@ -1,10 +1,19 @@
 {
   "mcpServers": {
     "teamkb": {
+      "name": "teamkb",
+      "description": "Governed team knowledge brain — cited search (teamkb_search) plus admin-gated capture/govern tools. Returns qmd:// citations.",
+      "version": "0.4.0",
+      "enabled": true,
+      "transport": "stdio",
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/apps/mcp-server/dist/index.js"],
       "env": {
-        "TEAMKB_TENANT_ID": "${TEAMKB_TENANT_ID}"
+        "TEAMKB_TENANT_ID": "${TEAMKB_TENANT_ID}",
+        "TEAMKB_API_URL": "${TEAMKB_API_URL}",
+        "TEAMKB_API_TOKEN": "${TEAMKB_API_TOKEN}",
+        "TEAMKB_ROLE": "${TEAMKB_ROLE}",
+        "TEAMKB_EXPORT_DIR": "${TEAMKB_EXPORT_DIR}"
       }
     }
   }

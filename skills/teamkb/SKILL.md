@@ -1,56 +1,92 @@
 ---
 name: teamkb
 description: |
-  Team knowledge governance for Claude Code. Captures architectural decisions,
-  patterns, conventions, and insights during sessions. Shares governed
-  knowledge across the team via qmd. Use when making team-relevant
-  discoveries or importing existing docs.
-allowed-tools: 'Read, Glob, Grep, Bash, Agent'
-user-invocable: true
-argument-hint: '[capture|import|status|review]'
+  Runs an end-of-session capture sweep for the governed knowledge brain: reviews what
+  happened, classifies insights, checks for conflicts, and proposes governed memories
+  via the teamkb MCP tools. Admin capture workflow that complements the one-shot
+  /brain-promote. Use when wrapping up a session with team-relevant discoveries, or
+  when importing existing docs into the brain. Trigger with "/teamkb", "capture this
+  session", or "sweep for team knowledge".
+allowed-tools: 'Read, Glob, Grep, Agent'
+version: 1.0.0
+author: Intent Solutions <jeremy@intentsolutions.io>
+license: Apache-2.0
+compatibility: 'Designed for Claude Code; requires the intent-brain plugin with admin role (TEAMKB_ROLE=admin) for the write tools'
+tags: [brain, capture, governance, knowledge, admin]
+argument-hint: '[capture | import | status | review]'
 ---
 
-You are assisting with **governed team knowledge management**. This plugin ensures
-that team memory is captured, validated through deterministic governance policies,
-and shared reliably.
+# TeamKB — governed team-knowledge capture sweep
 
-## Available MCP Tools
+Capture team memory at the end of a session: review what happened, classify the
+insights worth keeping, check them against existing memories for conflicts, and queue
+them for governance review. This is the multi-step, subagent-driven capture workflow
+that sits alongside the one-shot `/brain-promote`.
 
-When the teamkb MCP server is running, you have these tools:
+## Overview
 
-- **teamkb_propose** — Capture a single insight as a memory candidate
-  - Input: `{ title, content, category?, filePaths? }`
-  - Categories: decision, pattern, convention, architecture, troubleshooting, onboarding, reference
-  - Writes to spool (not directly to DB). Governance pipeline decides promotion.
+The brain captures knowledge, validates it through deterministic governance policies,
+and shares it across the team via qmd. This skill drives the **capture** side: it uses
+the `teamkb` MCP tools to propose candidates (never writing governed state directly —
+the curator promotes after policy checks) and delegates the judgment-heavy steps to
+specialized subagents.
 
-- **teamkb_import** — Bulk import files as memory candidates
-  - Input: `{ glob, basePath? }`
-  - Each file becomes a separate candidate in the spool.
+## Prerequisites
 
-- **teamkb_status** — Check team knowledge health
-  - Shows counts by lifecycle state, category, and recent rejection feedback.
+- The `intent-brain` plugin is installed with **admin** role (`TEAMKB_ROLE=admin`), so
+  the write MCP tools (`teamkb_propose`, `teamkb_status`) are registered. A member
+  install is read-only and cannot capture.
+- For conflict checking, the brain has an existing corpus to compare against.
 
-- **teamkb_transition** — Change a memory's lifecycle state
-  - Input: `{ memoryId, to, reason, actor }`
-  - Valid transitions: active→deprecated, active→superseded, active→archived, deprecated→active, deprecated→archived, superseded→archived
+## Authentication
 
-- **teamkb_sync** — Trigger qmd embedding (only if qmd installed)
+In team mode, the write tools reach the brain API over the tailnet with the admin's
+per-user bearer token (`TEAMKB_API_TOKEN`), sent as an `Authorization: Bearer` header.
+A non-admin token is rejected server-side with `403`. Never hardcode the token; supply
+it via env or a `headersHelper`. In local mode no token is needed.
 
-## When to Capture
+## Available MCP tools
 
-Recognize these capturable moments during sessions:
+- **teamkb_propose** — capture a single insight as a candidate `{ title, content, category?, filePaths? }`. Writes to the spool; the governance pipeline decides promotion.
+- **teamkb_import** — bulk-import files as candidates `{ glob, basePath? }`.
+- **teamkb_status** — counts by lifecycle state, category, and recent rejection feedback.
+- **teamkb_transition** — change a memory's lifecycle state `{ memoryId, to, reason, actor }`.
 
-1. **Decisions made** — "Let's use X instead of Y because..." → category: decision
-2. **Patterns discovered** — "This pattern works well for..." → category: pattern
-3. **Conventions agreed** — "We should always..." → category: convention
-4. **Architecture documented** — "The data flows from..." → category: architecture
-5. **Bugs solved** — "The root cause was..." → category: troubleshooting
-6. **Setup documented** — "To get this running..." → category: onboarding
+## Instructions
 
-## Quality Bar
+### Step 1: Review the session
+
+Use `Read`, `Glob`, and `Grep` to gather what changed and what was decided — the diff,
+the files touched, and any decisions stated in the conversation. Delegate the sweep to
+the **@teamkb-scout** subagent (via `Agent`) when the session is large.
+
+### Step 2: Classify each candidate insight
+
+Recognize capturable moments and assign a category:
+
+1. Decisions made ("Let's use X instead of Y because…") → `decision`
+2. Patterns discovered ("This pattern works well for…") → `pattern`
+3. Conventions agreed ("We should always…") → `convention`
+4. Architecture documented ("The data flows from…") → `architecture`
+5. Bugs solved ("The root cause was…") → `troubleshooting`
+6. Setup documented ("To get this running…") → `onboarding`
+
+Delegate ambiguous content to **@teamkb-classifier**.
+
+### Step 3: Check for conflicts
+
+Before proposing, delegate to **@teamkb-conflict-checker** to compare each candidate
+against existing memories. Surface conflicts rather than creating duplicates or
+contradictions — the governance layer tracks contradictions explicitly.
+
+### Step 4: Propose
+
+For each surviving candidate, call `teamkb_propose`. Then call `teamkb_status` to
+confirm the candidates landed and review any recent rejection feedback.
+
+## Quality bar
 
 Before proposing, ask: **"Would a new team member benefit from finding this in 30 days?"**
-
 Do NOT propose:
 
 - Session-specific debugging steps (too ephemeral)
@@ -60,22 +96,40 @@ Do NOT propose:
 
 ## Subagents
 
-- **@teamkb-curator** — End-of-session capture sweep. Reviews what happened and proposes insights.
-- **@teamkb-classifier** — Categorizes ambiguous content into a MemoryCategory.
-- **@teamkb-conflict-checker** — Compares proposed memory against existing ones for conflicts.
+- **@teamkb-scout** — sweeps the session for capturable moments.
+- **@teamkb-curator** — end-of-session capture orchestration.
+- **@teamkb-classifier** — categorizes ambiguous content into a MemoryCategory.
+- **@teamkb-conflict-checker** — compares a proposed memory against existing ones.
 
-## Usage Examples
+## Output
+
+- A list of proposed candidates with their categories and returned `candidateId`s.
+- Any conflicts surfaced (and how they were resolved).
+- A closing `teamkb_status` summary.
+
+## Error Handling
+
+| Situation                      | Response                                                              |
+| ------------------------------ | --------------------------------------------------------------------- |
+| Write tools absent             | The install is `member` role; capture requires an `admin` install.    |
+| Propose returns `403`          | The token is not an admin token — the gate working as designed.       |
+| Candidate may contain a secret | Strip it; do not rely on pipeline secret-detection as the only check. |
+
+## Examples
 
 ```
 /teamkb capture
-→ Invokes @teamkb-curator to review session and propose memories
+→ @teamkb-curator reviews the session, proposes 3 candidates (1 decision, 2 patterns).
 
 /teamkb import docs/**/*.md
-→ Bulk imports matching files as memory candidates
+→ Bulk-imports matching files as candidates queued for governance review.
 
 /teamkb status
-→ Shows team knowledge health dashboard
-
-/teamkb review
-→ Reviews recent rejections and suggests improvements
+→ Shows counts by lifecycle state and recent rejection feedback.
 ```
+
+## Resources
+
+- The read counterpart: the `/brain` skill (cited, member-safe queries).
+- The one-shot capture: the `/brain-promote` skill.
+- [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance plane.
