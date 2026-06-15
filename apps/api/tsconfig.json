@@ -14,6 +14,7 @@
     { "path": "../../packages/store" },
     { "path": "../../packages/policy-engine" },
     { "path": "../../packages/test-fixtures" },
+    { "path": "../../packages/qmd-adapter" },
     { "path": "../curator" }
   ]
 }

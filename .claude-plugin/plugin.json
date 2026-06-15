@@ -1,12 +1,14 @@
 {
-  "name": "qmd-team-intent-kb",
-  "version": "0.3.0",
-  "description": "Governed team memory — deterministic policy, lifecycle, team sharing via qmd",
+  "name": "intent-brain",
+  "version": "0.4.0",
+  "description": "Query Intent Solutions' governed knowledge brain from Claude Code — qmd://-cited answers, per-user audit, deterministic governance. Compile, then govern.",
   "author": {
     "name": "Intent Solutions",
-    "url": "https://github.com/jeremylongshore"
+    "email": "jeremy@intentsolutions.io"
   },
+  "homepage": "https://github.com/intent-solutions-io/compile-then-govern",
   "repository": "https://github.com/jeremylongshore/qmd-team-intent-kb",
-  "license": "UNLICENSED",
-  "keywords": ["memory", "team", "knowledge", "governance", "qmd"]
+  "license": "Apache-2.0",
+  "keywords": ["memory", "team", "knowledge", "governance", "qmd", "brain", "citations", "rag"],
+  "commands": []
 }

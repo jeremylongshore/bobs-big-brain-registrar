@@ -23,11 +23,25 @@ export type SearchQuery = z.infer<typeof SearchQuery>;
 
 /** A single search result hit */
 export const SearchHit = z.object({
-  memoryId: Uuid,
+  /**
+   * UUID of the governed memory this hit resolves to. Present on the SQLite
+   * metadata path; absent on the qmd retrieval path, where a hit is anchored
+   * by its `citation` (qmd:// URI) rather than a store row.
+   */
+  memoryId: Uuid.optional(),
   title: NonEmptyString,
   snippet: z.string(),
   score: z.number().min(0).max(1),
-  category: MemoryCategory,
+  /** Governed memory category. Absent on qmd hits, which carry `collection`. */
+  category: MemoryCategory.optional(),
+  /**
+   * The tamper-evident citation for this hit — a `qmd://<collection>/<file>`
+   * URI emitted by qmd. This is the wedge: every retrieved answer is anchored
+   * to a verifiable source, not just recalled. Present on the qmd path.
+   */
+  citation: z.string().optional(),
+  /** qmd collection the hit came from (e.g. `kb-curated`). Present on the qmd path. */
+  collection: z.string().optional(),
   highlightedContent: z.string().optional(),
   matchedAt: IsoDatetime,
 });

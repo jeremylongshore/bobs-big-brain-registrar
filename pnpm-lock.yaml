@@ -102,6 +102,9 @@ importers:
       '@qmd-team-intent-kb/curator':
         specifier: workspace:*
         version: link:../curator
+      '@qmd-team-intent-kb/qmd-adapter':
+        specifier: workspace:*
+        version: link:../../packages/qmd-adapter
       '@qmd-team-intent-kb/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -217,6 +220,9 @@ importers:
       '@qmd-team-intent-kb/curator':
         specifier: workspace:*
         version: link:../curator
+      '@qmd-team-intent-kb/qmd-adapter':
+        specifier: workspace:*
+        version: link:../../packages/qmd-adapter
       '@qmd-team-intent-kb/schema':
         specifier: workspace:*
         version: link:../../packages/schema
