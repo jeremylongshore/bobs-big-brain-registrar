@@ -8,3 +8,4 @@ CHANGELOG.md
 .beads/
 .claude/worktrees/
 AGENTS.md
+plugin-runtime/

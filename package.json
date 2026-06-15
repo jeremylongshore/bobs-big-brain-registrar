@@ -30,7 +30,8 @@
     "crap": "tsx scripts/crap-score.ts",
     "harness-pin": "bash scripts/harness-pin.sh --verify",
     "harness-pin:init": "bash scripts/harness-pin.sh --init",
-    "prepare": "husky"
+    "prepare": "husky",
+    "build:plugin-runtime": "esbuild apps/mcp-server/src/remote-client.ts --bundle --platform=node --format=cjs --target=node20 --outfile=plugin-runtime/teamkb-remote.cjs"
   },
   "devDependencies": {
     "@intentsolutions/audit-harness": "^1.1.5",
@@ -44,6 +45,7 @@
     "@types/pg": "8.20.0",
     "@vitest/coverage-v8": "^4.1.5",
     "dependency-cruiser": "17.4.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.2.0",
     "husky": "^9.1.7",
     "knip": "^6.4.1",
