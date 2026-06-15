@@ -4,6 +4,7 @@ export default tseslint.config(
   // Global ignores
   {
     ignores: [
+      'plugin-runtime/**',
       '**/dist/**',
       '**/build/**',
       '**/coverage/**',
