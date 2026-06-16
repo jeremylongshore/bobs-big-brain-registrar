@@ -143,7 +143,19 @@ SQLite via better-sqlite3 with 5 tables: `candidates`, `curated_memories`, `gove
 
 ### API (apps/api)
 
-Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware stack: rate-limiter → api-key-auth → input-sanitizer. Routes: `/api/candidates`, `/api/memories`, `/api/policies`, `/api/audit`, `/health`.
+Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware stack: rate-limiter → api-key-auth → input-sanitizer. Routes: `/api/candidates`, `/api/memories`, `/api/policies`, `/api/audit`, `/api/search`, `/health`.
+
+#### Cited-query report (brain adoption KPI)
+
+`POST /api/search` emits one structured `query-access` access-log line per read (`{ actor, query, scope, resultCount, citations }`) — deliberately a log line, _not_ a governance `AuditEvent`, so the hash-chained trail stays pure for `ico audit verify`. `apps/api/src/reports/` aggregates those lines into the **weekly cited-query count per teammate** (a _cited_ query = one that returned ≥1 `qmd://` citation):
+
+```bash
+pnpm build                              # produce apps/api/dist
+pnpm report:cited-queries               # last 7 days, human table
+pnpm report:cited-queries --days 30 --json   # JSON for the notification hub
+```
+
+The aggregator (`cited-queries.ts`) is pure and source-agnostic; the CLI (`weekly-cited-queries-cli.ts`) is the only piece that reads the systemd **user** journal (`teamkb-brain-api.service`, persistent journald = the durable access log). `--stdin` pipes lines from any source instead. Intended to run weekly via cron or the notification hub.
 
 ### Curator (apps/curator)
 
