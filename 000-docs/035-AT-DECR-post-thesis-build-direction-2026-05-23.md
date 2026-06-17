@@ -11,8 +11,15 @@ cross_repo: byte-identical copy at qmd-team-intent-kb/000-docs/035-AT-DECR-post-
 seats_convened: [CTO, GC, CFO, CSO, CISO, 'VP DevRel', CMO]
 seats_muted_in_synthesis: [CMO]
 status: binding decision record — supersedes only by explicit later DECR
-license: MIT
+license: Apache-2.0
 ---
+
+> **Editorial note (2026-06-16):** the General Counsel's license-posture line in
+> §2.2 ("MIT on both projects") reflects the state on 2026-05-23. ICO and INTKB
+> have since been **relicensed MIT → Apache-2.0** — see each repo's `LICENSE` and
+> this record's `license:` frontmatter (now `Apache-2.0`). The historical quote is
+> preserved unaltered; this note supersedes its license claim. Applied identically
+> to the byte-identical INTKB copy.
 
 # Post-Thesis Build Direction — Executive Council Decision Record
 
