@@ -43,3 +43,19 @@ export { checkHealth } from './health/health-check.js';
 
 // Facade
 export { QmdAdapter } from './adapter.js';
+
+// Weights — retrieval-model integrity pinning (bead 0t9.5)
+export {
+  verifyWeights,
+  assertWeightsVerified,
+  resolveQmdModelsDir,
+  WeightIntegrityError,
+  QMD_WEIGHTS_MANIFEST,
+} from './weights/index.js';
+export type {
+  PinnedModel,
+  WeightsManifest,
+  ModelVerifyStatus,
+  ModelVerifyResult,
+  WeightsVerifyResult,
+} from './weights/index.js';
