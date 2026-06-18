@@ -59,3 +59,22 @@ export type {
   ModelVerifyResult,
   WeightsVerifyResult,
 } from './weights/index.js';
+
+// Eval — retrieval-quality harness, gates BM25 vs native semantic (bead 0t9.6)
+export {
+  recallAtK,
+  ndcgAtK,
+  reciprocalRank,
+  runEval,
+  formatReport,
+  bm25IsSufficient,
+  BM25_SUFFICIENCY_RECALL_THRESHOLD,
+  SEED_EVAL_DATASET,
+} from './eval/index.js';
+export type {
+  EvalQuery,
+  EvalDataset,
+  RetrievalFn,
+  QueryEvalResult,
+  EvalReport,
+} from './eval/index.js';
