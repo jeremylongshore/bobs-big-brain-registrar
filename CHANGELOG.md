@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-19
+
+### Added
+
+- **Retrieval backend foundations (epic `0t9`).** A native FTS5 (BM25) keyword backend that drops the external qmd binary for keyword search (#192); a backend-agnostic Recall@10 / nDCG@10 eval harness that gates BM25 against a future semantic path (#191); and SHA-256-pinned, fail-closed retrieval-model weight verification (#190). Decision of record: ship BM25 now, eval-gate a lean native sqlite-vec (EmbeddingGemma-300M) semantic path; skip qmd's heavy hybrid. See ADR `000-docs/038-AT-DECR`.
+- **External anchor log for the audit chain** — detects silent full-chain rewrites that a local re-hash would otherwise hide (#187).
+- **Audit-events hash chain + `verify-audit-chain` CLI** (#154), with spool-manifest SHA-256 verification on ingest and quarantine of tampered files (#156).
+- **`curator-cli`** — the ingest → policy → promote governance pipeline as a CLI (#153); optional `evalCallback` wired into `promote()` emitting eval-result events (#168).
+- **QMD functional eval surface** — three evaluators (#167) plus an eval-result audit action (#166).
+- **`exporter-cli` + real-qmd integration** for demo stages 5-6 (#158).
+- **Weekly cited-query count per-teammate report** (#186).
+- **Plugin + MCP surface** — a self-contained marketplace MCP client (install-once, no build); the `intent-brain` plugin with `/brain` + `/brain-promote` skills; a `teamkb_search` MCP tool with a `TEAMKB_API_URL` hosting flip; qmd wired into search for `qmd://` citations.
+- **Per-user auth** — per-user tokens, an admin-only write gate, and a per-read access audit.
+- **Quickstart** — qmd indexing + curated-answer query; full compile when `ANTHROPIC_API_KEY` is set.
+
+### Changed
+
+- **Relicensed to Apache-2.0** and added the `@intentsolutions/core` dependency (#166).
+- **qmd tracked as a pinned devDependency** for controlled auto-bump (#161); bumped to qmd 2.5.3.
+- Refactored `edge-daemon` `runCycle` into phases and tightened the CRAP complexity gate 40 → 30 (#157).
+- Grouped the Dependabot config (dev / production / github-actions) and merged a batch of dependency updates.
+
+### Fixed
+
+- Soft-fail the Codecov upload on Dependabot PRs — secrets are withheld from Dependabot runs, so the token-less upload was failing every dependency-update PR (#193).
+- Install qmd in CI so the qmd-gated integration tests actually run (#160).
+- Bridge the git-exporter layout to qmd collections (#159).
+- Correct the compile-then-govern URL to the `intent-solutions-io` org.
+
+### Security
+
+- **Tenant-scope the audit read API** — closes a cross-tenant audit-log leak (#169).
+
 ## [0.6.0] - 2026-05-15
 
 ### Security
