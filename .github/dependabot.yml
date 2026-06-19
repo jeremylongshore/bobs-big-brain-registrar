@@ -4,9 +4,22 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     labels:
       - 'dependencies'
+    # Batch routine updates into a few PRs instead of one-per-package. Majors stay
+    # ungrouped (individual PRs) so breaking bumps still get reviewed on their own.
+    groups:
+      dev-dependencies:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+      production-dependencies:
+        dependency-type: 'production'
+        update-types:
+          - 'minor'
+          - 'patch'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
@@ -16,3 +29,7 @@ updates:
     labels:
       - 'dependencies'
       - 'ci'
+    groups:
+      github-actions:
+        patterns:
+          - '*'
