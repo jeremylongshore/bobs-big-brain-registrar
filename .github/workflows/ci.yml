@@ -72,7 +72,10 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
-          fail_ci_if_error: true
+          # Dependabot PRs run with secrets withheld (empty CODECOV_TOKEN), so a
+          # token-less upload errors. Keep the strict gate for human PRs; soft-fail
+          # only for dependabot so dependency-update PRs aren't blocked by it.
+          fail_ci_if_error: ${{ github.actor != 'dependabot[bot]' }}
           verbose: true
 
       - name: Upload test results to Codecov Test Analytics
