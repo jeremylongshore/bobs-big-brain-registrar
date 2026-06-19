@@ -22,6 +22,11 @@ export function badRequest(message: string): ApiError {
   return new ApiError(400, message);
 }
 
+/** Produce a 422 Unprocessable Content error (well-formed but disallowed). */
+export function unprocessable(message: string): ApiError {
+  return new ApiError(422, message);
+}
+
 /** Produce a 500 Internal Server Error. */
 export function internalError(message: string): ApiError {
   return new ApiError(500, message);

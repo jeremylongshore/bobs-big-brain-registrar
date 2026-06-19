@@ -94,6 +94,41 @@ describe('/api/candidates', () => {
     expect(created.metadata.filePaths).toEqual(['src/api.ts', 'src/auth.ts']);
   });
 
+  // ---- POST disclosure gate (bead 3iu.1) -----------------------------------
+
+  it('POST with compensation content is rejected 422', async () => {
+    const body = makeCandidate({ content: 'his base salary and 4-year vesting schedule' });
+    const res = await injectJson(app, 'POST', '/api/candidates', body);
+    expect(res.status).toBe(422);
+    expect((res.body as { error: string }).error).toMatch(/compensation/i);
+  });
+
+  it('POST with PII content is rejected 422', async () => {
+    const body = makeCandidate({ content: 'candidate SSN 123-45-6789 from the background-check' });
+    const res = await injectJson(app, 'POST', '/api/candidates', body);
+    expect(res.status).toBe(422);
+    expect((res.body as { error: string }).error).toMatch(/PII/);
+  });
+
+  it('POST with a disclosure violation in the title is rejected 422', async () => {
+    const body = makeCandidate({ title: 'launch bonus terms', content: 'clean body' });
+    const res = await injectJson(app, 'POST', '/api/candidates', body);
+    expect(res.status).toBe(422);
+  });
+
+  it('POST 422 error does NOT echo the flagged value back', async () => {
+    const body = makeCandidate({ content: 'SSN 123-45-6789' });
+    const res = await injectJson(app, 'POST', '/api/candidates', body);
+    expect(res.status).toBe(422);
+    expect((res.body as { error: string }).error).not.toContain('123-45-6789');
+  });
+
+  it('POST with a bare technical ratio-split (no comp context) still succeeds 201', async () => {
+    const body = makeCandidate({ content: 'route a 60/40 traffic split between regions' });
+    const res = await injectJson(app, 'POST', '/api/candidates', body);
+    expect(res.status).toBe(201);
+  });
+
   // ---- GET /api/candidates/:id ---------------------------------------------
 
   it('GET /:id returns the stored candidate', async () => {
