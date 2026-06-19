@@ -44,7 +44,7 @@
     "@tobilu/qmd": "2.5.3",
     "@types/node": "^25.6.0",
     "@types/pg": "8.20.0",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.9",
     "dependency-cruiser": "17.4.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.2.0",
