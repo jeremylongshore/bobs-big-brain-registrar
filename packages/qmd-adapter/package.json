@@ -20,6 +20,10 @@
   },
   "dependencies": {
     "@qmd-team-intent-kb/schema": "workspace:*",
-    "@qmd-team-intent-kb/common": "workspace:*"
+    "@qmd-team-intent-kb/common": "workspace:*",
+    "better-sqlite3": "^12.10.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11"
   }
 }

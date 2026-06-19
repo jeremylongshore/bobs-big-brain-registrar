@@ -78,3 +78,7 @@ export type {
   QueryEvalResult,
   EvalReport,
 } from './eval/index.js';
+
+// Native FTS5 — model-free keyword backend, no external binary (bead 0t9.2)
+export { Fts5Backend, fts5RetrievalFn, buildFts5MatchQuery } from './native/index.js';
+export type { IndexedDoc, Fts5SearchHit } from './native/index.js';
