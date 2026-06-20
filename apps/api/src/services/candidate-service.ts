@@ -1,7 +1,8 @@
 import type { CandidateRepository } from '@qmd-team-intent-kb/store';
 import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { badRequest, notFound } from '../errors.js';
+import { badRequest, notFound, unprocessable } from '../errors.js';
+import { scanDisclosureFields } from './disclosure-filter.js';
 
 /**
  * Service layer for memory candidate intake and retrieval.
@@ -13,7 +14,11 @@ export class CandidateService {
   /**
    * Validate and intake a new memory candidate.
    * Computes the content hash and inserts the record.
-   * Throws a 400 ApiError on invalid input.
+   *
+   * @throws a 400 ApiError on invalid (mis-shaped) input.
+   * @throws a 422 ApiError when the content violates the no-compensation /
+   *   no-PII disclosure rule — the candidate is rejected before it can enter
+   *   the inbox (bead `3iu.1`).
    */
   intake(data: unknown): MemoryCandidate {
     const parsed = MemoryCandidate.safeParse(data);
@@ -21,6 +26,21 @@ export class CandidateService {
       throw badRequest(`Invalid candidate: ${parsed.error.message}`);
     }
     const candidate = parsed.data;
+
+    // Disclosure gate: enforce the no-compensation / no-PII rule at the
+    // boundary. The matched value is never echoed back (PII non-leak).
+    const violation = scanDisclosureFields([
+      candidate.content,
+      candidate.title,
+      ...candidate.metadata.tags,
+    ]);
+    if (violation !== null) {
+      const kind = violation.category === 'pii' ? 'PII' : 'compensation / comp-split';
+      throw unprocessable(
+        `Candidate rejected: content contains disallowed ${kind} material and cannot enter the governed brain.`,
+      );
+    }
+
     const contentHash = computeContentHash(candidate.content);
     this.repo.insert(candidate, contentHash);
     return candidate;
