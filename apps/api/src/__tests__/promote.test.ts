@@ -88,6 +88,19 @@ describe('POST /api/candidates/:id/promote', () => {
     expect((res.json() as { error: string }).error).toMatch(/already promoted/i);
   });
 
+  it('does not treat another tenant’s identical content as a duplicate (tenant-scoped dedup)', async () => {
+    const content = 'a shared convention that two teams both wrote down';
+    const hash = computeContentHash(content);
+    // team-beta already has this exact content as a governed memory.
+    memoryRepo.insert(makeMemory({ contentHash: hash, tenantId: 'team-beta' }));
+    // team-alpha proposes the same content — must NOT be blocked as a duplicate.
+    const candidate = makeCandidate({ content, tenantId: 'team-alpha' });
+    candidateRepo.insert(candidate, hash);
+
+    const res = await promote(candidate.id, 'team-alpha');
+    expect(res.statusCode).toBe(200);
+  });
+
   it('returns 422 and leaves the candidate in the inbox when policy rejects', async () => {
     // Default makePolicy carries a secret_detection rule with action 'reject'.
     policyRepo.insert(makePolicy({ tenantId: 'team-alpha' }));

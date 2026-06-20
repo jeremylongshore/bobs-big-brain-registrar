@@ -56,14 +56,19 @@ export class PromotionService {
 
     const contentHash = computeContentHash(candidate.content);
 
-    // Dedup: identical content already in the governed store means it is already promoted.
-    const existing = this.memoryRepo.findByContentHash(contentHash);
-    if (existing !== null) {
-      throw unprocessable(`Candidate already promoted — content matches memory ${existing.id}`);
+    // Tenant-scoped governed memories — load once and use for BOTH the dedup
+    // check and the policy's existing-hash set. Dedup must NOT cross tenant
+    // boundaries: a global hash lookup would let tenant A's candidate be blocked
+    // as a "duplicate" of tenant B's memory, leaking cross-tenant state.
+    const tenantMemories = this.memoryRepo.findByTenant(tenantId);
+
+    const duplicate = tenantMemories.find((m) => m.contentHash === contentHash);
+    if (duplicate !== undefined) {
+      throw unprocessable(`Candidate already promoted — content matches memory ${duplicate.id}`);
     }
 
     // Run the tenant's enabled policy (or auto-approve when none), exactly as the
-    // curator batch pipeline does.
+    // curator batch pipeline does — but with a tenant-scoped existing-hash set.
     const policy = this.policyRepo.findByTenant(tenantId).find((p) => p.enabled);
     let pipelineResult: PipelineResult;
     if (policy === undefined) {
@@ -71,7 +76,7 @@ export class PromotionService {
     } else {
       const pipeline = new PolicyPipeline(policy);
       pipelineResult = pipeline.evaluate(candidate, {
-        existingHashes: new Set(this.memoryRepo.getAllContentHashes()),
+        existingHashes: new Set(tenantMemories.map((m) => m.contentHash)),
         tenantId,
       });
     }
