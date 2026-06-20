@@ -7,8 +7,11 @@
  * matches a hard-fail pattern is rejected (HTTP 422) before it can enter the
  * inbox or the governed brain.
  *
- * Scope — deliberately narrow, matching the gate:
- *   - **Compensation / equity / comp-split** terms (pay, equity, vesting, splits).
+ * Scope — deliberately narrow, matching the gate (minus equity):
+ *   - **Compensation / pay / comp-split** terms (anyone's pay, revenue / partner
+ *     splits). Intent Solutions does not offer equity, so the equity family
+ *     (equity stake/grant, vesting, RSUs, stock options) is NOT scanned — it is
+ *     a non-existent risk vector here that only generated false positives.
  *   - **PII** (SSN, background-check results, date of birth).
  * Client / revenue money (pricing menus, deal values) is ALLOWED and is NOT
  * flagged — only the gate's hard-fail patterns are ported; its advisory /
@@ -33,13 +36,17 @@ export interface DisclosureViolation {
 }
 
 /**
- * Unambiguous personal-compensation / equity terms — these never describe
- * legitimate technical content, so they hard-fail on their own. Ported from
- * `disclosure-gate.sh` §1, with `\b` boundaries on `vesting` so it does not
- * match `investing` / `harvesting`.
+ * Unambiguous compensation / pay / comp-split terms — these never describe
+ * legitimate technical content, so they hard-fail on their own. A pared-down
+ * port of `disclosure-gate.sh` §1: the **equity** family (equity stake/grant,
+ * vesting, RSUs, stock options) is intentionally NOT scanned — Intent Solutions
+ * does not offer equity, so those terms are a risk vector that does not exist
+ * here, and scanning them only produced false positives (`equity optional`,
+ * `stock optional`, …). What remains is what is real for this business:
+ * anyone's pay, and revenue / comp-splits among partners and subcontractors.
  */
 export const COMPENSATION_TERMS_PATTERN =
-  /\bsalary\b|base pay\b|take[- ]home pay\b|(?:launch|signing|sign[- ]on) bonus|equity\s+(?:stakes?|grants?|granted|options?)\b|equity\s+[0-9]|\bvesting\b|\bRSUs?\b|stock options?\b|revenue[- ]share\s*[0-9]|7[- ]bucket/i;
+  /\bsalary\b|base pay\b|take[- ]home pay\b|(?:launch|signing|sign[- ]on) bonus|revenue[- ]share\s*[0-9]|7[- ]bucket/i;
 
 /**
  * A numeric ratio expressed as a `split` / `share` (e.g. `60/40 split`, or the
@@ -52,7 +59,7 @@ export const RATIO_SPLIT_PATTERN =
 
 /** Money / compensation context that promotes a bare ratio-split to a violation. */
 export const COMP_CONTEXT_PATTERN =
-  /\b(?:compensation|comp|revenue|profit|equity|payout|royalty|salary|wage|bonus|earnings)\b|take[- ]home/i;
+  /\b(?:compensation|comp|revenue|profit|payout|royalty|salary|wage|bonus|earnings)\b|take[- ]home/i;
 
 /**
  * Hard-fail PII patterns — SSNs and background-check data, which never belong in

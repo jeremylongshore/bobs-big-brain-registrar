@@ -30,16 +30,6 @@ describe('scanDisclosure — unambiguous compensation (hard-fail)', () => {
     ['take-home pay', 'take-home pay after tax'],
     ['launch bonus', 'a launch bonus was promised'],
     ['signing bonus', 'signing bonus on offer'],
-    ['equity grant', 'equity grant vests over time'],
-    ['equity stake', 'a 2% equity stake'],
-    ['equity options', 'granted equity options'],
-    ['equity option (singular)', 'an equity option in the offer'],
-    ['equity granted (inflection)', 'equity granted to early staff'],
-    ['equity stakes (plural)', 'two equity stakes were issued'],
-    ['equity by percent', 'equity 5% to the team'],
-    ['vesting', 'a 4-year vesting schedule'],
-    ['RSUs', 'paid in RSUs'],
-    ['stock options', 'granted stock options'],
     ['revenue-share with a number', 'revenue-share 50 of net'],
     ['the 7-bucket framework', 'allocate per the 7-bucket framework'],
   ])('flags %s as compensation', (_label, text) => {
@@ -66,10 +56,10 @@ describe('scanDisclosure — numeric ratio-split is context-gated', () => {
 
 describe('scanDisclosure — clean content (no false positives)', () => {
   it.each([
-    ['investing (not vesting)', 'we are investing in better tests'],
-    ['harvesting (not vesting)', 'harvesting logs from the cluster'],
-    ['equity optional (not options)', 'we can make the equity optional in v2'],
-    ['stock optional (not options)', 'the stock chart widget is optional'],
+    [
+      'equity content is allowed — we do not offer equity',
+      'his equity grant, vesting schedule and stock options',
+    ],
     ['base payment (not base pay)', 'the base payment gateway is configured'],
     ['client revenue / deal value is allowed', 'the deal value is $50k for this client'],
     ['a pricing menu is allowed', 'see the pricing menu for tiers'],
