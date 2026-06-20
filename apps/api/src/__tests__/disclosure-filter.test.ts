@@ -32,6 +32,8 @@ describe('scanDisclosure — unambiguous compensation (hard-fail)', () => {
     ['signing bonus', 'signing bonus on offer'],
     ['equity grant', 'equity grant vests over time'],
     ['equity stake', 'a 2% equity stake'],
+    ['equity options', 'granted equity options'],
+    ['equity option (singular)', 'an equity option in the offer'],
     ['vesting', 'a 4-year vesting schedule'],
     ['RSUs', 'paid in RSUs'],
     ['stock options', 'granted stock options'],
@@ -48,9 +50,14 @@ describe('scanDisclosure — numeric ratio-split is context-gated', () => {
     expect(scanDisclosure('his comp: 70/30 split')).toEqual(COMP);
   });
 
-  it('does NOT flag a bare ratio-split in technical context', () => {
+  it('flags a spaced ratio-split (60 / 40) alongside a compensation keyword', () => {
+    expect(scanDisclosure('the revenue is a 60 / 40 split with the partner')).toEqual(COMP);
+  });
+
+  it('does NOT flag a bare ratio-split in technical context (spaced or not)', () => {
     expect(scanDisclosure('we route a 60/40 traffic split between regions')).toBeNull();
     expect(scanDisclosure('70/30 canary split for the rollout')).toBeNull();
+    expect(scanDisclosure('a 60 / 40 traffic split across zones')).toBeNull();
   });
 });
 
