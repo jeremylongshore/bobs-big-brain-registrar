@@ -10,7 +10,7 @@ audience: engineering managers, platform-team leads, team-knowledge stewards
 cross_repo: byte-identical copy at qmd-team-intent-kb/000-docs/034-AT-NTRP-ecosystem-thesis.md
 parent_bead_ico: intentional-cognition-os-ziz
 parent_bead_intkb: qmd-team-intent-kb-oaa
-license: MIT
+license: Apache-2.0
 ---
 
 # Compile, Then Govern
