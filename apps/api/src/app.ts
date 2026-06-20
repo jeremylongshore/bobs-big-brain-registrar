@@ -10,6 +10,7 @@ import {
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
 import { CandidateService } from './services/candidate-service.js';
+import { PromotionService } from './services/promotion-service.js';
 import { MemoryService } from './services/memory-service.js';
 import { PolicyService } from './services/policy-service.js';
 import { HealthService } from './services/health-service.js';
@@ -106,6 +107,13 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const healthService = new HealthService(deps.db);
   const searchService = new SearchService(memoryRepo, deps.qmdAdapter);
   const importService = new ImportService(candidateRepo, memoryRepo, batchRepo, linksRepo);
+  const promotionService = new PromotionService(
+    candidateRepo,
+    memoryRepo,
+    policyRepo,
+    auditRepo,
+    linksRepo,
+  );
 
   // Routes are wrapped in an inner register() so they load AFTER the
   // @fastify/swagger plugin. The swagger plugin installs an `onRoute`
@@ -113,7 +121,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   // hook is active would be missing from the generated spec.
   void app.register(async (scope) => {
     registerHealthRoutes(scope, healthService);
-    registerCandidateRoutes(scope, candidateService);
+    registerCandidateRoutes(scope, candidateService, promotionService);
     registerMemoryRoutes(scope, memoryService, memoryRepo);
     registerPolicyRoutes(scope, policyService);
     registerAuditRoutes(scope, auditRepo);

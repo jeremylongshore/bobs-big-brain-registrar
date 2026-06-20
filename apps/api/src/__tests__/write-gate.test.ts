@@ -59,6 +59,27 @@ describe('write gate — admin-only governance mutations', () => {
     expect(res.statusCode).not.toBe(403);
   });
 
+  it('blocks a member from promoting a candidate with 403', async () => {
+    // The gate runs as an onRequest hook, before the handler — so a member is
+    // refused regardless of whether the candidate exists.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/candidates/any-id/promote?tenantId=team-alpha',
+      headers: { Authorization: `Bearer ${MEMBER}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('lets an admin reach the promote endpoint (not 403)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/candidates/any-id/promote?tenantId=team-alpha',
+      headers: { Authorization: `Bearer ${ADMIN}` },
+    });
+    // 404 (candidate missing) is fine — the point is the gate let it through.
+    expect(res.statusCode).not.toBe(403);
+  });
+
   it('blocks a member from creating a policy with 403', async () => {
     const res = await app.inject({
       method: 'POST',

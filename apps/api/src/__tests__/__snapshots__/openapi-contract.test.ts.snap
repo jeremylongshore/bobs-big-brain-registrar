@@ -20,6 +20,11 @@ exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] =
         "get",
       ],
     },
+    "/api/candidates/{id}/promote": {
+      "methods": [
+        "post",
+      ],
+    },
     "/api/health": {
       "methods": [
         "get",

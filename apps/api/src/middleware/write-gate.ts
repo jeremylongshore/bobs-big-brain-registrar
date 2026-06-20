@@ -15,6 +15,13 @@ import type { FastifyInstance } from 'fastify';
 const ADMIN_WRITE_PREFIXES = ['/api/memories', '/api/policies', '/api/import'];
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
+/**
+ * Promoting a candidate is an admin act, but it lives under `/api/candidates`
+ * (which is otherwise member-allowed for propose), so it needs its own match
+ * rather than a prefix: `POST /api/candidates/:id/promote`.
+ */
+const PROMOTE_PATH = /^\/api\/candidates\/[^/]+\/promote$/;
+
 export function registerWriteGate(app: FastifyInstance): void {
   app.addHook('onRequest', async (request, reply) => {
     if (!MUTATION_METHODS.has(request.method)) {
@@ -22,9 +29,9 @@ export function registerWriteGate(app: FastifyInstance): void {
     }
 
     const path = request.url.split('?')[0] ?? request.url;
-    const isAdminWrite = ADMIN_WRITE_PREFIXES.some(
-      (prefix) => path === prefix || path.startsWith(`${prefix}/`),
-    );
+    const isAdminWrite =
+      PROMOTE_PATH.test(path) ||
+      ADMIN_WRITE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
     if (!isAdminWrite) {
       return;
     }

@@ -1,15 +1,21 @@
 import type { FastifyInstance } from 'fastify';
-import { ApiError } from '../errors.js';
+import { ApiError, badRequest } from '../errors.js';
 import type { CandidateService } from '../services/candidate-service.js';
+import type { PromotionService } from '../services/promotion-service.js';
 
 /**
- * Register candidate intake and retrieval routes.
+ * Register candidate intake, retrieval, and promotion routes.
  *
- * POST   /api/candidates          — intake a new candidate (201)
- * GET    /api/candidates/:id      — retrieve by UUID (200 | 404)
- * GET    /api/candidates          — list by tenantId query param (200 | 400)
+ * POST   /api/candidates              — intake a new candidate (201)
+ * POST   /api/candidates/:id/promote  — promote to a governed memory (200 | admin-only)
+ * GET    /api/candidates/:id          — retrieve by UUID (200 | 404)
+ * GET    /api/candidates              — list by tenantId query param (200 | 400)
  */
-export function registerCandidateRoutes(app: FastifyInstance, service: CandidateService): void {
+export function registerCandidateRoutes(
+  app: FastifyInstance,
+  service: CandidateService,
+  promotionService: PromotionService,
+): void {
   app.post(
     '/api/candidates',
     {
@@ -24,6 +30,37 @@ export function registerCandidateRoutes(app: FastifyInstance, service: Candidate
       try {
         const candidate = service.intake(request.body);
         return reply.status(201).send(candidate);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          return reply.status(err.statusCode).send({ error: err.message });
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.post(
+    '/api/candidates/:id/promote',
+    {
+      schema: {
+        tags: ['candidates'],
+        summary: 'Promote a candidate to a governed memory (admin-only)',
+        description:
+          'Runs the full governance path (dedup → policy → promote) and atomically turns the ' +
+          'inbox candidate into a curated memory, writing the promotion audit event. Admin-only ' +
+          '(write gate). Returns 404 if the candidate is missing, 422 if it is already promoted ' +
+          'or policy rejects/flags it (the candidate is left in the inbox), 400 if tenantId is missing.',
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const { tenantId } = request.query as { tenantId?: string };
+        if (tenantId === undefined || tenantId.trim().length === 0) {
+          throw badRequest('tenantId query parameter is required');
+        }
+        const memory = promotionService.promoteCandidate(id, tenantId);
+        return reply.status(200).send(memory);
       } catch (err) {
         if (err instanceof ApiError) {
           return reply.status(err.statusCode).send({ error: err.message });
