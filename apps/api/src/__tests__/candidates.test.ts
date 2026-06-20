@@ -97,7 +97,7 @@ describe('/api/candidates', () => {
   // ---- POST disclosure gate (bead 3iu.1) -----------------------------------
 
   it('POST with compensation content is rejected 422', async () => {
-    const body = makeCandidate({ content: 'his base salary was disclosed' });
+    const body = makeCandidate({ content: 'his base salary and 4-year vesting schedule' });
     const res = await injectJson(app, 'POST', '/api/candidates', body);
     expect(res.status).toBe(422);
     expect((res.body as { error: string }).error).toMatch(/compensation/i);
