@@ -88,7 +88,9 @@ qmd-team-intent-kb/
 
 ## Status
 
-**v0.6.0 — Production-ready platform with full Intent Solutions Testing SOP enforced in CI.**
+**v0.7.0 — Production-ready platform with full Intent Solutions Testing SOP enforced in CI.**
+
+**v0.7.0 marquee:** native FTS5/BM25 retrieval backend (model-free, in-process) · Recall@10/nDCG@10 eval harness · MCP tool surface (`teamkb_search` / `teamkb_propose`) · hash-chained tamper-evident audit receipts with an external chain-head anchor.
 
 All core subsystems functional. 1,313 unit tests + 4 testcontainers-based L4 integration tests passing. CI enforces 10 gates per PR: typecheck → lint → format → architecture (dep-cruiser) → complexity (CRAP) → unit tests → coverage 80% line / 70% branch → secrets (gitleaks) → npm audit (when deps change) → SAST (Semgrep advisory). Policy artifacts hash-pinned via `scripts/harness-pin.sh` so the testing-SOP is self-defending against silent AI policy edits.
 
