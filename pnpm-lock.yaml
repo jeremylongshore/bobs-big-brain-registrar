@@ -105,6 +105,9 @@ importers:
       '@qmd-team-intent-kb/curator':
         specifier: workspace:*
         version: link:../curator
+      '@qmd-team-intent-kb/policy-engine':
+        specifier: workspace:*
+        version: link:../../packages/policy-engine
       '@qmd-team-intent-kb/qmd-adapter':
         specifier: workspace:*
         version: link:../../packages/qmd-adapter

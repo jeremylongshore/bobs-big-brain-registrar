@@ -28,6 +28,7 @@
     "@qmd-team-intent-kb/common": "workspace:*",
     "@qmd-team-intent-kb/store": "workspace:*",
     "@qmd-team-intent-kb/curator": "workspace:*",
+    "@qmd-team-intent-kb/policy-engine": "workspace:*",
     "@qmd-team-intent-kb/qmd-adapter": "workspace:*"
   },
   "devDependencies": {
