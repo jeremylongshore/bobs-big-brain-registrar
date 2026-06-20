@@ -32,6 +32,11 @@ describe('scanDisclosure — unambiguous compensation (hard-fail)', () => {
     ['signing bonus', 'signing bonus on offer'],
     ['equity grant', 'equity grant vests over time'],
     ['equity stake', 'a 2% equity stake'],
+    ['equity options', 'granted equity options'],
+    ['equity option (singular)', 'an equity option in the offer'],
+    ['equity granted (inflection)', 'equity granted to early staff'],
+    ['equity stakes (plural)', 'two equity stakes were issued'],
+    ['equity by percent', 'equity 5% to the team'],
     ['vesting', 'a 4-year vesting schedule'],
     ['RSUs', 'paid in RSUs'],
     ['stock options', 'granted stock options'],
@@ -48,9 +53,14 @@ describe('scanDisclosure — numeric ratio-split is context-gated', () => {
     expect(scanDisclosure('his comp: 70/30 split')).toEqual(COMP);
   });
 
-  it('does NOT flag a bare ratio-split in technical context', () => {
+  it('flags a spaced ratio-split (60 / 40) alongside a compensation keyword', () => {
+    expect(scanDisclosure('the revenue is a 60 / 40 split with the partner')).toEqual(COMP);
+  });
+
+  it('does NOT flag a bare ratio-split in technical context (spaced or not)', () => {
     expect(scanDisclosure('we route a 60/40 traffic split between regions')).toBeNull();
     expect(scanDisclosure('70/30 canary split for the rollout')).toBeNull();
+    expect(scanDisclosure('a 60 / 40 traffic split across zones')).toBeNull();
   });
 });
 
@@ -58,6 +68,9 @@ describe('scanDisclosure — clean content (no false positives)', () => {
   it.each([
     ['investing (not vesting)', 'we are investing in better tests'],
     ['harvesting (not vesting)', 'harvesting logs from the cluster'],
+    ['equity optional (not options)', 'we can make the equity optional in v2'],
+    ['stock optional (not options)', 'the stock chart widget is optional'],
+    ['base payment (not base pay)', 'the base payment gateway is configured'],
     ['client revenue / deal value is allowed', 'the deal value is $50k for this client'],
     ['a pricing menu is allowed', 'see the pricing menu for tiers'],
     ['a semver-looking string', 'upgraded to version 1.2.3'],
