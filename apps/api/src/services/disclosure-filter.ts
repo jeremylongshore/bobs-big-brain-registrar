@@ -39,7 +39,7 @@ export interface DisclosureViolation {
  * match `investing` / `harvesting`.
  */
 export const COMPENSATION_TERMS_PATTERN =
-  /\bsalary\b|base pay|take[- ]home pay|(?:launch|signing|sign[- ]on) bonus|equity\s+(?:stake|grant|options?|[0-9])|\bvesting\b|\bRSUs?\b|stock options?|revenue[- ]share\s*[0-9]|7[- ]bucket/i;
+  /\bsalary\b|base pay\b|take[- ]home pay\b|(?:launch|signing|sign[- ]on) bonus|equity\s+(?:stakes?|grants?|granted|options?)\b|equity\s+[0-9]|\bvesting\b|\bRSUs?\b|stock options?\b|revenue[- ]share\s*[0-9]|7[- ]bucket/i;
 
 /**
  * A numeric ratio expressed as a `split` / `share` (e.g. `60/40 split`, or the
