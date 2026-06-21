@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import { assertDisclosureClean } from '@qmd-team-intent-kb/common';
 
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
@@ -138,8 +139,27 @@ export class CandidateRepository {
     `);
   }
 
-  /** Insert a new candidate. The contentHash must be provided by the caller. */
+  /**
+   * Insert a new candidate. The contentHash must be provided by the caller.
+   *
+   * **Disclosure / secret choke point (Epic 0, compile-then-govern-c5k).** Every
+   * candidate write path in the system funnels through this single SQL INSERT —
+   * API intake, curator bulk-import, spool-intake / ICO ingest, MCP propose→spool,
+   * and promotion re-scan. Enforcing the PII / comp-secret / credential gate here
+   * (rather than only in the API service layer, which three paths bypassed) means
+   * no caller can write disallowed material regardless of how it arrived.
+   *
+   * The scan normalizes (NFKC + invisible-strip + homoglyph-fold + decode-once)
+   * before matching, is ReDoS-safe, fails closed, and never logs the matched
+   * value. A violating candidate throws `DisclosureRejectedError` and is never
+   * written.
+   *
+   * @throws {DisclosureRejectedError} when content/title/tags contain disallowed
+   *   PII, compensation, or credential/secret material.
+   */
   insert(candidate: MemoryCandidate, contentHash: string, importBatchId?: string): void {
+    // Choke-point enforcement: reject before the row is ever written.
+    assertDisclosureClean(candidate);
     this.stmtInsert.run({
       id: candidate.id,
       status: candidate.status,

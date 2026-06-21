@@ -24,7 +24,9 @@ describe('QmdAdapter', () => {
     mock.queueSuccess(
       JSON.stringify([{ score: 0.9, file: 'qmd://kb-curated/doc.md', snippet: 'Result snippet' }]),
     );
-    const result = await adapter.query('test query');
+    // Pass the bound tenant — the adapter is fail-closed on an omitted
+    // tenantId (c5k.2), so a delegation test must name the tenant it serves.
+    const result = await adapter.query('test query', 'curated', 'test-tenant');
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toHaveLength(1);
@@ -64,11 +66,37 @@ describe('QmdAdapter', () => {
         { score: 0.8, file: 'qmd://kb-inbox/b.md', snippet: 'B' },
       ]),
     );
-    const result = await adapter.query('test');
+    const result = await adapter.query('test', 'curated', 'test-tenant');
     expect(result.ok).toBe(true);
     if (result.ok) {
       // Should not include inbox results
       expect(result.value.some((r) => r.collection === 'kb-inbox')).toBe(false);
     }
+  });
+
+  // ---- tenant-isolation guard (EPIC 0, compile-then-govern-c5k) -----------
+
+  it('serves the query when the requested tenant matches the bound tenant', async () => {
+    mock.queueSuccess(
+      JSON.stringify([{ score: 0.9, file: 'qmd://kb-curated/doc.md', snippet: 'Result' }]),
+    );
+    const result = await adapter.query('test', 'curated', 'test-tenant');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toHaveLength(1);
+    }
+  });
+
+  it('returns empty (does NOT leak the bound tenant) on a tenant mismatch', async () => {
+    // The adapter is bound to `test-tenant`. A request for another tenant must
+    // not be served this adapter's index — defense-in-depth for the API-layer
+    // token→tenant binding.
+    const result = await adapter.query('test', 'curated', 'other-tenant');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual([]);
+    }
+    // The executor was never invoked — nothing reached qmd.
+    expect(mock.commands).toHaveLength(0);
   });
 });

@@ -1,8 +1,7 @@
 import type { CandidateRepository } from '@qmd-team-intent-kb/store';
 import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
-import { computeContentHash } from '@qmd-team-intent-kb/common';
+import { computeContentHash, scanDisclosureFields } from '@qmd-team-intent-kb/common';
 import { badRequest, notFound, unprocessable } from '../errors.js';
-import { scanDisclosureFields } from './disclosure-filter.js';
 
 /**
  * Service layer for memory candidate intake and retrieval.
@@ -27,15 +26,23 @@ export class CandidateService {
     }
     const candidate = parsed.data;
 
-    // Disclosure gate: enforce the no-compensation / no-PII rule at the
-    // boundary. The matched value is never echoed back (PII non-leak).
+    // Disclosure gate: enforce the no-compensation / no-PII / no-secret rule at
+    // the boundary so the API returns a clean 422 (the same gate is also enforced
+    // at the repository choke point as the real backstop — see
+    // CandidateRepository.insert). The matched value is never echoed back
+    // (PII non-leak).
     const violation = scanDisclosureFields([
       candidate.content,
       candidate.title,
       ...candidate.metadata.tags,
     ]);
     if (violation !== null) {
-      const kind = violation.category === 'pii' ? 'PII' : 'compensation / comp-split';
+      const kind =
+        violation.category === 'pii'
+          ? 'PII'
+          : violation.category === 'secret'
+            ? 'a credential / secret'
+            : 'compensation / comp-split';
       throw unprocessable(
         `Candidate rejected: content contains disallowed ${kind} material and cannot enter the governed brain.`,
       );

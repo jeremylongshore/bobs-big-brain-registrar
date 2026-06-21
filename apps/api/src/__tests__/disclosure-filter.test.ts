@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
-  scanDisclosure,
+  // The canonical filter moved to @qmd-team-intent-kb/common (Epic 0) so it can
+  // be enforced at the repository-layer choke point. `scanForDisclosure` is the
+  // current name for what was `scanDisclosure`; this api-layer suite is retained
+  // for its false-positive-guard coverage and now exercises the shared module.
+  scanForDisclosure as scanDisclosure,
   scanDisclosureFields,
   type DisclosureViolation,
-} from '../services/disclosure-filter.js';
+} from '@qmd-team-intent-kb/common';
 
 const PII: DisclosureViolation = { category: 'pii' };
 const COMP: DisclosureViolation = { category: 'compensation' };

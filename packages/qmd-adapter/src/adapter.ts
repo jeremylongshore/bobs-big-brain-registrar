@@ -21,9 +21,12 @@ export class QmdAdapter {
   readonly search: SearchClient;
   readonly indexLifecycle: IndexLifecycleManager;
   private readonly exportDir: string;
+  /** The single tenant this adapter's qmd registry + index are bound to. */
+  private readonly tenantId: string;
 
   constructor(config: QmdAdapterConfig, executor?: QmdExecutor) {
     this.exportDir = config.exportDir;
+    this.tenantId = config.tenantId;
     this.executor =
       executor ??
       new RealQmdExecutor({
@@ -37,11 +40,35 @@ export class QmdAdapter {
     this.indexLifecycle = new IndexLifecycleManager(this.executor);
   }
 
-  /** Run a search with curated-only default scope */
+  /**
+   * Run a search with curated-only default scope.
+   *
+   * This adapter instance is bound to a single tenant at construction (its qmd
+   * registry + index are XDG-isolated to `config.tenantId`). The requested
+   * tenant MUST equal the bound tenant for the index to be served; anything
+   * else (a different tenant OR an unscoped/omitted tenant) returns an empty
+   * result rather than serving the bound tenant's index unlabelled.
+   *
+   * The guard is fail-closed and NOT inert when tenantId is undefined (c5k.2):
+   * the prior `tenantId !== undefined && tenantId !== this.tenantId` form
+   * short-circuited the whole check on `undefined`, so an unscoped call fell
+   * through to `this.search.search()` with no tenant assertion at all — the
+   * exact path the API-layer omission bug fed. The API tenancy guard now
+   * resolves the effective tenant from the token before the service calls
+   * `query()`, so every legitimate call arrives with a defined, matching
+   * tenantId; a missing tenantId is a contract violation and is refused here
+   * as the last line of defense rather than served.
+   */
   async query(
     queryText: string,
     scope?: SearchScope,
+    tenantId?: string,
   ): Promise<Result<QmdSearchResult[], QmdError>> {
+    if (tenantId !== this.tenantId) {
+      // Requested tenant is undefined or not the one this adapter serves —
+      // refuse rather than serve the bound tenant's index unscoped/mislabelled.
+      return { ok: true, value: [] };
+    }
     return this.search.search(queryText, scope);
   }
 

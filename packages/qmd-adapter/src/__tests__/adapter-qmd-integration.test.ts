@@ -94,7 +94,9 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
     const updated = await adapter.update();
     expect(updated.ok).toBe(true);
 
-    const found = await adapter.query('attention');
+    // Name the bound tenant — the adapter is fail-closed on an omitted
+    // tenantId (c5k.2), so an unscoped query would correctly return nothing.
+    const found = await adapter.query('attention', 'curated', 'demo-e2e');
     expect(found.ok).toBe(true);
     if (found.ok) {
       expect(found.value.length).toBeGreaterThan(0);
@@ -116,7 +118,7 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
     const tenantA = new QmdAdapter({ tenantId: 'tenant-a', exportDir });
     expect((await tenantA.ensureCollections()).ok).toBe(true);
     expect((await tenantA.update()).ok).toBe(true);
-    const aHit = await tenantA.query('attention');
+    const aHit = await tenantA.query('attention', 'curated', 'tenant-a');
     expect(aHit.ok).toBe(true);
     if (aHit.ok) expect(aHit.value.length).toBeGreaterThan(0);
 
@@ -125,7 +127,7 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
     const tenantB = new QmdAdapter({ tenantId: 'tenant-b', exportDir: tenantBExport });
     expect((await tenantB.ensureCollections()).ok).toBe(true);
     expect((await tenantB.update()).ok).toBe(true);
-    const bHit = await tenantB.query('attention');
+    const bHit = await tenantB.query('attention', 'curated', 'tenant-b');
     expect(bHit.ok).toBe(true);
     if (bHit.ok) expect(bHit.value).toHaveLength(0);
   }, 30000);

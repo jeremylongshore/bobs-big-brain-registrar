@@ -1,9 +1,27 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
+import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
 import type { MemoryRepository } from '@qmd-team-intent-kb/store';
 import { resolveWikiLinks } from '@qmd-team-intent-kb/curator';
 import { ApiError } from '../errors.js';
 import type { MemoryService } from '../services/memory-service.js';
+
+/**
+ * Enforce token→tenant binding on a single-record fetch (EPIC 0,
+ * compile-then-govern-c5k). The `:id` / `by-hash` lookups carry no tenantId in
+ * the request, so the preHandler tenancy guard cannot bind them up-front —
+ * instead we check the FETCHED record's tenantId against the token's allowlist.
+ * Unscoped tokens (empty allowlist, or dev no-auth) are unaffected. Returns 404
+ * (not 403) on a cross-tenant hit so the existence of another tenant's record
+ * is not disclosed by enumeration.
+ */
+function assertTenantVisible(request: FastifyRequest, memory: CuratedMemory): void {
+  const allowed = request.tenants;
+  if (allowed === undefined || allowed.length === 0) return;
+  if (!allowed.includes(memory.tenantId)) {
+    throw new ApiError(404, `Memory ${memory.id} not found`);
+  }
+}
 
 /**
  * Register curated memory retrieval and lifecycle routes.
@@ -51,6 +69,7 @@ export function registerMemoryRoutes(
         if (memory === null) {
           return reply.status(404).send({ error: `No memory found with hash ${hash}` });
         }
+        assertTenantVisible(request, memory);
         return reply.send(memory);
       } catch (err) {
         if (err instanceof ApiError) {
@@ -74,6 +93,7 @@ export function registerMemoryRoutes(
         const { id } = request.params as { id: string };
         const query = request.query as { resolve_links?: string };
         const memory = service.getById(id);
+        assertTenantVisible(request, memory);
 
         if (query.resolve_links === 'true' && memoryRepo) {
           const { resolvedContent } = resolveWikiLinks(memory.content, (slug) => {

@@ -28,7 +28,7 @@ describe('scanForSecrets', () => {
   });
 
   it('detects Slack tokens', () => {
-    const content = 'slack: xoxb-123456789012-1234567890123-abcdefgh';
+    const content = 'slack: xoxb-' + '123456789012-1234567890123-abcdefgh';
     const matches = scanForSecrets(content);
     expect(matches.some((m) => m.patternId === 'slack-token')).toBe(true);
   });

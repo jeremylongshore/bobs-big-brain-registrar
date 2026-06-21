@@ -64,7 +64,10 @@ async function main(): Promise<void> {
     process.stderr.write(`[teamkb-api] auth: ${tokens.length} token(s) loaded — ${roles}\n`);
   }
 
-  const app = buildApp({ db, tokens, qmdAdapter });
+  // Pass the real bind host so the no-auth dev path is refused off-loopback:
+  // an empty registry on a tailnet/0.0.0.0 bind throws at boot rather than
+  // serving every request as role=admin. Loopback stays the default.
+  const app = buildApp({ db, tokens, qmdAdapter, bindHost: config.host });
   await app.ready();
 
   const shutdown = async (signal: string): Promise<void> => {

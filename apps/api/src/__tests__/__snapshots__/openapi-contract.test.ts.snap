@@ -9,6 +9,11 @@ exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] =
         "get",
       ],
     },
+    "/api/auth/revoke": {
+      "methods": [
+        "post",
+      ],
+    },
     "/api/candidates": {
       "methods": [
         "get",

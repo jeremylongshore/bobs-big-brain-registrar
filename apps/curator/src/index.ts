@@ -6,6 +6,7 @@ export type {
   IngestFromSpoolOptions,
   IngestResult,
   SpoolTamperRecord,
+  SpoolDisclosureRejection,
 } from './intake/spool-intake.js';
 export { checkDuplicate } from './dedup/dedup-checker.js';
 export type { DedupResult } from './dedup/dedup-checker.js';

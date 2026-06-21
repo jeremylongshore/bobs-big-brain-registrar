@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTestDatabase, CandidateRepository } from '@qmd-team-intent-kb/store';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { ingestFromSpool } from '../intake/spool-intake.js';
+import { ingestFromSpool, ingestFromSpoolDetailed } from '../intake/spool-intake.js';
 import { makeCandidate } from './fixtures.js';
 
 /** Serialise a candidate to a JSONL line */
@@ -161,6 +161,88 @@ describe('ingestFromSpool', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value).toHaveLength(0); // non-matching file ignored
+    }
+  });
+});
+
+// Epic 0 (compile-then-govern-c5k): the spool-intake path (ICO ingest + MCP
+// propose→spool) previously bypassed the disclosure filter — it called
+// candidateRepo.insert() directly with no PII / comp / secret check. The
+// repository-layer choke point now rejects disallowed content on this path too.
+// A poisoned candidate is refused WITHOUT aborting the batch (fail-closed on the
+// bad candidate, not a DoS on the whole spool), and surfaced in `rejected`.
+describe('ingestFromSpool — disclosure / secret choke point (spool bypass path)', () => {
+  let spoolDir: string;
+  let candidateRepo: CandidateRepository;
+
+  beforeEach(async () => {
+    spoolDir = await mkdtemp(join(tmpdir(), 'spool-disclosure-test-'));
+    const db = createTestDatabase();
+    candidateRepo = new CandidateRepository(db);
+  });
+
+  afterEach(async () => {
+    await rm(spoolDir, { recursive: true, force: true });
+  });
+
+  it('refuses a PII candidate and does NOT write it', async () => {
+    const dirty = makeCandidate({ content: 'applicant ssn 123-45-6789 on file' });
+    await writeSpoolFile(spoolDir, 'spool-pii.jsonl', [dirty]);
+
+    const result = await ingestFromSpoolDetailed(candidateRepo, spoolDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.ingested).toHaveLength(0);
+      expect(result.value.rejected).toHaveLength(1);
+      expect(result.value.rejected[0]?.category).toBe('pii');
+      expect(result.value.rejected[0]?.candidateId).toBe(dirty.id);
+    }
+    expect(candidateRepo.count()).toBe(0);
+  });
+
+  it('refuses a secret candidate (gitleaks-class)', async () => {
+    const dirty = makeCandidate({
+      content: 'token leaked: ghp_' + '1234567890abcdefghijklmnopqrstuvwxyz12',
+    });
+    await writeSpoolFile(spoolDir, 'spool-secret.jsonl', [dirty]);
+
+    const result = await ingestFromSpoolDetailed(candidateRepo, spoolDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.rejected[0]?.category).toBe('secret');
+    }
+    expect(candidateRepo.count()).toBe(0);
+  });
+
+  it('one poisoned candidate does NOT block clean candidates in the same batch', async () => {
+    const clean1 = makeCandidate({ content: 'clean note one about caching strategy' });
+    const dirty = makeCandidate({ content: 'his base salary was leaked here' });
+    const clean2 = makeCandidate({ content: 'clean note two about retry backoff' });
+    // All three in one spool file — the dirty one must not abort the batch.
+    await writeSpoolFile(spoolDir, 'spool-mixed.jsonl', [clean1, dirty, clean2]);
+
+    const result = await ingestFromSpoolDetailed(candidateRepo, spoolDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.ingested).toHaveLength(2);
+      expect(result.value.rejected).toHaveLength(1);
+      expect(result.value.rejected[0]?.category).toBe('compensation');
+    }
+    // Exactly the two clean candidates landed.
+    expect(candidateRepo.count()).toBe(2);
+    expect(candidateRepo.findById(clean1.id)).not.toBeNull();
+    expect(candidateRepo.findById(clean2.id)).not.toBeNull();
+    expect(candidateRepo.findById(dirty.id)).toBeNull();
+  });
+
+  it('does not leak the matched value in the rejection record', async () => {
+    const dirty = makeCandidate({ content: 'applicant ssn 123-45-6789 on file' });
+    await writeSpoolFile(spoolDir, 'spool-pii2.jsonl', [dirty]);
+
+    const result = await ingestFromSpoolDetailed(candidateRepo, spoolDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(JSON.stringify(result.value.rejected)).not.toContain('123-45-6789');
     }
   });
 });

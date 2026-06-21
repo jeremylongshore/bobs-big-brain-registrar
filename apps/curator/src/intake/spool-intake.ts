@@ -6,7 +6,7 @@ import {
   readSpoolFile,
   verifySpoolManifest,
 } from '@qmd-team-intent-kb/claude-runtime';
-import { computeContentHash } from '@qmd-team-intent-kb/common';
+import { computeContentHash, DisclosureRejectedError } from '@qmd-team-intent-kb/common';
 import type { Result } from '@qmd-team-intent-kb/common';
 import type { CandidateRepository } from '@qmd-team-intent-kb/store';
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
@@ -40,11 +40,24 @@ export interface SpoolTamperRecord {
   quarantinedTo: string | null;
 }
 
+/** A spool candidate refused at the disclosure / secret choke point. Carries
+ *  only the candidate id + violated category — never the matched value. */
+export interface SpoolDisclosureRejection {
+  candidateId: string;
+  category: string;
+}
+
 /** Result payload from `ingestFromSpoolDetailed`. */
 export interface IngestResult {
   ingested: MemoryCandidate[];
   /** Files refused because their manifest SHA-256 did not match (tamper). */
   tampered: SpoolTamperRecord[];
+  /**
+   * Candidates refused at the repository-layer disclosure / secret choke point
+   * (Epic 0). One poisoned candidate is skipped without aborting the batch —
+   * fail-closed on the bad candidate, not a denial-of-service on the whole spool.
+   */
+  rejected: SpoolDisclosureRejection[];
 }
 
 /**
@@ -93,6 +106,7 @@ export async function ingestFromSpoolDetailed(
 
   const ingested: MemoryCandidate[] = [];
   const tampered: SpoolTamperRecord[] = [];
+  const rejected: SpoolDisclosureRejection[] = [];
 
   for (const filepath of filesResult.value) {
     if (verifyManifest) {
@@ -127,12 +141,25 @@ export async function ingestFromSpoolDetailed(
       if (existing !== null) continue;
 
       const hash = computeContentHash(candidate.content);
-      candidateRepo.insert(candidate, hash);
-      ingested.push(candidate);
+      try {
+        // The repository-layer choke point (Epic 0) rejects PII / comp / secret
+        // content before it can be written. Refuse this one candidate and keep
+        // processing the rest of the batch — a poisoned spool entry must not be
+        // able to block every other candidate's ingest.
+        candidateRepo.insert(candidate, hash);
+        ingested.push(candidate);
+      } catch (e) {
+        if (e instanceof DisclosureRejectedError) {
+          // Record only the id + category — never the matched value.
+          rejected.push({ candidateId: candidate.id, category: e.category });
+          continue;
+        }
+        throw e;
+      }
     }
   }
 
-  return { ok: true, value: { ingested, tampered } };
+  return { ok: true, value: { ingested, tampered, rejected } };
 }
 
 /**

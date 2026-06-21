@@ -104,8 +104,12 @@ describe('POST /api/candidates/:id/promote', () => {
   it('returns 422 and leaves the candidate in the inbox when policy rejects', async () => {
     // Default makePolicy carries a secret_detection rule with action 'reject'.
     policyRepo.insert(makePolicy({ tenantId: 'team-alpha' }));
+    // This content must trip the POLICY-ENGINE secret scanner (which is broader)
+    // WITHOUT tripping the boundary disclosure choke point on insert (Epic 0) —
+    // otherwise it never reaches the inbox to be promote-tested. A GCP
+    // service-account marker is policy-flagged but not a boundary-gate pattern.
     const candidate = makeCandidate({
-      content: 'deploy with AWS key AKIAIOSFODNN7EXAMPLE in the config',
+      content: 'config snippet includes "type": "service_account" for the deploy',
       tenantId: 'team-alpha',
     });
     candidateRepo.insert(candidate, computeContentHash(candidate.content));

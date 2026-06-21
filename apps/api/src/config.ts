@@ -25,7 +25,12 @@ export function loadConfig(): AppConfig {
   const apiKeyRaw = process.env['TEAMKB_API_KEY'];
   return {
     port: parseInt(process.env['TEAMKB_API_PORT'] ?? '3847', 10),
-    host: process.env['TEAMKB_API_HOST'] ?? '127.0.0.1',
+    // Coerce empty / whitespace-only TEAMKB_API_HOST to loopback. A bare ''
+    // would otherwise pass the nullish-coalesce unchanged, be classified as
+    // loopback by isLoopbackHost, and then bind :: (all interfaces) at listen
+    // time (an unauthenticated brain reachable off-host). `||` collapses '' and
+    // whitespace-only values to 127.0.0.1 before anything else sees them.
+    host: process.env['TEAMKB_API_HOST']?.trim() || '127.0.0.1',
     dbPath: process.env['TEAMKB_DB_PATH'] ?? resolveTeamKbPath('data/teamkb.db'),
     logLevel: process.env['TEAMKB_LOG_LEVEL'] ?? 'info',
     apiKey: apiKeyRaw !== undefined && apiKeyRaw !== '' ? apiKeyRaw : undefined,
