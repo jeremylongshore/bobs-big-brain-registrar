@@ -123,3 +123,59 @@ export function deriveMemoryId(candidateId: string, contentHash: string): string
   const name = ['memory', candidateId, contentHash].join(NAME_FIELD_SEPARATOR);
   return uuidV5(SPOOL_UUID_NAMESPACE, name);
 }
+
+/**
+ * Derive an audit-event id deterministically from the *logical* event identity
+ * so the same logical promotion yields a byte-identical audit-event id on every
+ * clone. This is load-bearing for cross-clone reproducibility: the audit chain's
+ * v2 `entry_hash` folds the event `id` into its canonical body, so a random v4
+ * id (the old `crypto.randomUUID()`) made the `entry_hash` per-clone even after
+ * `timestamp` was excluded from the hash (bead `8da.6`). Content-deriving the id
+ * (bead `8da.5`) closes that gap: identical logical event at the same chain
+ * position -> identical `entry_hash` across clones.
+ *
+ * The `"audit"` tag keeps audit-event ids in their own id-space, disjoint from
+ * `"memory"`-tagged ids ({@link deriveMemoryId}) and `"link"`-tagged ids
+ * ({@link deriveLinkId}), so the three never collide even on identical operands.
+ *
+ * @param memoryId       The memory the event is about (the `memoryId` written on the row).
+ * @param action         The audit action (e.g. `promoted`, `superseded`, `eval-result`).
+ * @param discriminator  Optional extra identity field that keeps otherwise-identical
+ *                       `(memoryId, action)` events distinct, e.g. the superseding
+ *                       memory id for a `superseded` event, or the evaluator name for
+ *                       one `eval-result` row among several emitted in a single promotion.
+ *                       Omit when `(memoryId, action)` is already unique per promotion.
+ */
+export function deriveAuditEventId(
+  memoryId: string,
+  action: string,
+  discriminator: string = '',
+): string {
+  const name = ['audit', memoryId, action, discriminator].join(NAME_FIELD_SEPARATOR);
+  return uuidV5(SPOOL_UUID_NAMESPACE, name);
+}
+
+/**
+ * Derive a memory-link (graph edge) id deterministically from the edge's natural
+ * identity `(sourceMemoryId, targetMemoryId, linkType)`. Link ids are NOT part of
+ * the audit chain (they are never hashed into any `entry_hash`), but minting them
+ * with `crypto.randomUUID()` left residual per-clone divergence in the curated DB
+ * for the *same* logical promotion. Deriving them makes the whole promotion (memory,
+ * audit events, and edges) byte-reproducible across clones, which is the property the
+ * govern-at-merge path depends on.
+ *
+ * The `"link"` tag keeps these ids in their own id-space, disjoint from
+ * `"memory"`- and `"audit"`-tagged ids.
+ *
+ * @param sourceMemoryId  The edge's source memory id.
+ * @param targetMemoryId  The edge's target memory id.
+ * @param linkType        The edge kind (e.g. `supersedes`, `relates_to`).
+ */
+export function deriveLinkId(
+  sourceMemoryId: string,
+  targetMemoryId: string,
+  linkType: string,
+): string {
+  const name = ['link', sourceMemoryId, targetMemoryId, linkType].join(NAME_FIELD_SEPARATOR);
+  return uuidV5(SPOOL_UUID_NAMESPACE, name);
+}

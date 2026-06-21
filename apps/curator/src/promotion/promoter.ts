@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { deriveMemoryId } from '@qmd-team-intent-kb/common';
+import { deriveMemoryId, deriveAuditEventId, deriveLinkId } from '@qmd-team-intent-kb/common';
 import {
   CuratedMemory as CuratedMemorySchema,
   AuditEvent as AuditEventSchema,
@@ -80,9 +80,14 @@ export function promote(
   // CuratedMemory.id on every clone. It is intentionally distinct from
   // candidate.id (a "memory"-tagged derivation) but a pure function of the
   // candidate's already content-addressed id plus its content hash, both stable
-  // across clones for the same logical event. The per-record policyId / audit
-  // event id / link id below stay random: they identify operational rows, not
-  // the durable memory identity, and are not part of the dedupe id lineage.
+  // across clones for the same logical event.
+  //
+  // The audit-event ids and graph-edge (link) ids below are ALSO content-derived
+  // (bead 8da.5) from their logical identities, load-bearing for the audit chain,
+  // whose v2 entry_hash folds the event id into its canonical body, so a random id
+  // would make the entry_hash per-clone even with timestamp excluded (8da.6).
+  // The per-record policyId stays random: it labels an operational policy-evaluation
+  // row, is never hashed into the audit chain, and is not part of any dedupe lineage.
   const memoryId = deriveMemoryId(input.candidate.id, input.contentHash);
 
   // The pipeline does not carry a per-evaluation policyId, so one is generated per record.
@@ -134,7 +139,11 @@ export function promote(
 
       auditRepo.insert(
         AuditEventSchema.parse({
-          id: randomUUID(),
+          // Content-derived (bead 8da.5): identity is the superseded memory +
+          // the 'superseded' action + the superseding memory id as discriminator,
+          // so two clones supersede-by-the-same-memory mint the same audit id and
+          // hence the same v2 entry_hash at the same chain position.
+          id: deriveAuditEventId(input.supersession.supersededMemoryId, 'superseded', memoryId),
           action: 'superseded',
           memoryId: input.supersession.supersededMemoryId,
           tenantId: input.candidate.tenantId,
@@ -153,7 +162,11 @@ export function promote(
 
     if (input.supersession !== undefined && linksRepo) {
       linksRepo.insert({
-        id: randomUUID(),
+        // Content-derived (bead 8da.5): a graph edge's identity is its
+        // (source, target, type) triple, stable across clones for the same
+        // logical promotion. Not part of the audit chain, but kept deterministic
+        // so the whole promotion is byte-reproducible across clones.
+        id: deriveLinkId(memoryId, input.supersession.supersededMemoryId, 'supersedes'),
         sourceMemoryId: memoryId,
         targetMemoryId: input.supersession.supersededMemoryId,
         linkType: 'supersedes',
@@ -176,7 +189,9 @@ export function promote(
         if (match) {
           try {
             linksRepo.insert({
-              id: randomUUID(),
+              // Content-derived (bead 8da.5): (source, target, type) edge identity,
+              // stable across clones. See the supersedes edge above.
+              id: deriveLinkId(memoryId, match.id, 'relates_to'),
               sourceMemoryId: memoryId,
               targetMemoryId: match.id,
               linkType: 'relates_to',
@@ -195,7 +210,9 @@ export function promote(
 
     auditRepo.insert(
       AuditEventSchema.parse({
-        id: randomUUID(),
+        // Content-derived (bead 8da.5): one 'promoted' event per memory, so the
+        // (memoryId, action) pair is already unique, so no discriminator needed.
+        id: deriveAuditEventId(memoryId, 'promoted'),
         action: 'promoted',
         memoryId,
         tenantId: input.candidate.tenantId,
@@ -217,7 +234,10 @@ export function promote(
         for (const verdict of evalCallback(memory, input.pipelineResult)) {
           auditRepo.insert(
             AuditEventSchema.parse({
-              id: randomUUID(),
+              // Content-derived (bead 8da.5): several eval-result rows can be
+              // emitted per promotion, so the evaluator name discriminates them.
+              // Identical evaluator verdicts on two clones mint the same id.
+              id: deriveAuditEventId(memoryId, 'eval-result', verdict.name),
               action: 'eval-result',
               memoryId,
               tenantId: input.candidate.tenantId,
