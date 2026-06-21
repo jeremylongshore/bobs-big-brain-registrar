@@ -1,6 +1,7 @@
 import {
   assertDisclosureClean,
   computeContentHash,
+  deriveMemoryId,
   DisclosureRejectedError,
 } from '@qmd-team-intent-kb/common';
 import { PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
@@ -102,6 +103,56 @@ export interface MergeGovernResult {
    * processed (the same logical memory present in both clones).
    */
   readonly unionSize: number;
+}
+
+/**
+ * Error thrown at the merge-gate entry when an input row's `id` is not
+ * deterministically content-derivable from its own `(candidateId, contentHash)`
+ * lineage - i.e. it is not `deriveMemoryId(candidateId, contentHash)`.
+ *
+ * ## Why this is a hard invariant
+ *
+ * Every row that crosses a clone boundary into the merge gate is, by contract, a
+ * row a clone already *promoted*. The canonical promotion path
+ * ({@link promote}) ALWAYS mints the durable id as
+ * `deriveMemoryId(candidate.id, contentHash)` (a content-derived UUID v5), so a
+ * legitimately-promoted row satisfies `id === deriveMemoryId(candidateId,
+ * contentHash)` unconditionally. A row whose `id` does NOT reproduce under
+ * re-derivation therefore did not come from the promotion path - it carries a
+ * stray, non-content-derived id (e.g. a `crypto.randomUUID()` v4 from an old or
+ * out-of-band code path).
+ *
+ * Such a row is poison for the gate's two load-bearing guarantees:
+ *
+ *   - **id-dedup of the union** keys on `id`, so two clones holding the same
+ *     logical memory under *different* random ids would BOTH survive id-dedup and
+ *     be double-counted instead of collapsed;
+ *   - **byte-identical commutativity** depends on the id-sorted traversal landing
+ *     each logical memory at the same position on every clone - a random id sorts
+ *     to a per-clone position, breaking the determinism the whole gate rests on.
+ *
+ * Rather than silently corrupt the merge, the gate FAILS LOUD at entry. The error
+ * carries the offending row's actual `id` and the expected re-derived id (both
+ * already-public, non-secret identifiers) - but NEVER the row's content,
+ * mirroring {@link DisclosureRejectedError}'s non-leak contract.
+ */
+export class MergeIdInvariantError extends Error {
+  /** The offending row's actual `id` (the non-content-derived value found). */
+  readonly actualId: string;
+  /** The id the row's `(candidateId, contentHash)` lineage should have produced. */
+  readonly expectedId: string;
+  constructor(actualId: string, expectedId: string) {
+    // NOTE: message deliberately omits the row's content (non-leak contract).
+    super(
+      `Merge gate rejected a row whose id is not content-derived: ` +
+        `id=${actualId} is not deriveMemoryId(candidateId, contentHash)=${expectedId}. ` +
+        `Every row crossing a clone boundary must carry a content-derived id; a ` +
+        `stray random id (e.g. a v4) breaks id-dedup and cross-clone determinism.`,
+    );
+    this.name = 'MergeIdInvariantError';
+    this.actualId = actualId;
+    this.expectedId = expectedId;
+  }
 }
 
 /** Dependencies the merge gate needs - the same repositories the curator uses. */
@@ -236,6 +287,25 @@ export function mergeGovern(
   //    clone, regardless of which clone's rows arrived first. This sort is the
   //    one element that makes A∪B and B∪A byte-identical.
   const union = [...unionById.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  // 2b. GATE-ENTRY ID INVARIANT - a WHOLE-UNION pre-pass, before ANY promotion.
+  //     A row crossing a clone boundary is, by contract, a row a clone already
+  //     promoted, so its id MUST equal deriveMemoryId(candidateId, contentHash)
+  //     (the canonical promotion path mints it that way). A row whose id does not
+  //     reproduce under re-derivation carries a stray, non-content-derived id (e.g.
+  //     a v4 from an old code path) - poison for both id-dedup (which keys on .id,
+  //     so the same logical memory under two random ids survives twice) and the
+  //     id-sorted commutativity guarantee (a random id sorts to a per-clone
+  //     position). Validate the entire union up front so a single bad row aborts
+  //     the merge ATOMICALLY: nothing is written before the throw, regardless of
+  //     where the offending row falls in the sort order. Walking the already-sorted
+  //     union makes the FIRST reported offender deterministic across clones.
+  for (const memory of union) {
+    const expectedId = deriveMemoryId(memory.candidateId, memory.contentHash);
+    if (memory.id !== expectedId) {
+      throw new MergeIdInvariantError(memory.id, expectedId);
+    }
+  }
 
   // 3. SEED the dedupe set from the merged DB's existing content hashes (the same
   //    call the eval harness uses), then accrete each newly-promoted row's hash.

@@ -16,6 +16,7 @@
  * @module __tests__/merge-gate.test
  */
 
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Database from 'better-sqlite3';
 import {
@@ -24,14 +25,19 @@ import {
   AuditRepository,
   verifyAuditChain,
 } from '@qmd-team-intent-kb/store';
-import { assertDisclosureClean, DisclosureRejectedError } from '@qmd-team-intent-kb/common';
+import {
+  assertDisclosureClean,
+  computeContentHash,
+  deriveMemoryId,
+  DisclosureRejectedError,
+} from '@qmd-team-intent-kb/common';
 import { PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
 import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
 import type {
   CuratedMemory,
   GovernancePolicy as GovernancePolicyType,
 } from '@qmd-team-intent-kb/schema';
-import { mergeGovern } from '../merge/merge-gate.js';
+import { mergeGovern, MergeIdInvariantError } from '../merge/merge-gate.js';
 import { MemoryCandidate as MemoryCandidateSchema } from '@qmd-team-intent-kb/schema';
 import { makeCuratedMemory, TENANT, NOW } from './fixtures.js';
 
@@ -101,13 +107,30 @@ function makeMergePolicy(overrides?: Partial<GovernancePolicyType>): GovernanceP
 }
 
 /**
- * Build a promoted CuratedMemory whose `id` is the content-derived id the merge
- * gate would re-derive - so that the same logical content yields the same id on
- * both "clones". We let the fixture mint random ids by default; for the
- * cross-clone-duplicate test we pin BOTH clones' rows to the same id + content.
+ * Build a promoted CuratedMemory the way the canonical promotion path
+ * ({@link promote}) would - in particular with a CONTENT-DERIVED id
+ * `deriveMemoryId(candidateId, contentHash)`. This matters because the merge gate
+ * now enforces an entry invariant: every row crossing a clone boundary must carry
+ * a content-derived id (a stray random v4 is rejected as
+ * {@link MergeIdInvariantError}). A legitimately-promoted clone export always
+ * satisfies that invariant, so the fixture used by the happy-path tests must too.
+ *
+ * The id is derived from the row's `candidateId` (overridable) and the SHA-256
+ * hash of its `content`, exactly as {@link promote} derives it. So:
+ *
+ *   - two rows with the SAME content AND the SAME `candidateId` get the SAME id
+ *     (a cross-clone duplicate - the id-dedup case);
+ *   - two rows with the same content but DIFFERENT `candidateId`s get DIFFERENT
+ *     ids but the SAME `contentHash` (the policy dedup_check case).
+ *
+ * Pass `id` explicitly to deliberately plant a NON-derived id (the negative
+ * invariant test); any explicit `id` override wins over the derivation.
  */
 function makeRow(content: string, overrides?: Partial<CuratedMemory>): CuratedMemory {
-  return makeCuratedMemory({ content, ...overrides });
+  const candidateId = overrides?.candidateId ?? randomUUID();
+  const contentHash = overrides?.contentHash ?? computeContentHash(content);
+  const id = overrides?.id ?? deriveMemoryId(candidateId, contentHash);
+  return makeCuratedMemory({ content, candidateId, contentHash, id, ...overrides });
 }
 
 /**
@@ -171,11 +194,12 @@ describe('mergeGovern - govern-at-merge gate', () => {
     const content = 'Use a single shared logger configured at process start, never per-module.';
 
     // The SAME logical memory exists in both clones: identical content AND
-    // identical id (content-derived ids are stable across clones).
-    const sharedId = '11111111-1111-4111-8111-111111111111';
+    // identical candidateId, so makeRow derives the SAME content-derived id for
+    // both (content-derived ids are stable across clones - this is exactly what
+    // lets id-dedup collapse them).
     const sharedCandidateId = '22222222-2222-4222-8222-222222222222';
-    const inA = makeRow(content, { id: sharedId, candidateId: sharedCandidateId });
-    const inB = makeRow(content, { id: sharedId, candidateId: sharedCandidateId });
+    const inA = makeRow(content, { candidateId: sharedCandidateId });
+    const inB = makeRow(content, { candidateId: sharedCandidateId });
 
     const uniqueToB = makeRow('A distinct convention that only clone B promoted locally today.');
 
@@ -197,20 +221,22 @@ describe('mergeGovern - govern-at-merge gate', () => {
     const policy = makeMergePolicy();
 
     // Two SEPARATE capture events whose content converged on the same string.
-    // Distinct ids AND distinct candidateIds: the upstream id-dedup (the unionById
+    // Distinct candidateIds -> distinct CONTENT-DERIVED ids (deriveMemoryId folds
+    // candidateId), but identical contentHash. The upstream id-dedup (the unionById
     // map, which keys purely on .id) CANNOT collapse these - both rows survive into
     // the policy pipeline. The only thing that can catch the second one is the
     // CONTENT-HASH dedup_check rule comparing against the accreting existingHashes
-    // set. This is the path under test.
+    // set. This is the path under test. (Ids are NOT pinned here: pinning a literal
+    // would violate the gate's content-derived-id entry invariant; instead each
+    // row's id is derived from its own candidateId + contentHash, exactly as a real
+    // promoted clone export would carry it.)
     const convergedContent =
       'Decision: every public API response is wrapped in a discriminated-union Result envelope.';
 
     const rowA = makeRow(convergedContent, {
-      id: '55555555-5555-4555-8555-555555555555',
       candidateId: '66666666-6666-4666-8666-666666666666',
     });
     const rowB = makeRow(convergedContent, {
-      id: '77777777-7777-4777-8777-777777777777',
       candidateId: '88888888-8888-4888-8888-888888888888',
     });
 
@@ -264,21 +290,78 @@ describe('mergeGovern - govern-at-merge gate', () => {
     expect(deps.memoryRepo.findByContentHash(rowA.contentHash)).not.toBeNull();
   });
 
+  it('rejects a row whose id is not content-derived (a stray v4) at gate entry, before any promotion', () => {
+    const policy = makeMergePolicy();
+
+    // A clean, otherwise-promotable row whose id is a RANDOM v4 - NOT
+    // deriveMemoryId(candidateId, contentHash). This is exactly what an old or
+    // out-of-band code path (e.g. a pre-8da.5 crypto.randomUUID() site) would
+    // leave on a clone export. Its content is clean and would sail through the
+    // disclosure choke point + the full policy pipeline - so ONLY the gate-entry
+    // id invariant can catch it.
+    const strayV4 = randomUUID();
+    const content = 'A perfectly clean convention whose row id was minted at random, not derived.';
+    const poison = makeRow(content, { id: strayV4 });
+
+    // Sanity: the planted id really is the wrong one (not the derived id), so the
+    // test is exercising the invariant and not an accidental match.
+    expect(poison.id).toBe(strayV4);
+    expect(poison.id).not.toBe(deriveMemoryId(poison.candidateId, poison.contentHash));
+
+    // A second, legitimately-promotable row paired in the SAME pass. Even though it
+    // is clean and content-derived, the gate must fail the WHOLE pass loudly the
+    // moment it meets the poison row - a merge that silently dropped the bad row and
+    // kept going would be worse (it hides a real upstream id bug).
+    const cleanDerived = makeRow(
+      'A clean, content-derived row that shares the pass with the poison.',
+    );
+
+    // (a) FAILS LOUD: the gate throws MergeIdInvariantError, naming the offending
+    //     id and the id its lineage should have produced - never the content.
+    let thrown: unknown;
+    try {
+      mergeGovern([poison], [cleanDerived], deps, { policy, tenantId: TENANT });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(MergeIdInvariantError);
+    const invariantErr = thrown as MergeIdInvariantError;
+    expect(invariantErr.actualId).toBe(strayV4);
+    expect(invariantErr.expectedId).toBe(deriveMemoryId(poison.candidateId, poison.contentHash));
+    // Non-leak contract: the error message must not embed the row content.
+    expect(invariantErr.message).not.toContain(content);
+
+    // (b) NOTHING was promoted - the throw happens before any write, so the durable
+    //     state is untouched even though one of the two rows was perfectly clean.
+    expect(deps.memoryRepo.count()).toBe(0);
+    expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+
+    // (c) The same clean, content-derived row promotes fine on its own - proving the
+    //     gate rejected the pass for the id invariant specifically, not for anything
+    //     about the clean row.
+    const ok = mergeGovern([cleanDerived], [], deps, { policy, tenantId: TENANT });
+    expect(ok.promoted).toHaveLength(1);
+    expect(ok.quarantined).toHaveLength(0);
+    expect(deps.memoryRepo.count()).toBe(1);
+  });
+
   it('is commutative: A∪B and B∪A produce byte-identical governed state + identical audit outcome', () => {
     const policy = makeMergePolicy();
 
     // A mixed bag exercising every branch: clean rows, a cross-clone duplicate,
-    // a secret row, a PII row - split unevenly across the two clones.
-    const dupId = '33333333-3333-4333-8333-333333333333';
+    // a secret row, a PII row - split unevenly across the two clones. The
+    // cross-clone duplicate shares content AND candidateId, so makeRow derives the
+    // SAME content-derived id for both - the id-dedup case, with ids that honor the
+    // gate's content-derived-id entry invariant.
     const dupCandId = '44444444-4444-4444-8444-444444444444';
     const dupContent = 'Shared decision: all timestamps are stored as UTC ISO-8601 strings.';
 
     const a1 = makeRow('Clone A clean row one about dependency injection wiring conventions.');
-    const a2 = makeRow(dupContent, { id: dupId, candidateId: dupCandId });
+    const a2 = makeRow(dupContent, { candidateId: dupCandId });
     const aSecret = makeRow(`A note from clone A leaking ${SECRET_LITERAL} into the brain.`);
 
     const b1 = makeRow('Clone B clean row about retry-with-backoff for idempotent calls only.');
-    const b2 = makeRow(dupContent, { id: dupId, candidateId: dupCandId });
+    const b2 = makeRow(dupContent, { candidateId: dupCandId });
     const bPii = makeRow(`Clone B accidentally captured an SSN ${SSN_LITERAL} during intake.`);
 
     const cloneA = [a1, a2, aSecret];
