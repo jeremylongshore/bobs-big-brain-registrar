@@ -193,6 +193,77 @@ describe('mergeGovern - govern-at-merge gate', () => {
     expect(deps.memoryRepo.count()).toBe(2);
   });
 
+  it('policy dedup_check catches same-content rows that arrive under different candidate ids (dedup_check is not shadowed by id-dedup)', () => {
+    const policy = makeMergePolicy();
+
+    // Two SEPARATE capture events whose content converged on the same string.
+    // Distinct ids AND distinct candidateIds: the upstream id-dedup (the unionById
+    // map, which keys purely on .id) CANNOT collapse these - both rows survive into
+    // the policy pipeline. The only thing that can catch the second one is the
+    // CONTENT-HASH dedup_check rule comparing against the accreting existingHashes
+    // set. This is the path under test.
+    const convergedContent =
+      'Decision: every public API response is wrapped in a discriminated-union Result envelope.';
+
+    const rowA = makeRow(convergedContent, {
+      id: '55555555-5555-4555-8555-555555555555',
+      candidateId: '66666666-6666-4666-8666-666666666666',
+    });
+    const rowB = makeRow(convergedContent, {
+      id: '77777777-7777-4777-8777-777777777777',
+      candidateId: '88888888-8888-4888-8888-888888888888',
+    });
+
+    // Sanity: same content + same hash, but genuinely different identity. If these
+    // shared an id the id-dedup would shadow the path we mean to exercise.
+    expect(rowA.id).not.toBe(rowB.id);
+    expect(rowA.candidateId).not.toBe(rowB.candidateId);
+    expect(rowA.contentHash).toBe(rowB.contentHash);
+
+    // Pre-seed the merged DB with an UNRELATED promoted row, so the gate's
+    // existingHashes seed (memoryRepo.getAllContentHashes()) is non-empty and the
+    // dedup_check rule is not vacuous on the seed path. Its hash differs from the
+    // converged content, so neither rowA nor rowB matches it on the seed - the
+    // catch comes from intra-pass ACCRETION of rowA's hash, proving the gate
+    // accretes existingHashes between rows.
+    const seed = makeRow('An unrelated convention seeded into the merged DB before the pass runs.');
+    deps.memoryRepo.insert(seed);
+
+    const result = mergeGovern([rowA], [rowB], deps, { policy, tenantId: TENANT });
+
+    // Union after id-dedup = 2 logical rows (different ids), both reach the pipeline.
+    expect(result.unionSize).toBe(2);
+
+    // Exactly one converged-content survivor; its twin is quarantined by the policy
+    // pipeline's dedup_check, NOT by the id-dedup (which never fired - distinct ids).
+    expect(result.promoted).toHaveLength(1);
+    expect(result.quarantined).toHaveLength(1);
+
+    const refused = result.quarantined[0]!;
+    expect(refused.category).toBe('policy');
+    // The reason is the rejecting RULE id from the pipeline verdict. Only the
+    // pipeline-verdict branch (merge-gate.ts:276-288) produces a rule id here; the
+    // no-policy fallback would report 'duplicate-content'. Asserting the rule id
+    // makes this test fail if the pipeline branch is disabled - i.e. NON-VACUOUS.
+    expect(refused.reason).toBe('rule-dedup');
+
+    // The refused row is reported under one of the two converged-content rows'
+    // SOURCE ids - the quarantine record carries the union row's input .id
+    // (merge-gate.ts:282), unchanged. (The survivor, by contrast, is re-promoted
+    // through the canonical path, so ITS .id is re-derived from candidateId +
+    // contentHash, not the input id - which is why we match the survivor on content,
+    // not id.)
+    const convergedInputIds = new Set([rowA.id, rowB.id]);
+    expect(convergedInputIds.has(refused.memoryId)).toBe(true);
+
+    const convergedSurvivors = result.promoted.filter((m) => m.content === convergedContent);
+    expect(convergedSurvivors).toHaveLength(1);
+
+    // count() = seed + the single converged survivor = 2.
+    expect(deps.memoryRepo.count()).toBe(2);
+    expect(deps.memoryRepo.findByContentHash(rowA.contentHash)).not.toBeNull();
+  });
+
   it('is commutative: A∪B and B∪A produce byte-identical governed state + identical audit outcome', () => {
     const policy = makeMergePolicy();
 
