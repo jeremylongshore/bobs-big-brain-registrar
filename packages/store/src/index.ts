@@ -16,6 +16,30 @@ export type {
   AnchorBreak,
   AppendAnchorOptions,
 } from './audit-anchor.js';
+export {
+  generateActorKeypair,
+  signMergeAnchor,
+  verifyMergeAnchorSignature,
+  signedMergeAnchorBodyJson,
+  computeSignedMergeAnchorHash,
+  appendSignedMergeAnchor,
+  readSignedMergeAnchors,
+  verifySignedMergeAnchors,
+} from './signed-merge-anchor.js';
+export type {
+  ActorKeypair,
+  SignedMergeAnchorRecord,
+  AppendSignedMergeAnchorOptions,
+  SignedMergeAnchorBreak,
+  SignedMergeAnchorVerifyResult,
+} from './signed-merge-anchor.js';
+export { verifyMergeAuditChain, canonicalMergeOrder } from './audit-verify-merge.js';
+export type {
+  MergeAuditVerifyResult,
+  DagAnchorVerifyResult,
+  DagAnchorBreak,
+  VerifyMergeAuditChainInput,
+} from './audit-verify-merge.js';
 export { ExportStateRepository } from './repositories/export-state-repository.js';
 export type { ExportState } from './repositories/export-state-repository.js';
 export { MemoryLinksRepository } from './repositories/memory-links-repository.js';

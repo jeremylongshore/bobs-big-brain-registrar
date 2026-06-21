@@ -55,3 +55,16 @@ tmp/
 .stryker-tmp/
 reports/mutation/
 stryker.log
+
+# Signed merge-anchor key custody (bead 8da.7)
+# The actor Ed25519 PRIVATE key lives ONLY in the SOPS-encrypted form below;
+# its decrypted/plaintext form and the Lamport-clock sidecar are never committed.
+secrets/actor-ed25519.private.env
+secrets/*.private.env
+secrets/*.private.pem
+secrets/*.private.der
+secrets/*.private.hex
+.anchor-clock
+# The SOPS-encrypted private key (committed) and the public-key registry are NOT ignored:
+!secrets/*.sops.env
+!keys/*.pub
