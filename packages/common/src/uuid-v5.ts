@@ -156,6 +156,36 @@ export function deriveAuditEventId(
 }
 
 /**
+ * Derive a policy-evaluation record id deterministically from its natural
+ * identity `(memoryId, ruleId, discriminator)`. A `policyEvaluations[]` entry on
+ * a {@link deriveMemoryId promoted memory} records one rule's verdict; minting its
+ * `policyId` with `crypto.randomUUID()` left the durable `curated_memories` row
+ * per-clone for the *same* logical promotion (the row's `policy_evaluations_json`
+ * column embeds these ids). The policyId is NOT part of the audit chain (never
+ * hashed into any `entry_hash`), so this purely stabilises the curated DB row,
+ * which is the property the govern-at-merge gate (bead 8da.9) depends on for
+ * byte-identical commutativity.
+ *
+ * The `"policy"` tag keeps these ids in their own id-space, disjoint from
+ * `"memory"`-, `"audit"`-, and `"link"`-tagged ids.
+ *
+ * @param memoryId       The memory the evaluation belongs to.
+ * @param ruleId         The policy rule that produced the verdict.
+ * @param discriminator  Optional extra identity field that keeps otherwise-identical
+ *                       `(memoryId, ruleId)` pairs distinct (e.g. an evaluation
+ *                       index when one rule could appear more than once). Omit when
+ *                       `(memoryId, ruleId)` is already unique per promotion.
+ */
+export function derivePolicyEvaluationId(
+  memoryId: string,
+  ruleId: string,
+  discriminator: string = '',
+): string {
+  const name = ['policy', memoryId, ruleId, discriminator].join(NAME_FIELD_SEPARATOR);
+  return uuidV5(SPOOL_UUID_NAMESPACE, name);
+}
+
+/**
  * Derive a memory-link (graph edge) id deterministically from the edge's natural
  * identity `(sourceMemoryId, targetMemoryId, linkType)`. Link ids are NOT part of
  * the audit chain (they are never hashed into any `entry_hash`), but minting them

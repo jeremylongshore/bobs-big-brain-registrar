@@ -18,6 +18,14 @@ export type { SupersessionMatch } from './supersession/supersession-detector.js'
 export { promote } from './promotion/promoter.js';
 export type { PromotionInput } from './promotion/promoter.js';
 export { reject } from './rejection/rejector.js';
+export { mergeGovern } from './merge/merge-gate.js';
+export type {
+  MergeGovernResult,
+  MergeGovernDependencies,
+  MergeGovernOptions,
+  QuarantinedRow,
+  QuarantineCategory,
+} from './merge/merge-gate.js';
 export { parseMarkdown, titleFromPath, walkVault, countVaultFiles } from './import/index.js';
 export type { ParsedMarkdown, VaultFile } from './import/index.js';
 export {
