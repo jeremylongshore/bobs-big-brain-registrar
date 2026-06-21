@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { deriveMemoryId } from '@qmd-team-intent-kb/common';
 import {
   CuratedMemory as CuratedMemorySchema,
   AuditEvent as AuditEventSchema,
@@ -74,7 +75,15 @@ export function promote(
   evalCallback?: EvalCallback,
 ): CuratedMemory {
   const now = new Date().toISOString();
-  const memoryId = randomUUID();
+  // The promoted-memory id is content-derived (UUID v5) from the candidate
+  // lineage, not random, so the same logical candidate promotes to the same
+  // CuratedMemory.id on every clone. It is intentionally distinct from
+  // candidate.id (a "memory"-tagged derivation) but a pure function of the
+  // candidate's already content-addressed id plus its content hash, both stable
+  // across clones for the same logical event. The per-record policyId / audit
+  // event id / link id below stay random: they identify operational rows, not
+  // the durable memory identity, and are not part of the dedupe id lineage.
+  const memoryId = deriveMemoryId(input.candidate.id, input.contentHash);
 
   // The pipeline does not carry a per-evaluation policyId, so one is generated per record.
   const policyEvaluations: PolicyEvaluation[] = input.pipelineResult.evaluations.map((ev) => ({

@@ -6,7 +6,7 @@ import {
   AuditRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
-import { computeContentHash } from '@qmd-team-intent-kb/common';
+import { computeContentHash, deriveMemoryId } from '@qmd-team-intent-kb/common';
 import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
 import { promote, type EvalResultRecord } from '../promotion/promoter.js';
 import { makeCandidate, makeCuratedMemory, TENANT } from './fixtures.js';
@@ -56,7 +56,7 @@ describe('promote', () => {
     expect(memory.lifecycle).toBe('active');
   });
 
-  it('generates a valid UUID for the memory ID', () => {
+  it('generates a content-derived UUID v5 for the memory ID', () => {
     const candidate = makeCandidate();
     const contentHash = computeContentHash(candidate.content);
     const memory = promote(
@@ -64,9 +64,63 @@ describe('promote', () => {
       memoryRepo,
       auditRepo,
     );
+    // The memory id is now a content-derived UUID v5 (bead 8da.5), not a
+    // random v4: version nibble 5, RFC 4122 variant bits.
     expect(memory.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
+    // And it is exactly deriveMemoryId(candidate.id, contentHash).
+    expect(memory.id).toBe(deriveMemoryId(candidate.id, contentHash));
+  });
+
+  it('is deterministic: the same logical candidate promotes to the same memory id', () => {
+    // Two independent promote() calls (distinct DBs, as two clones would have)
+    // for the same logical candidate + content hash must yield the same id.
+    const candidate = makeCandidate();
+    const contentHash = computeContentHash(candidate.content);
+
+    const dbA = createTestDatabase();
+    const memoryA = promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult() },
+      new MemoryRepository(dbA),
+      new AuditRepository(dbA),
+    );
+
+    const dbB = createTestDatabase();
+    const memoryB = promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult() },
+      new MemoryRepository(dbB),
+      new AuditRepository(dbB),
+    );
+
+    expect(memoryA.id).toBe(memoryB.id);
+    dbA.close();
+    dbB.close();
+  });
+
+  it('a different content hash for the same candidate yields a different memory id', () => {
+    const candidate = makeCandidate();
+    const memoryA = promote(
+      {
+        candidate,
+        contentHash: computeContentHash('content one'),
+        pipelineResult: makePipelineResult(),
+      },
+      memoryRepo,
+      auditRepo,
+    );
+    const dbB = createTestDatabase();
+    const memoryB = promote(
+      {
+        candidate,
+        contentHash: computeContentHash('content two'),
+        pipelineResult: makePipelineResult(),
+      },
+      new MemoryRepository(dbB),
+      new AuditRepository(dbB),
+    );
+    expect(memoryA.id).not.toBe(memoryB.id);
+    dbB.close();
   });
 
   it('preserves the content hash from input', () => {
