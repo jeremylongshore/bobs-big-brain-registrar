@@ -19,8 +19,17 @@
  * @module audit-verify
  */
 
-import { computeEntryHash } from './audit-chain.js';
+import { computeEntryHash, type AuditHashVersion } from './audit-chain.js';
 import type { AuditRepository, AuditChainRow } from './repositories/audit-repository.js';
+
+/**
+ * Resolve a row's stored hash version to the discriminant the serialiser
+ * understands. A NULL/absent column (rows that predate migration 6, or any
+ * value other than 2) is treated as the original v1 timestamp-in-hash form.
+ */
+function rowHashVersion(row: AuditChainRow): AuditHashVersion {
+  return row.hash_version === 2 ? 2 : 1;
+}
 
 /** Per-row finding from the chain walk. */
 export interface AuditChainBreak {
@@ -89,17 +98,23 @@ export function verifyAuditChain(repo: AuditRepository): AuditVerifyResult {
       continue;
     }
 
-    const expectedHash = computeEntryHash({
-      id: row.id,
-      action: row.action,
-      memory_id: row.memory_id,
-      tenant_id: row.tenant_id,
-      actor_json: row.actor_json,
-      reason: row.reason,
-      details_json: row.details_json,
-      timestamp: row.timestamp,
-      prev_entry_hash: row.prev_entry_hash,
-    });
+    // Recompute under the SAME hash version the row was written with, so a
+    // mixed v1/v2 table verifies in a single pass (bead 8da.6). v1 rows hash
+    // their timestamp; v2 rows do not.
+    const expectedHash = computeEntryHash(
+      {
+        id: row.id,
+        action: row.action,
+        memory_id: row.memory_id,
+        tenant_id: row.tenant_id,
+        actor_json: row.actor_json,
+        reason: row.reason,
+        details_json: row.details_json,
+        timestamp: row.timestamp,
+        prev_entry_hash: row.prev_entry_hash,
+      },
+      rowHashVersion(row),
+    );
 
     const prevMatches = row.prev_entry_hash === expectedPrev;
     const entryMatches = row.entry_hash === expectedHash;

@@ -2,7 +2,11 @@ import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { AuditEvent } from '@qmd-team-intent-kb/schema';
 
-import { computeEntryHash } from '../audit-chain.js';
+import {
+  computeEntryHash,
+  CURRENT_AUDIT_HASH_VERSION,
+  type AuditHashVersion,
+} from '../audit-chain.js';
 
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
@@ -12,6 +16,11 @@ import { computeEntryHash } from '../audit-chain.js';
  * backward-compatible: pre-migration rows have both as NULL; new rows
  * have both populated (modulo the first chained row, where
  * prev_entry_hash is NULL by design).
+ *
+ * `hash_version` is nullable/optional for the same reason against
+ * migration 6: rows written before it have no column value (a stale read
+ * model), rows after it default to 1, and new inserts write the CURRENT
+ * version. Callers treat NULL/absent as v1.
  */
 const AuditRowSchema = z.object({
   id: z.string(),
@@ -24,6 +33,7 @@ const AuditRowSchema = z.object({
   timestamp: z.string(),
   entry_hash: z.string().nullable().optional(),
   prev_entry_hash: z.string().nullable().optional(),
+  hash_version: z.number().int().nullable().optional(),
 });
 
 /** Raw chronological row used by the audit verifier. */
@@ -38,6 +48,8 @@ export interface AuditChainRow {
   timestamp: string;
   entry_hash: string | null;
   prev_entry_hash: string | null;
+  /** Canonical-hash version (NULL/absent => 1, the original timestamp-in-hash form). */
+  hash_version: number | null;
 }
 
 /**
@@ -112,10 +124,10 @@ export class AuditRepository {
     this.stmtInsert = db.prepare(`
       INSERT INTO audit_events (
         id, action, memory_id, tenant_id, actor_json, reason, details_json,
-        timestamp, entry_hash, prev_entry_hash
+        timestamp, entry_hash, prev_entry_hash, hash_version
       ) VALUES (
         @id, @action, @memory_id, @tenant_id, @actor_json, @reason, @details_json,
-        @timestamp, @entry_hash, @prev_entry_hash
+        @timestamp, @entry_hash, @prev_entry_hash, @hash_version
       )
     `);
 
@@ -180,26 +192,35 @@ export class AuditRepository {
    * `prev_entry_hash` equals the chronologically previous row's
    * `entry_hash`, or NULL if this is the first chained row in the table.
    * Tampering with any stored row will be detected by `verifyAuditChain`.
+   *
+   * New rows are written under the CURRENT hash version (v2, with `timestamp`
+   * excluded from the canonical body), so the `entry_hash` is reproducible
+   * across clones for the same logical event (bead `8da.6`). The version is
+   * stored alongside the row so the verifier knows which serialiser to use.
    */
   insert(event: AuditEvent): void {
     const actor_json = JSON.stringify(event.actor);
     const details_json = JSON.stringify(event.details);
     const reason = event.reason ?? null;
+    const hash_version: AuditHashVersion = CURRENT_AUDIT_HASH_VERSION;
 
     const prevRow = this.stmtLastHash.get() as { entry_hash: string | null } | undefined;
     const prev_entry_hash = prevRow?.entry_hash ?? null;
 
-    const entry_hash = computeEntryHash({
-      id: event.id,
-      action: event.action,
-      memory_id: event.memoryId,
-      tenant_id: event.tenantId,
-      actor_json,
-      reason,
-      details_json,
-      timestamp: event.timestamp,
-      prev_entry_hash,
-    });
+    const entry_hash = computeEntryHash(
+      {
+        id: event.id,
+        action: event.action,
+        memory_id: event.memoryId,
+        tenant_id: event.tenantId,
+        actor_json,
+        reason,
+        details_json,
+        timestamp: event.timestamp,
+        prev_entry_hash,
+      },
+      hash_version,
+    );
 
     this.stmtInsert.run({
       id: event.id,
@@ -212,6 +233,7 @@ export class AuditRepository {
       timestamp: event.timestamp,
       entry_hash,
       prev_entry_hash,
+      hash_version,
     });
   }
 
