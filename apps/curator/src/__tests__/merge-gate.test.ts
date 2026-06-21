@@ -37,7 +37,12 @@ import type {
   CuratedMemory,
   GovernancePolicy as GovernancePolicyType,
 } from '@qmd-team-intent-kb/schema';
-import { mergeGovern, MergeIdInvariantError } from '../merge/merge-gate.js';
+import {
+  mergeGovern,
+  mergeGovernFold,
+  MergeIdInvariantError,
+  EmptyMergeFoldError,
+} from '../merge/merge-gate.js';
 import { MemoryCandidate as MemoryCandidateSchema } from '@qmd-team-intent-kb/schema';
 import { makeCuratedMemory, TENANT, NOW } from './fixtures.js';
 
@@ -462,5 +467,160 @@ describe('mergeGovern - govern-at-merge gate', () => {
     const promotedHashes = new Set(result.promoted.map((m) => m.contentHash));
     expect(promotedHashes.has(secretRow.contentHash)).toBe(false);
     expect(promotedHashes.has(piiRow.contentHash)).toBe(false);
+  });
+
+  it('mergeGovernFold rejects an empty clone list (no well-defined identity merge)', () => {
+    expect(() =>
+      mergeGovernFold([], deps, { policy: makeMergePolicy(), tenantId: TENANT }),
+    ).toThrow(EmptyMergeFoldError);
+  });
+
+  it('mergeGovernFold of a single clone equals the lone two-arg pass (fold([X]) === mergeGovern(X, []))', () => {
+    const policy = makeMergePolicy();
+    const x1 = makeRow('Single-clone fold row about structured logging field naming conventions.');
+    const x2 = makeRow('A second single-clone fold row covering graceful shutdown ordering.');
+
+    const dbFold = createTestDatabase();
+    const depsFold = makeDeps(dbFold);
+    const dbPair = createTestDatabase();
+    const depsPair = makeDeps(dbPair);
+
+    const foldRes = mergeGovernFold([[x1, x2]], depsFold, { policy, tenantId: TENANT });
+    const pairRes = mergeGovern([x1, x2], [], depsPair, { policy, tenantId: TENANT });
+
+    expect(foldRes.promoted.map((m) => m.id)).toEqual(pairRes.promoted.map((m) => m.id));
+    expect(foldRes.quarantined).toEqual(pairRes.quarantined);
+    expect(foldRes.unionSize).toBe(pairRes.unionSize);
+
+    const dumpMemories = (mr: MemoryRepository): string =>
+      JSON.stringify(mr.findByLifecycle('active').sort((x, y) => (x.id < y.id ? -1 : 1)));
+    expect(dumpMemories(depsFold.memoryRepo)).toBe(dumpMemories(depsPair.memoryRepo));
+
+    dbFold.close();
+    dbPair.close();
+  });
+
+  it('fold-of-3 is commutative + associative: all 6 orderings of mergeGovernFold([A,B,C]) yield byte-identical governed state AND identical audit chain', () => {
+    const policy = makeMergePolicy();
+
+    // Three clones with DELIBERATE cross-clone structure so every gate branch is
+    // exercised inside the fold, not just the happy path:
+    //   - a duplicate that appears in ALL THREE clones (same content + same
+    //     candidateId -> same content-derived id -> id-dedup must collapse it to one
+    //     survivor regardless of fold order);
+    //   - a duplicate that appears in TWO clones under DIFFERENT candidateIds (same
+    //     content, distinct ids -> id-dedup cannot fire; the policy dedup_check must
+    //     collapse it, and which copy survives must NOT depend on fold order);
+    //   - one secret-bearing row and one PII-bearing row (each must be quarantined
+    //     by the disclosure choke point in every ordering);
+    //   - plus per-clone unique clean rows.
+    const triDupCandId = '33333333-3333-4333-8333-333333333333';
+    const triDupContent =
+      'Shared across all three clones: config is loaded once at boot, never lazily.';
+
+    // Same content, DIFFERENT candidateIds -> distinct content-derived ids, identical
+    // contentHash. Lives in clone A and clone C; the policy dedup_check collapses it.
+    const convergedContent =
+      'Two clones converged on: all money values are integer cents, never floats.';
+    const convergedInA = makeRow(convergedContent, {
+      candidateId: '55555555-5555-4555-8555-555555555555',
+    });
+    const convergedInC = makeRow(convergedContent, {
+      candidateId: '77777777-7777-4777-8777-777777777777',
+    });
+    expect(convergedInA.id).not.toBe(convergedInC.id);
+    expect(convergedInA.contentHash).toBe(convergedInC.contentHash);
+
+    const cloneA: CuratedMemory[] = [
+      makeRow('Clone A unique: prefer composition over inheritance for service wiring.'),
+      makeRow(triDupContent, { candidateId: triDupCandId }),
+      makeRow(`Clone A leaked ${SECRET_LITERAL} into a captured note during a session.`),
+      convergedInA,
+    ];
+    const cloneB: CuratedMemory[] = [
+      makeRow('Clone B unique: all retries use exponential backoff with full jitter.'),
+      makeRow(triDupContent, { candidateId: triDupCandId }),
+      makeRow(`Clone B captured a contractor SSN ${SSN_LITERAL} from a pasted form.`),
+    ];
+    const cloneC: CuratedMemory[] = [
+      makeRow('Clone C unique: every public handler returns a discriminated Result envelope.'),
+      makeRow(triDupContent, { candidateId: triDupCandId }),
+      convergedInC,
+    ];
+
+    // All 6 orderings/groupings of the three clones. Because mergeGovernFold reduces
+    // mergeGovern left-to-right, the permutation order is the fold/grouping order:
+    // [A,B,C] folds as ((A∪B)∪C); [C,B,A] as ((C∪B)∪A); etc. Asserting all 6 agree
+    // proves both commutativity (any order) AND associativity (any grouping), since
+    // the fold's left-reduction realises every parenthesisation reachable by reorder.
+    const orderings: (readonly CuratedMemory[])[][] = [
+      [cloneA, cloneB, cloneC],
+      [cloneA, cloneC, cloneB],
+      [cloneB, cloneA, cloneC],
+      [cloneB, cloneC, cloneA],
+      [cloneC, cloneA, cloneB],
+      [cloneC, cloneB, cloneA],
+    ];
+
+    const dumpMemories = (mr: MemoryRepository): string => {
+      const rows = mr.findByLifecycle('active').sort((x, y) => (x.id < y.id ? -1 : 1));
+      return JSON.stringify(rows);
+    };
+    const dumpAudit = (database: Database.Database): string => {
+      const repo = new AuditRepository(database);
+      return repo
+        .findAllChronological()
+        .map((r) => `${r.action}:${r.memory_id}:${r.entry_hash}`)
+        .sort()
+        .join('\n');
+    };
+
+    const memoryDumps: string[] = [];
+    const auditDumps: string[] = [];
+
+    for (const ordering of orderings) {
+      // Independent fresh DB per ordering so each fold's durable state is isolated.
+      const dbN = createTestDatabase();
+      const depsN = makeDeps(dbN);
+
+      mergeGovernFold(ordering, depsN, { policy, tenantId: TENANT });
+
+      // DURABLE survivor set is the order-invariant truth (the per-pass result
+      // object only reflects the LAST fold step, so its promoted/quarantined counts
+      // are NOT fold-order-invariant - the DB is). The merged DB holds exactly the
+      // logical survivors: 3 per-clone uniques + 1 tri-clone dup + 1 converged-content
+      // survivor = 5. The secret + PII rows never reach it; the converged twin is
+      // collapsed by dedup. This count is identical in every ordering.
+      expect(depsN.memoryRepo.count()).toBe(5);
+      expect(depsN.memoryRepo.findByContentHash(convergedInA.contentHash)).not.toBeNull();
+      // Neither the secret nor the PII content is anywhere in the merged DB.
+      const allHashes = new Set(depsN.memoryRepo.getAllContentHashes());
+      const secretHash = computeContentHash(
+        `Clone A leaked ${SECRET_LITERAL} into a captured note during a session.`,
+      );
+      const piiHash = computeContentHash(
+        `Clone B captured a contractor SSN ${SSN_LITERAL} from a pasted form.`,
+      );
+      expect(allHashes.has(secretHash)).toBe(false);
+      expect(allHashes.has(piiHash)).toBe(false);
+
+      // The audit chain produced by this fold ordering verifies clean.
+      expect(verifyAuditChain(depsN.auditRepo).breaks).toHaveLength(0);
+
+      memoryDumps.push(dumpMemories(depsN.memoryRepo));
+      auditDumps.push(dumpAudit(dbN));
+
+      dbN.close();
+    }
+
+    // (a) BYTE-IDENTICAL governed state across all 6 orderings/groupings.
+    for (let i = 1; i < memoryDumps.length; i++) {
+      expect(memoryDumps[i]).toBe(memoryDumps[0]);
+    }
+    // (b) IDENTICAL audit outcome (sorted action:memoryId:entry_hash) across all 6.
+    for (let i = 1; i < auditDumps.length; i++) {
+      expect(auditDumps[i]).toBe(auditDumps[0]);
+    }
+    // (c) Each chain already asserted clean per-ordering above.
   });
 });

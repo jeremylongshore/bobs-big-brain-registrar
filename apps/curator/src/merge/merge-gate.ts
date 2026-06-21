@@ -392,3 +392,100 @@ export function mergeGovern(
 
   return { promoted, quarantined, unionSize: union.length };
 }
+
+/**
+ * Error thrown when {@link mergeGovernFold} is called with an empty clone list.
+ * A fold needs at least one clone to govern; folding zero clones has no
+ * well-defined identity element here (the gate writes to a live DB and seeds its
+ * dedupe set from existing state), so the empty case fails loud rather than
+ * silently producing an empty result.
+ */
+export class EmptyMergeFoldError extends Error {
+  constructor() {
+    super('mergeGovernFold requires at least one clone; received an empty list.');
+    this.name = 'EmptyMergeFoldError';
+  }
+}
+
+/**
+ * Govern an N-way merge by folding the clone row-arrays into a SINGLE
+ * {@link mergeGovern} pass.
+ *
+ * The 2-arg {@link mergeGovern} already re-derives the UNION of its two inputs as
+ * untrusted - step 1 is literally "concatenate both inputs, then content-id
+ * de-dup". So reconciling THREE OR MORE clones needs no new governance machinery:
+ * fold the clone arrays into a single `(allButLast, last)` pair and run
+ * {@link mergeGovern} ONCE. The fold REUSES {@link mergeGovern} verbatim - it adds
+ * no new dedupe, no new disclosure check, no new audit logic. The only new thing
+ * is the reduction shape: concatenate the row arrays into the two-arg call's inputs.
+ *
+ * ## Why a single pass, not an iterated reduce
+ *
+ * An obvious alternative is to reduce *passes* - govern (A,B), then re-govern those
+ * survivors against C, and so on, each writing the running DB. That is rejected
+ * here for a concrete reason: {@link mergeGovern}'s deterministic merge clock
+ * ({@link mergeClock}) restarts at `MERGE_EPOCH_MS` on every call, so a SECOND pass
+ * would write audit events whose timestamps collide with (or precede) the first
+ * pass's. The audit verifier re-walks the chain ordered by `(timestamp ASC, id
+ * ASC)` while the store anchors each new row's `prev_entry_hash` to the most-recent
+ * row by `(timestamp DESC, id DESC)` - so colliding per-pass clocks desynchronise
+ * insertion order from chronological order and the chain breaks. A single pass
+ * keeps one strictly-monotonic clock over the whole union, so the audit chain
+ * verifies clean. (This is exactly the failure the fold-of-3 proof test guards
+ * against - it asserts every ordering's chain verifies with zero breaks.)
+ *
+ * ## Why the fold is associative AND commutative
+ *
+ * For any clones X, Y, Z the merged governed state is identical regardless of how
+ * they are grouped or ordered - `fold([X, Y, Z])`, `fold([Z, Y, X])`, the grouping
+ * `((X u Y) u Z)` and `(X u (Y u Z))` all yield byte-identical durable state and an
+ * identical audit chain. This follows directly from {@link mergeGovern}'s own
+ * two-clone commutativity, lifted to N clones:
+ *
+ *   - **Concatenation feeds one set union.** The fold concatenates every clone's
+ *     rows into the single pass's inputs; the pass's first step content-id de-dups
+ *     that union (a set operation). The order in which rows are concatenated cannot
+ *     change the resulting SET of unique ids, so all orderings produce the same
+ *     working union.
+ *   - **The id-sorted traversal erases input order.** The single pass sorts its
+ *     union by content-derived id before governing, so the order in which
+ *     `existingHashes` accretes - and therefore which of two duplicate-content rows
+ *     survives - depends only on the SET of rows present, not on the fold order
+ *     that assembled it. A given logical memory lands at the same sort position
+ *     under every ordering, gets the same {@link mergeClock} index, and so the same
+ *     deterministic timestamp.
+ *   - **Disclosure + policy are pure functions of content.** Identical content
+ *     yields an identical quarantine/promote verdict in every ordering.
+ *
+ * So the fold's observable governed state and audit chain are exactly what a single
+ * 2-arg {@link mergeGovern} over the full union would have produced - which is why
+ * all groupings agree byte for byte. The fold-of-3 proof test asserts exactly this.
+ *
+ * @param clones  One or more clones' promoted (active) row arrays to reconcile.
+ * @param deps    The store repositories to write survivors + audit events into.
+ * @param options Policy, tenant scope, and dry-run flag (forwarded unchanged).
+ * @throws {EmptyMergeFoldError} when `clones` is empty.
+ */
+export function mergeGovernFold(
+  clones: readonly (readonly CuratedMemory[])[],
+  deps: MergeGovernDependencies,
+  options: MergeGovernOptions,
+): MergeGovernResult {
+  if (clones.length === 0) {
+    throw new EmptyMergeFoldError();
+  }
+
+  // Fold the N clone arrays into the two inputs of a SINGLE mergeGovern call:
+  // everything but the last clone forms side A, the last clone forms side B. Since
+  // mergeGovern's first act is to UNION (concatenate + id-dedup) A and B, this one
+  // call governs the union of ALL clones in a single monotonic-clock pass. The
+  // single-clone case folds to mergeGovern(clones[0], []) - one clone unioned with
+  // the empty clone. Reuse mergeGovern verbatim; do not reinvent.
+  const sideA: CuratedMemory[] = [];
+  for (let i = 0; i < clones.length - 1; i++) {
+    sideA.push(...clones[i]!);
+  }
+  const sideB = clones[clones.length - 1]!;
+
+  return mergeGovern(sideA, sideB, deps, options);
+}
