@@ -86,8 +86,12 @@ describe('runCycle', () => {
     const policy = makePolicy();
     deps.policyRepo.insert(policy);
 
+    // Content must reach curation to exercise the POLICY-ENGINE secret rule, so
+    // it must pass the boundary disclosure choke point on ingest (Epic 0). A GCP
+    // service-account marker is policy-flagged but is not a boundary-gate pattern
+    // (an AWS key, by contrast, is now refused at ingest before curation).
     const candidate = makeCandidate({
-      content: 'API key is AKIAIOSFODNN7EXAMPLE — this has a secret',
+      content: 'deploy config carries "type": "service_account" for the runner',
     });
     await writeSpoolFile(spoolDir, 'spool-001.jsonl', [candidate]);
 

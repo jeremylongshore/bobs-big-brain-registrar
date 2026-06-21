@@ -213,6 +213,55 @@ describe('executeImport', () => {
     expect(candidate.content).toBe('Just the body');
     expect(candidate.content).not.toContain('---');
   });
+
+  // Epic 0 (compile-then-govern-c5k): the curator bulk-import path previously
+  // bypassed the disclosure filter entirely — it called candidateRepo.insert()
+  // directly with no PII / comp / secret check. The repository-layer choke point
+  // now rejects disallowed content on this path too. A rejected file is recorded
+  // as an error and never lands in the candidate table.
+  describe('disclosure / secret choke point (bulk-import bypass path)', () => {
+    it('rejects a vault file containing PII and never stores it', async () => {
+      writeVault('clean.md', 'A perfectly clean technical note about caching');
+      writeVault('pii.md', 'onboarding doc — applicant ssn 123-45-6789 recorded');
+
+      const result = await executeImport(vaultDir, TENANT, deps, undefined, () => NOW);
+      expect(result.createdCount).toBe(1);
+      expect(result.rejectedCount).toBe(1);
+      // Only the clean candidate is in the store; the PII file was refused.
+      expect(deps.candidateRepo.count()).toBe(1);
+      const piiFile = result.files.find((f) => f.relativePath === 'pii.md');
+      expect(piiFile?.status).toBe('error');
+    });
+
+    it('rejects a vault file containing compensation material', async () => {
+      writeVault('comp.md', 'his base salary and 4-year vesting schedule leaked');
+
+      const result = await executeImport(vaultDir, TENANT, deps, undefined, () => NOW);
+      expect(result.createdCount).toBe(0);
+      expect(result.rejectedCount).toBe(1);
+      expect(deps.candidateRepo.count()).toBe(0);
+    });
+
+    it('rejects a vault file containing a credential / secret', async () => {
+      writeVault(
+        'secret.md',
+        'leftover token ghp_' + '1234567890abcdefghijklmnopqrstuvwxyz12 in notes',
+      );
+
+      const result = await executeImport(vaultDir, TENANT, deps, undefined, () => NOW);
+      expect(result.createdCount).toBe(0);
+      expect(result.rejectedCount).toBe(1);
+      expect(deps.candidateRepo.count()).toBe(0);
+    });
+
+    it('does not leak the matched value into the per-file error reason', async () => {
+      writeVault('pii.md', 'applicant ssn 123-45-6789 recorded');
+
+      const result = await executeImport(vaultDir, TENANT, deps, undefined, () => NOW);
+      const piiFile = result.files.find((f) => f.relativePath === 'pii.md');
+      expect(piiFile?.reason ?? '').not.toContain('123-45-6789');
+    });
+  });
 });
 
 describe('rollbackImport', () => {

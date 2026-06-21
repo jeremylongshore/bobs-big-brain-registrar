@@ -6,13 +6,14 @@ import type { FastifyInstance } from 'fastify';
  * The governed corpus is mutated only by admin tokens. Members may read
  * (search, GET) and *propose* (POST /api/candidates queues for review), but the
  * acts that change governed state — promoting/transitioning a memory, editing
- * policy, bulk-importing or rolling back — require an admin role.
+ * policy, bulk-importing or rolling back — require an admin role. Live token
+ * revocation (`POST /api/auth/revoke`) is likewise an admin act.
  *
  * Enforced server-side as an onRequest hook that runs after auth has stamped
  * `request.role`. Client-side tool gating (the MCP server hiding write tools
  * from members) is a UX nicety; this is the real boundary.
  */
-const ADMIN_WRITE_PREFIXES = ['/api/memories', '/api/policies', '/api/import'];
+const ADMIN_WRITE_PREFIXES = ['/api/memories', '/api/policies', '/api/import', '/api/auth'];
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**

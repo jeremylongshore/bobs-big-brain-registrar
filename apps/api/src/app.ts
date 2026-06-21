@@ -25,9 +25,11 @@ import { registerSearchRoutes } from './routes/search.js';
 import { registerImportRoutes } from './routes/import.js';
 import { ImportService } from './services/import-service.js';
 import { registerGraphRoutes } from './routes/graph.js';
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerRateLimiter } from './middleware/rate-limiter.js';
 import { registerApiKeyAuth } from './middleware/api-key-auth.js';
 import { registerWriteGate } from './middleware/write-gate.js';
+import { registerTenancyGuard } from './middleware/tenancy-guard.js';
 import { registerInputSanitizer } from './middleware/input-sanitizer.js';
 import { InMemoryTokenRegistry, loadTokenRecords } from './auth/token-registry.js';
 import type { TokenRecord } from './auth/token-registry.js';
@@ -58,6 +60,13 @@ export interface AppDependencies {
   /** Max body size in bytes (default 1MB) */
   maxBodySize?: number;
   /**
+   * The interface the server will bind. The no-auth dev path is LOOPBACK-ONLY:
+   * an empty token registry on a non-loopback host (tailnet 100.x, 0.0.0.0,
+   * LAN) is refused at boot so an unauthenticated, admin-stamping brain is never
+   * reachable off-host. Default: `127.0.0.1`.
+   */
+  bindHost?: string;
+  /**
    * Optional qmd query port. When provided, search runs through qmd so every
    * hit carries a `qmd://` citation. When omitted, search falls back to SQLite
    * text-match over the curated store.
@@ -85,9 +94,15 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
       tokensFile: process.env['TEAMKB_TOKENS_FILE'],
     }),
   );
-  registerApiKeyAuth(app, tokenRegistry);
+  // Pass the bind host so the no-auth dev path is refused off-loopback — an
+  // unauthenticated admin-stamping brain must never be reachable off-host.
+  registerApiKeyAuth(app, tokenRegistry, { bindHost: deps.bindHost ?? '127.0.0.1' });
   // Must follow auth so `request.role` is set before the gate inspects it.
   registerWriteGate(app);
+  // Must follow auth so `request.role`/`request.tenants` are set. Binds every
+  // tenant-scoped read/write to the token's tenant allowlist and locks the raw
+  // candidate inbox to admin (EPIC 0 — compile-then-govern-c5k).
+  registerTenancyGuard(app);
   registerInputSanitizer(app, deps.maxBodySize ?? 1_048_576);
 
   // OpenAPI must be registered BEFORE routes so their schema metadata
@@ -128,6 +143,8 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     registerSearchRoutes(scope, searchService);
     registerImportRoutes(scope, importService);
     registerGraphRoutes(scope, linksRepo, memoryRepo);
+    // Live token revocation — admin-only, cuts a token off without a restart.
+    registerAuthRoutes(scope, tokenRegistry);
   });
 
   return app;

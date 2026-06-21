@@ -20,11 +20,17 @@ export interface QmdCiteHit {
 /**
  * Minimal query port over qmd. The concrete `QmdAdapter.query()` matches this
  * shape; the bootstrap injects it, unit tests inject a fake.
+ *
+ * `tenantId` carries the request's tenant scope through to qmd so the cited
+ * path is isolated to the same tenant the SQLite fallback already filters by.
+ * Before EPIC 0 this argument was dropped, leaking governed memories across
+ * every tenant on the production qmd path (compile-then-govern-c5k).
  */
 export interface QmdQueryPort {
   query(
     queryText: string,
     scope?: SearchScope,
+    tenantId?: string,
   ): Promise<{ ok: true; value: QmdCiteHit[] } | { ok: false; error: unknown }>;
 }
 
@@ -69,7 +75,10 @@ export class SearchService {
    */
   private async searchViaQmd(query: SearchQuery): Promise<SearchResult> {
     const nowIso = new Date().toISOString();
-    const result = await this.qmd!.query(query.query, query.scope);
+    // Propagate the tenant scope so the cited path is isolated to the same
+    // tenant the SQLite fallback filters by — closing the cross-tenant leak on
+    // the production qmd path (EPIC 0, compile-then-govern-c5k).
+    const result = await this.qmd!.query(query.query, query.scope, query.tenantId);
 
     if (!result.ok) {
       // qmd unavailable / failed — degrade to "no results" rather than 500.

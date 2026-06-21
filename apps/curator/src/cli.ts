@@ -198,6 +198,9 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     }
     const candidates = ingestResult.value.ingested;
     const tampered = ingestResult.value.tampered;
+    // Candidates refused at the disclosure / secret choke point (Epic 0).
+    // Reported, never silently dropped — carries only id + category.
+    const disclosureRejected = ingestResult.value.rejected;
 
     // Stage B: Curator.processBatch — dedup + policy + promote.
     const curator = new Curator(
@@ -215,6 +218,8 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           ingested_count: candidates.length,
           tampered_count: tampered.length,
           tampered,
+          disclosure_rejected_count: disclosureRejected.length,
+          disclosure_rejected: disclosureRejected,
           batch,
         }) + '\n',
       );
@@ -236,6 +241,15 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           process.stderr.write(
             `  ${t.spoolFile}\n    quarantined → ${t.quarantinedTo ?? '(quarantine failed)'}\n`,
           );
+        }
+      }
+      if (disclosureRejected.length > 0) {
+        // Never print the matched value — only id + category.
+        process.stderr.write(
+          `\nDISCLOSURE_REJECTED: ${disclosureRejected.length} candidate(s) refused (PII / comp / secret):\n`,
+        );
+        for (const r of disclosureRejected) {
+          process.stderr.write(`  ${r.candidateId} (${r.category})\n`);
         }
       }
     }

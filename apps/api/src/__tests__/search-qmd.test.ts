@@ -14,6 +14,8 @@ import type { QmdCiteHit, QmdQueryPort } from '../services/search-service.js';
 class FakeQmd implements QmdQueryPort {
   lastQuery?: string;
   lastScope?: SearchScope;
+  lastTenantId?: string;
+  tenantIdSeen = false;
   constructor(
     private readonly hits: QmdCiteHit[],
     private readonly fail = false,
@@ -21,9 +23,12 @@ class FakeQmd implements QmdQueryPort {
   query(
     queryText: string,
     scope?: SearchScope,
+    tenantId?: string,
   ): Promise<{ ok: true; value: QmdCiteHit[] } | { ok: false; error: unknown }> {
     this.lastQuery = queryText;
     this.lastScope = scope;
+    this.lastTenantId = tenantId;
+    this.tenantIdSeen = true;
     if (this.fail) {
       return Promise.resolve({ ok: false, error: { code: 'not_available' } });
     }
@@ -101,6 +106,24 @@ describe('POST /api/search — qmd cited path', () => {
     });
     expect(qmd.lastScope).toBe('all');
     expect(qmd.lastQuery).toBe('x');
+  });
+
+  // ---- tenant isolation on the qmd path (EPIC 0, compile-then-govern-c5k) ---
+
+  it('propagates tenantId to qmd so the cited path is tenant-scoped', async () => {
+    const qmd = new FakeQmd([hit('qmd://kb-curated/a.md', 1)]);
+    app = buildApp({ db, qmdAdapter: qmd });
+    await app.ready();
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'x', scope: 'curated', tenantId: 'team-alpha' },
+    });
+    // Before the fix the qmd path dropped tenantId entirely (leaking every
+    // tenant's governed memories). The argument must now reach qmd.
+    expect(qmd.tenantIdSeen).toBe(true);
+    expect(qmd.lastTenantId).toBe('team-alpha');
   });
 
   it('paginates the qmd result set', async () => {

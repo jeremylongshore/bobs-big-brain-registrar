@@ -85,6 +85,47 @@ describe('spool-reader', () => {
       const result = await listSpoolFiles('/nonexistent/dir');
       expect(result.ok).toBe(false);
     });
+
+    // ICO → INTKB handoff: when no explicit spoolDir is passed, the reader
+    // derives its default from getSpoolPath() == <teamkb-base>/spool. ICO's
+    // emitter writes to the SAME base via TEAMKB_HOME (its pre-existing
+    // allowlist root). This test proves INTKB reads exactly where ICO writes
+    // when only TEAMKB_HOME is configured — the default-path mismatch the Epic
+    // 0 spool grounding flagged is closed.
+    describe('default read path tracks the ICO write base (TEAMKB_HOME)', () => {
+      const origBasePath = process.env['TEAMKB_BASE_PATH'];
+      const origHome = process.env['TEAMKB_HOME'];
+
+      afterEach(() => {
+        if (origBasePath === undefined) delete process.env['TEAMKB_BASE_PATH'];
+        else process.env['TEAMKB_BASE_PATH'] = origBasePath;
+        if (origHome === undefined) delete process.env['TEAMKB_HOME'];
+        else process.env['TEAMKB_HOME'] = origHome;
+      });
+
+      it('lists ICO-written spool files from $TEAMKB_HOME/spool with no explicit spoolDir', async () => {
+        // Simulate an operator who only set ICO's TEAMKB_HOME root. ICO would
+        // emit to `<tmpDir>/spool`; INTKB's reader must default to the same.
+        delete process.env['TEAMKB_BASE_PATH'];
+        process.env['TEAMKB_HOME'] = tmpDir;
+
+        const r = buildCandidate(makeEvent('ICO handoff candidate'), gitCtx);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+
+        // Write into <TEAMKB_HOME>/spool — the ICO write path.
+        const icoSpoolDir = join(tmpDir, 'spool');
+        const writeResult = await writeToSpool(r.value.candidate, icoSpoolDir);
+        expect(writeResult.ok).toBe(true);
+
+        // Read with NO explicit dir — must resolve to <TEAMKB_HOME>/spool.
+        const result = await listSpoolFiles();
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.value.length).toBeGreaterThanOrEqual(1);
+        expect(result.value[0]).toContain(icoSpoolDir);
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
