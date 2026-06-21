@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import { assertDisclosureClean } from '@qmd-team-intent-kb/common';
+import { assertEnumMembership } from './enum-membership.js';
 
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
@@ -154,12 +155,29 @@ export class CandidateRepository {
    * value. A violating candidate throws `DisclosureRejectedError` and is never
    * written.
    *
+   * **Enum-membership re-assertion (Epic 0 residual hardening).** The disclosure
+   * scan deliberately SKIPS the closed-vocabulary fields (`status`, `source`,
+   * `category`, `trustLevel`, `confidence`, `sensitivity`, `author.type`) - safe
+   * only while those fields actually hold a vocabulary member. A raw `insert()`
+   * caller that bypassed `MemoryCandidate.parse()` could otherwise smuggle an
+   * SSN / comp / secret-shaped value into an enum field and ride the skip into
+   * durable state. `assertEnumMembership` closes that gap here: an off-vocabulary
+   * value is rejected (routed through the disclosure scan first so a
+   * disclosure-shaped value is caught with its precise category); a valid enum
+   * value is left untouched.
+   *
    * @throws {DisclosureRejectedError} when content/title/tags contain disallowed
-   *   PII, compensation, or credential/secret material.
+   *   PII, compensation, or credential/secret material - or when a disclosure-shaped
+   *   value is smuggled into an enum-constrained field.
+   * @throws {EnumConstraintViolationError} when an enum-constrained field carries a
+   *   non-vocabulary value that is not itself disclosure-shaped.
    */
   insert(candidate: MemoryCandidate, contentHash: string, importBatchId?: string): void {
     // Choke-point enforcement: reject before the row is ever written.
     assertDisclosureClean(candidate);
+    // Re-assert closed-vocabulary membership so a raw caller cannot smuggle
+    // disclosure content through a field the disclosure scan skips by name.
+    assertEnumMembership(candidate);
     this.stmtInsert.run({
       id: candidate.id,
       status: candidate.status,
