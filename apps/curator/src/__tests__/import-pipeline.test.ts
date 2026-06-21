@@ -214,6 +214,64 @@ describe('executeImport', () => {
     expect(candidate.content).not.toContain('---');
   });
 
+  // Bead 8da.5: the candidate id is content-derived (UUID v5), not random v4,
+  // so a re-import of the same vault content yields the same id and the
+  // id-based dedupe holds across clones.
+  it('mints a content-derived UUID v5 candidate id, not a random v4', async () => {
+    writeVault('note.md', 'Deterministic body content');
+
+    const result = await executeImport(vaultDir, TENANT, deps, undefined, () => NOW);
+    const candidateId = result.files[0]!.candidateId!;
+    // Version nibble 5, RFC 4122 variant bits.
+    expect(candidateId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('is deterministic: re-importing the same content yields the same candidate id', async () => {
+    // Two independent runs (separate DBs + separate vault dirs sharing the same
+    // basename, as two clones would have) must produce the same candidate id for
+    // byte-identical content at the same relative path.
+    const body = 'Stable content for determinism';
+
+    const dirA = mkdtempSync(join(tmpdir(), 'wsx-'));
+    const dirB = mkdtempSync(join(tmpdir(), 'wsx-'));
+    try {
+      writeFileSync(join(dirA, 'foo.md'), body, 'utf8');
+      writeFileSync(join(dirB, 'foo.md'), body, 'utf8');
+
+      const dbA = createTestDatabase();
+      const dbB = createTestDatabase();
+      try {
+        const resA = await executeImport(dirA, TENANT, setupDeps(dbA), undefined, () => NOW);
+        const resB = await executeImport(dirB, TENANT, setupDeps(dbB), undefined, () => NOW);
+        // Same basename root + same relpath + same body hash => same id.
+        // (dirA/dirB share the 'wsx-...' prefix but differ in suffix, so this
+        // asserts the path basename is part of the tuple; align them to prove it.)
+        const idA = resA.files.find((f) => f.relativePath === 'foo.md')!.candidateId!;
+        const idB = resB.files.find((f) => f.relativePath === 'foo.md')!.candidateId!;
+        // dirA and dirB have different basenames, so ids differ by workspaceId.
+        expect(idA).not.toBe(idB);
+
+        // Re-importing dirA's exact content into a fresh DB reproduces idA.
+        const dbC = createTestDatabase();
+        try {
+          const resC = await executeImport(dirA, TENANT, setupDeps(dbC), undefined, () => NOW);
+          const idC = resC.files.find((f) => f.relativePath === 'foo.md')!.candidateId!;
+          expect(idC).toBe(idA);
+        } finally {
+          dbC.close();
+        }
+      } finally {
+        dbA.close();
+        dbB.close();
+      }
+    } finally {
+      rmSync(dirA, { recursive: true, force: true });
+      rmSync(dirB, { recursive: true, force: true });
+    }
+  });
+
   // Epic 0 (compile-then-govern-c5k): the curator bulk-import path previously
   // bypassed the disclosure filter entirely — it called candidateRepo.insert()
   // directly with no PII / comp / secret check. The repository-layer choke point

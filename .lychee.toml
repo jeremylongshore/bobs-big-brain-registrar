@@ -7,9 +7,12 @@ verbose = "info"
 # Don't follow link rel=nofollow.
 no_progress = true
 
-# Retry transient failures.
-max_retries = 2
-retry_wait_time = 5
+# Retry transient failures. Bumped 2->4 / 5s->8s: a single transient
+# connection-reset (os error 104) from an otherwise-healthy host (e.g.
+# conventionalcommits.org) was enough to red the whole gate, even though
+# real anti-bot statuses (403/429) are already accepted below.
+max_retries = 4
+retry_wait_time = 8
 
 # Treat these HTTP codes as success.
 #  - 429 — rate-limited (not broken)

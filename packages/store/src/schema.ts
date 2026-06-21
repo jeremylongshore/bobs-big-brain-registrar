@@ -77,10 +77,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
   details_json TEXT NOT NULL DEFAULT '{}',
   timestamp TEXT NOT NULL
 );
--- entry_hash / prev_entry_hash columns added via MIGRATIONS[5] so the
--- migration runs against both fresh and pre-existing databases. Adding
--- them here would cause a 'duplicate column' error when migration 5
--- replays on a fresh DB.
+-- entry_hash / prev_entry_hash columns added via migration 5, and
+-- hash_version via migration 6, so each migration runs against both fresh
+-- and pre-existing databases. Adding them here would cause a 'duplicate
+-- column' error when the migration replays on a fresh DB.
 CREATE INDEX IF NOT EXISTS idx_audit_memory ON audit_events(memory_id);
 CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_events(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_events(action);
@@ -237,6 +237,36 @@ CREATE INDEX IF NOT EXISTS idx_candidates_batch ON candidates(import_batch_id);
     sql: `
 ALTER TABLE audit_events ADD COLUMN entry_hash TEXT;
 ALTER TABLE audit_events ADD COLUMN prev_entry_hash TEXT;
+    `.trim(),
+  },
+  {
+    // Cross-clone determinism for the audit hash chain (bead
+    // qmd-team-intent-kb-8da.6).
+    //
+    // The original (v1) canonical hash body included `timestamp`, which is
+    // sourced from `new Date().toISOString()` at write time. Two clones
+    // processing the same logical event at different instants minted
+    // different timestamps, hence different entry_hash values, so the chain
+    // was reproducible only within a single DB, not across clones.
+    //
+    // This migration adds a `hash_version` discriminant. Existing rows take
+    // the DEFAULT 1 (still hashed WITH timestamp; their stored hashes are
+    // unchanged and remain valid v1 tamper-evidence). New rows are inserted
+    // with hash_version = 2, whose canonical body EXCLUDES timestamp, so the
+    // entry_hash is a pure function of the logical event and reproducible on
+    // every clone. The timestamp column is untouched: it is still stored,
+    // just no longer fed into the v2 hash. Chain ordering is unaffected; it
+    // rides on prev_entry_hash, which never depended on the timestamp value.
+    //
+    // v1 rows are NOT backfilled to v2: rehashing them would erase the very
+    // tamper-evidence those v1 hashes provide. verifyAuditChain dispatches
+    // per row on hash_version (NULL/absent => 1), so a DB with both v1 and
+    // v2 rows verifies in a single pass. `ico audit verify` stays valid
+    // before and after; pre-existing rows are byte-for-byte unchanged.
+    version: 6,
+    name: 'rehash_audit_chain_v2',
+    sql: `
+ALTER TABLE audit_events ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1;
     `.trim(),
   },
 ];

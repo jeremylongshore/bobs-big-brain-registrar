@@ -1,6 +1,14 @@
 export type { Result } from './result.js';
 export { ok, err } from './result.js';
 export { computeContentHash, computeFileHash } from './hash.js';
+export {
+  SPOOL_UUID_NAMESPACE,
+  uuidV5,
+  deriveCandidateId,
+  deriveMemoryId,
+  deriveAuditEventId,
+  deriveLinkId,
+} from './uuid-v5.js';
 export { DEFAULT_TEAMKB_BASE, getTeamKbBasePath, resolveTeamKbPath } from './paths.js';
 export { isPathSafe } from './path-safety.js';
 export type { PathSafetyResult } from './path-safety.js';

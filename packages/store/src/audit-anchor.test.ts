@@ -14,6 +14,9 @@ function buildChain(reasons: string[]): AuditChainRow[] {
   const rows: AuditChainRow[] = [];
   let prev: string | null = null;
   reasons.forEach((reason, i) => {
+    // hash_version 2 is the current write form (timestamp excluded from the
+    // canonical body); computeEntryHash defaults to it, so the row hashes
+    // reproducibly regardless of the timestamp value baked in below.
     const base = {
       id: `id-${i}`,
       action: 'promoted',
@@ -23,6 +26,7 @@ function buildChain(reasons: string[]): AuditChainRow[] {
       reason,
       details_json: '{}',
       timestamp: `2026-06-17T00:00:0${i}.000Z`,
+      hash_version: 2 as const,
     };
     const entry_hash = computeEntryHash({ ...base, prev_entry_hash: prev });
     rows.push({ ...base, prev_entry_hash: prev, entry_hash });

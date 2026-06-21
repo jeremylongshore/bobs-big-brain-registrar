@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   createTestDatabase,
@@ -6,7 +6,12 @@ import {
   AuditRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
-import { computeContentHash } from '@qmd-team-intent-kb/common';
+import {
+  computeContentHash,
+  deriveMemoryId,
+  deriveAuditEventId,
+  deriveLinkId,
+} from '@qmd-team-intent-kb/common';
 import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
 import { promote, type EvalResultRecord } from '../promotion/promoter.js';
 import { makeCandidate, makeCuratedMemory, TENANT } from './fixtures.js';
@@ -56,7 +61,7 @@ describe('promote', () => {
     expect(memory.lifecycle).toBe('active');
   });
 
-  it('generates a valid UUID for the memory ID', () => {
+  it('generates a content-derived UUID v5 for the memory ID', () => {
     const candidate = makeCandidate();
     const contentHash = computeContentHash(candidate.content);
     const memory = promote(
@@ -64,9 +69,63 @@ describe('promote', () => {
       memoryRepo,
       auditRepo,
     );
+    // The memory id is now a content-derived UUID v5 (bead 8da.5), not a
+    // random v4: version nibble 5, RFC 4122 variant bits.
     expect(memory.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
+    // And it is exactly deriveMemoryId(candidate.id, contentHash).
+    expect(memory.id).toBe(deriveMemoryId(candidate.id, contentHash));
+  });
+
+  it('is deterministic: the same logical candidate promotes to the same memory id', () => {
+    // Two independent promote() calls (distinct DBs, as two clones would have)
+    // for the same logical candidate + content hash must yield the same id.
+    const candidate = makeCandidate();
+    const contentHash = computeContentHash(candidate.content);
+
+    const dbA = createTestDatabase();
+    const memoryA = promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult() },
+      new MemoryRepository(dbA),
+      new AuditRepository(dbA),
+    );
+
+    const dbB = createTestDatabase();
+    const memoryB = promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult() },
+      new MemoryRepository(dbB),
+      new AuditRepository(dbB),
+    );
+
+    expect(memoryA.id).toBe(memoryB.id);
+    dbA.close();
+    dbB.close();
+  });
+
+  it('a different content hash for the same candidate yields a different memory id', () => {
+    const candidate = makeCandidate();
+    const memoryA = promote(
+      {
+        candidate,
+        contentHash: computeContentHash('content one'),
+        pipelineResult: makePipelineResult(),
+      },
+      memoryRepo,
+      auditRepo,
+    );
+    const dbB = createTestDatabase();
+    const memoryB = promote(
+      {
+        candidate,
+        contentHash: computeContentHash('content two'),
+        pipelineResult: makePipelineResult(),
+      },
+      new MemoryRepository(dbB),
+      new AuditRepository(dbB),
+    );
+    expect(memoryA.id).not.toBe(memoryB.id);
+    dbB.close();
   });
 
   it('preserves the content hash from input', () => {
@@ -378,5 +437,245 @@ describe('promote — eval callback (Evidence emission)', () => {
     expect(memoryRepo.findById(memory.id)).not.toBeNull();
     expect(auditRepo.findByMemory(memory.id).some((e) => e.action === 'promoted')).toBe(true);
     expect(auditRepo.findByAction('eval-result')).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-clone audit-event-id determinism (beads 8da.5 + 8da.6)
+//
+// Regression guard for the cross-clone determinism blocker: promoter.ts used to
+// mint every audit-event id with crypto.randomUUID() (v4), and the audit chain's
+// v2 entry_hash folds the event id into its canonical body. So two independent
+// clones promoting the SAME logical candidate could never reproduce a
+// byte-identical entry_hash: the random id diverged even after 8da.6 excluded
+// the wallclock timestamp from the hash.
+//
+// The fix makes every audit-event id (and graph-edge id) a pure function of the
+// logical event identity via deriveAuditEventId / deriveLinkId (UUID v5), exactly
+// as deriveMemoryId already did for the memory id. These tests vary the wallclock
+// between the two clone runs (via fake timers) to prove the ids (and, given an
+// identical preceding chain, the entry_hash) are timestamp-independent.
+// ---------------------------------------------------------------------------
+
+/** A fixed logical candidate id so two independent runs share one identity. */
+const LOGICAL_CANDIDATE_ID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+/**
+ * Promote one logical candidate into a fresh in-memory DB at a chosen wallclock,
+ * returning the promoter output plus the raw audit chain (entry_hash visible).
+ * Models a single clone: a brand-new DB, a fixed logical candidate, a controllable
+ * "now".
+ */
+function promoteOnClone(
+  wallclock: string,
+  opts?: { evalCallback?: EvalResultRecord[] },
+): {
+  memoryId: string;
+  contentHash: string;
+  chain: ReturnType<AuditRepository['findAllChronological']>;
+} {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(wallclock));
+  try {
+    const db = createTestDatabase();
+    try {
+      const memoryRepo = new MemoryRepository(db);
+      const auditRepo = new AuditRepository(db);
+      const candidate = makeCandidate({ id: LOGICAL_CANDIDATE_ID });
+      const contentHash = computeContentHash(candidate.content);
+      const memory = promote(
+        {
+          candidate,
+          contentHash,
+          pipelineResult: makePipelineResult({ candidateId: candidate.id }),
+        },
+        memoryRepo,
+        auditRepo,
+        false,
+        undefined,
+        opts?.evalCallback ? (): EvalResultRecord[] => opts.evalCallback! : undefined,
+      );
+      // Snapshot the chain BEFORE the DB closes; findAllChronological returns plain rows.
+      const chain = auditRepo.findAllChronological();
+      return { memoryId: memory.id, contentHash, chain };
+    } finally {
+      db.close();
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
+describe('promote: cross-clone audit-event-id determinism (8da.5 + 8da.6)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('two clones at different wallclocks mint a byte-identical promoted audit-event id', () => {
+    const cloneA = promoteOnClone('2026-06-20T08:00:00.000Z');
+    const cloneB = promoteOnClone('2027-01-15T17:42:11.123Z');
+
+    // Same logical candidate -> same memory id (the 8da.5 foundation primitive).
+    expect(cloneA.memoryId).toBe(cloneB.memoryId);
+
+    const promotedA = cloneA.chain.find((e) => e.action === 'promoted')!;
+    const promotedB = cloneB.chain.find((e) => e.action === 'promoted')!;
+
+    // The audit-event id is content-derived and therefore identical across clones,
+    // and is exactly deriveAuditEventId(memoryId, 'promoted').
+    expect(promotedA.id).toBe(promotedB.id);
+    expect(promotedA.id).toBe(deriveAuditEventId(cloneA.memoryId, 'promoted'));
+    // It is a real v5 id (version nibble 5, RFC 4122 variant), not a random v4.
+    expect(promotedA.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('given an identical preceding chain (empty), the promoted entry_hash is byte-identical across clones', () => {
+    // Both clones start from an empty audit table, so prev_entry_hash is NULL for
+    // the first event on each, the "identical preceding chain" precondition. With
+    // a content-derived id and timestamp excluded from the v2 body, the entry_hash
+    // must match despite the wildly different wallclocks.
+    const cloneA = promoteOnClone('2026-06-20T08:00:00.000Z');
+    const cloneB = promoteOnClone('2027-01-15T17:42:11.123Z');
+
+    const promotedA = cloneA.chain.find((e) => e.action === 'promoted')!;
+    const promotedB = cloneB.chain.find((e) => e.action === 'promoted')!;
+
+    // First event in each empty chain -> no anchor.
+    expect(promotedA.prev_entry_hash).toBeNull();
+    expect(promotedB.prev_entry_hash).toBeNull();
+
+    // The reproducible chain head: identical entry_hash across clones...
+    expect(promotedA.entry_hash).not.toBeNull();
+    expect(promotedA.entry_hash).toBe(promotedB.entry_hash);
+
+    // ...while the timestamps genuinely differ and are still recorded (just not hashed).
+    expect(promotedA.timestamp).not.toBe(promotedB.timestamp);
+  });
+
+  it('eval-result audit-event ids are deterministic and discriminated per evaluator', () => {
+    const verdicts: EvalResultRecord[] = [
+      { name: 'memory-utility', passed: true, score: 1, threshold: 0.8, details: { probes: 3 } },
+      { name: 'provenance-integrity', passed: true, score: 1, threshold: 1, details: {} },
+    ];
+    const cloneA = promoteOnClone('2026-06-20T08:00:00.000Z', { evalCallback: verdicts });
+    const cloneB = promoteOnClone('2027-01-15T17:42:11.123Z', { evalCallback: verdicts });
+
+    const evalA = cloneA.chain.filter((e) => e.action === 'eval-result');
+    const evalB = cloneB.chain.filter((e) => e.action === 'eval-result');
+    expect(evalA).toHaveLength(2);
+    expect(evalB).toHaveLength(2);
+
+    // The two evaluators get distinct ids within a single clone (the verdict name
+    // is the discriminator), and the same logical row matches across clones.
+    const idsA = evalA.map((e) => e.id).sort();
+    const idsB = evalB.map((e) => e.id).sort();
+    expect(new Set(idsA).size).toBe(2);
+    expect(idsA).toEqual(idsB);
+    expect(idsA).toEqual(
+      [
+        deriveAuditEventId(cloneA.memoryId, 'eval-result', 'memory-utility'),
+        deriveAuditEventId(cloneA.memoryId, 'eval-result', 'provenance-integrity'),
+      ].sort(),
+    );
+
+    // And every eval-result entry_hash matches across clones (identical preceding
+    // chain: the promoted event hashes identically, so each subsequent link does too).
+    const hashesA = evalA.map((e) => e.entry_hash).sort();
+    const hashesB = evalB.map((e) => e.entry_hash).sort();
+    expect(hashesA).toEqual(hashesB);
+  });
+});
+
+describe('promote: cross-clone determinism on the supersession path (8da.5)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Promote a superseding candidate over a pre-seeded old memory, on a fresh DB at
+   * a chosen wallclock. The old memory is inserted with a FIXED id on both clones so
+   * the supersession references the same logical target.
+   */
+  function promoteWithSupersessionOnClone(wallclock: string): {
+    memoryId: string;
+    supersededId: string;
+    chain: ReturnType<AuditRepository['findAllChronological']>;
+    linkIds: string[];
+  } {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(wallclock));
+    try {
+      const db = createTestDatabase();
+      try {
+        const memoryRepo = new MemoryRepository(db);
+        const auditRepo = new AuditRepository(db);
+        const linksRepo = new MemoryLinksRepository(db);
+
+        const old = makeCuratedMemory({
+          id: '11112222-3333-4444-8555-666677778888',
+          title: 'Error handling guide',
+          category: 'convention',
+        });
+        memoryRepo.insert(old);
+
+        const candidate = makeCandidate({
+          id: LOGICAL_CANDIDATE_ID,
+          title: 'Error handling guide updated',
+          category: 'convention',
+        });
+        const contentHash = computeContentHash(candidate.content);
+        const memory = promote(
+          {
+            candidate,
+            contentHash,
+            pipelineResult: makePipelineResult({ candidateId: candidate.id }),
+            supersession: {
+              supersededMemoryId: old.id,
+              supersededTitle: old.title,
+              similarity: 0.75,
+            },
+          },
+          memoryRepo,
+          auditRepo,
+          false,
+          linksRepo,
+        );
+
+        const chain = auditRepo.findAllChronological();
+        const linkIds = linksRepo
+          .findBySource(memory.id)
+          .map((l) => l.id)
+          .sort();
+        return { memoryId: memory.id, supersededId: old.id, chain, linkIds };
+      } finally {
+        db.close();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it('superseded audit-event id + supersedes link id are byte-identical across clones', () => {
+    const cloneA = promoteWithSupersessionOnClone('2026-06-20T08:00:00.000Z');
+    const cloneB = promoteWithSupersessionOnClone('2027-01-15T17:42:11.123Z');
+
+    const supersededA = cloneA.chain.find((e) => e.action === 'superseded')!;
+    const supersededB = cloneB.chain.find((e) => e.action === 'superseded')!;
+
+    // The superseded audit-event id is content-derived: (supersededMemoryId,
+    // 'superseded', superseding-memory-id-as-discriminator), identical across clones.
+    expect(supersededA.id).toBe(supersededB.id);
+    expect(supersededA.id).toBe(
+      deriveAuditEventId(cloneA.supersededId, 'superseded', cloneA.memoryId),
+    );
+
+    // The supersedes graph edge id is content-derived from its (source, target, type)
+    // and matches across clones too.
+    expect(cloneA.linkIds).toEqual(cloneB.linkIds);
+    expect(cloneA.linkIds).toContain(
+      deriveLinkId(cloneA.memoryId, cloneA.supersededId, 'supersedes'),
+    );
   });
 });

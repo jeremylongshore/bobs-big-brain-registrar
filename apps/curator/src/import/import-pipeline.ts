@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
+import { deriveCandidateId } from '@qmd-team-intent-kb/common';
 import type { MemoryCandidate, MemoryCategory } from '@qmd-team-intent-kb/schema';
 import type {
   CandidateRepository,
@@ -123,6 +125,13 @@ export async function executeImport(
 ): Promise<ImportExecutionResult> {
   const batchId = randomUUID();
   const now = nowFn();
+  // The candidate id is content-derived (UUID v5), not random, so re-importing
+  // unchanged content, on this clone or any other, yields the same id and the
+  // id-based dedupe holds. `workspaceId` mirrors ICO's `basename(resolve(...))`
+  // of the source root; combined with the vault-relative path and the body
+  // SHA-256 it forms the same name tuple ICO uses for spool candidates.
+  // `batchId` stays random: it identifies this operational run, not the content.
+  const workspaceId = basename(sourcePath);
 
   // Create batch record
   const batch: ImportBatch = {
@@ -173,8 +182,10 @@ export async function executeImport(
       continue;
     }
 
-    // Build the candidate
-    const candidateId = randomUUID();
+    // Build the candidate. `collision.contentHash` is the SHA-256 of the body
+    // (frontmatter stripped) computed by detectCollision above, the same basis
+    // ICO uses for `page.bodySha256`.
+    const candidateId = deriveCandidateId(workspaceId, vf.relativePath, collision.contentHash);
     const title =
       typeof parsed.frontmatter['title'] === 'string' && parsed.frontmatter['title']
         ? parsed.frontmatter['title']
