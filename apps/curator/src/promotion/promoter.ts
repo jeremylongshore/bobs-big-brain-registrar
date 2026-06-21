@@ -1,5 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { deriveMemoryId, deriveAuditEventId, deriveLinkId } from '@qmd-team-intent-kb/common';
+import {
+  deriveMemoryId,
+  deriveAuditEventId,
+  derivePolicyEvaluationId,
+  deriveLinkId,
+} from '@qmd-team-intent-kb/common';
 import {
   CuratedMemory as CuratedMemorySchema,
   AuditEvent as AuditEventSchema,
@@ -64,6 +68,14 @@ export type EvalCallback = (
  * When dryRun=true all logic runs (including schema validation) but nothing is
  * written to the database.
  *
+ * `now` defaults to the current wall-clock instant. Callers that need a
+ * cross-clone-reproducible promoted row (the govern-at-merge gate) inject a
+ * deterministic, content-derived timestamp here so that the same logical memory
+ * yields a byte-identical `promotedAt` / `updatedAt` on every clone. The audit
+ * chain's v2 `entry_hash` already excludes the timestamp (bead 8da.6), so the
+ * audit outcome is reproducible regardless; injecting `now` extends that
+ * reproducibility to the durable `curated_memories` row itself.
+ *
  * @returns The fully-formed CuratedMemory (always, even in dry-run mode).
  */
 export function promote(
@@ -73,8 +85,8 @@ export function promote(
   dryRun: boolean = false,
   linksRepo?: MemoryLinksRepository,
   evalCallback?: EvalCallback,
+  now: string = new Date().toISOString(),
 ): CuratedMemory {
-  const now = new Date().toISOString();
   // The promoted-memory id is content-derived (UUID v5) from the candidate
   // lineage, not random, so the same logical candidate promotes to the same
   // CuratedMemory.id on every clone. It is intentionally distinct from
@@ -86,18 +98,24 @@ export function promote(
   // (bead 8da.5) from their logical identities, load-bearing for the audit chain,
   // whose v2 entry_hash folds the event id into its canonical body, so a random id
   // would make the entry_hash per-clone even with timestamp excluded (8da.6).
-  // The per-record policyId stays random: it labels an operational policy-evaluation
-  // row, is never hashed into the audit chain, and is not part of any dedupe lineage.
   const memoryId = deriveMemoryId(input.candidate.id, input.contentHash);
 
-  // The pipeline does not carry a per-evaluation policyId, so one is generated per record.
-  const policyEvaluations: PolicyEvaluation[] = input.pipelineResult.evaluations.map((ev) => ({
-    policyId: randomUUID(),
-    ruleId: ev.ruleId,
-    result: ev.outcome,
-    reason: ev.reason,
-    evaluatedAt: now,
-  }));
+  // The pipeline does not carry a per-evaluation policyId, so one is derived per
+  // record. It is content-derived (bead 8da.5/8da.9) from (memoryId, ruleId,
+  // index), not random: the durable curated_memories row embeds these ids in its
+  // policy_evaluations_json column, so a random id made the row per-clone for the
+  // same logical promotion, which the govern-at-merge gate's byte-identical
+  // commutativity guarantee cannot tolerate. The policyId is never hashed into the
+  // audit chain, so deriving it deterministically is a pure improvement.
+  const policyEvaluations: PolicyEvaluation[] = input.pipelineResult.evaluations.map(
+    (ev, index) => ({
+      policyId: derivePolicyEvaluationId(memoryId, ev.ruleId, String(index)),
+      ruleId: ev.ruleId,
+      result: ev.outcome,
+      reason: ev.reason,
+      evaluatedAt: now,
+    }),
+  );
 
   const memory = CuratedMemorySchema.parse({
     id: memoryId,

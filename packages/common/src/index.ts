@@ -7,6 +7,7 @@ export {
   deriveCandidateId,
   deriveMemoryId,
   deriveAuditEventId,
+  derivePolicyEvaluationId,
   deriveLinkId,
 } from './uuid-v5.js';
 export { DEFAULT_TEAMKB_BASE, getTeamKbBasePath, resolveTeamKbPath } from './paths.js';
