@@ -1,6 +1,7 @@
 import {
   assertDisclosureClean,
   computeContentHash,
+  deriveMemoryId,
   DisclosureRejectedError,
 } from '@qmd-team-intent-kb/common';
 import { PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
@@ -102,6 +103,56 @@ export interface MergeGovernResult {
    * processed (the same logical memory present in both clones).
    */
   readonly unionSize: number;
+}
+
+/**
+ * Error thrown at the merge-gate entry when an input row's `id` is not
+ * deterministically content-derivable from its own `(candidateId, contentHash)`
+ * lineage - i.e. it is not `deriveMemoryId(candidateId, contentHash)`.
+ *
+ * ## Why this is a hard invariant
+ *
+ * Every row that crosses a clone boundary into the merge gate is, by contract, a
+ * row a clone already *promoted*. The canonical promotion path
+ * ({@link promote}) ALWAYS mints the durable id as
+ * `deriveMemoryId(candidate.id, contentHash)` (a content-derived UUID v5), so a
+ * legitimately-promoted row satisfies `id === deriveMemoryId(candidateId,
+ * contentHash)` unconditionally. A row whose `id` does NOT reproduce under
+ * re-derivation therefore did not come from the promotion path - it carries a
+ * stray, non-content-derived id (e.g. a `crypto.randomUUID()` v4 from an old or
+ * out-of-band code path).
+ *
+ * Such a row is poison for the gate's two load-bearing guarantees:
+ *
+ *   - **id-dedup of the union** keys on `id`, so two clones holding the same
+ *     logical memory under *different* random ids would BOTH survive id-dedup and
+ *     be double-counted instead of collapsed;
+ *   - **byte-identical commutativity** depends on the id-sorted traversal landing
+ *     each logical memory at the same position on every clone - a random id sorts
+ *     to a per-clone position, breaking the determinism the whole gate rests on.
+ *
+ * Rather than silently corrupt the merge, the gate FAILS LOUD at entry. The error
+ * carries the offending row's actual `id` and the expected re-derived id (both
+ * already-public, non-secret identifiers) - but NEVER the row's content,
+ * mirroring {@link DisclosureRejectedError}'s non-leak contract.
+ */
+export class MergeIdInvariantError extends Error {
+  /** The offending row's actual `id` (the non-content-derived value found). */
+  readonly actualId: string;
+  /** The id the row's `(candidateId, contentHash)` lineage should have produced. */
+  readonly expectedId: string;
+  constructor(actualId: string, expectedId: string) {
+    // NOTE: message deliberately omits the row's content (non-leak contract).
+    super(
+      `Merge gate rejected a row whose id is not content-derived: ` +
+        `id=${actualId} is not deriveMemoryId(candidateId, contentHash)=${expectedId}. ` +
+        `Every row crossing a clone boundary must carry a content-derived id; a ` +
+        `stray random id (e.g. a v4) breaks id-dedup and cross-clone determinism.`,
+    );
+    this.name = 'MergeIdInvariantError';
+    this.actualId = actualId;
+    this.expectedId = expectedId;
+  }
 }
 
 /** Dependencies the merge gate needs - the same repositories the curator uses. */
@@ -237,6 +288,25 @@ export function mergeGovern(
   //    one element that makes A∪B and B∪A byte-identical.
   const union = [...unionById.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
+  // 2b. GATE-ENTRY ID INVARIANT - a WHOLE-UNION pre-pass, before ANY promotion.
+  //     A row crossing a clone boundary is, by contract, a row a clone already
+  //     promoted, so its id MUST equal deriveMemoryId(candidateId, contentHash)
+  //     (the canonical promotion path mints it that way). A row whose id does not
+  //     reproduce under re-derivation carries a stray, non-content-derived id (e.g.
+  //     a v4 from an old code path) - poison for both id-dedup (which keys on .id,
+  //     so the same logical memory under two random ids survives twice) and the
+  //     id-sorted commutativity guarantee (a random id sorts to a per-clone
+  //     position). Validate the entire union up front so a single bad row aborts
+  //     the merge ATOMICALLY: nothing is written before the throw, regardless of
+  //     where the offending row falls in the sort order. Walking the already-sorted
+  //     union makes the FIRST reported offender deterministic across clones.
+  for (const memory of union) {
+    const expectedId = deriveMemoryId(memory.candidateId, memory.contentHash);
+    if (memory.id !== expectedId) {
+      throw new MergeIdInvariantError(memory.id, expectedId);
+    }
+  }
+
   // 3. SEED the dedupe set from the merged DB's existing content hashes (the same
   //    call the eval harness uses), then accrete each newly-promoted row's hash.
   const existingHashes = new Set<string>(deps.memoryRepo.getAllContentHashes());
@@ -321,4 +391,101 @@ export function mergeGovern(
   }
 
   return { promoted, quarantined, unionSize: union.length };
+}
+
+/**
+ * Error thrown when {@link mergeGovernFold} is called with an empty clone list.
+ * A fold needs at least one clone to govern; folding zero clones has no
+ * well-defined identity element here (the gate writes to a live DB and seeds its
+ * dedupe set from existing state), so the empty case fails loud rather than
+ * silently producing an empty result.
+ */
+export class EmptyMergeFoldError extends Error {
+  constructor() {
+    super('mergeGovernFold requires at least one clone; received an empty list.');
+    this.name = 'EmptyMergeFoldError';
+  }
+}
+
+/**
+ * Govern an N-way merge by folding the clone row-arrays into a SINGLE
+ * {@link mergeGovern} pass.
+ *
+ * The 2-arg {@link mergeGovern} already re-derives the UNION of its two inputs as
+ * untrusted - step 1 is literally "concatenate both inputs, then content-id
+ * de-dup". So reconciling THREE OR MORE clones needs no new governance machinery:
+ * fold the clone arrays into a single `(allButLast, last)` pair and run
+ * {@link mergeGovern} ONCE. The fold REUSES {@link mergeGovern} verbatim - it adds
+ * no new dedupe, no new disclosure check, no new audit logic. The only new thing
+ * is the reduction shape: concatenate the row arrays into the two-arg call's inputs.
+ *
+ * ## Why a single pass, not an iterated reduce
+ *
+ * An obvious alternative is to reduce *passes* - govern (A,B), then re-govern those
+ * survivors against C, and so on, each writing the running DB. That is rejected
+ * here for a concrete reason: {@link mergeGovern}'s deterministic merge clock
+ * ({@link mergeClock}) restarts at `MERGE_EPOCH_MS` on every call, so a SECOND pass
+ * would write audit events whose timestamps collide with (or precede) the first
+ * pass's. The audit verifier re-walks the chain ordered by `(timestamp ASC, id
+ * ASC)` while the store anchors each new row's `prev_entry_hash` to the most-recent
+ * row by `(timestamp DESC, id DESC)` - so colliding per-pass clocks desynchronise
+ * insertion order from chronological order and the chain breaks. A single pass
+ * keeps one strictly-monotonic clock over the whole union, so the audit chain
+ * verifies clean. (This is exactly the failure the fold-of-3 proof test guards
+ * against - it asserts every ordering's chain verifies with zero breaks.)
+ *
+ * ## Why the fold is associative AND commutative
+ *
+ * For any clones X, Y, Z the merged governed state is identical regardless of how
+ * they are grouped or ordered - `fold([X, Y, Z])`, `fold([Z, Y, X])`, the grouping
+ * `((X u Y) u Z)` and `(X u (Y u Z))` all yield byte-identical durable state and an
+ * identical audit chain. This follows directly from {@link mergeGovern}'s own
+ * two-clone commutativity, lifted to N clones:
+ *
+ *   - **Concatenation feeds one set union.** The fold concatenates every clone's
+ *     rows into the single pass's inputs; the pass's first step content-id de-dups
+ *     that union (a set operation). The order in which rows are concatenated cannot
+ *     change the resulting SET of unique ids, so all orderings produce the same
+ *     working union.
+ *   - **The id-sorted traversal erases input order.** The single pass sorts its
+ *     union by content-derived id before governing, so the order in which
+ *     `existingHashes` accretes - and therefore which of two duplicate-content rows
+ *     survives - depends only on the SET of rows present, not on the fold order
+ *     that assembled it. A given logical memory lands at the same sort position
+ *     under every ordering, gets the same {@link mergeClock} index, and so the same
+ *     deterministic timestamp.
+ *   - **Disclosure + policy are pure functions of content.** Identical content
+ *     yields an identical quarantine/promote verdict in every ordering.
+ *
+ * So the fold's observable governed state and audit chain are exactly what a single
+ * 2-arg {@link mergeGovern} over the full union would have produced - which is why
+ * all groupings agree byte for byte. The fold-of-3 proof test asserts exactly this.
+ *
+ * @param clones  One or more clones' promoted (active) row arrays to reconcile.
+ * @param deps    The store repositories to write survivors + audit events into.
+ * @param options Policy, tenant scope, and dry-run flag (forwarded unchanged).
+ * @throws {EmptyMergeFoldError} when `clones` is empty.
+ */
+export function mergeGovernFold(
+  clones: readonly (readonly CuratedMemory[])[],
+  deps: MergeGovernDependencies,
+  options: MergeGovernOptions,
+): MergeGovernResult {
+  if (clones.length === 0) {
+    throw new EmptyMergeFoldError();
+  }
+
+  // Fold the N clone arrays into the two inputs of a SINGLE mergeGovern call:
+  // everything but the last clone forms side A, the last clone forms side B. Since
+  // mergeGovern's first act is to UNION (concatenate + id-dedup) A and B, this one
+  // call governs the union of ALL clones in a single monotonic-clock pass. The
+  // single-clone case folds to mergeGovern(clones[0], []) - one clone unioned with
+  // the empty clone. Reuse mergeGovern verbatim; do not reinvent.
+  const sideA: CuratedMemory[] = [];
+  for (let i = 0; i < clones.length - 1; i++) {
+    sideA.push(...clones[i]!);
+  }
+  const sideB = clones[clones.length - 1]!;
+
+  return mergeGovern(sideA, sideB, deps, options);
 }
