@@ -87,6 +87,20 @@ describe('deriveCandidateId', () => {
     expect(a).toMatch(UUID_RE);
   });
 
+  it("matches ICO's locked golden vector (cross-repo drift guard, bead 8da.10)", () => {
+    // The SAME (workspaceId, relPath, bodySha256) triple ICO pins in its own
+    // packages/kernel/src/uuid.test.ts must derive the SAME id here. ICO uses
+    // SHA_A = '0123456789abcdef' repeated 4x (64 hex chars). If either repo's
+    // namespace or NUL-delimited name composition drifts, this assertion fails:
+    // the cross-repo dedup key and the audit-chain candidateId link would
+    // otherwise diverge silently. This is the INTKB half of the drift guard;
+    // ICO pins the same vector independently, so a drift in either repo is caught.
+    const SHA_A = '0123456789abcdef'.repeat(4);
+    expect(deriveCandidateId('my-workspace', 'wiki/concepts/foo.md', SHA_A)).toBe(
+      'e0e430cb-ede6-53ae-8bd0-1edc3b945c6f',
+    );
+  });
+
   it('uses a NUL-delimited name tuple byte-identical to ICO buildCandidate', () => {
     // ICO composes `${workspaceId}\x00${relPath}\x00${bodySha256}`.
     const nul = String.fromCharCode(0);
