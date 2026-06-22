@@ -1,0 +1,127 @@
+# Runbook — the governed brain API on the tailnet team-server
+
+| Field       | Value                                                             |
+| ----------- | ----------------------------------------------------------------- |
+| **Code**    | `040-OD-OPSM`                                                     |
+| **Type**    | Operations runbook                                                |
+| **Date**    | 2026-06-21                                                        |
+| **Service** | `teamkb-brain-api.service` (systemd **--user**)                   |
+| **Bead**    | `compile-then-govern-650.5` (deploy, closed) · hardening: `650.6` |
+
+The deployed, tailnet-only query surface of the governed brain (`apps/api`). This is the **D27
+single remote brain**: one token-authenticated host that the team reaches over Tailscale. It runs
+on the **team-server (the dev box)** for the soak — **not the VPS** (D27, D17 blast radius) — and
+migrates to a dedicated tailnet VM once load-bearing (`650.6`).
+
+## 1. What runs, and where
+
+- **Host:** the dev box, on the tailnet as `team-server` / `dev` (`tailscale ip -4`).
+- **Bind:** the tailnet IP only, port **3847** (`TEAMKB_API_HOST=<tailnet-ip>`) — never `0.0.0.0`,
+  never public. Reachable only by tailnet peers.
+- **Brain:** `~/.teamkb/teamkb.db` (tenant `intent-solutions`), qmd export `~/.teamkb/kb-export`.
+- **Auth:** every route requires `Authorization: Bearer <token>`; no token → `401`.
+
+## 2. The service
+
+systemd **user** unit (persists across logout/reboot because `loginctl enable-linger jeremy` is on
+and the unit is `WantedBy=default.target`). It is ordered after `tailscaled` so it binds the tailnet
+IP only once the interface is up.
+
+```ini
+# ~/.config/systemd/user/teamkb-brain-api.service  (abridged)
+[Unit]
+After=network-online.target tailscaled.service
+[Service]
+WorkingDirectory=/home/jeremy/000-projects/qmd-team-intent-kb
+ExecStart=/usr/bin/node apps/api/dist/main.js
+Environment=TEAMKB_API_HOST=<tailnet-ip>   TEAMKB_API_PORT=3847
+Environment=TEAMKB_DB_PATH=/home/jeremy/.teamkb/teamkb.db
+Environment=TEAMKB_TENANT_ID=intent-solutions
+Environment=TEAMKB_EXPORT_DIR=/home/jeremy/.teamkb/kb-export
+Environment=TEAMKB_TOKENS_FILE=/home/jeremy/.teamkb/tokens.json
+Environment=NODE_ENV=production
+Restart=on-failure
+[Install]
+WantedBy=default.target
+```
+
+After a code change: `pnpm -F @qmd-team-intent-kb/api build` then restart (below). The unit runs the
+built `apps/api/dist/main.js`, not `tsx`.
+
+## 3. Operate it
+
+```bash
+systemctl --user status  teamkb-brain-api.service     # state
+systemctl --user restart teamkb-brain-api.service     # apply a rebuild / token change
+systemctl --user stop    teamkb-brain-api.service     # take it down
+journalctl --user -u teamkb-brain-api.service -n 50 --no-pager   # logs (JSON lines)
+```
+
+## 4. Tokens (add / rotate a teammate)
+
+Tokens live in `~/.teamkb/tokens.json` (mode 600) — a JSON array of records:
+
+```json
+[
+  { "actor": "jeremy", "role": "admin", "tenants": null, "expiresAt": null },
+  { "actor": "ope", "role": "member", "tenants": null, "expiresAt": null }
+]
+```
+
+Each record's `token` field is the bearer secret. The registry accepts **either** a plaintext
+secret (hashed with scrypt on load) **or** a pre-hashed `scrypt$<salt>$<hash>` form
+(`hashToken()` in `apps/api/src/auth/token-registry.ts`). To add a teammate:
+
+1. Generate a random secret (e.g. `openssl rand -hex 24`).
+2. Add a record. **Prefer the pre-hashed form** — `node -e 'import("./apps/api/dist/auth/token-registry.js").then(m=>console.log(m.hashToken(process.argv[1])))' <secret>` — so no plaintext bearer token rests on disk (see §7).
+3. `systemctl --user restart teamkb-brain-api.service`.
+4. Hand the **plaintext** secret to the teammate over a secure channel — never in chat, commits, or
+   this repo. `role: member` = read + propose; `admin` = promote/govern. `tenants: ["intent-os"]`
+   scopes a token to one tenant; `null` = all.
+
+## 5. Clients — team mode
+
+The unified `governed-second-brain` plugin auto-selects **team mode** when `TEAMKB_API_URL` is set
+(otherwise it runs the local in-process brain). A teammate points it at this server:
+
+```bash
+TEAMKB_API_URL=http://<tailnet-ip>:3847
+TEAMKB_API_TOKEN=<their bearer secret>
+```
+
+Team mode exposes the unified `brain_search` (read); capture/govern stay governed server-side.
+
+## 6. Verify
+
+```bash
+# no token → 401 (gate is on)
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://<tailnet-ip>:3847/api/search \
+  -H 'content-type: application/json' -d '{"query":"x"}'        # → 401
+
+# with a token → cited hits from the brain
+curl -s -H "Authorization: Bearer <secret>" -X POST http://<tailnet-ip>:3847/api/search \
+  -H 'content-type: application/json' \
+  -d '{"query":"system map","pagination":{"page":1,"pageSize":3}}'   # → {"hits":[{"citation":"qmd://...
+```
+
+Verified 2026-06-21 against a same-artifact ephemeral instance: authed `/api/search` returns
+`qmd://`-cited hits, and the unified plugin in team mode proxies to the API and returns the same
+cited shape. (Functional path proven without mutating the live service; a real teammate's authed
+query is the final confirmation.)
+
+## 7. Known gaps / follow-ons (`compile-then-govern-650.6`)
+
+- **Tokens are stored plaintext on disk** today (`tokens.json` records are not `scrypt$`-prefixed).
+  The plaintext bearer secrets sit in `~/.teamkb/tokens.json` and any backup of `~/.teamkb`.
+  Re-seed with `hashToken()` output (§4) or SOPS-encrypt the file.
+- **No token expiry/rotation** (`expiresAt: null`); the registry supports it — set one.
+- **`/healthz` requires auth**, so a tailnet uptime probe can't hit it anonymously — add an
+  unauthenticated health route.
+- **Soak host:** runs on the dev box (which also runs Claude sessions + has OOM history); migrate to
+  a dedicated tailnet VM once load-bearing (D27).
+
+## 8. References
+
+- D27 (single remote brain, not the VPS): `intent-os decision-log/004-…`.
+- The unified plugin (local | team): `governed-second-brain-plugin`; decision `intent-os/000-docs/014-AT-DECR-…`.
+- The dogfood proof: `intent-os/000-docs/015-AA-AACR-…`.
