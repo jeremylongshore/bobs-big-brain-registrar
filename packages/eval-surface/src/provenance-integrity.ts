@@ -49,12 +49,17 @@ export function evaluateProvenanceIntegrity(
   }
 
   const chain = verifyAuditChain(auditRepo);
-  const chainBreaks = chain.breaks.length;
+  // CHAIN_FORK rows are non-malicious ordering artifacts (all hashes intact),
+  // NOT tampering — report them apart from tamper breaks (bead yxp). Both still
+  // fail this integrity eval (threshold 1.0); a forked chain is not pristine.
+  const chainForks = chain.breaks.filter((b) => b.reason === 'CHAIN_FORK').length;
+  const chainTamperBreaks = chain.breaks.length - chainForks;
+  const chainAnomalies = chain.breaks.length;
 
-  const passed = contentHashMismatches === 0 && invalidSources === 0 && chainBreaks === 0;
+  const passed = contentHashMismatches === 0 && invalidSources === 0 && chainAnomalies === 0;
   // Score: fraction of all integrity checks that held (memories × 2 checks + chain).
   const totalChecks = memories.length * 2 + 1;
-  const failedChecks = contentHashMismatches + invalidSources + (chainBreaks > 0 ? 1 : 0);
+  const failedChecks = contentHashMismatches + invalidSources + (chainAnomalies > 0 ? 1 : 0);
   const score = totalChecks === 0 ? 1 : (totalChecks - failedChecks) / totalChecks;
 
   return {
@@ -67,7 +72,8 @@ export function evaluateProvenanceIntegrity(
       content_hash_mismatches: contentHashMismatches,
       invalid_sources: invalidSources,
       audit_chain_rows: chain.totalRows,
-      audit_chain_breaks: chainBreaks,
+      audit_chain_breaks: chainTamperBreaks,
+      audit_chain_forks: chainForks,
     },
   };
 }

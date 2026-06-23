@@ -48,8 +48,26 @@ export interface AuditChainBreak {
   /** Hash chain link expected based on the previous row's entry_hash. */
   expectedPrevEntryHash: string | null;
   actualPrevEntryHash: string | null;
-  /** Machine-readable reason code. */
-  reason: 'ENTRY_HASH_MISMATCH' | 'PREV_LINK_MISMATCH' | 'PREV_LINK_AND_ENTRY_HASH_MISMATCH';
+  /**
+   * Machine-readable reason code.
+   *
+   * The first three are TAMPERING signatures (a stored hash no longer matches
+   * recomputation, or a prev link points at a value no prior row ever held).
+   *
+   * `CHAIN_FORK` is NOT tampering: the row's own content hash is intact AND its
+   * `prev_entry_hash` points back to a real, already-walked earlier row — just
+   * not its immediate predecessor. A pre-fix writer ordered same-timestamp
+   * events by a random-UUID tiebreak, so a later insert linked past its sibling
+   * and one predecessor ended up with two children. Every hash is intact; the
+   * chain merely is not linear at that point. Callers that need a tamper-only
+   * view filter this reason out (see `curator-cli verify-audit-chain`); it still
+   * counts against a STRICT clean chain. See bead qmd-team-intent-kb-yxp.
+   */
+  reason:
+    | 'ENTRY_HASH_MISMATCH'
+    | 'PREV_LINK_MISMATCH'
+    | 'PREV_LINK_AND_ENTRY_HASH_MISMATCH'
+    | 'CHAIN_FORK';
 }
 
 /** Aggregate result of a chain-verification pass. */
@@ -85,6 +103,13 @@ export function verifyAuditChain(repo: AuditRepository): AuditVerifyResult {
   // tampered prev_entry_hash on row N reports against the correct
   // expected anchor.
   let expectedPrev: string | null = null;
+
+  // Stored entry_hashes of every already-walked row WHOSE OWN HASH MATCHED.
+  // Used to tell a CHAIN_FORK (a prev link pointing back to a real, intact
+  // earlier row) apart from a forged PREV_LINK_MISMATCH (a prev pointing at a
+  // value no intact row holds). Only intact rows are valid fork anchors, so a
+  // tampered row's stored hash can never excuse a later row as non-tampering.
+  const seenEntryHashes = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -122,11 +147,18 @@ export function verifyAuditChain(repo: AuditRepository): AuditVerifyResult {
     if (prevMatches && entryMatches) {
       cleanRows++;
       expectedPrev = row.entry_hash;
+      if (row.entry_hash !== null) seenEntryHashes.add(row.entry_hash);
       continue;
     }
 
     let reason: AuditChainBreak['reason'];
-    if (!prevMatches && !entryMatches) {
+    if (entryMatches && row.prev_entry_hash !== null && seenEntryHashes.has(row.prev_entry_hash)) {
+      // Own content hash intact, and the prev link points back to a real
+      // earlier row we already walked — a non-malicious ordering fork, not
+      // tampering (bead yxp). It still fails a STRICT clean chain, but a
+      // tamper-only view (curator-cli) filters it out.
+      reason = 'CHAIN_FORK';
+    } else if (!prevMatches && !entryMatches) {
       reason = 'PREV_LINK_AND_ENTRY_HASH_MISMATCH';
     } else if (!prevMatches) {
       reason = 'PREV_LINK_MISMATCH';
@@ -147,10 +179,13 @@ export function verifyAuditChain(repo: AuditRepository): AuditVerifyResult {
       reason,
     });
 
-    // Re-anchor the chain on whatever the tampered row stored, so
-    // subsequent rows aren't all reported as broken due to one tamper.
-    // Same "honest accounting" pattern as ICO's audit-verify.ts.
+    // Re-anchor the chain on whatever this row stored, so subsequent rows
+    // aren't all reported as broken due to one fork/tamper. Same "honest
+    // accounting" pattern as ICO's audit-verify.ts.
     expectedPrev = row.entry_hash;
+    // Only a row whose OWN hash matched may anchor a later CHAIN_FORK; a broken
+    // row's stored hash must not let a successor be excused as non-tampering.
+    if (entryMatches && row.entry_hash !== null) seenEntryHashes.add(row.entry_hash);
   }
 
   return {
