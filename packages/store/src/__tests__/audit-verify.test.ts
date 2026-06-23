@@ -293,7 +293,7 @@ describe('verifyAuditChain — same-timestamp ordering (bead yxp)', () => {
       // immediate predecessor to a higher-id sibling — forking the chain so
       // no linear walk could verify it. Under seq ordering the walk follows
       // true insertion order and the chain is clean.
-      const inserted = [
+      const inserted: Array<{ id: string; action: AuditEvent['action']; ts: string }> = [
         // (timestamp, descending id) — adversarial: first-inserted has the
         // highest id, so (timestamp, id) order would reverse these three.
         { id: '00000000-0000-4000-8000-0000000000ff', action: 'superseded', ts: SAME_TS },
