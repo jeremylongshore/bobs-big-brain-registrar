@@ -312,33 +312,18 @@ async function cmdVerifyAuditChain(args: string[], deps: CuratorCliDeps): Promis
   try {
     const auditRepo = new AuditRepository(db);
     const result = verifyAuditChain(auditRepo);
-    const isClean = result.breaks.length === 0;
 
-    if (json) {
-      process.stdout.write(
-        JSON.stringify({
-          ok: isClean,
-          totalRows: result.totalRows,
-          unverifiedRows: result.unverifiedRows,
-          cleanRows: result.cleanRows,
-          breaks: result.breaks,
-        }) + '\n',
-      );
-      return isClean ? 0 : 2;
-    }
+    // A CHAIN_FORK is a non-malicious ordering artifact (all hashes intact);
+    // every other reason is a tampering signature. Partition so we never shout
+    // "TAMPERED" at a pre-fix same-timestamp ordering fork (bead yxp).
+    const tamperBreaks = result.breaks.filter((b) => b.reason !== 'CHAIN_FORK');
+    const forks = result.breaks.filter((b) => b.reason === 'CHAIN_FORK');
+    const strictClean = result.breaks.length === 0;
+    const tamperFree = tamperBreaks.length === 0;
+    // 0 = strictly clean · 1 = forked but untampered · 2 = tampered
+    const exitCode = tamperBreaks.length > 0 ? 2 : forks.length > 0 ? 1 : 0;
 
-    if (isClean) {
-      process.stdout.write(`audit chain OK\n`);
-      process.stdout.write(`Total rows:      ${result.totalRows}\n`);
-      process.stdout.write(`Clean rows:      ${result.cleanRows}\n`);
-      process.stdout.write(`Unverified rows: ${result.unverifiedRows} (pre-migration)\n`);
-      return 0;
-    }
-
-    process.stderr.write(
-      `AUDIT_TAMPERED: ${result.breaks.length} chain break(s) detected in ${result.totalRows} row(s)\n\n`,
-    );
-    for (const b of result.breaks) {
+    const writeBreak = (b: (typeof result.breaks)[number]): void => {
       process.stderr.write(
         `  index ${b.index}  id=${b.id}  action=${b.action}  ts=${b.timestamp}  tenant=${b.tenantId}\n`,
       );
@@ -351,8 +336,50 @@ async function cmdVerifyAuditChain(args: string[], deps: CuratorCliDeps): Promis
         `    expected prev_hash:  ${b.expectedPrevEntryHash ?? 'null'}\n` +
           `    actual prev_hash:    ${b.actualPrevEntryHash ?? 'null'}\n`,
       );
+    };
+
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({
+          ok: strictClean,
+          tamperFree,
+          totalRows: result.totalRows,
+          unverifiedRows: result.unverifiedRows,
+          cleanRows: result.cleanRows,
+          forks: forks.length,
+          breaks: result.breaks,
+        }) + '\n',
+      );
+      return exitCode;
     }
-    return 2;
+
+    if (strictClean) {
+      process.stdout.write(`audit chain OK\n`);
+      process.stdout.write(`Total rows:      ${result.totalRows}\n`);
+      process.stdout.write(`Clean rows:      ${result.cleanRows}\n`);
+      process.stdout.write(`Unverified rows: ${result.unverifiedRows} (pre-migration)\n`);
+      return 0;
+    }
+
+    if (tamperBreaks.length > 0) {
+      process.stderr.write(
+        `AUDIT_TAMPERED: ${tamperBreaks.length} tampering break(s) detected in ${result.totalRows} row(s)` +
+          (forks.length > 0 ? ` (plus ${forks.length} non-tampering CHAIN_FORK row(s))` : '') +
+          `\n\n`,
+      );
+      for (const b of tamperBreaks) writeBreak(b);
+      return 2;
+    }
+
+    // Forks only — NO tampering. Every entry_hash is intact; the chain is
+    // non-linear at `forks.length` historical points (pre-fix writer bug).
+    process.stderr.write(
+      `AUDIT_FORKED: ${forks.length} historical chain fork(s) in ${result.totalRows} row(s) — ` +
+        `NO tampering (every entry_hash intact). Pre-fix same-timestamp ordering artifact; ` +
+        `see bead qmd-team-intent-kb-yxp.\n\n`,
+    );
+    for (const b of forks) writeBreak(b);
+    return 1;
   } finally {
     try {
       (db as unknown as { close?: () => void }).close?.();

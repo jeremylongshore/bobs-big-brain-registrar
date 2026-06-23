@@ -20,6 +20,7 @@ import type { AuditEvent } from '@qmd-team-intent-kb/schema';
 import { AuditRepository } from '../repositories/audit-repository.js';
 import { createTestDatabase } from '../database.js';
 import { verifyAuditChain } from '../audit-verify.js';
+import { computeEntryHash, CURRENT_AUDIT_HASH_VERSION } from '../audit-chain.js';
 
 function makeEvent(overrides: Partial<AuditEvent> = {}): AuditEvent {
   return {
@@ -346,6 +347,138 @@ describe('verifyAuditChain — same-timestamp ordering (bead yxp)', () => {
       expect(result.totalRows).toBe(40);
       expect(result.cleanRows).toBe(40);
       expect(result.breaks).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Fork classification — a link back to a real, intact earlier row is a
+//    CHAIN_FORK (writer-bug ordering artifact), NOT tampering. This is what
+//    lets `verify` tell the truth about the 155 historical forks on the live
+//    brain instead of crying tamper. Bead qmd-team-intent-kb-yxp.
+// ---------------------------------------------------------------------------
+
+describe('verifyAuditChain — fork classification (bead yxp)', () => {
+  it('reports CHAIN_FORK (not tampering) when a row links back to a real earlier intact row', () => {
+    const { db, repo } = setupRepo();
+    try {
+      const ids = [
+        '00000000-0000-4000-8000-0000000000a1',
+        '00000000-0000-4000-8000-0000000000a2',
+        '00000000-0000-4000-8000-0000000000a3',
+      ];
+      for (let i = 0; i < ids.length; i++) {
+        repo.insert(
+          makeEvent({ id: ids[i]!, reason: `r${i}`, timestamp: `2026-05-29T08:0${i}:00.000Z` }),
+        );
+      }
+
+      // Forge the exact shape the old buggy writer produced: make row C link
+      // back to A (so B and C share predecessor A) AND recompute C's entry_hash
+      // so it is VALID for that forking prev — i.e. a non-linear chain with
+      // every hash intact. The new writer can no longer produce this, so we
+      // synthesise it directly.
+      const rowA = db.prepare('SELECT entry_hash FROM audit_events WHERE id = ?').get(ids[0]) as {
+        entry_hash: string;
+      };
+      const rowC = db.prepare('SELECT * FROM audit_events WHERE id = ?').get(ids[2]) as {
+        id: string;
+        action: string;
+        memory_id: string;
+        tenant_id: string;
+        actor_json: string;
+        reason: string | null;
+        details_json: string;
+        timestamp: string;
+      };
+      const forkedEntry = computeEntryHash(
+        {
+          id: rowC.id,
+          action: rowC.action,
+          memory_id: rowC.memory_id,
+          tenant_id: rowC.tenant_id,
+          actor_json: rowC.actor_json,
+          reason: rowC.reason,
+          details_json: rowC.details_json,
+          timestamp: rowC.timestamp,
+          prev_entry_hash: rowA.entry_hash,
+        },
+        CURRENT_AUDIT_HASH_VERSION,
+      );
+      db.prepare('UPDATE audit_events SET prev_entry_hash = ?, entry_hash = ? WHERE id = ?').run(
+        rowA.entry_hash,
+        forkedEntry,
+        ids[2],
+      );
+
+      const result = verifyAuditChain(repo);
+      // A and B verify clean; C is the fork.
+      expect(result.cleanRows).toBe(2);
+      expect(result.breaks).toHaveLength(1);
+      const fork = result.breaks[0]!;
+      expect(fork.id).toBe(ids[2]);
+      expect(fork.reason).toBe('CHAIN_FORK');
+      // The fork's OWN content hash is intact — recomputed == stored.
+      expect(fork.actualEntryHash).toBe(fork.expectedEntryHash);
+      // The tamper-only view (what curator-cli reports) sees zero tampering.
+      expect(result.breaks.filter((b) => b.reason !== 'CHAIN_FORK')).toHaveLength(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('still reports tampering (not CHAIN_FORK) when a prev link points at a hash no row holds', () => {
+    const { db, repo } = setupRepo();
+    try {
+      const ids = [
+        '00000000-0000-4000-8000-0000000000b1',
+        '00000000-0000-4000-8000-0000000000b2',
+        '00000000-0000-4000-8000-0000000000b3',
+      ];
+      for (let i = 0; i < ids.length; i++) {
+        repo.insert(makeEvent({ id: ids[i]!, timestamp: `2026-05-29T08:0${i}:00.000Z` }));
+      }
+      // Point row B's prev at a hash NO row holds, and recompute its entry_hash
+      // to be self-consistent. This is a forged splice, not a fork — it must
+      // NOT be excused as CHAIN_FORK.
+      const fakePrev = 'd'.repeat(64);
+      const rowB = db.prepare('SELECT * FROM audit_events WHERE id = ?').get(ids[1]) as {
+        id: string;
+        action: string;
+        memory_id: string;
+        tenant_id: string;
+        actor_json: string;
+        reason: string | null;
+        details_json: string;
+        timestamp: string;
+      };
+      const forged = computeEntryHash(
+        {
+          id: rowB.id,
+          action: rowB.action,
+          memory_id: rowB.memory_id,
+          tenant_id: rowB.tenant_id,
+          actor_json: rowB.actor_json,
+          reason: rowB.reason,
+          details_json: rowB.details_json,
+          timestamp: rowB.timestamp,
+          prev_entry_hash: fakePrev,
+        },
+        CURRENT_AUDIT_HASH_VERSION,
+      );
+      db.prepare('UPDATE audit_events SET prev_entry_hash = ?, entry_hash = ? WHERE id = ?').run(
+        fakePrev,
+        forged,
+        ids[1],
+      );
+
+      const result = verifyAuditChain(repo);
+      const offending = result.breaks.find((b) => b.id === ids[1]);
+      expect(offending).toBeDefined();
+      expect(offending!.reason).not.toBe('CHAIN_FORK');
+      expect(offending!.reason).toBe('PREV_LINK_MISMATCH');
     } finally {
       db.close();
     }
