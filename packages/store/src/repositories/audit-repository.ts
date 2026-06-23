@@ -121,30 +121,42 @@ export class AuditRepository {
   private readonly stmtFindAllChronological: Database.Statement;
 
   constructor(db: Database.Database) {
+    // `seq` is assigned MAX(seq)+1 atomically within the INSERT so it is a
+    // monotonic, gap-tolerant write-order key (the chain orders by it, not by
+    // the random-UUID `id`; bead yxp). Single-writer (better-sqlite3 is
+    // synchronous), and the UNIQUE index on seq fails loud rather than
+    // silently corrupting order if two writes ever raced.
     this.stmtInsert = db.prepare(`
       INSERT INTO audit_events (
         id, action, memory_id, tenant_id, actor_json, reason, details_json,
-        timestamp, entry_hash, prev_entry_hash, hash_version
+        timestamp, entry_hash, prev_entry_hash, hash_version, seq
       ) VALUES (
         @id, @action, @memory_id, @tenant_id, @actor_json, @reason, @details_json,
-        @timestamp, @entry_hash, @prev_entry_hash, @hash_version
+        @timestamp, @entry_hash, @prev_entry_hash, @hash_version,
+        (SELECT COALESCE(MAX(seq), 0) + 1 FROM audit_events)
       )
     `);
 
-    // Most-recent hashed row, by (timestamp, id) order. Used by insert() to
-    // anchor a new row's prev_entry_hash. Returns NULL when no chained
-    // history exists yet (first post-migration insert, or empty table).
+    // Most-recent hashed row, by monotonic write order (seq). Used by insert()
+    // to anchor a new row's prev_entry_hash to the immediately-preceding
+    // inserted row. Ordering by seq (not timestamp, id) is what keeps the
+    // write-time prev link and the verifier walk in agreement on
+    // same-timestamp pairs (bead yxp). Returns NULL when no chained history
+    // exists yet (first post-migration insert, or empty table).
     this.stmtLastHash = db.prepare(`
       SELECT entry_hash FROM audit_events
       WHERE entry_hash IS NOT NULL
-      ORDER BY timestamp DESC, id DESC
+      ORDER BY seq DESC
       LIMIT 1
     `);
 
-    // Chronological walk used by verifyAuditChain. Order is (timestamp, id)
-    // so ties on timestamp resolve deterministically by primary key.
+    // Chronological walk used by verifyAuditChain. Ordered by the monotonic
+    // write-order key `seq` so it reproduces true insertion order — the order
+    // in which the prev_entry_hash links were built. Ordering by (timestamp,
+    // id) reordered same-timestamp pairs by random UUID and broke the chain
+    // walk (bead yxp).
     this.stmtFindAllChronological = db.prepare(`
-      SELECT * FROM audit_events ORDER BY timestamp ASC, id ASC
+      SELECT * FROM audit_events ORDER BY seq ASC
     `);
 
     this.stmtFindByMemory = db.prepare(`

@@ -269,3 +269,85 @@ describe('verifyAuditChain — re-anchoring after tamper', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. Same-timestamp ordering — the chain rides insertion order (seq), not
+//    (timestamp, id). Regression for bead qmd-team-intent-kb-yxp: a
+//    promotion-that-supersedes writes a `promoted` and a `superseded` event
+//    in the same instant, so events share a timestamp. The chain MUST verify
+//    clean regardless of how the random-UUID `id` sorts within that instant —
+//    ordering by (timestamp, id) reordered same-timestamp rows vs the order
+//    their prev-links were built in and produced spurious PREV_LINK_MISMATCH
+//    breaks (310 of them, 0 tampering, on the live brain).
+// ---------------------------------------------------------------------------
+
+describe('verifyAuditChain — same-timestamp ordering (bead yxp)', () => {
+  it('verifies clean when several same-timestamp events have UUIDs that sort opposite to insertion order', () => {
+    const { db, repo } = setupRepo();
+    try {
+      const SAME_TS = '2026-06-14T04:51:54.023Z';
+      // Insert in this order, but choose ids so that id-sort is the REVERSE
+      // of insertion order. Under the old `ORDER BY timestamp ASC, id ASC`
+      // walk (and the matching `timestamp DESC, id DESC` write-time prev
+      // lookup), a later same-timestamp insert would link back past its
+      // immediate predecessor to a higher-id sibling — forking the chain so
+      // no linear walk could verify it. Under seq ordering the walk follows
+      // true insertion order and the chain is clean.
+      const inserted = [
+        // (timestamp, descending id) — adversarial: first-inserted has the
+        // highest id, so (timestamp, id) order would reverse these three.
+        { id: '00000000-0000-4000-8000-0000000000ff', action: 'superseded', ts: SAME_TS },
+        { id: '00000000-0000-4000-8000-0000000000aa', action: 'promoted', ts: SAME_TS },
+        { id: '00000000-0000-4000-8000-000000000011', action: 'promoted', ts: SAME_TS },
+        // a later-timestamp row whose prev-link, under the old logic, would
+        // have skipped back to the highest-id same-ts sibling.
+        {
+          id: '00000000-0000-4000-8000-000000000022',
+          action: 'promoted',
+          ts: '2026-06-14T04:51:54.027Z',
+        },
+      ];
+      for (const e of inserted) {
+        repo.insert(makeEvent({ id: e.id, action: e.action, timestamp: e.ts }));
+      }
+
+      // The walk must be in insertion (seq) order, NOT id order.
+      const walked = repo.findAllChronological().map((r) => r.id);
+      expect(walked).toEqual(inserted.map((e) => e.id));
+
+      const result = verifyAuditChain(repo);
+      expect(result.totalRows).toBe(4);
+      expect(result.cleanRows).toBe(4);
+      expect(result.unverifiedRows).toBe(0);
+      expect(result.breaks).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps the chain clean across many same-timestamp promote/supersede pairs', () => {
+    const { db, repo } = setupRepo();
+    try {
+      const SAME_TS = '2026-06-14T04:51:54.023Z';
+      // 20 pairs, all sharing one timestamp, ids assigned so they sort in the
+      // OPPOSITE order to insertion (descending id) — the exact shape that
+      // forked the live chain. seq ordering must keep every pair clean.
+      let n = 0;
+      for (let p = 0; p < 20; p++) {
+        for (const action of ['promoted', 'superseded'] as const) {
+          const descId = (10_000 - n).toString(16).padStart(12, '0');
+          repo.insert(
+            makeEvent({ id: `00000000-0000-4000-8000-${descId}`, action, timestamp: SAME_TS }),
+          );
+          n++;
+        }
+      }
+      const result = verifyAuditChain(repo);
+      expect(result.totalRows).toBe(40);
+      expect(result.cleanRows).toBe(40);
+      expect(result.breaks).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+});

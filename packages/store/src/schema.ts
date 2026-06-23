@@ -269,4 +269,34 @@ ALTER TABLE audit_events ADD COLUMN prev_entry_hash TEXT;
 ALTER TABLE audit_events ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1;
     `.trim(),
   },
+  {
+    // Order the audit hash chain by a monotonic write-order key instead of
+    // (timestamp, id) — bead qmd-team-intent-kb-yxp.
+    //
+    // `id` is a random UUID, so when two events share one timestamp (a
+    // promotion that supersedes writes a `promoted` and a `superseded` event
+    // in the same instant) the equal-timestamp tiebreak sorted by UUID,
+    // flipping ~half the pairs relative to true insertion order. The
+    // prev_entry_hash links were always built in insertion order (the
+    // write-time prev lookup returned the sole same-timestamp predecessor
+    // present at write time), so the verifier's (timestamp, id) read
+    // disagreed with the stored links and reported PREV_LINK_MISMATCH on
+    // every flipped pair — even though every entry_hash was intact (no
+    // tampering, only a stale ordering contract).
+    //
+    // Fix: add an explicit monotonic `seq`, backfill existing rows by rowid
+    // (which reflects insertion order for this append-only, delete-free
+    // table), and order both the verifier walk and the write-time prev lookup
+    // by seq. No row data is rewritten and no entry_hash changes — the
+    // existing chain verifies clean immediately. An explicit column (rather
+    // than relying on SQLite's rowid) keeps the ordering contract portable to
+    // Dolt/Postgres, where rowid has no stable equivalent.
+    version: 7,
+    name: 'add_audit_seq_ordering',
+    sql: `
+ALTER TABLE audit_events ADD COLUMN seq INTEGER;
+UPDATE audit_events SET seq = rowid WHERE seq IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_seq ON audit_events(seq);
+    `.trim(),
+  },
 ];
