@@ -107,6 +107,15 @@ function rowToEvent(row: unknown): AuditEvent {
  * Append-only repository for immutable audit events.
  * No update or delete methods are exposed by design.
  */
+/** Pre-serialised inputs to the atomic append transaction. */
+interface AppendParams {
+  event: AuditEvent;
+  actor_json: string;
+  details_json: string;
+  reason: string | null;
+  hash_version: AuditHashVersion;
+}
+
 export class AuditRepository {
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindByMemory: Database.Statement;
@@ -119,13 +128,15 @@ export class AuditRepository {
   private readonly stmtCountByTenantAndAction: Database.Statement;
   private readonly stmtLastHash: Database.Statement;
   private readonly stmtFindAllChronological: Database.Statement;
+  /** Atomic (BEGIN IMMEDIATE) prev-read + INSERT — see the constructor. */
+  private readonly appendTxn: Database.Transaction<(p: AppendParams) => void>;
 
   constructor(db: Database.Database) {
-    // `seq` is assigned MAX(seq)+1 atomically within the INSERT so it is a
-    // monotonic, gap-tolerant write-order key (the chain orders by it, not by
-    // the random-UUID `id`; bead yxp). Single-writer (better-sqlite3 is
-    // synchronous), and the UNIQUE index on seq fails loud rather than
-    // silently corrupting order if two writes ever raced.
+    // `seq` is assigned MAX(seq)+1 atomically within the INSERT — a monotonic,
+    // gap-tolerant write-order key (the chain orders by it, not by the
+    // random-UUID `id`; bead yxp). The prev-hash read and this INSERT run inside
+    // the BEGIN IMMEDIATE `appendTxn` below, so concurrent WAL writers cannot
+    // interleave; the UNIQUE index on seq is a belt-and-suspenders guard.
     this.stmtInsert = db.prepare(`
       INSERT INTO audit_events (
         id, action, memory_id, tenant_id, actor_json, reason, details_json,
@@ -195,6 +206,45 @@ export class AuditRepository {
     this.stmtCountByTenantAndAction = db.prepare(`
       SELECT action, COUNT(*) as cnt FROM audit_events WHERE tenant_id = ? GROUP BY action
     `);
+
+    // Serialize the prev-hash read + the INSERT in one BEGIN IMMEDIATE
+    // transaction. Under WAL with two connections (e.g. the brain-api daemon and
+    // a concurrent curator-cli run), an un-serialised read-then-insert lets both
+    // writers read the SAME prev_entry_hash and persist a fork — two rows
+    // pointing at one predecessor — which UNIQUE(seq) does NOT catch (each row
+    // still gets a distinct seq). The immediate write lock makes appends atomic
+    // so the chain stays linear (bead yxp; flagged by review).
+    this.appendTxn = db.transaction((p: AppendParams): void => {
+      const prevRow = this.stmtLastHash.get() as { entry_hash: string | null } | undefined;
+      const prev_entry_hash = prevRow?.entry_hash ?? null;
+      const entry_hash = computeEntryHash(
+        {
+          id: p.event.id,
+          action: p.event.action,
+          memory_id: p.event.memoryId,
+          tenant_id: p.event.tenantId,
+          actor_json: p.actor_json,
+          reason: p.reason,
+          details_json: p.details_json,
+          timestamp: p.event.timestamp,
+          prev_entry_hash,
+        },
+        p.hash_version,
+      );
+      this.stmtInsert.run({
+        id: p.event.id,
+        action: p.event.action,
+        memory_id: p.event.memoryId,
+        tenant_id: p.event.tenantId,
+        actor_json: p.actor_json,
+        reason: p.reason,
+        details_json: p.details_json,
+        timestamp: p.event.timestamp,
+        entry_hash,
+        prev_entry_hash,
+        hash_version: p.hash_version,
+      });
+    });
   }
 
   /**
@@ -211,47 +261,22 @@ export class AuditRepository {
    * stored alongside the row so the verifier knows which serialiser to use.
    */
   insert(event: AuditEvent): void {
-    const actor_json = JSON.stringify(event.actor);
-    const details_json = JSON.stringify(event.details);
-    const reason = event.reason ?? null;
-    const hash_version: AuditHashVersion = CURRENT_AUDIT_HASH_VERSION;
-
-    const prevRow = this.stmtLastHash.get() as { entry_hash: string | null } | undefined;
-    const prev_entry_hash = prevRow?.entry_hash ?? null;
-
-    const entry_hash = computeEntryHash(
-      {
-        id: event.id,
-        action: event.action,
-        memory_id: event.memoryId,
-        tenant_id: event.tenantId,
-        actor_json,
-        reason,
-        details_json,
-        timestamp: event.timestamp,
-        prev_entry_hash,
-      },
-      hash_version,
-    );
-
-    this.stmtInsert.run({
-      id: event.id,
-      action: event.action,
-      memory_id: event.memoryId,
-      tenant_id: event.tenantId,
-      actor_json,
-      reason,
-      details_json,
-      timestamp: event.timestamp,
-      entry_hash,
-      prev_entry_hash,
-      hash_version,
+    // The prev-hash read, hash computation, and INSERT all happen inside the
+    // immediate transaction so concurrent writers cannot fork the chain.
+    this.appendTxn.immediate({
+      event,
+      actor_json: JSON.stringify(event.actor),
+      details_json: JSON.stringify(event.details),
+      reason: event.reason ?? null,
+      hash_version: CURRENT_AUDIT_HASH_VERSION,
     });
   }
 
   /**
-   * Return every audit row in chronological (timestamp, id) order with
-   * the raw hash-chain columns intact. Used by the chain verifier.
+   * Return every audit row in monotonic write-order (`seq`, i.e. insertion
+   * order) with the raw hash-chain columns intact. Used by the chain verifier;
+   * `seq` ordering is what makes the walk match the order the prev-links were
+   * built in, so same-timestamp pairs verify correctly (bead yxp).
    */
   findAllChronological(): AuditChainRow[] {
     return this.stmtFindAllChronological.all() as AuditChainRow[];

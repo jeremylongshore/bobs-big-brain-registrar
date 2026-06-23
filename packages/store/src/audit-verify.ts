@@ -104,9 +104,11 @@ export function verifyAuditChain(repo: AuditRepository): AuditVerifyResult {
   // expected anchor.
   let expectedPrev: string | null = null;
 
-  // Stored entry_hashes of every chained row already walked. Used to tell a
-  // CHAIN_FORK (a prev link pointing back to a real, intact earlier row) apart
-  // from a forged PREV_LINK_MISMATCH (a prev pointing at a value no row holds).
+  // Stored entry_hashes of every already-walked row WHOSE OWN HASH MATCHED.
+  // Used to tell a CHAIN_FORK (a prev link pointing back to a real, intact
+  // earlier row) apart from a forged PREV_LINK_MISMATCH (a prev pointing at a
+  // value no intact row holds). Only intact rows are valid fork anchors, so a
+  // tampered row's stored hash can never excuse a later row as non-tampering.
   const seenEntryHashes = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
@@ -181,7 +183,9 @@ export function verifyAuditChain(repo: AuditRepository): AuditVerifyResult {
     // aren't all reported as broken due to one fork/tamper. Same "honest
     // accounting" pattern as ICO's audit-verify.ts.
     expectedPrev = row.entry_hash;
-    if (row.entry_hash !== null) seenEntryHashes.add(row.entry_hash);
+    // Only a row whose OWN hash matched may anchor a later CHAIN_FORK; a broken
+    // row's stored hash must not let a successor be excused as non-tampering.
+    if (entryMatches && row.entry_hash !== null) seenEntryHashes.add(row.entry_hash);
   }
 
   return {

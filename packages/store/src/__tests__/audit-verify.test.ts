@@ -483,4 +483,76 @@ describe('verifyAuditChain — fork classification (bead yxp)', () => {
       db.close();
     }
   });
+
+  it('does NOT let a broken row anchor a later CHAIN_FORK — only intact rows anchor forks', () => {
+    const { db, repo } = setupRepo();
+    try {
+      // Four clean rows r0..r3.
+      const ids = [
+        '00000000-0000-4000-8000-0000000000c1',
+        '00000000-0000-4000-8000-0000000000c2',
+        '00000000-0000-4000-8000-0000000000c3',
+        '00000000-0000-4000-8000-0000000000c4',
+      ];
+      for (let i = 0; i < ids.length; i++) {
+        repo.insert(
+          makeEvent({ id: ids[i]!, reason: `r${i}`, timestamp: `2026-05-29T08:0${i}:00.000Z` }),
+        );
+      }
+      // r1's ORIGINAL stored hash, captured before we break it.
+      const h1 = (
+        db.prepare('SELECT entry_hash FROM audit_events WHERE id = ?').get(ids[1]) as {
+          entry_hash: string;
+        }
+      ).entry_hash;
+      // Break r1: tamper its content WITHOUT touching its stored hash -> the
+      // recomputed hash no longer matches => ENTRY_HASH_MISMATCH (a broken row).
+      db.prepare(`UPDATE audit_events SET reason = 'tampered' WHERE id = ?`).run(ids[1]);
+      // Re-point r3 back to r1's stored hash h1 (skipping r2) and recompute r3's
+      // hash to be self-consistent for that prev. If a BROKEN row's hash were a
+      // valid fork anchor, r3 would be excused as a CHAIN_FORK and the tampering
+      // would be filtered out of the tamper counts.
+      const r3 = db.prepare('SELECT * FROM audit_events WHERE id = ?').get(ids[3]) as {
+        id: string;
+        action: string;
+        memory_id: string;
+        tenant_id: string;
+        actor_json: string;
+        reason: string | null;
+        details_json: string;
+        timestamp: string;
+      };
+      const r3hash = computeEntryHash(
+        {
+          id: r3.id,
+          action: r3.action,
+          memory_id: r3.memory_id,
+          tenant_id: r3.tenant_id,
+          actor_json: r3.actor_json,
+          reason: r3.reason,
+          details_json: r3.details_json,
+          timestamp: r3.timestamp,
+          prev_entry_hash: h1,
+        },
+        CURRENT_AUDIT_HASH_VERSION,
+      );
+      db.prepare('UPDATE audit_events SET prev_entry_hash = ?, entry_hash = ? WHERE id = ?').run(
+        h1,
+        r3hash,
+        ids[3],
+      );
+
+      const result = verifyAuditChain(repo);
+      // r1 is the tamper; r3 links back to r1's (broken) hash.
+      expect(result.breaks.find((b) => b.id === ids[1])?.reason).toBe('ENTRY_HASH_MISMATCH');
+      // The fix: r3 must NOT be excused as a fork (its anchor is a broken row).
+      const r3break = result.breaks.find((b) => b.id === ids[3]);
+      expect(r3break).toBeDefined();
+      expect(r3break!.reason).not.toBe('CHAIN_FORK');
+      // Tampering is therefore visible in the tamper-only view.
+      expect(result.breaks.some((b) => b.reason !== 'CHAIN_FORK')).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
 });
