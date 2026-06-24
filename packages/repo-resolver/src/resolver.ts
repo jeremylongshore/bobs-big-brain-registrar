@@ -62,6 +62,17 @@ export async function resolveRepoContext(
     if (stderr.includes('not a git repository')) {
       return err<ResolverError>({ kind: 'NotAGitRepo', cwd: canonicalCwd });
     }
+    // git's CVE-2022-24765 mitigation: "fatal: detected dubious ownership in
+    // repository at <path>" fires when a repo dir up the tree is owned by a
+    // different user than the running process (e.g. a stray repo at a
+    // root-owned /tmp, hit by any mktemp dir beneath it). git refuses to
+    // operate, so the resolver cannot establish a trusted repo context here —
+    // classify as NotAGitRepo (no usable git repo could be resolved) rather
+    // than the misleading GitUnavailable, which implies git itself is broken.
+    // Bead qmd-team-intent-kb-4gl.
+    if (stderr.includes('dubious ownership')) {
+      return err<ResolverError>({ kind: 'NotAGitRepo', cwd: canonicalCwd });
+    }
     // `--show-toplevel` fails inside a bare repo because there's no working tree.
     if (stderr.includes('must be run in a work tree') || stderr.includes('bare repository')) {
       const gitDir = await runGit(canonicalCwd, ['rev-parse', '--absolute-git-dir']);
