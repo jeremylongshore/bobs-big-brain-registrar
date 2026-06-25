@@ -115,8 +115,9 @@ query is the final confirmation.)
   The plaintext bearer secrets sit in `~/.teamkb/tokens.json` and any backup of `~/.teamkb`.
   Re-seed with `hashToken()` output (§4) or SOPS-encrypt the file.
 - **No token expiry/rotation** (`expiresAt: null`); the registry supports it — set one.
-- **`/healthz` requires auth**, so a tailnet uptime probe can't hit it anonymously — add an
-  unauthenticated health route.
+- **Liveness probe:** `/api/health` is **already exempt from auth** (`apps/api/src/middleware/api-key-auth.ts`
+  — `/api/health`, `/openapi.json`, `/docs*` are always public), so a tailnet uptime probe hits it
+  anonymously; every other route still requires the bearer token. (Not a gap — point probes at `/api/health`.)
 - **Soak host:** runs on the dev box (which also runs Claude sessions + has OOM history); migrate to
   a dedicated tailnet VM once load-bearing (D27).
 
