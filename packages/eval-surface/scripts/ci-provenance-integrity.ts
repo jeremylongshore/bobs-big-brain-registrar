@@ -39,9 +39,13 @@ import { evaluateProvenanceIntegrity } from '../src/index.js';
 
 const TENANT = 'ci-provenance';
 
+/**
+ * Signal an assertion failure by THROWING (not `process.exit`), so the single
+ * top-level `finally` runs its cleanup (close DB + remove temp dir) before the
+ * process exits non-zero. The top-level catch sets exit code 1.
+ */
 function fail(msg: string): never {
-  process.stderr.write(`ci-provenance-integrity FAILED: ${msg}\n`);
-  process.exit(1);
+  throw new Error(msg);
 }
 
 function makeMemory(content: string): CuratedMemory {
@@ -86,8 +90,13 @@ const dbPath = join(dir, 'teamkb.db');
 // A manifest path that does NOT exist → the evaluator's "no amnesty" branch.
 const noManifest = join(dir, 'no-such-exceptions.manifest.json');
 
+// `db` is declared OUTSIDE the try so the single top-level `finally` can safely
+// `db?.close()` it on every path (success, assertion failure, unexpected throw)
+// before the temp dir is removed.
+let db: ReturnType<typeof createDatabase> | undefined;
+
 try {
-  const db = createDatabase({ path: dbPath });
+  db = createDatabase({ path: dbPath });
   const memRepo = new MemoryRepository(db);
   const auditRepo = new AuditRepository(db);
 
@@ -158,11 +167,22 @@ try {
   if (Number(tampered.details.tamper_signatures) <= 0)
     fail('expected tamper_signatures > 0 on a tampered brain');
 
-  db.close();
   process.stdout.write(
     'ci-provenance-integrity OK — forks pass (disclosed), tamper fails closed\n',
   );
-  process.exit(0);
+  // Success falls through: no `process.exit(0)` here (it would bypass the
+  // finally and leak the temp dir). The process exits 0 naturally once the
+  // event loop drains.
+} catch (err) {
+  // Any assertion failure (thrown by `fail`) or unexpected error lands here.
+  // Print a diagnostic and set a non-zero exit code — but let `finally` run its
+  // cleanup FIRST (setting exitCode does not exit immediately, unlike exit()).
+  process.stderr.write(`ci-provenance-integrity FAILED: ${(err as Error).message}\n`);
+  process.exitCode = 1;
 } finally {
+  // Runs on every path (success, assertion failure, unexpected throw): close the
+  // DB handle if it was opened, then remove the temp dir. `db?.close()` is safe
+  // even if createDatabase threw before assignment.
+  db?.close();
   rmSync(dir, { recursive: true, force: true });
 }
