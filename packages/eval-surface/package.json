@@ -16,7 +16,8 @@
     "build": "tsc",
     "test": "vitest run",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "provenance:ci": "tsx scripts/ci-provenance-integrity.ts"
   },
   "dependencies": {
     "@qmd-team-intent-kb/common": "workspace:*",

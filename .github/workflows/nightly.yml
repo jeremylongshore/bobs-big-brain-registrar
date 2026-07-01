@@ -1,8 +1,8 @@
 name: Nightly
 
 on:
-  # schedule:
-  #   - cron: '0 4 * * *' # Daily 4am UTC
+  schedule:
+    - cron: '0 4 * * *' # Daily 4am UTC
   workflow_dispatch:
 
 permissions:
@@ -29,6 +29,12 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Provenance-integrity eval (real on-disk brain, forks pass / tamper fails)
+        # 010-AT-RISK R5 / bead compile-then-govern-e06.2: nightly real-DB run of
+        # evaluateProvenanceIntegrity — a forked-but-untampered brain must PASS
+        # with forks disclosed; a tampered brain must FAIL closed.
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
 
       - name: Dependency audit
         run: pnpm audit --audit-level=moderate
