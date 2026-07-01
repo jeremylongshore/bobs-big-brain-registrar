@@ -64,8 +64,18 @@ jobs:
       - name: Test (with coverage)
         # Switched from pnpm test:ci to pnpm test:coverage so coverage/lcov.info
         # is produced for the Codecov upload step below. test:coverage runs the
-        # same test set; only the coverage instrumentation is added.
+        # same test set (incl. the eval-surface provenance-integrity unit tests);
+        # only the coverage instrumentation is added.
         run: pnpm test:coverage
+
+      - name: Provenance-integrity eval (real on-disk brain, forks pass / tamper fails)
+        # A REAL end-to-end run of evaluateProvenanceIntegrity against a seeded
+        # throwaway brain carrying a benign CHAIN_FORK. Named gate for
+        # 010-AT-RISK R5 / bead compile-then-govern-e06.2: proves the eval passes
+        # on a forked-but-untampered chain (the live brain's shape: 155 forks,
+        # 0 tamper) while still failing closed on genuine tampering. Complements
+        # the in-memory unit tests above with a real-DB regression guard.
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
