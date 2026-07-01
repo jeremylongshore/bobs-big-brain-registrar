@@ -27,6 +27,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:mutation": "stryker run",
     "report:cited-queries": "node apps/api/dist/reports/weekly-cited-queries-cli.js",
+    "reindex": "node packages/qmd-adapter/dist/cli.js reindex",
+    "search-canary": "node packages/qmd-adapter/dist/cli.js canary",
     "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
     "crap": "tsx scripts/crap-score.ts",
     "harness-pin": "bash scripts/harness-pin.sh --verify",

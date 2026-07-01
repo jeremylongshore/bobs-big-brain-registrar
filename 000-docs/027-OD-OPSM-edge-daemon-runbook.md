@@ -376,6 +376,47 @@ Check the logs for a configuration or database error. Common causes:
   PATH is not inherited from the user shell — add it explicitly in the
   environment file if needed.
 
+### Search returns 0 hits ("SEARCH DEGRADED") — the silent-degradation trap
+
+`brain_search` / `teamkb_search` **degrades to an empty result rather than
+throwing** when the qmd index is missing, empty, stale, or scoped to the wrong
+tenant (a missing index reads as "nothing retrievable", not an error). The
+failure is therefore **invisible at the tool surface** — every query just
+quietly returns nothing. The 2026-06-29 incident (bead
+`compile-then-govern-e06.13`, umbrella #27, risk register R-search) was exactly
+this: the corpus was indexed under tenant `intent-solutions`, but a runtime path
+resolved `TEAMKB_TENANT_ID=local` (or left it unset), pointing qmd at an empty
+`local` index → 0 hits for every candidate **and** every known-positive control.
+
+Diagnose in order:
+
+1. **Which tenant is the query using?** `brain_search` resolves the index from
+   `TEAMKB_TENANT_ID`. The live brain's tenant is **`intent-solutions`** (the
+   `apps/api` default and the nightly compile MCP config). A blank/`local`/other
+   value points at a different, likely-empty index.
+
+   ```sh
+   # Per-tenant qmd state lives under ~/.teamkb/qmd-index/<tenant>/
+   ls -la ~/.teamkb/qmd-index/          # one dir per tenant
+   ls -la ~/.teamkb/qmd-index/local/config/qmd/   # missing = no collections registered
+   ```
+
+2. **Is the tenant's index actually populated?** An empty `index.sqlite`
+   (~4 KB, 0 files) is the smoking gun; a healthy one is MBs with N files.
+
+   ```sh
+   XDG_CONFIG_HOME=~/.teamkb/qmd-index/<tenant>/config \
+   XDG_CACHE_HOME=~/.teamkb/qmd-index/<tenant>/cache \
+     qmd status        # "Total: 0 files indexed" + "No collections" == degraded
+   ```
+
+3. **Run the canary** — the deterministic verdict (see Recovery below). Exit 1
+   with `SEARCH DEGRADED` confirms it; exit 0 with `SEARCH HEALTHY` clears it.
+
+The qmd-index is **Tier-C DERIVED** state — rebuildable purely from
+`kb-export/`, never source-of-truth. The fix is always a **reindex** (below); it
+never touches `teamkb.db` or `brain/raw/`.
+
 ### High CPU or tight restart loop (systemd)
 
 The `RestartSec=5s` guard in the unit file prevents spinning. If the daemon is
@@ -423,6 +464,50 @@ node apps/edge-daemon/dist/main.js stop
 # If stop exits non-zero, remove manually:
 rm "${DAEMON_PID_FILE:-$HOME/.qmd-team-intent-kb/daemon.pid}"
 ```
+
+### Rebuild the search index (reindex) + search-health canary
+
+When search returns 0 hits (previous section), rebuild the DERIVED qmd index
+from `kb-export/`. The `@qmd-team-intent-kb/qmd-adapter` package ships a small,
+idempotent CLI (`qmd-index`, also `pnpm reindex` / `pnpm search-canary` at the
+repo root) that wraps the exact `ensureCollections()` → `update()` sequence the
+daemon runs at the end of every cycle. It is safe to run against a live
+`~/.teamkb`: it reads `kb-export/` and writes only the `qmd-index/<tenant>/`
+cache — **it never touches `teamkb.db`, `brain/raw/`, or the audit chain.**
+
+```sh
+# Rebuild the LIVE brain's index (tenant defaults to intent-solutions).
+# Set TEAMKB_TENANT_ID to rebuild a different tenant (e.g. local).
+node packages/qmd-adapter/dist/cli.js reindex
+# → reindex OK (tenant=intent-solutions): collectionsCreated=[...], indexUpdated=true
+
+# Verify: the canary runs known-positive control queries and EXITS 1 if any
+# returns 0 hits — turning the silent degradation into a loud, scriptable signal.
+node packages/qmd-adapter/dist/cli.js canary
+# → SEARCH HEALTHY (tenant=intent-solutions)  [exit 0]
+#   or SEARCH DEGRADED ...                     [exit 1]
+
+# One-shot self-heal: if degraded, reindex once and re-check, then report.
+node packages/qmd-adapter/dist/cli.js canary --heal
+```
+
+Idempotent: a second `reindex` reports `collectionsCreated=[]` (nothing new to
+register) and is a no-op if the corpus hasn't changed.
+
+**Where the canary is wired so this never silently regresses again:**
+
+- **CI (nightly workflow):** a "Search-health canary" step builds an ephemeral
+  fixture brain, reindexes it, and runs the canary — a retrieval regression
+  fails the nightly loudly. See `.github/workflows/nightly.yml`. The
+  `describe.skipIf(!HAS_QMD)` integration suite
+  (`packages/qmd-adapter/src/__tests__/search-canary-integration.test.ts`) also
+  runs it against real qmd on every CI run.
+- **Live nightly compile (dev box):** the local `teamkb-compile` cron is the
+  only host with the real `~/.teamkb` + a warm qmd. Run the canary as its
+  pre-flight gate — if `canary` exits 1, `reindex` (or `canary --heal`) before
+  compiling, so the compile never runs blind against a dead index (this is the
+  operational root cause of the original incident: the compile's MCP config now
+  pins `TEAMKB_TENANT_ID=intent-solutions`).
 
 ### Recover from corrupted SQLite database
 
