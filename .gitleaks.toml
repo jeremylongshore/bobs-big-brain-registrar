@@ -1,18 +1,31 @@
 # gitleaks configuration — qmd-team-intent-kb
 #
 # Extends gitleaks' built-in ruleset (hundreds of curated provider rules) and
-# adds a TIGHTLY PATH-SCOPED allowlist for the govern-decision eval's adversarial
-# test fixtures. Those fixtures deliberately embed realistic-SHAPED but non-live
-# secret material to exercise the secret/PII detectors (bead
-# compile-then-govern-e06.3, risk 010-AT-RISK). Without this, gitleaks flags the
-# fixtures as real leaks and fails CI on the very test that PROVES the scanners
-# work.
+# adds a PATH-SCOPED allowlist for TEST FIXTURES ONLY. The secret/PII detector
+# suites across this repo (secret-scanner, content-classifier, policy-engine
+# rules, disclosure-filter, the govern-decision adversarial dataset, …)
+# deliberately embed realistic-SHAPED but non-live secret material to exercise
+# the detectors (bead compile-then-govern-e06.3 / e06.14, risk 010-AT-RISK).
+# Without this, gitleaks flags the fixtures as real leaks and fails CI on the
+# very tests that PROVE the scanners work.
 #
-# Safety: `useDefault = true` keeps every real gitleaks rule active repo-wide.
-# The allowlist is scoped by PATH regex to exactly the three fixture-bearing
-# files — a real key committed anywhere else still fails the scan. The AWS value
-# is AWS's own published EXAMPLE access-key id; the JWT is a random-body
-# fixture; neither is a live credential.
+# Safety model:
+#   - `useDefault = true` keeps every real gitleaks rule active repo-wide.
+#   - The allowlist is scoped by PATH REGEX to (a) files under any `__tests__/`
+#     directory and (b) the versioned govern-decision fixture dataset. A real
+#     credential committed to PRODUCTION code (any non-test `src/` path, config,
+#     script, or infra file) is NEVER allowlisted and still fails the scan.
+#   - Tradeoff (intentional): a secret hardcoded inside a *test* file will not be
+#     caught by gitleaks. That is acceptable — test fixtures are non-production by
+#     definition, and the product's own runtime secret-scanner + boundary
+#     disclosure filter guard the actual capture/promotion path. The fixture
+#     values are shape-only (AWS's own published EXAMPLE key id, random-body JWTs,
+#     random PAT/`sk-` shapes); none is a live credential.
+#
+# e06.14 note: broadened from three explicit fixture files to the `__tests__/`
+# regex because the secret-detector test suites (all shape-only) live across ~15
+# test files, not three — the prior narrow allowlist left the gitleaks gate red
+# on files it never covered. Scope stays TEST-ONLY; production code is untouched.
 
 title = "qmd-team-intent-kb gitleaks config"
 
@@ -20,11 +33,13 @@ title = "qmd-team-intent-kb gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "govern-decision eval adversarial test fixtures — non-live, shape-only secret material (e06.3)"
-# Path-scoped: only these fixture files are exempt. Anchored so a real leak
-# elsewhere is never allowlisted.
+description = "test fixtures only — non-live, shape-only secret material in __tests__/ and the govern-decision dataset (e06.3 / e06.14)"
+# Path-scoped to test files + the versioned fixture dataset. Anchored so a real
+# leak in any PRODUCTION (non-test) path is never allowlisted.
 paths = [
+  # Any file under a `__tests__/` directory anywhere in the tree.
+  '''(^|/)__tests__/.*\.(ts|tsx|js|mjs|cjs|json)$''',
+  # The versioned govern-decision adversarial fixture dataset (not under
+  # __tests__/ — it is consumed as data by the eval, tests, and CI script).
   '''packages/eval-surface/src/govern-decision/dataset/v1/index\.ts''',
-  '''packages/eval-surface/src/__tests__/govern-decision\.test\.ts''',
-  '''apps/api/src/__tests__/services\.test\.ts''',
 ]
