@@ -1,8 +1,9 @@
 # govern-decision adversarial labeled set — v1
 
-**Version:** `1.1.0` · **Cases:** 32 (22 positive · 10 negative) ·
+**Version:** `1.2.0` · **Cases:** 33 (23 positive · 10 negative) ·
 **Bead:** `compile-then-govern-e06.3` (set) / `compile-then-govern-e06.14`
-(v1.1.0 relabel) · **Risk:** `010-AT-RISK` R5 / R10 ·
+(v1.1.0 relabel) / `compile-then-govern-e06.15` (v1.2.0 precision fix) ·
+**Risk:** `010-AT-RISK` R5 / R10 ·
 **Umbrella:** `intent-solutions-io/governed-second-brain#27`
 
 This is the versioned, labeled adversarial set that measures the **efficacy** of
@@ -55,31 +56,35 @@ label drifts (an undocumented false-negative). So the dataset and the code
 cannot silently disagree: a relabel that hides a real miss is caught by the CI
 gate, and a code regression that breaks a real catch is caught the same way.
 
-## Measured results (v1.1.0, e06.14 — after the split/base64 fix)
+## Measured results (v1.2.0, e06.15 — after the UUID precision + PII-vocab fix)
 
-Reporting score = mean per-check F1 = **0.8188** (was 0.7333 at v1.0.0). Gate =
+Reporting score = mean per-check F1 = **0.8526** (was 0.8188 at v1.1.0). Gate =
 **zero undocumented false-negatives** → PASS.
 
-| check                 | precision  | recall (v1.0.0 → v1.1.0) | F1     | TP  | FP  | FN  | TN  |
-| --------------------- | ---------- | ------------------------ | ------ | --- | --- | --- | --- |
-| `policy-pipeline`     | 0.9333     | 0.5789 → **0.7368**      | 0.8235 | 14  | 1   | 5   | 9   |
-| `secret-scanner`      | 0.9231     | 0.5625 → **0.7500**      | 0.8276 | 12  | 1   | 4   | 9   |
-| `content-classifier`  | 0.9444     | 0.6364 → **0.7727**      | 0.8500 | 17  | 1   | 5   | 9   |
-| `boundary-disclosure` | **1.0000** | 0.6316 (unchanged)       | 0.7742 | 12  | 0   | 7   | 10  |
+| check                 | precision (v1.1.0 → v1.2.0) | recall (v1.1.0 → v1.2.0) | F1     | TP  | FP  | FN  | TN  |
+| --------------------- | --------------------------- | ------------------------ | ------ | --- | --- | --- | --- |
+| `policy-pipeline`     | 0.9333 → **1.0000**         | 0.7368 → **0.8000**      | 0.8889 | 16  | 0   | 4   | 10  |
+| `secret-scanner`      | 0.9231 → **1.0000**         | 0.7500 → **0.7647**      | 0.8667 | 13  | 0   | 4   | 10  |
+| `content-classifier`  | 0.9444 → **1.0000**         | 0.7727 → **0.8261**      | 0.9048 | 19  | 0   | 4   | 10  |
+| `boundary-disclosure` | **1.0000** (held)           | 0.6316 → 0.6000          | 0.7500 | 12  | 0   | 8   | 10  |
 
-The **secret-scanner recall rose 0.56 → 0.75** because the two evasions that
-defeated the line-by-line scan — a key split across a newline, and a
-base64/hex-wrapped token — are now closed by a newline-collapsed pre-pass and a
-bounded decode-and-rescan in `scanForSecrets` (see gaps 1 & 2 below, now
-**CLOSED**). The cascade lifts the policy-pipeline and content-classifier too
-(both consume `scanForSecrets` / `classifyContent`). Precision held (no new
-false positives — a benign base64 data-URI image is NOT flagged, guarded by a
-printable-decode check). The remaining ~0.63–0.77 recall is the point of the
-eval, not a bug: the still-missed positives are the metadata/tenant-spoof and
-boundary-vocabulary gaps documented below. The scoping rule is that a check only
-counts toward a case's recall when the case names it in `expectCaughtBy` or
-`knownFalseNegativeOf` — so e.g. the secret-scanner is not penalised for
-"missing" an SSN (SSNs are PII, not secrets).
+**Precision rose to 1.0 on all three in-content checks** because the
+`heroku-api-key` rule — a bare UUID regex that flagged any UUID in prose as a
+credential (`neg-uuid-in-prose-01`, the single false positive at v1.1.0) — is now
+**context-gated** (gap 5 below, now **CLOSED**): a UUID counts as a Heroku key
+only when key-context (`heroku` / `api key` / `token` / an assignment) is present.
+**Recall held / rose**: a new `sec-inline-heroku-01` positive (a real Heroku key
+in `HEROKU_API_KEY=` context) proves the gate did not drop real-key detection,
+and the DOB-only leak (`pii-inline-dob-01`) is now caught by policy-pipeline +
+content-classifier after the PII-vocabulary convergence (gap 3, DOB line, now
+**CLOSED**). The `boundary-disclosure` raw recall dips only because two new
+positives (`sec-inline-heroku-01`) sit on its pre-existing "no Heroku/UUID/
+generic-assign rule" documented gap — not a regression (its precision stays 1.0).
+The remaining recall is the point of the eval, not a bug: the still-missed
+positives are the metadata/tenant-spoof and boundary-vocabulary gaps documented
+below. The scoping rule is that a check only counts toward a case's recall when
+the case names it in `expectCaughtBy` or `knownFalseNegativeOf` — so e.g. the
+secret-scanner is not penalised for "missing" an SSN (SSNs are PII, not secrets).
 
 ## Documented gaps this set proves (real findings — follow-up bead candidates)
 
@@ -109,10 +114,14 @@ was fixed by weakening a rule.**
    - Boundary filter misses: DB connection strings (`sec-inline-connstr-01`),
      generic `KEY=value` env assignments (`sec-inline-envassign-01`), and
      hex-encoded keys (`sec-hex-aws-01`) — all caught by the line scanner.
-   - The claude-runtime classifier misses **DOB** (`pii-inline-dob-01`): its PII
-     set is EMAIL / PHONE / SSN only, while the boundary filter's PII pattern
-     includes `date of birth` / `DOB:`. So a DOB-only leak passes the policy
-     pipeline but is caught at the repository boundary.
+   - The claude-runtime classifier missed **DOB** (`pii-inline-dob-01`) — its PII
+     set was EMAIL / PHONE / SSN only, while the boundary filter's PII pattern
+     includes `date of birth` / `DOB:`. **CLOSED (e06.15):** the classifier's PII
+     vocabulary is converged UP to the boundary filter's (added `date-of-birth`,
+     `ssn-keyword`, `background-check`), so a DOB-only leak is now caught by
+     policy-pipeline + content-classifier too, not only at the repository
+     boundary. (The DB-connstr / generic-assign / hex-key line-scanner-only cases
+     above are still boundary-filter misses — a separate convergence follow-up.)
    - The boundary filter misses **email** (`pii-inline-email-01`) by design
      (email is often legitimate); the classifier flags it.
      Fix candidate: converge the two vocabularies (or document the split as
@@ -127,12 +136,17 @@ was fixed by weakening a rule.**
    **R10 fix** in this PR extends the API intake early-check to that surface so
    it is caught at the boundary too (not just the deeper repository backstop).
 
-5. **PRECISION finding — the `heroku-api-key` rule is a bare UUID regex.** A
-   plain UUID in prose (`neg-uuid-in-prose-01`) is flagged as a credential by
-   `scanForSecrets` / `classifyContent`, so those checks lose precision
-   (0.90 / 0.93) and the policy pipeline over-rejects a benign note. The
-   boundary filter (no UUID rule) stays at precision 1.0. Fix candidate: gate
-   the UUID rule behind a key-context keyword, or drop it.
+5. **PRECISION finding — the `heroku-api-key` rule was a bare UUID regex —
+   CLOSED (e06.15).** A plain UUID in prose (`neg-uuid-in-prose-01`) was flagged
+   as a credential by `scanForSecrets` / `classifyContent`, so those checks lost
+   precision (0.92 / 0.94) and the policy pipeline over-rejected a benign note.
+   **Fixed:** the UUID rule is now gated behind key-context — a UUID counts as a
+   Heroku key only when a `heroku` / `api key` / `token` keyword or an
+   assignment (`HEROKU_API_KEY=`) is present in the same scan window (the new
+   `SecretPattern.requiresContext` field, enforced by `scanForSecrets`). Precision
+   returns to 1.0 on all three in-content checks; the recall-hold is proven by the
+   new `sec-inline-heroku-01` positive (a real key in key-context is still caught).
+   The gate weakens no other rule — every context-free pattern fires unchanged.
 
 ## Bumping the set
 

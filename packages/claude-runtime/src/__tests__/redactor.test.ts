@@ -33,4 +33,33 @@ describe('redactSecrets', () => {
     expect(result).toContain('[REDACTED:aws-key]');
     expect(result).toContain('[REDACTED:connection-string]');
   });
+
+  // Context gate consistency with scanForSecrets (bead compile-then-govern-e06.15).
+  it('does NOT redact a bare UUID in prose (heroku context gate)', () => {
+    const content = 'The request id was 3f2504e0-4f89-41d3-9a0c-0305e82c3301 in the trace.';
+    // No key-context → the heroku rule is suppressed, so the UUID is left intact
+    // (matching the scanner, which no longer flags it).
+    expect(redactSecrets(content)).toBe(content);
+  });
+
+  it('STILL redacts a real Heroku key in key-context (recall held)', () => {
+    // The key MUST be gone (recall held). Note: in a `HEROKU_API_KEY=` string the
+    // broader `env-secret` (`API_KEY=…`) rule runs first and redacts the whole
+    // assignment, so the value is removed under that id — the context-gated
+    // heroku rule is a backstop, not the only path. Either way, no leak.
+    const content = 'HEROKU_API_KEY=3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+    const result = redactSecrets(content);
+    expect(result).not.toContain('3f2504e0-4f89-41d3-9a0c-0305e82c3301');
+    expect(result).toContain('[REDACTED:');
+  });
+
+  it('redacts the Heroku key via the context-gated rule when no other rule fires', () => {
+    // Reference the key with heroku/api-key WORDS (not an `API_KEY=` assignment),
+    // so the env-secret rule does not pre-empt it — proving the context-gated
+    // heroku rule itself fires and redacts when its context is present.
+    const content = 'Heroku api key value: 3f2504e0-4f89-41d3-9a0c-0305e82c3301 rotate soon';
+    const result = redactSecrets(content);
+    expect(result).toContain('[REDACTED:heroku-api-key]');
+    expect(result).not.toContain('3f2504e0-4f89-41d3-9a0c-0305e82c3301');
+  });
 });

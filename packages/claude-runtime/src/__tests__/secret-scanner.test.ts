@@ -265,3 +265,53 @@ describe('scanForSecrets — global/sticky custom pattern determinism (evasion h
     expect(first).toEqual(second);
   });
 });
+
+/**
+ * Heroku-key UUID context gate (bead compile-then-govern-e06.15 · umbrella #27).
+ *
+ * The `heroku-api-key` rule is a bare-UUID regex, so before this fix ANY UUID in
+ * prose (a request/trace/bead id) was flagged as a live credential —
+ * over-blocking a benign memory (the e06.3 eval's `neg-uuid-in-prose-01` false
+ * positive). The fix gates the rule behind key-context. These tests pin BOTH
+ * directions: precision UP (a bare UUID in prose is NOT flagged) and recall HELD
+ * (a real Heroku key in a key-context IS still flagged). The gate NEVER weakens
+ * a context-free rule — only the ambiguous UUID pattern is gated.
+ */
+describe('scanForSecrets — heroku UUID context gate (precision up, recall held)', () => {
+  const UUID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+
+  it('does NOT flag a bare UUID in ordinary prose (precision guard)', () => {
+    const content = `The request id was ${UUID} in the trace.`;
+    const matches = scanForSecrets(content);
+    expect(matches.some((m) => m.patternId === 'heroku-api-key')).toBe(false);
+    // And nothing ELSE should fire on this benign prose either.
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does NOT flag a UUID used as a bead id in prose', () => {
+    const content = `Tracked in bead ${UUID} for the sprint retro.`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(false);
+  });
+
+  it('STILL flags a real Heroku key in a HEROKU_API_KEY= assignment (recall held)', () => {
+    const content = `HEROKU_API_KEY=${UUID}`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(true);
+  });
+
+  it('STILL flags a Heroku key referenced with heroku / api key words (recall held)', () => {
+    const content = `Rotate the Heroku API key ${UUID} after the incident.`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(true);
+  });
+
+  it('flags a Heroku key split across a newline when context is present (collapse pass)', () => {
+    // The newline-collapsed pre-pass must also honour the context gate: with a
+    // key-context word present, the UUID (even reassembled) is a real hit.
+    const content = `HEROKU_API_KEY set to\n${UUID}\nin the dyno config`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(true);
+  });
+
+  it('does NOT flag a UUID split across a newline with NO key-context', () => {
+    const content = `trace segment one\n${UUID}\nsegment two ends here`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(false);
+  });
+});
