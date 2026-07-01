@@ -1,6 +1,10 @@
 import type { CandidateRepository } from '@qmd-team-intent-kb/store';
 import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
-import { computeContentHash, scanDisclosureFields } from '@qmd-team-intent-kb/common';
+import {
+  computeContentHash,
+  scanDisclosureFields,
+  collectFreeTextFields,
+} from '@qmd-team-intent-kb/common';
 import { badRequest, notFound, unprocessable } from '../errors.js';
 
 /**
@@ -31,11 +35,26 @@ export class CandidateService {
     // at the repository choke point as the real backstop — see
     // CandidateRepository.insert). The matched value is never echoed back
     // (PII non-leak).
-    const violation = scanDisclosureFields([
-      candidate.content,
-      candidate.title,
-      ...candidate.metadata.tags,
-    ]);
+    //
+    // R10 fix (010-AT-RISK · bead compile-then-govern-e06.3): the early-check
+    // scanned only a HAND-MAINTAINED subset (content/title/tags, later a few
+    // metadata fields), so a secret or PII hidden in any un-enumerated free-text
+    // surface slipped THIS boundary and only tripped the deeper repository choke
+    // point — a worse error surface, and a real leak the moment any path skips
+    // that backstop. The last-enumerated list still MISSED `tenantId` and the
+    // `author` free-text (`author.name`, `author.id`), both of which the backstop
+    // (`assertDisclosureClean`) and the govern-decision eval already scan — a
+    // known bypass.
+    //
+    // The fix (Gemini review, HIGH): derive the scanned set STRUCTURALLY via
+    // `collectFreeTextFields(candidate)` — the exact same walker the repository
+    // backstop uses. This scans every persisted free-text surface (content,
+    // title, tenantId, every tag, all ContentMetadata free-text, and the author
+    // free-text), skipping only enum-constrained fields by name. The early gate
+    // now covers EXACTLY the same fields as the backstop, so no un-enumerated
+    // free-text column can bypass it, and future schema additions are covered
+    // automatically with no manual list to drift.
+    const violation = scanDisclosureFields(collectFreeTextFields(candidate));
     if (violation !== null) {
       const kind =
         violation.category === 'pii'

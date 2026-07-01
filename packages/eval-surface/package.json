@@ -17,10 +17,13 @@
     "test": "vitest run",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "provenance:ci": "tsx scripts/ci-provenance-integrity.ts"
+    "provenance:ci": "tsx scripts/ci-provenance-integrity.ts",
+    "govern:ci": "tsx scripts/ci-govern-decision.ts"
   },
   "dependencies": {
+    "@qmd-team-intent-kb/claude-runtime": "workspace:*",
     "@qmd-team-intent-kb/common": "workspace:*",
+    "@qmd-team-intent-kb/policy-engine": "workspace:*",
     "@qmd-team-intent-kb/schema": "workspace:*",
     "@qmd-team-intent-kb/store": "workspace:*"
   },

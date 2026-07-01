@@ -1,0 +1,30 @@
+# gitleaks configuration — qmd-team-intent-kb
+#
+# Extends gitleaks' built-in ruleset (hundreds of curated provider rules) and
+# adds a TIGHTLY PATH-SCOPED allowlist for the govern-decision eval's adversarial
+# test fixtures. Those fixtures deliberately embed realistic-SHAPED but non-live
+# secret material to exercise the secret/PII detectors (bead
+# compile-then-govern-e06.3, risk 010-AT-RISK). Without this, gitleaks flags the
+# fixtures as real leaks and fails CI on the very test that PROVES the scanners
+# work.
+#
+# Safety: `useDefault = true` keeps every real gitleaks rule active repo-wide.
+# The allowlist is scoped by PATH regex to exactly the three fixture-bearing
+# files — a real key committed anywhere else still fails the scan. The AWS value
+# is AWS's own published EXAMPLE access-key id; the JWT is a random-body
+# fixture; neither is a live credential.
+
+title = "qmd-team-intent-kb gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "govern-decision eval adversarial test fixtures — non-live, shape-only secret material (e06.3)"
+# Path-scoped: only these fixture files are exempt. Anchored so a real leak
+# elsewhere is never allowlisted.
+paths = [
+  '''packages/eval-surface/src/govern-decision/dataset/v1/index\.ts''',
+  '''packages/eval-surface/src/__tests__/govern-decision\.test\.ts''',
+  '''apps/api/src/__tests__/services\.test\.ts''',
+]

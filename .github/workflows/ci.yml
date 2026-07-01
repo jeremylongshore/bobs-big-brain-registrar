@@ -77,6 +77,17 @@ jobs:
         # the in-memory unit tests above with a real-DB regression guard.
         run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
 
+      - name: Govern-decision eval (per-check precision/recall, fail-closed on missed secret/PII)
+        # 010-AT-RISK R5/R10 · bead compile-then-govern-e06.3: runs the govern
+        # decision over the versioned adversarial labeled set (dataset/v1) and
+        # prints PER-CHECK precision/recall + the false-negative list. Fails
+        # CLOSED on any UNDOCUMENTED false-negative — a missed secret/PII the
+        # dataset did not already flag as a known, tracked gap (i.e. a regression
+        # or a new evasion). Documented gaps (split keys, base64, boundary blind
+        # spots) are reported, not failed. Determinism is not efficacy; this gate
+        # makes the moat's catch-rate a required, measured property.
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface govern:ci
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
