@@ -265,3 +265,113 @@ describe('scanForSecrets — global/sticky custom pattern determinism (evasion h
     expect(first).toEqual(second);
   });
 });
+
+/**
+ * Heroku-key UUID context gate (bead compile-then-govern-e06.15 · umbrella #27).
+ *
+ * The `heroku-api-key` rule is a bare-UUID regex, so before this fix ANY UUID in
+ * prose (a request/trace/bead id) was flagged as a live credential —
+ * over-blocking a benign memory (the e06.3 eval's `neg-uuid-in-prose-01` false
+ * positive). The fix gates the rule behind key-context. These tests pin BOTH
+ * directions: precision UP (a bare UUID in prose is NOT flagged) and recall HELD
+ * (a real Heroku key in a key-context IS still flagged). The gate NEVER weakens
+ * a context-free rule — only the ambiguous UUID pattern is gated.
+ */
+describe('scanForSecrets — heroku UUID context gate (precision up, recall held)', () => {
+  const UUID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+
+  it('does NOT flag a bare UUID in ordinary prose (precision guard)', () => {
+    const content = `The request id was ${UUID} in the trace.`;
+    const matches = scanForSecrets(content);
+    expect(matches.some((m) => m.patternId === 'heroku-api-key')).toBe(false);
+    // And nothing ELSE should fire on this benign prose either.
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does NOT flag a UUID used as a bead id in prose', () => {
+    const content = `Tracked in bead ${UUID} for the sprint retro.`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(false);
+  });
+
+  it('STILL flags a real Heroku key in a HEROKU_API_KEY= assignment (recall held)', () => {
+    const content = `HEROKU_API_KEY=${UUID}`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(true);
+  });
+
+  it('STILL flags a Heroku key referenced with heroku / api key words (recall held)', () => {
+    const content = `Rotate the Heroku API key ${UUID} after the incident.`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(true);
+  });
+
+  it('flags a Heroku key split across a newline when context is present (collapse pass)', () => {
+    // The newline-collapsed pre-pass must also honour the context gate: with a
+    // key-context word present, the UUID (even reassembled) is a real hit.
+    const content = `HEROKU_API_KEY set to\n${UUID}\nin the dyno config`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(true);
+  });
+
+  it('does NOT flag a UUID split across a newline with NO key-context', () => {
+    const content = `trace segment one\n${UUID}\nsegment two ends here`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(false);
+  });
+
+  it('flags a base64-wrapped Heroku key when the ORIGINAL content has context (recall held)', () => {
+    // Gemini finding: the decoded blob is just the raw UUID and carries no
+    // context keywords, so the context gate must be evaluated against the
+    // ORIGINAL content (threaded via scanFlat's contextText). A real wrapped
+    // Heroku key surrounded by `heroku api key` context must still be caught.
+    const wrapped = Buffer.from(UUID, 'utf8').toString('base64');
+    const content = `The Heroku API key blob is ${wrapped} — decode at runtime.`;
+    expect(
+      scanForSecrets(content).some((m) => m.patternId === 'base64-wrapped:heroku-api-key'),
+    ).toBe(true);
+  });
+
+  it('flags a hex-wrapped Heroku key when the original content has context (recall held)', () => {
+    const wrapped = Buffer.from(UUID, 'utf8').toString('hex');
+    const content = `heroku token hexval ${wrapped} rotate soon`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'hex-wrapped:heroku-api-key')).toBe(
+      true,
+    );
+  });
+
+  it('does NOT flag a base64-wrapped bare UUID with NO context (precision held)', () => {
+    // A UUID that merely happens to be base64-wrapped in prose with no key
+    // context stays suppressed — the decode pass does not resurrect the
+    // over-block the gate removed.
+    const wrapped = Buffer.from(UUID, 'utf8').toString('base64');
+    const content = `The request id blob is ${wrapped} in the trace log.`;
+    expect(
+      scanForSecrets(content).some((m) => m.patternId === 'base64-wrapped:heroku-api-key'),
+    ).toBe(false);
+  });
+
+  it('resets lastIndex on a global/sticky requiresContext regex (determinism)', () => {
+    // A custom context-gated pattern whose CONTEXT regex carries the global flag.
+    // Without resetting `requiresContext.lastIndex` between scans, `.test()`
+    // would advance lastIndex and make the gate nondeterministic — the second
+    // scan could wrongly suppress a hit the first counted. Scanning twice must
+    // yield identical results, and the gate must both fire (context present) and
+    // suppress (context absent) correctly.
+    const gated: SecretPattern = {
+      id: 'custom-gated',
+      name: 'Custom Context-Gated Token',
+      regex: /GATED-[A-Z0-9]{6}/,
+      description: 'a custom pattern gated behind a global-flag context regex',
+      requiresContext: /\bkeyctx\b/g, // NOTE the global flag
+    };
+
+    const withCtx = 'keyctx present: GATED-ABC123 in scope';
+    const first = scanForSecrets(withCtx, [gated]);
+    const second = scanForSecrets(withCtx, [gated]);
+    expect(first).toEqual(second);
+    expect(first.some((m) => m.patternId === 'custom-gated')).toBe(true);
+
+    // Same token, no context word → suppressed, and stable across scans.
+    const noCtx = 'no context here: GATED-ABC123 in scope';
+    const a = scanForSecrets(noCtx, [gated]);
+    const b = scanForSecrets(noCtx, [gated]);
+    expect(a).toEqual(b);
+    expect(a.some((m) => m.patternId === 'custom-gated')).toBe(false);
+  });
+});

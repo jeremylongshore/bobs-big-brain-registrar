@@ -52,21 +52,43 @@ describe('evaluateGovernDecision — shipped v1 set', () => {
     expect(boundary!.precision).toBe(1);
   });
 
-  it('the ONLY false positives are the documented UUID over-block (heroku-key regex)', () => {
-    // Real precision finding (see README §5): the `heroku-api-key` rule is a bare
-    // UUID regex, so a UUID in prose (neg-uuid-in-prose-01) is over-flagged by
-    // scanForSecrets / classifyContent, dragging those three checks below 1.0.
-    // This is surfaced, not hidden — but it must stay bounded to exactly that one
-    // benign case (FP ≤ 1 per check), so a NEW over-block regression is caught.
+  it('has ZERO false positives on EVERY check — precision 1.0 (e06.15 UUID over-block closed)', () => {
+    // Before e06.15 the `heroku-api-key` rule was a bare UUID regex, so a UUID in
+    // prose (`neg-uuid-in-prose-01`) over-fired scanForSecrets / classifyContent
+    // / policy-pipeline (FP=1 each, precision ~0.92–0.94). The rule is now
+    // context-gated, so that benign case no longer fires: precision returns to
+    // 1.0 on all four checks. This is the PRECISION-UP assertion — any NEW
+    // over-block regression (a benign case firing a check) flips it.
     const rep = report(evaluateGovernDecision());
     for (const m of rep.perCheck) {
-      expect(m.falsePositives).toBeLessThanOrEqual(1);
+      expect(m.falsePositives).toBe(0);
+      expect(m.precision).toBe(1);
     }
-    // The three content checks lose precision only via that single case.
-    const contentChecks = rep.perCheck.filter((m) => m.check !== 'boundary-disclosure');
-    for (const m of contentChecks) {
-      expect(m.precision).toBeGreaterThan(0.85);
-    }
+  });
+
+  it('holds recall on the real Heroku key in key-context (context gate did not drop detection)', () => {
+    // The recall-hold counterpart to the precision fix: `sec-inline-heroku-01`
+    // (a real Heroku key in `HEROKU_API_KEY=` context) must STILL be caught by
+    // the in-content checks. If the context gate over-suppressed, this case would
+    // become an undocumented FN and flip the eval red.
+    const rep = report(evaluateGovernDecision());
+    const heroFn = rep.falseNegatives.filter(
+      (f) => f.caseId === 'sec-inline-heroku-01' && f.check !== 'boundary-disclosure',
+    );
+    expect(heroFn).toHaveLength(0);
+  });
+
+  it('catches the DOB-only PII leak on the classifier + policy pipeline (converged vocab)', () => {
+    // Part 2 of e06.15: claude-runtime's PII vocab is converged UP to the
+    // boundary filter's, so `pii-inline-dob-01` is no longer a documented miss on
+    // policy-pipeline / content-classifier — it is caught (a TP), not an FN.
+    const rep = report(evaluateGovernDecision());
+    const dobFn = rep.falseNegatives.filter(
+      (f) =>
+        f.caseId === 'pii-inline-dob-01' &&
+        (f.check === 'policy-pipeline' || f.check === 'content-classifier'),
+    );
+    expect(dobFn).toHaveLength(0);
   });
 
   it('catches inline secrets on the line-based secret scanner (recall > 0)', () => {

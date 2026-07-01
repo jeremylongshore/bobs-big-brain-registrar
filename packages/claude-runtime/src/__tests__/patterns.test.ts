@@ -51,4 +51,67 @@ describe('PII_PATTERNS', () => {
     expect(ssnPattern).toBeDefined();
     expect(ssnPattern!.regex.test('123-45-6789')).toBe(true);
   });
+
+  // PII vocabulary convergence (bead compile-then-govern-e06.15 · umbrella #27):
+  // the classifier's PII set is widened UP to the repository-boundary filter's
+  // PII_PATTERN — SSN keyword, DOB, and background-check terms — so a DOB-only
+  // leak is caught pre-boundary by the policy pipeline too, not only at the
+  // write choke point. Additive / tightening only.
+  it('includes an SSN keyword pattern (SSN / social security number)', () => {
+    const p = PII_PATTERNS.find((x) => x.id === 'ssn-keyword');
+    expect(p).toBeDefined();
+    expect(p!.regex.test('Employee SSN on file')).toBe(true);
+    expect(p!.regex.test('social security number redacted')).toBe(true);
+  });
+
+  it('includes a date-of-birth pattern (date of birth / DOB: / DOB=)', () => {
+    const p = PII_PATTERNS.find((x) => x.id === 'date-of-birth');
+    expect(p).toBeDefined();
+    expect(p!.regex.test('DOB: 1984-07-02')).toBe(true);
+    expect(p!.regex.test('date of birth on the form')).toBe(true);
+    // A bare "DOB" mention without an assignment stays below the bar (matches
+    // the boundary filter's `\bDOB\b\s*[:=]` shape — no over-broad firing).
+    expect(p!.regex.test('the DOB column header')).toBe(false);
+  });
+
+  it('includes a background-check pattern', () => {
+    const p = PII_PATTERNS.find((x) => x.id === 'background-check');
+    expect(p).toBeDefined();
+    expect(p!.regex.test('background-check passed')).toBe(true);
+    expect(p!.regex.test('background check report attached')).toBe(true);
+  });
+});
+
+describe('heroku-api-key context gate (precision guard)', () => {
+  // The heroku-api-key rule is UUID-shaped, so it is gated behind key-context to
+  // avoid over-flagging a request/trace/bead id in prose (bead
+  // compile-then-govern-e06.15). The pattern still carries the UUID regex; the
+  // scanner (execWithContext) enforces the context. Here we assert the
+  // requiresContext gate exists and matches key-context but not bare prose.
+  const heroku = SECRET_PATTERNS.find((p) => p.id === 'heroku-api-key')!;
+
+  it('still recognises the UUID shape', () => {
+    expect(heroku.regex.test('3f2504e0-4f89-41d3-9a0c-0305e82c3301')).toBe(true);
+  });
+
+  it('carries a requiresContext gate', () => {
+    expect(heroku.requiresContext).toBeInstanceOf(RegExp);
+  });
+
+  it('context gate matches key-context (HEROKU / API / KEY / assignment)', () => {
+    const ctx = heroku.requiresContext!;
+    expect(ctx.test('HEROKU_API_KEY=3f2504e0-4f89-41d3-9a0c-0305e82c3301')).toBe(true);
+    expect(ctx.test('the Heroku API key is ...')).toBe(true);
+    expect(ctx.test('bearer token ...')).toBe(true);
+  });
+
+  it('context gate does NOT match ordinary id prose', () => {
+    const ctx = heroku.requiresContext!;
+    expect(ctx.test('The request id was 3f2504e0-4f89-41d3-9a0c-0305e82c3301 in the trace.')).toBe(
+      false,
+    );
+    expect(ctx.test('Tracked in bead 3f2504e0-4f89-41d3-9a0c-0305e82c3301 for the sprint.')).toBe(
+      false,
+    );
+  });
 });

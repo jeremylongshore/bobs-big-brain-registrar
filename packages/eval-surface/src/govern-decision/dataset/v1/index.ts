@@ -27,6 +27,16 @@ import type { GovernCase } from '../../types.js';
 /**
  * Semantic version of THIS labeled set. Bump on any case add/remove/relabel.
  *
+ * 1.2.0 (e06.15 · umbrella #27) — the govern PRECISION LEAK the e06.3 eval
+ * surfaced is closed. (1) The `heroku-api-key` rule (a bare UUID regex) is now
+ * context-gated in claude-runtime, so `neg-uuid-in-prose-01` (a UUID in prose)
+ * no longer false-positives — secret-scanner / content-classifier /
+ * policy-pipeline precision returns to 1.0. A new `sec-inline-heroku-01`
+ * positive (a real Heroku key in `HEROKU_API_KEY=` context) proves the gate held
+ * recall — a real key is still caught. (2) claude-runtime's classifyContent PII
+ * vocabulary is converged UP to the boundary filter's, so `pii-inline-dob-01` (a
+ * DOB-only leak) is now caught by policy-pipeline + content-classifier too — it
+ * was `knownFalseNegativeOf` both.
  * 1.1.0 (e06.14 · umbrella #27) — the split-across-newline and base64-wrapped
  * secret evasions the e06.3 eval measured are now CLOSED in claude-runtime's
  * scanForSecrets (newline-collapsed pre-pass + bounded decode-and-rescan), so
@@ -37,7 +47,7 @@ import type { GovernCase } from '../../types.js';
  * miss on the split/base64 cases — a separate follow-up (converge the filters).
  * 1.0.0 — initial adversarial set (see README).
  */
-export const DATASET_VERSION = '1.1.0';
+export const DATASET_VERSION = '1.2.0';
 
 /* -------------------------------------------------------------------------- */
 /* Fixture material — realistic-shaped but non-live secrets.                   */
@@ -59,6 +69,9 @@ const JWT_SHAPE =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpEb2UifQ.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
 /** An SSN-shaped string. */
 const SSN_SHAPE = '123-45-6789';
+/** A UUID-shaped string. Heroku API keys are UUIDs; so are request/trace/bead
+ *  ids — the ambiguity the e06.15 context gate resolves. Random, not a live key. */
+const UUID_SHAPE = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
 /** base64 of the OpenAI-shaped key — the encoded-token evasion. */
 const OPENAI_B64 = Buffer.from(OPENAI_SHAPE, 'utf8').toString('base64');
@@ -165,6 +178,23 @@ export const GOVERN_CASES: readonly GovernCase[] = [
     expectCaughtBy: ['policy-pipeline', 'secret-scanner', 'content-classifier'],
     knownFalseNegativeOf: ['boundary-disclosure'],
   },
+  {
+    id: 'sec-inline-heroku-01',
+    description: 'Real Heroku API key (UUID) in HEROKU_API_KEY= context (recall-hold probe)',
+    sensitiveClass: 'secret',
+    surface: 'inline',
+    // The RECALL-HOLD counterpart to the `neg-uuid-in-prose-01` precision probe.
+    // The heroku-api-key rule is now context-gated (e06.15): a bare UUID in prose
+    // is NOT flagged, but a UUID in a `HEROKU_API_KEY=` assignment (or with
+    // heroku/api-key/token words) STILL is. This case proves the gate did not
+    // silently drop real-key detection — the env-secret regex ALSO fires here,
+    // but the heroku rule firing in key-context is what the recall-hold asserts.
+    // The boundary filter's SECRET_PATTERNS have no Heroku/UUID rule, so it is a
+    // documented miss there — the same shape as the other generic-assign cases.
+    candidate: { content: `Set HEROKU_API_KEY=${UUID_SHAPE} in the dyno config.` },
+    expectCaughtBy: ['policy-pipeline', 'secret-scanner', 'content-classifier'],
+    knownFalseNegativeOf: ['boundary-disclosure'],
+  },
 
   /* --------- SECRETS · split across two lines (the CISO's fear) ------------ */
   {
@@ -263,15 +293,15 @@ export const GOVERN_CASES: readonly GovernCase[] = [
     sensitiveClass: 'pii',
     surface: 'inline',
     candidate: { content: 'HR note — DOB: 1984-07-02, hired last spring.' },
-    // DOCUMENTED GAP (real finding, follow-up bead candidate): the boundary
-    // disclosure filter's PII_PATTERN includes `date of birth` / `DOB:`, but
-    // claude-runtime's classifyContent PII set is EMAIL / PHONE / SSN only — no
-    // DOB — so a DOB-only leak passes the policy pipeline (which gates on
-    // classifyContent) and is caught only at the repository boundary. The two
-    // PII vocabularies have drifted; the classifier is the weaker one. Surfaced
-    // here, not hidden by loosening a rule.
-    expectCaughtBy: ['boundary-disclosure'],
-    knownFalseNegativeOf: ['policy-pipeline', 'content-classifier'],
+    // CLOSED (e06.15): the previously-documented PII-vocabulary drift is fixed.
+    // claude-runtime's classifyContent PII set is now converged UP to the
+    // boundary filter's PII_PATTERN (added `date-of-birth`, `ssn-keyword`,
+    // `background-check`), so a DOB-only leak is now classified `confidential`
+    // and the policy pipeline REJECTS it pre-boundary — not caught only at the
+    // repository boundary. All three checks fire; was
+    // `knownFalseNegativeOf: ['policy-pipeline', 'content-classifier']`.
+    // Relabelled under DATASET_VERSION 1.2.0.
+    expectCaughtBy: ['policy-pipeline', 'content-classifier', 'boundary-disclosure'],
   },
   {
     id: 'pii-inline-email-01',
@@ -428,12 +458,15 @@ export const GOVERN_CASES: readonly GovernCase[] = [
     sensitiveClass: 'none',
     surface: 'benign',
     candidate: {
-      content: 'The request id was 3f2504e0-4f89-41d3-9a0c-0305e82c3301 in the trace.',
+      content: `The request id was ${UUID_SHAPE} in the trace.`,
     },
-    // NOTE: this is a deliberate PRECISION probe. The heroku-api-key rule is a
-    // bare UUID regex, so classify/secret-scanner treat any UUID as a secret.
-    // We expect NO check to fire; if one does it is a FALSE POSITIVE and drags
-    // that check's precision — surfaced, not hidden. (Documented in README.)
+    // PRECISION probe — NOW CLOSED (e06.15). The heroku-api-key rule was a bare
+    // UUID regex, so classify/secret-scanner over-flagged any UUID in prose as a
+    // credential (this case was the FALSE POSITIVE dragging secret-scanner /
+    // content-classifier / policy-pipeline precision below 1.0). The rule is now
+    // context-gated: a UUID counts as a Heroku key only with key-context nearby.
+    // This prose has none, so NO check fires — precision returns to 1.0. The
+    // recall-hold counterpart is `sec-inline-heroku-01` (same UUID, key-context).
     expectCaughtBy: [],
   },
   {
