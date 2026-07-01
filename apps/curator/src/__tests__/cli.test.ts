@@ -361,3 +361,150 @@ describe('dispatch usage — verify-audit-chain in help', () => {
     expect(stdoutText()).toMatch(/verify-audit-chain/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// generate-exception-manifest subcommand (bead compile-then-govern-e06.2;
+// 010-AT-RISK R1/R2/R7). The generator pins each tamper-reason break's current
+// stored tuple into a byte-pinned manifest, refusing to overwrite without
+// --force.
+// ---------------------------------------------------------------------------
+
+describe('dispatch generate-exception-manifest', () => {
+  /** Seed a chain, then tamper one row's content to produce a persistent break. */
+  function seedTamperedDb(): {
+    db: ReturnType<typeof createTestDatabase>;
+    tamperedId: string;
+  } {
+    const db = createTestDatabase();
+    const auditRepo = new AuditRepository(db);
+    const ids = [
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+      '00000000-0000-4000-8000-000000000003',
+    ];
+    for (let i = 0; i < ids.length; i++) {
+      auditRepo.insert({
+        id: ids[i]!,
+        action: 'promoted',
+        memoryId: '11111111-1111-4111-8111-111111111111',
+        tenantId: 'demo-e2e',
+        actor: { type: 'human', id: 'curator-1' },
+        reason: `original ${i}`,
+        details: {},
+        timestamp: `2026-05-29T08:0${i}:00.000Z`,
+      });
+    }
+    // Persistently tamper row 2 in the DB (stands in for a migration break row).
+    db.prepare(`UPDATE audit_events SET reason = 'MIGRATION_ARTIFACT' WHERE id = ?`).run(ids[1]);
+    return { db, tamperedId: ids[1]! };
+  }
+
+  it('exits 2 when --db is missing', async () => {
+    const rc = await dispatch(['generate-exception-manifest'], testDeps);
+    expect(rc).toBe(2);
+    expect(stderrText()).toMatch(/missing required flag: --db/);
+  });
+
+  it('exits 2 on unknown flag', async () => {
+    const rc = await dispatch(['generate-exception-manifest', '--db', 'x', '--bogus'], testDeps);
+    expect(rc).toBe(2);
+    expect(stderrText()).toMatch(/unknown flag: --bogus/);
+  });
+
+  it('lists the subcommand in help text', async () => {
+    const rc = await dispatch(['help'], testDeps);
+    expect(rc).toBe(0);
+    expect(stdoutText()).toMatch(/generate-exception-manifest/);
+  });
+
+  it('pins the current tuple of every tamper break and round-trips through readManifest', async () => {
+    const { db, tamperedId } = seedTamperedDb();
+    const outPath = join(spoolDir, 'exceptions.manifest.json');
+
+    // The CLI closes the db it was handed in its finally block, so we do the
+    // downstream classify against a FRESH identical db (v2 hashes are
+    // timestamp-independent and ids are fixed, so the two DBs are byte-equal).
+    const rc = await dispatch(
+      ['generate-exception-manifest', '--db', '/ignored', '--out', outPath, '--json'],
+      { createDb: () => db },
+    );
+    expect(rc).toBe(0);
+
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(true);
+    expect(parsed['entryCount']).toBe(1);
+    expect(typeof parsed['manifestHash']).toBe('string');
+    const breakdown = parsed['reasonBreakdown'] as Record<string, number>;
+    expect(breakdown['ENTRY_HASH_MISMATCH']).toBe(1);
+
+    // The written manifest loads + verifies (count-assert + hash re-check).
+    const { readManifest, verifyAuditChain, classifyChainBreaks } =
+      await import('@qmd-team-intent-kb/store');
+    const manifest = readManifest(outPath);
+    expect(manifest.entryCount).toBe(1);
+    expect(manifest.entries[0]!.id).toBe(tamperedId);
+
+    // And the manifest classifies the (byte-identical) live break as a
+    // documented exception — proving the generated manifest COVERS the break it
+    // was made for.
+    const fresh = seedTamperedDb();
+    const auditRepo = new AuditRepository(fresh.db);
+    const { breaks } = verifyAuditChain(auditRepo);
+    const rows = auditRepo.findAllChronological() as unknown as Array<{
+      id: string;
+      entry_hash: string | null;
+      prev_entry_hash: string | null;
+      hash_version: number | null;
+      seq: number | null;
+    }>;
+    const rowsById = new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          entry_hash: r.entry_hash,
+          prev_entry_hash: r.prev_entry_hash,
+          hash_version: r.hash_version ?? 1,
+          seq: r.seq ?? 0,
+        },
+      ]),
+    );
+    const classified = classifyChainBreaks(breaks, manifest, rowsById);
+    expect(classified.documentedExceptions.map((b) => b.id)).toEqual([tamperedId]);
+    expect(classified.tamperSignatures).toHaveLength(0);
+    expect(classified.verified).toBe(true);
+    fresh.db.close();
+  });
+
+  it('refuses to overwrite an existing manifest without --force', async () => {
+    const { db } = seedTamperedDb();
+    const outPath = join(spoolDir, 'exceptions.manifest.json');
+    // Pre-create the file.
+    await writeFile(outPath, '{}', 'utf8');
+
+    const rc = await dispatch(
+      ['generate-exception-manifest', '--db', '/ignored', '--out', outPath, '--json'],
+      { createDb: () => db },
+    );
+    expect(rc).toBe(1);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    expect(parsed['code']).toBe('MANIFEST_EXISTS');
+    db.close();
+  });
+
+  it('overwrites an existing manifest WITH --force', async () => {
+    const { db } = seedTamperedDb();
+    const outPath = join(spoolDir, 'exceptions.manifest.json');
+    await writeFile(outPath, '{}', 'utf8');
+
+    const rc = await dispatch(
+      ['generate-exception-manifest', '--db', '/ignored', '--out', outPath, '--force', '--json'],
+      { createDb: () => db },
+    );
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(true);
+    expect(parsed['entryCount']).toBe(1);
+    db.close();
+  });
+});

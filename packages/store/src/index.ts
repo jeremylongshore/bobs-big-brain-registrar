@@ -14,6 +14,22 @@ export { verifyAuditChain, type AuditVerifyResult, type AuditChainBreak } from '
 export { computeEntryHash, canonicalRowJson, CURRENT_AUDIT_HASH_VERSION } from './audit-chain.js';
 export type { CanonicalAuditRow, AuditHashVersion } from './audit-chain.js';
 export { appendAnchor, verifyAnchors, computeAnchorHash, readAnchors } from './audit-anchor.js';
+export {
+  computeManifestHash,
+  readManifest,
+  classifyChainBreaks,
+  ExceptionManifestError,
+  ExceptionManifestEntrySchema,
+  ExceptionManifestSchema,
+} from './exception-manifest.js';
+export type {
+  ExceptionManifestEntry,
+  ExceptionManifest,
+  ExceptionManifestBody,
+  TamperReason,
+  StoredRowTuple,
+  ClassifiedChainBreaks,
+} from './exception-manifest.js';
 export type {
   AnchorRecord,
   AnchorVerifyResult,
