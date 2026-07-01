@@ -19,8 +19,10 @@ import { dispatch } from './cli.js';
 
 async function main(): Promise<void> {
   const exitCode = await dispatch(process.argv.slice(2), {
-    createDb: ({ dbPath }) =>
-      dbPath !== undefined ? createDatabase({ path: dbPath }) : createTestDatabase(),
+    createDb: ({ dbPath, readonly }) =>
+      dbPath !== undefined
+        ? createDatabase({ path: dbPath, readonly: readonly ?? false })
+        : createTestDatabase(),
   });
   process.exit(exitCode);
 }
