@@ -45,6 +45,18 @@ describe('resolveCliContext', () => {
   it('ignores a blank TEAMKB_TENANT_ID', () => {
     expect(resolveCliContext({ TEAMKB_TENANT_ID: '   ' }).tenantId).toBe(DEFAULT_CLI_TENANT);
   });
+
+  it('ignores a blank/whitespace TEAMKB_EXPORT_DIR (never resolves to cwd)', () => {
+    const ctx = resolveCliContext({ TEAMKB_EXPORT_DIR: '   ' });
+    // Must fall back to the default <base>/kb-export, NOT resolve('') === cwd().
+    expect(ctx.exportDir.endsWith('/kb-export')).toBe(true);
+    expect(ctx.exportDir).not.toBe(process.cwd());
+  });
+
+  it('trims surrounding whitespace on TEAMKB_EXPORT_DIR', () => {
+    const ctx = resolveCliContext({ TEAMKB_EXPORT_DIR: '  /tmp/some/export  ' });
+    expect(ctx.exportDir).toBe('/tmp/some/export');
+  });
 });
 
 describe('run', () => {

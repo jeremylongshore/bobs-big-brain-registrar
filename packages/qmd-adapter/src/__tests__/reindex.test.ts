@@ -81,4 +81,45 @@ describe('reindex', () => {
       expect(result.error.message).toContain('Failed to update index');
     }
   });
+
+  it('catches a raw throw from ensureCollections and returns a failed Result (does not reject)', async () => {
+    // `ensureCollections()` calls `mkdirSync`, which throws synchronously on a
+    // read-only fs / EACCES rather than returning a `Result`. reindex must catch
+    // that and convert it to a failed Result — never let the promise reject.
+    const throwingAdapter = {
+      async ensureCollections(): Promise<never> {
+        throw new Error('EACCES: permission denied, mkdir');
+      },
+      async update(): Promise<never> {
+        throw new Error('update should not run after a throwing ensureCollections');
+      },
+    } as unknown as QmdAdapter;
+
+    const result = await reindex(throwingAdapter);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('command_failed');
+      expect(result.error.message).toContain('EACCES');
+    }
+  });
+
+  it('coerces a non-Error throw to a string message', async () => {
+    const throwingAdapter = {
+      async ensureCollections(): Promise<never> {
+        throw 'string failure';
+      },
+      async update(): Promise<never> {
+        throw new Error('unreachable');
+      },
+    } as unknown as QmdAdapter;
+
+    const result = await reindex(throwingAdapter);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('command_failed');
+      expect(result.error.message).toBe('string failure');
+    }
+  });
 });

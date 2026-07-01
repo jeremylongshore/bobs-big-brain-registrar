@@ -20,6 +20,7 @@
  * rebuild of the derived index (never touches teamkb.db or brain/raw).
  */
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { getTeamKbBasePath } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from './adapter.js';
@@ -35,9 +36,11 @@ export function resolveCliContext(env: NodeJS.ProcessEnv = process.env): {
   exportDir: string;
 } {
   const tenantId = env['TEAMKB_TENANT_ID']?.trim() || DEFAULT_CLI_TENANT;
-  const exportDir = env['TEAMKB_EXPORT_DIR']
-    ? resolve(env['TEAMKB_EXPORT_DIR'])
-    : join(getTeamKbBasePath(), 'kb-export');
+  // Trim + non-empty guard: a blank/whitespace-only TEAMKB_EXPORT_DIR is still
+  // truthy, and `resolve('')` collapses to process.cwd() — reading/writing the
+  // qmd collections in the wrong directory. Fall back to the default instead.
+  const rawExportDir = env['TEAMKB_EXPORT_DIR']?.trim();
+  const exportDir = rawExportDir ? resolve(rawExportDir) : join(getTeamKbBasePath(), 'kb-export');
   return { tenantId, exportDir };
 }
 
@@ -97,9 +100,12 @@ export async function main(): Promise<void> {
 }
 
 // Direct-execution guard: run `main()` only when this module is the process
-// entry (`node dist/cli.js ...`), NOT when imported by tests. `argv[1]` is the
-// invoked script path; comparing its file URL to this module's `import.meta.url`
-// is the standard ESM equivalent of `require.main === module`.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// entry (`node dist/cli.js ...`), NOT when imported by tests — the ESM
+// equivalent of `require.main === module`. Convert this module's `import.meta.url`
+// to a filesystem path with `fileURLToPath` and compare to the invoked script
+// path. Building a `file://${argv[1]}` string by hand is fragile: `import.meta.url`
+// is URL-encoded (spaces → `%20`) while `argv[1]` is a raw path, so paths with
+// spaces/special chars — or Windows backslash separators — would never match.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   void main();
 }

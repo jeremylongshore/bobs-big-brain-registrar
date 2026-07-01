@@ -1,4 +1,3 @@
-import type { Result } from '@qmd-team-intent-kb/common';
 import type { SearchScope } from '@qmd-team-intent-kb/schema';
 import type { QmdError } from '../types.js';
 import type { QmdAdapter } from '../adapter.js';
@@ -73,11 +72,7 @@ async function runControls(
   for (const control of controls) {
     const minHits = control.minHits ?? 1;
     const scope = control.scope ?? 'all';
-    const searchResult: Result<{ length: number }, QmdError> = await adapter.query(
-      control.query,
-      scope,
-      tenantId,
-    );
+    const searchResult = await adapter.query(control.query, scope, tenantId);
     if (!searchResult.ok) {
       results.push({
         query: control.query,

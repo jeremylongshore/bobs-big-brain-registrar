@@ -35,21 +35,35 @@ export interface ReindexReport {
  *
  * Fail-closed: the first failing step returns its `QmdError` and the second
  * step is NOT attempted — a caller must never conclude "reindexed" off a
- * half-built index.
+ * half-built index. A raw throw from either step (e.g. `ensureCollections()`'s
+ * `mkdirSync` hitting EACCES / a read-only filesystem, which is NOT surfaced as
+ * a `Result`) is caught and converted to a failed `Result`, so this primitive
+ * never rejects — the CLI and canary that call it stay on the `Result` path and
+ * cannot crash mid-pipeline.
  */
 export async function reindex(adapter: QmdAdapter): Promise<Result<ReindexReport, QmdError>> {
-  const ensureResult = await adapter.ensureCollections();
-  if (!ensureResult.ok) {
-    return { ok: false, error: ensureResult.error };
-  }
+  try {
+    const ensureResult = await adapter.ensureCollections();
+    if (!ensureResult.ok) {
+      return { ok: false, error: ensureResult.error };
+    }
 
-  const updateResult = await adapter.update();
-  if (!updateResult.ok) {
-    return { ok: false, error: updateResult.error };
-  }
+    const updateResult = await adapter.update();
+    if (!updateResult.ok) {
+      return { ok: false, error: updateResult.error };
+    }
 
-  return {
-    ok: true,
-    value: { collectionsCreated: ensureResult.value, indexUpdated: true },
-  };
+    return {
+      ok: true,
+      value: { collectionsCreated: ensureResult.value, indexUpdated: true },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: 'command_failed',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
 }
