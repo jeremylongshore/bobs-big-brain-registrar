@@ -314,4 +314,33 @@ describe('scanForSecrets — heroku UUID context gate (precision up, recall held
     const content = `trace segment one\n${UUID}\nsegment two ends here`;
     expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(false);
   });
+
+  it('resets lastIndex on a global/sticky requiresContext regex (determinism)', () => {
+    // A custom context-gated pattern whose CONTEXT regex carries the global flag.
+    // Without resetting `requiresContext.lastIndex` between scans, `.test()`
+    // would advance lastIndex and make the gate nondeterministic — the second
+    // scan could wrongly suppress a hit the first counted. Scanning twice must
+    // yield identical results, and the gate must both fire (context present) and
+    // suppress (context absent) correctly.
+    const gated: SecretPattern = {
+      id: 'custom-gated',
+      name: 'Custom Context-Gated Token',
+      regex: /GATED-[A-Z0-9]{6}/,
+      description: 'a custom pattern gated behind a global-flag context regex',
+      requiresContext: /\bkeyctx\b/g, // NOTE the global flag
+    };
+
+    const withCtx = 'keyctx present: GATED-ABC123 in scope';
+    const first = scanForSecrets(withCtx, [gated]);
+    const second = scanForSecrets(withCtx, [gated]);
+    expect(first).toEqual(second);
+    expect(first.some((m) => m.patternId === 'custom-gated')).toBe(true);
+
+    // Same token, no context word → suppressed, and stable across scans.
+    const noCtx = 'no context here: GATED-ABC123 in scope';
+    const a = scanForSecrets(noCtx, [gated]);
+    const b = scanForSecrets(noCtx, [gated]);
+    expect(a).toEqual(b);
+    expect(a.some((m) => m.patternId === 'custom-gated')).toBe(false);
+  });
 });
