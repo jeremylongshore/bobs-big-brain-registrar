@@ -51,6 +51,101 @@ describe('CandidateService', () => {
       }
     }
   });
+
+  // ---- R10: intake early-check scans metadata odd fields --------------------
+  //
+  // 010-AT-RISK R10 / bead compile-then-govern-e06.3: the intake() early-check
+  // used to scan only content/title/tags, so a secret or PII hidden in
+  // metadata.filePaths / projectContext bypassed THIS boundary and only tripped
+  // the deeper repository backstop. These tests use a SPY repo whose insert()
+  // throws if reached, so a clean 422 with insert() NEVER called proves the
+  // EARLY gate — not the backstop — now catches the odd-field leak.
+
+  /** A CandidateRepository double whose insert() fails the test if reached. */
+  function spyRepo(): { repo: CandidateRepository; inserted: () => boolean } {
+    let didInsert = false;
+    const stub = {
+      insert: () => {
+        didInsert = true;
+        throw new Error('repo.insert reached — the intake early-check did NOT gate this leak');
+      },
+      findById: () => null,
+      findByTenant: () => [],
+      findByContentHash: () => null,
+    } as unknown as CandidateRepository;
+    return { repo: stub, inserted: () => didInsert };
+  }
+
+  it('intake rejects an SSN hidden in metadata.filePaths at the early-check (R10)', () => {
+    const { repo: stub, inserted } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'a perfectly ordinary architecture note',
+      metadata: { filePaths: ['/records/patient-123-45-6789.txt'], tags: [] },
+    });
+    let status = 0;
+    try {
+      svc.intake(data);
+    } catch (err) {
+      if (err instanceof ApiError) status = err.statusCode;
+    }
+    expect(status).toBe(422);
+    // The early gate fired BEFORE the repository backstop.
+    expect(inserted()).toBe(false);
+  });
+
+  it('intake rejects a credential hidden in metadata.projectContext at the early-check (R10)', () => {
+    const { repo: stub, inserted } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'note about the deploy pipeline',
+      metadata: {
+        filePaths: [],
+        tags: [],
+        projectContext: 'onboarding for AKIAIOSFODNN7EXAMPLE',
+      },
+    });
+    let status = 0;
+    try {
+      svc.intake(data);
+    } catch (err) {
+      if (err instanceof ApiError) status = err.statusCode;
+    }
+    expect(status).toBe(422);
+    expect(inserted()).toBe(false);
+  });
+
+  it('intake 422 for an odd-field leak does NOT echo the flagged value back (R10)', () => {
+    const { repo: stub } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'clean',
+      metadata: { filePaths: ['/records/patient-123-45-6789.txt'], tags: [] },
+    });
+    try {
+      svc.intake(data);
+      throw new Error('expected intake to reject');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        expect(err.message).not.toContain('123-45-6789');
+      }
+    }
+  });
+
+  it('intake still accepts a clean candidate with benign metadata (R10 precision guard)', () => {
+    // Uses the REAL repo so the accept path runs end-to-end (backstop included).
+    const data = makeCandidate({
+      content: 'the store layer keeps raw and derived content separate',
+      metadata: {
+        filePaths: ['packages/store/src/repositories/policy-repository.ts'],
+        tags: ['store'],
+        projectContext: 'governed brain intake',
+      },
+    });
+    const candidate = service.intake(data);
+    expect(candidate.id).toBe(data['id']);
+    expect(repo.findById(candidate.id)).not.toBeNull();
+  });
 });
 
 describe('MemoryService', () => {

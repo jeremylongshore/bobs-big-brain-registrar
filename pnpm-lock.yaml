@@ -278,9 +278,15 @@ importers:
 
   packages/eval-surface:
     dependencies:
+      '@qmd-team-intent-kb/claude-runtime':
+        specifier: workspace:*
+        version: link:../claude-runtime
       '@qmd-team-intent-kb/common':
         specifier: workspace:*
         version: link:../common
+      '@qmd-team-intent-kb/policy-engine':
+        specifier: workspace:*
+        version: link:../policy-engine
       '@qmd-team-intent-kb/schema':
         specifier: workspace:*
         version: link:../schema

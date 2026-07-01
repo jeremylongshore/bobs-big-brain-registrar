@@ -31,10 +31,34 @@ export class CandidateService {
     // at the repository choke point as the real backstop — see
     // CandidateRepository.insert). The matched value is never echoed back
     // (PII non-leak).
+    //
+    // R10 fix (010-AT-RISK · bead compile-then-govern-e06.3): the early-check
+    // scanned only content/title/tags, so a secret or PII hidden in an "odd"
+    // metadata field (e.g. an SSN in `metadata.filePaths`, a key in
+    // `projectContext`) slipped THIS boundary and only tripped the deeper
+    // repository choke point — a worse error surface, and a real leak the moment
+    // any path skips that backstop. The govern-decision eval demonstrates the
+    // exact filePath leak this closes. We now scan the same free-text metadata
+    // surface: filePaths, projectContext, repoUrl, branch, language, sessionId.
+    // `category` is enum-constrained (MemoryCategory) so it carries no
+    // attacker-controlled free text, but it is scanned too for parity with the
+    // R10 spec — a no-op on the closed vocabulary, cheap insurance if the enum
+    // ever widens.
+    const meta = candidate.metadata;
+    const metadataFreeText = [
+      ...meta.filePaths,
+      ...(meta.projectContext !== undefined ? [meta.projectContext] : []),
+      ...(meta.repoUrl !== undefined ? [meta.repoUrl] : []),
+      ...(meta.branch !== undefined ? [meta.branch] : []),
+      ...(meta.language !== undefined ? [meta.language] : []),
+      ...(meta.sessionId !== undefined ? [meta.sessionId] : []),
+    ];
     const violation = scanDisclosureFields([
       candidate.content,
       candidate.title,
+      candidate.category,
       ...candidate.metadata.tags,
+      ...metadataFreeText,
     ]);
     if (violation !== null) {
       const kind =

@@ -12,6 +12,8 @@
     { "path": "../schema" },
     { "path": "../store" },
     { "path": "../common" },
+    { "path": "../claude-runtime" },
+    { "path": "../policy-engine" },
     { "path": "../test-fixtures" }
   ]
 }
