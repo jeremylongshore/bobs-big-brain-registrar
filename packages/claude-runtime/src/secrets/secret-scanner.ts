@@ -43,6 +43,12 @@ function scanFlat(
   patternIdOverride?: (patternId: string) => string,
 ): void {
   for (const pattern of patterns) {
+    // A global/sticky regex carries `lastIndex` across `.exec()` calls, which
+    // would make matching nondeterministic across separate scan invocations.
+    // Reset it so scanFlat stays pure regardless of a custom pattern's flags.
+    if (pattern.regex.global || pattern.regex.sticky) {
+      pattern.regex.lastIndex = 0;
+    }
     const match = pattern.regex.exec(text);
     if (match) {
       const { line, column } = locate(match.index, match[0].length);
@@ -116,7 +122,12 @@ function scanEncodedWrapped(
   let decodedBytes = 0;
   const seenWrapped = new Set<string>();
 
-  const tryDecode = (raw: string, decode: (s: string) => string | null, prefix: string): void => {
+  const tryDecode = (
+    raw: string,
+    index: number,
+    decode: (s: string) => string | null,
+    prefix: string,
+  ): void => {
     if (decodedCandidates >= LIMITS.maxEncodedCandidates) return;
     if (raw.length < LIMITS.minEncodedCandidateLen) return;
     if (raw.length > LIMITS.maxEncodedCandidateLen) return;
@@ -126,11 +137,12 @@ function scanEncodedWrapped(
     if (decoded === null || decoded.length === 0) return;
     decodedCandidates += 1;
     decodedBytes += decoded.length;
-    // Best-effort location: the candidate's offset in the ORIGINAL content, on
-    // the (approximate) line it starts. Cheap and useful for triage.
-    const idx = content.indexOf(raw);
-    const line = idx >= 0 ? content.slice(0, idx).split('\n').length : 1;
-    const column = idx >= 0 ? idx - content.lastIndexOf('\n', idx) : 1;
+    // Best-effort location: the candidate's ACTUAL match offset in the ORIGINAL
+    // content (threaded from matchAll's `m.index`), on the line it starts. Using
+    // the real index is correct when the same blob appears more than once —
+    // `content.indexOf(raw)` would always report the first occurrence.
+    const line = index >= 0 ? content.slice(0, index).split('\n').length : 1;
+    const column = index >= 0 ? index - content.lastIndexOf('\n', index) : 1;
     scanFlat(
       decoded,
       patterns,
@@ -152,7 +164,7 @@ function scanEncodedWrapped(
     if (decodedBytes >= LIMITS.maxTotalDecodedBytes) break;
     const raw = m[0];
     if (seenWrapped.has(raw)) continue;
-    tryDecode(raw, decodeBase64, 'base64-wrapped');
+    tryDecode(raw, m.index ?? -1, decodeBase64, 'base64-wrapped');
   }
 
   // Hex candidates (even-length runs of hex). Cheap second encoded form.
@@ -161,7 +173,7 @@ function scanEncodedWrapped(
     if (decodedBytes >= LIMITS.maxTotalDecodedBytes) break;
     const raw = m[0];
     if (seenWrapped.has(raw) || raw.length % 2 !== 0) continue;
-    tryDecode(raw, decodeHex, 'hex-wrapped');
+    tryDecode(raw, m.index ?? -1, decodeHex, 'hex-wrapped');
   }
 }
 
@@ -241,6 +253,11 @@ export function scanForSecrets(
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]!;
     for (const pattern of patterns) {
+      // Same determinism guard as scanFlat: a global/sticky custom pattern
+      // would otherwise carry `lastIndex` across lines and skip matches.
+      if (pattern.regex.global || pattern.regex.sticky) {
+        pattern.regex.lastIndex = 0;
+      }
       const match = pattern.regex.exec(line);
       if (match) {
         matches.push({

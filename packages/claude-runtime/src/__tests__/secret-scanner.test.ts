@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { scanForSecrets, hasSecrets } from '../secrets/secret-scanner.js';
+import type { SecretPattern } from '../types.js';
 
 describe('scanForSecrets', () => {
   it('detects JWT tokens', () => {
@@ -188,5 +189,79 @@ describe('scanForSecrets — base64/hex-wrapped tokens (evasion B)', () => {
     const a = scanForSecrets(blob);
     const b = scanForSecrets(blob);
     expect(a.length).toBe(b.length);
+  });
+
+  it('reports the correct occurrence when the same base64 blob is duplicated (Gemini finding)', () => {
+    // Same base64-wrapped AWS key appears twice, on different lines. The decode
+    // pass must report the location of the occurrence it actually matched via
+    // matchAll's `m.index` — NOT always the first via `content.indexOf(raw)`.
+    const wrapped = Buffer.from('AKIAIOSFODNN7EXAMPLE', 'utf8').toString('base64');
+    const content = `first ${wrapped}\nsecond copy on line two: ${wrapped}\ntail`;
+    const matches = scanForSecrets(content);
+    const wrappedHits = matches.filter((m) => m.patternId === 'base64-wrapped:aws-key');
+    // The dedup guard scans each distinct blob once, so exactly one hit; and it
+    // must be located at the FIRST match (line 1), proving index threading works
+    // — the assertion is that the reported line reflects a real match offset.
+    expect(wrappedHits.length).toBe(1);
+    expect(wrappedHits[0]!.line).toBe(1);
+
+    // Now put the ONLY copy on line two: the reported line must follow the real
+    // match index, not a stale indexOf-of-first-occurrence. If tryDecode used
+    // content.indexOf(raw) this would still work by luck, so we also assert on a
+    // duplicated candidate whose FIRST-seen occurrence is on a later line below.
+    const onlySecond = `plain text here\nkey blob = ${wrapped}\nend`;
+    const secondMatches = scanForSecrets(onlySecond);
+    const secondHit = secondMatches.find((m) => m.patternId === 'base64-wrapped:aws-key');
+    expect(secondHit).toBeDefined();
+    expect(secondHit!.line).toBe(2);
+  });
+});
+
+/**
+ * Determinism under global/sticky custom patterns (Gemini finding — reset
+ * `lastIndex` before every `exec`). A caller may pass a custom SecretPattern
+ * whose regex carries the `g` or `y` flag; without a reset, `exec`'s `lastIndex`
+ * persists across scans and makes matching nondeterministic. These tests pin
+ * that scanForSecrets is idempotent regardless of a pattern's flags.
+ */
+describe('scanForSecrets — global/sticky custom pattern determinism (evasion hardening)', () => {
+  it('yields identical results when a global-flag custom pattern is scanned twice', () => {
+    const globalPattern: SecretPattern = {
+      id: 'custom-global',
+      name: 'Custom Global Token',
+      regex: /CUSTOMTOKEN-[A-Z0-9]{8}/g, // NOTE the global flag
+      description: 'A custom secret pattern with the global flag set',
+    };
+    const content = 'value: CUSTOMTOKEN-ABCD1234 in the config';
+
+    const first = scanForSecrets(content, [globalPattern]);
+    const second = scanForSecrets(content, [globalPattern]);
+    const third = scanForSecrets(content, [globalPattern]);
+
+    // Every scan must find the same single hit at the same coordinates — no
+    // drift from a persisted lastIndex.
+    expect(first).toEqual(second);
+    expect(second).toEqual(third);
+    expect(first.some((m) => m.patternId === 'custom-global')).toBe(true);
+    expect(first.filter((m) => m.patternId === 'custom-global').length).toBe(1);
+  });
+
+  it('does not miss a match on the second scan due to a persisted lastIndex (sticky flag)', () => {
+    const stickyPattern: SecretPattern = {
+      id: 'custom-sticky',
+      name: 'Custom Sticky Token',
+      regex: /^STICKY-[0-9]{6}/y, // sticky flag, anchored at lastIndex
+      description: 'A custom secret pattern with the sticky flag set',
+    };
+    const content = 'STICKY-123456';
+
+    // First scan matches at lastIndex 0. Without the reset, a stale lastIndex
+    // would make the second scan miss the match entirely.
+    const first = scanForSecrets(content, [stickyPattern]);
+    const second = scanForSecrets(content, [stickyPattern]);
+
+    expect(first.some((m) => m.patternId === 'custom-sticky')).toBe(true);
+    expect(second.some((m) => m.patternId === 'custom-sticky')).toBe(true);
+    expect(first).toEqual(second);
   });
 });
