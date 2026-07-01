@@ -132,6 +132,86 @@ describe('CandidateService', () => {
     }
   });
 
+  // ---- R10 gap closure: tenantId + author free-text (Gemini HIGH) -----------
+  //
+  // The early-check's hand-maintained field list MISSED `tenantId` and the
+  // `author` free-text (`author.name` / `author.id`) even though the repository
+  // backstop (`assertDisclosureClean`) already scanned them — a bypass where a
+  // secret / PII hidden there slipped the EARLY gate and only tripped the deeper
+  // choke point. The fix derives the scanned set structurally via
+  // `collectFreeTextFields`, so the early gate now covers exactly the backstop's
+  // fields. These SPY-repo tests prove the early gate — not the backstop — now
+  // fires on those two surfaces (insert() never reached).
+
+  it('intake rejects an SSN hidden in tenantId at the early-check (R10 gap)', () => {
+    const { repo: stub, inserted } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'an ordinary architecture note',
+      tenantId: 'ssn-123-45-6789',
+    });
+    let status = 0;
+    try {
+      svc.intake(data);
+    } catch (err) {
+      if (err instanceof ApiError) status = err.statusCode;
+    }
+    expect(status).toBe(422);
+    // The early gate fired BEFORE the repository backstop.
+    expect(inserted()).toBe(false);
+  });
+
+  it('intake rejects a credential hidden in author.name at the early-check (R10 gap)', () => {
+    const { repo: stub, inserted } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'note about the deploy pipeline',
+      author: { type: 'ai', id: 'claude-1', name: 'AKIAIOSFODNN7EXAMPLE' },
+    });
+    let status = 0;
+    try {
+      svc.intake(data);
+    } catch (err) {
+      if (err instanceof ApiError) status = err.statusCode;
+    }
+    expect(status).toBe(422);
+    expect(inserted()).toBe(false);
+  });
+
+  it('intake rejects an SSN hidden in author.id at the early-check (R10 gap)', () => {
+    const { repo: stub, inserted } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'clean body',
+      author: { type: 'human', id: '123-45-6789' },
+    });
+    let status = 0;
+    try {
+      svc.intake(data);
+    } catch (err) {
+      if (err instanceof ApiError) status = err.statusCode;
+    }
+    expect(status).toBe(422);
+    expect(inserted()).toBe(false);
+  });
+
+  it('intake 422 for a tenantId leak does NOT echo the flagged value back (R10 gap)', () => {
+    const { repo: stub } = spyRepo();
+    const svc = new CandidateService(stub);
+    const data = makeCandidate({
+      content: 'clean',
+      tenantId: 'ssn-123-45-6789',
+    });
+    try {
+      svc.intake(data);
+      throw new Error('expected intake to reject');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        expect(err.message).not.toContain('123-45-6789');
+      }
+    }
+  });
+
   it('intake still accepts a clean candidate with benign metadata (R10 precision guard)', () => {
     // Uses the REAL repo so the accept path runs end-to-end (backstop included).
     const data = makeCandidate({
