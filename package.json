@@ -48,7 +48,7 @@
     "@types/node": "^26.0.0",
     "@types/pg": "8.20.0",
     "@vitest/coverage-v8": "^4.1.9",
-    "dependency-cruiser": "17.4.3",
+    "dependency-cruiser": "18.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "husky": "^9.1.7",
