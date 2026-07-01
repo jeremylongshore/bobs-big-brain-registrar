@@ -315,6 +315,37 @@ describe('scanForSecrets — heroku UUID context gate (precision up, recall held
     expect(scanForSecrets(content).some((m) => m.patternId === 'heroku-api-key')).toBe(false);
   });
 
+  it('flags a base64-wrapped Heroku key when the ORIGINAL content has context (recall held)', () => {
+    // Gemini finding: the decoded blob is just the raw UUID and carries no
+    // context keywords, so the context gate must be evaluated against the
+    // ORIGINAL content (threaded via scanFlat's contextText). A real wrapped
+    // Heroku key surrounded by `heroku api key` context must still be caught.
+    const wrapped = Buffer.from(UUID, 'utf8').toString('base64');
+    const content = `The Heroku API key blob is ${wrapped} — decode at runtime.`;
+    expect(
+      scanForSecrets(content).some((m) => m.patternId === 'base64-wrapped:heroku-api-key'),
+    ).toBe(true);
+  });
+
+  it('flags a hex-wrapped Heroku key when the original content has context (recall held)', () => {
+    const wrapped = Buffer.from(UUID, 'utf8').toString('hex');
+    const content = `heroku token hexval ${wrapped} rotate soon`;
+    expect(scanForSecrets(content).some((m) => m.patternId === 'hex-wrapped:heroku-api-key')).toBe(
+      true,
+    );
+  });
+
+  it('does NOT flag a base64-wrapped bare UUID with NO context (precision held)', () => {
+    // A UUID that merely happens to be base64-wrapped in prose with no key
+    // context stays suppressed — the decode pass does not resurrect the
+    // over-block the gate removed.
+    const wrapped = Buffer.from(UUID, 'utf8').toString('base64');
+    const content = `The request id blob is ${wrapped} in the trace log.`;
+    expect(
+      scanForSecrets(content).some((m) => m.patternId === 'base64-wrapped:heroku-api-key'),
+    ).toBe(false);
+  });
+
   it('resets lastIndex on a global/sticky requiresContext regex (determinism)', () => {
     // A custom context-gated pattern whose CONTEXT regex carries the global flag.
     // Without resetting `requiresContext.lastIndex` between scans, `.test()`

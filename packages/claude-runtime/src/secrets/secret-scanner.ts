@@ -44,15 +44,28 @@ const HEX_CANDIDATE_RE = /[A-Fa-f0-9]{24,}/g;
  *      calls, which would make matching nondeterministic across invocations, so
  *      reset it (and the context regex) before use.
  *   2. Context gate — when `pattern.requiresContext` is set, the value matching
- *      is not sufficient: the SAME scan window must also satisfy the context
- *      regex, else the hit is suppressed. This lets an ambiguous value (a bare
- *      UUID) only count as a credential when key-context is nearby, raising
- *      precision without weakening any context-free rule.
+ *      is not sufficient: a context window must ALSO satisfy the context regex,
+ *      else the hit is suppressed. This lets an ambiguous value (a bare UUID)
+ *      only count as a credential when key-context is nearby, raising precision
+ *      without weakening any context-free rule.
+ *
+ * The context window is `contextText` when supplied, else `text`. This matters
+ * for the decode-and-rescan pass: the DECODED blob (`text`) is just the raw
+ * value (e.g. a bare UUID) with no surrounding keywords, so the context gate
+ * must be evaluated against the ORIGINAL content the blob came from
+ * (`contextText`) — otherwise a real base64/hex-wrapped Heroku key surrounded by
+ * `heroku` / `api key` context would be silently missed (Gemini finding, e06.15).
+ * For the per-line and collapsed passes the value and its context live in the
+ * same string, so `contextText` is omitted and the window is `text` itself.
  *
  * Returns the RegExpExecArray for a counted hit, or `null` when the pattern does
  * not match or its context gate is not satisfied.
  */
-function execWithContext(pattern: SecretPattern, text: string): RegExpExecArray | null {
+function execWithContext(
+  pattern: SecretPattern,
+  text: string,
+  contextText?: string,
+): RegExpExecArray | null {
   if (pattern.regex.global || pattern.regex.sticky) {
     pattern.regex.lastIndex = 0;
   }
@@ -62,8 +75,11 @@ function execWithContext(pattern: SecretPattern, text: string): RegExpExecArray 
     if (pattern.requiresContext.global || pattern.requiresContext.sticky) {
       pattern.requiresContext.lastIndex = 0;
     }
-    // Suppress the hit unless the surrounding window also carries key-context.
-    if (!pattern.requiresContext.test(text)) return null;
+    // Evaluate the gate against the context window (the original content for a
+    // decoded blob; the text itself otherwise). Suppress unless it carries
+    // key-context.
+    const window = contextText ?? text;
+    if (!pattern.requiresContext.test(window)) return null;
   }
   return match;
 }
@@ -74,9 +90,13 @@ function scanFlat(
   matches: SecretMatch[],
   locate: (matchIndex: number, matchLength: number) => { line: number; column: number },
   patternIdOverride?: (patternId: string) => string,
+  contextText?: string,
 ): void {
   for (const pattern of patterns) {
-    const match = execWithContext(pattern, text);
+    // `contextText` (when supplied) is the window a context-gated pattern's gate
+    // is evaluated against — used by the decode pass so a wrapped value is gated
+    // on the ORIGINAL content, not just the context-free decoded blob.
+    const match = execWithContext(pattern, text, contextText);
     if (match) {
       const { line, column } = locate(match.index, match[0].length);
       matches.push({
@@ -179,6 +199,11 @@ function scanEncodedWrapped(
         const wrappedId = `${prefix}:${patternId}`;
         return wrappedId;
       },
+      // The decoded blob is just the raw value; a context-gated pattern must be
+      // evaluated against the ORIGINAL content (where `heroku` / `api key`
+      // keywords live), else a real wrapped Heroku key is silently missed
+      // (Gemini finding, e06.15). Value regex still runs on `decoded`.
+      content,
     );
     // Dedup guard: track the wrapped prefix so the same blob is not re-scanned.
     seenWrapped.add(raw);
