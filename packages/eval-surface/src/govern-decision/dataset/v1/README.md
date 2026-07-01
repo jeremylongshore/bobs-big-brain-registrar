@@ -1,7 +1,8 @@
 # govern-decision adversarial labeled set — v1
 
-**Version:** `1.0.0` · **Cases:** 32 (22 positive · 10 negative) ·
-**Bead:** `compile-then-govern-e06.3` · **Risk:** `010-AT-RISK` R5 / R10 ·
+**Version:** `1.1.0` · **Cases:** 32 (22 positive · 10 negative) ·
+**Bead:** `compile-then-govern-e06.3` (set) / `compile-then-govern-e06.14`
+(v1.1.0 relabel) · **Risk:** `010-AT-RISK` R5 / R10 ·
 **Umbrella:** `intent-solutions-io/governed-second-brain#27`
 
 This is the versioned, labeled adversarial set that measures the **efficacy** of
@@ -54,23 +55,31 @@ label drifts (an undocumented false-negative). So the dataset and the code
 cannot silently disagree: a relabel that hides a real miss is caught by the CI
 gate, and a code regression that breaks a real catch is caught the same way.
 
-## Measured results (v1.0.0, this commit)
+## Measured results (v1.1.0, e06.14 — after the split/base64 fix)
 
-Reporting score = mean per-check F1 = **0.7333**. Gate = **zero undocumented
-false-negatives** → PASS.
+Reporting score = mean per-check F1 = **0.8188** (was 0.7333 at v1.0.0). Gate =
+**zero undocumented false-negatives** → PASS.
 
-| check                 | precision  | recall | F1     | TP  | FP  | FN  | TN  |
-| --------------------- | ---------- | ------ | ------ | --- | --- | --- | --- |
-| `policy-pipeline`     | 0.9167     | 0.5789 | 0.7097 | 11  | 1   | 8   | 9   |
-| `secret-scanner`      | 0.9000     | 0.5625 | 0.6923 | 9   | 1   | 7   | 9   |
-| `content-classifier`  | 0.9333     | 0.6364 | 0.7568 | 14  | 1   | 8   | 9   |
-| `boundary-disclosure` | **1.0000** | 0.6316 | 0.7742 | 12  | 0   | 7   | 10  |
+| check                 | precision  | recall (v1.0.0 → v1.1.0) | F1     | TP  | FP  | FN  | TN  |
+| --------------------- | ---------- | ------------------------ | ------ | --- | --- | --- | --- |
+| `policy-pipeline`     | 0.9333     | 0.5789 → **0.7368**      | 0.8235 | 14  | 1   | 5   | 9   |
+| `secret-scanner`      | 0.9231     | 0.5625 → **0.7500**      | 0.8276 | 12  | 1   | 4   | 9   |
+| `content-classifier`  | 0.9444     | 0.6364 → **0.7727**      | 0.8500 | 17  | 1   | 5   | 9   |
+| `boundary-disclosure` | **1.0000** | 0.6316 (unchanged)       | 0.7742 | 12  | 0   | 7   | 10  |
 
-Recall in the ~0.56–0.64 band is **the point of the eval**, not a bug to paper
-over: the missed positives are the documented evasions below. The scoping rule
-is that a check only counts toward a case's recall when the case names it in
-`expectCaughtBy` or `knownFalseNegativeOf` — so e.g. the secret-scanner is not
-penalised for "missing" an SSN (SSNs are PII, not secrets).
+The **secret-scanner recall rose 0.56 → 0.75** because the two evasions that
+defeated the line-by-line scan — a key split across a newline, and a
+base64/hex-wrapped token — are now closed by a newline-collapsed pre-pass and a
+bounded decode-and-rescan in `scanForSecrets` (see gaps 1 & 2 below, now
+**CLOSED**). The cascade lifts the policy-pipeline and content-classifier too
+(both consume `scanForSecrets` / `classifyContent`). Precision held (no new
+false positives — a benign base64 data-URI image is NOT flagged, guarded by a
+printable-decode check). The remaining ~0.63–0.77 recall is the point of the
+eval, not a bug: the still-missed positives are the metadata/tenant-spoof and
+boundary-vocabulary gaps documented below. The scoping rule is that a check only
+counts toward a case's recall when the case names it in `expectCaughtBy` or
+`knownFalseNegativeOf` — so e.g. the secret-scanner is not penalised for
+"missing" an SSN (SSNs are PII, not secrets).
 
 ## Documented gaps this set proves (real findings — follow-up bead candidates)
 
@@ -78,16 +87,23 @@ These are the honest output of the eval. They are **documented**, so they do not
 fail CI, but each is a genuine hole in the moat worth a follow-up bead. **None
 was fixed by weakening a rule.**
 
-1. **Split-across-newline keys → FALSE NEGATIVE on all in-content checks.**
-   `scanForSecrets` splits on `\n` and matches each line, so a key broken across
-   two lines (`sec-split-openai-01`, `sec-split-aws-01`) is invisible to the
-   secret scanner, the classifier, the policy pipeline, **and** the boundary
-   filter. _This is the CISO's exact fear._ Fix candidate: a windowed / newline-
-   collapsed pre-pass before the line scan.
+1. **Split-across-newline keys — CLOSED for the in-content checks (e06.14).**
+   `scanForSecrets` previously split on `\n` and matched each line, so a key
+   broken across two lines (`sec-split-openai-01`, `sec-split-aws-01`) was
+   invisible. _This was the CISO's exact fear._ **Fixed:** a newline-collapsed
+   pre-pass (single-space + no-whitespace views) now rejoins the split key, so
+   the secret-scanner / classifier / policy-pipeline catch both cases. The
+   `common` boundary filter has no collapse pass and STILL misses `sec-split-aws-01`
+   — that convergence is a separate follow-up (gap 3).
 
-2. **Base64-wrapped tokens → FALSE NEGATIVE everywhere.** No detector decodes
-   base64 before matching (`sec-b64-openai-01`, `sec-b64-github-01`). Fix
-   candidate: a bounded base64-decode-and-rescan pass on high-entropy blobs.
+2. **Base64/hex-wrapped tokens — CLOSED for the in-content checks (e06.14).** No
+   detector decoded base64 before matching (`sec-b64-openai-01`,
+   `sec-b64-github-01`). **Fixed:** a bounded base64/hex decode-and-rescan pass
+   (capped candidate count + total decoded bytes, printable-decode gate to avoid
+   flagging benign binary blobs like a data-URI image) now decodes encoded
+   substrings and re-runs the secret patterns, reporting a hit as
+   `base64-wrapped:<id>` / `hex-wrapped:<id>`. The boundary filter has no decode
+   pass and STILL misses these — a separate follow-up (gap 3).
 
 3. **The line-scanner and the boundary filter have DIVERGENT rule sets.**
    - Boundary filter misses: DB connection strings (`sec-inline-connstr-01`),
