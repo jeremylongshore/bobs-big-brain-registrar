@@ -82,3 +82,20 @@ export type {
 // Native FTS5 — model-free keyword backend, no external binary (bead 0t9.2)
 export { Fts5Backend, fts5RetrievalFn, buildFts5MatchQuery } from './native/index.js';
 export type { IndexedDoc, Fts5SearchHit } from './native/index.js';
+
+// Reindex — idempotent rebuild of the derived qmd-index from kb-export (e06.13)
+export { reindex } from './reindex/reindex.js';
+export type { ReindexReport } from './reindex/reindex.js';
+
+// Search-health canary — fails loudly when a known-positive control returns 0 hits (e06.13)
+export {
+  runSearchCanary,
+  formatCanaryReport,
+  DEFAULT_CANARY_CONTROLS,
+} from './canary/search-canary.js';
+export type {
+  CanaryControl,
+  CanaryControlResult,
+  SearchCanaryReport,
+  SearchCanaryOptions,
+} from './canary/search-canary.js';

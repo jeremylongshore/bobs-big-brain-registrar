@@ -36,6 +36,37 @@ jobs:
         # with forks disclosed; a tampered brain must FAIL closed.
         run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
 
+      - name: Put workspace bins on PATH (qmd for the search-health canary)
+        # qmd is a pinned root devDependency (@tobilu/qmd); the workspace bin
+        # makes it discoverable so the reindex+canary CLI runs against a real
+        # index below. Same pattern as ci.yml.
+        run: echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Search-health canary (reindex a fixture brain, fail loudly on 0 hits)
+        # 010-AT-RISK R11 · bead compile-then-govern-e06.13 · umbrella #27:
+        # brain_search degrades to an EMPTY result on a missing/misrouted index
+        # instead of erroring, so a broken retrieval index was invisible — the
+        # "SEARCH DEGRADED, 0 hits on known-positive controls" incident. This gate
+        # builds an ephemeral fixture brain from kb-export, reindexes it (the
+        # idempotent Tier-C-derived rebuild), then runs the canary: it exits
+        # non-zero if any known-positive control returns 0 hits, so a retrieval
+        # regression fails the nightly loudly instead of silently. The live-brain
+        # canary is the pre-flight gate in the local nightly compile (runbook
+        # 000-docs/027-OD-OPSM), which is the only host with the real ~/.teamkb.
+        run: |
+          set -euo pipefail
+          FIXTURE="$RUNNER_TEMP/teamkb-canary"
+          mkdir -p "$FIXTURE/kb-export/curated"
+          cat > "$FIXTURE/kb-export/curated/seed.md" <<'MD'
+          # Audit chain receipts and the governed brain backup
+          The audit chain keeps cryptographic receipts. This memory documents the
+          compile then govern architecture used for backup and DR of the governed brain.
+          MD
+          export TEAMKB_BASE_PATH="$FIXTURE"
+          export TEAMKB_TENANT_ID="ci-canary"
+          node packages/qmd-adapter/dist/cli.js reindex
+          node packages/qmd-adapter/dist/cli.js canary
+
       - name: Dependency audit
         run: pnpm audit --audit-level=moderate
         continue-on-error: true
