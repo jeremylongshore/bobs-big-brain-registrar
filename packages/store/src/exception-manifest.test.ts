@@ -25,6 +25,7 @@ import {
   type ExceptionManifest,
   type ExceptionManifestEntry,
   type StoredRowTuple,
+  type TamperReason,
 } from './exception-manifest.js';
 import type { AuditRepository, AuditChainRow } from './repositories/audit-repository.js';
 
@@ -121,24 +122,27 @@ function rowsByIdOf(rows: AuditChainRow[]): Map<string, StoredRowTuple> {
   return m;
 }
 
+/** Narrowing predicate: a break carrying one of the three tamper reasons. */
+function isTamperBreak(b: AuditChainBreak): b is AuditChainBreak & { reason: TamperReason } {
+  return b.reason !== 'CHAIN_FORK';
+}
+
 /** Build a manifest that pins every tamper-reason break in the given breaks list. */
 function manifestFor(
   breaks: AuditChainBreak[],
   rowsById: Map<string, StoredRowTuple>,
 ): ExceptionManifest {
-  const entries: ExceptionManifestEntry[] = breaks
-    .filter((b) => b.reason !== 'CHAIN_FORK')
-    .map((b) => {
-      const stored = rowsById.get(b.id)!;
-      return {
-        id: b.id,
-        entryHash: stored.entry_hash!,
-        prevEntryHash: stored.prev_entry_hash,
-        hashVersion: stored.hash_version,
-        seq: stored.seq,
-        reason: b.reason,
-      };
-    });
+  const entries: ExceptionManifestEntry[] = breaks.filter(isTamperBreak).map((b) => {
+    const stored = rowsById.get(b.id)!;
+    return {
+      id: b.id,
+      entryHash: stored.entry_hash, // nullable pin — capture the stored hash as-is
+      prevEntryHash: stored.prev_entry_hash,
+      hashVersion: stored.hash_version,
+      seq: stored.seq,
+      reason: b.reason,
+    };
+  });
   const body = {
     schemaVersion: 1 as const,
     generatedAt: '2026-06-30T00:00:00.000Z',
@@ -290,6 +294,92 @@ describe('classifyChainBreaks — ADVERSARIAL no-laundering (R1)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// (b2) NULL stored entry_hash — the nullable-pin case (Gemini review finding 1)
+//
+// A tamper-reason break CAN carry a null stored entry_hash (a row whose hash
+// column was cleared). The pin must capture that null so it byte-matches, AND
+// the anti-laundering guarantee must still hold for the null case: a
+// null->forged-hash drift flips it to tamper.
+// ---------------------------------------------------------------------------
+
+describe('classifyChainBreaks — null stored entry_hash', () => {
+  /**
+   * Build a 3-row v2 chain then a break row whose stored entry_hash is NULL but
+   * whose prev_entry_hash is the real prior head — so the verifier reports a
+   * tamper reason (not a pre-migration unverified row, which needs BOTH null),
+   * and the stored entry_hash the classifier reads is null.
+   */
+  function chainWithNullHashBreak(): { rows: AuditChainRow[]; breakId: string } {
+    const rows: AuditChainRow[] = [];
+    let prev: string | null = null;
+    for (let i = 0; i < 3; i++) {
+      const r = v2Row(i, prev);
+      rows.push(r);
+      prev = r.entry_hash;
+    }
+    const breakId = 'id-nullhash';
+    rows.push({
+      id: breakId,
+      action: 'promoted',
+      memory_id: 'mem-nullhash',
+      tenant_id: 'local',
+      actor_json: '{"type":"ai","id":"curator"}',
+      reason: 'rnull',
+      details_json: '{}',
+      timestamp: '2026-06-17T00:00:09.000Z',
+      hash_version: 2,
+      prev_entry_hash: prev, // real prior head → not a pre-migration row
+      entry_hash: null, // the stored hash is NULL
+    });
+    return { rows, breakId };
+  }
+
+  it('a documented break whose pinned entryHash is NULL classifies as documentedException', () => {
+    const { rows, breakId } = chainWithNullHashBreak();
+    const rowsById = rowsByIdOf(rows);
+    const { breaks } = verifyAuditChain(mockRepo(rows));
+
+    // Sanity: the break exists, is a tamper reason, and its stored hash is null.
+    const brk = breaks.find((b) => b.id === breakId)!;
+    expect(brk).toBeDefined();
+    expect(brk.reason).not.toBe('CHAIN_FORK');
+    expect(rowsById.get(breakId)!.entry_hash).toBeNull();
+
+    // Pin it (nullable) and classify → documented, verified true.
+    const manifest = manifestFor(breaks, rowsById);
+    expect(manifest.entries.find((e) => e.id === breakId)!.entryHash).toBeNull();
+
+    const result = classifyChainBreaks(breaks, manifest, rowsById);
+    expect(result.documentedExceptions.map((b) => b.id)).toContain(breakId);
+    expect(result.tamperSignatures).toHaveLength(0);
+    expect(result.verified).toBe(true);
+  });
+
+  it('ADVERSARIAL: a null-pinned row whose stored hash is forged null->value flips to tamper', () => {
+    const { rows, breakId } = chainWithNullHashBreak();
+    const rowsById = rowsByIdOf(rows);
+    const { breaks } = verifyAuditChain(mockRepo(rows));
+    const manifest = manifestFor(breaks, rowsById);
+
+    // Baseline: documented under the null pin.
+    expect(
+      classifyChainBreaks(breaks, manifest, rowsById).documentedExceptions.map((b) => b.id),
+    ).toContain(breakId);
+
+    // ATTACK: the row's stored entry_hash moves from null to a forged value.
+    // The pin says null; the live tuple now says "someforgedhash" → drift → tamper.
+    const attacked = new Map(rowsById);
+    const base = attacked.get(breakId)!;
+    attacked.set(breakId, { ...base, entry_hash: 'someforgedhash' });
+
+    const result = classifyChainBreaks(breaks, manifest, attacked);
+    expect(result.documentedExceptions.map((b) => b.id)).not.toContain(breakId);
+    expect(result.tamperSignatures.map((b) => b.id)).toContain(breakId);
+    expect(result.verified).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (c) an id NOT in the manifest is a tamperSignature
 // ---------------------------------------------------------------------------
 
@@ -363,7 +453,7 @@ describe('classifyChainBreaks — chain forks', () => {
       entries: [
         {
           id: forkId,
-          entryHash: stored.entry_hash!,
+          entryHash: stored.entry_hash,
           prevEntryHash: stored.prev_entry_hash,
           hashVersion: stored.hash_version,
           seq: stored.seq,
@@ -434,7 +524,7 @@ describe('readManifest — integrity gates', () => {
     expect(() => readManifest(manifestPath)).toThrow(/manifestHash mismatch/);
   });
 
-  it('throws on unsupported schemaVersion', () => {
+  it('throws on unsupported schemaVersion (Zod literal(1) rejects it)', () => {
     writeFileSync(
       manifestPath,
       JSON.stringify({
@@ -445,7 +535,44 @@ describe('readManifest — integrity gates', () => {
         manifestHash: 'x',
       }),
     );
-    expect(() => readManifest(manifestPath)).toThrow(/unsupported schemaVersion/);
+    expect(() => readManifest(manifestPath)).toThrow(ExceptionManifestError);
+    expect(() => readManifest(manifestPath)).toThrow(/schema validation/);
+  });
+
+  it('rejects a manifest entry whose reason is CHAIN_FORK (Zod enum excludes forks)', () => {
+    // A fork is never a documented exception, so the manifest entry `reason`
+    // enum permits only the three tamper reasons. A CHAIN_FORK entry must be
+    // refused at load — it cannot be smuggled in to launder a fork.
+    const entry = {
+      id: 'id-fork',
+      entryHash: 'h',
+      prevEntryHash: null,
+      hashVersion: 2,
+      seq: 3,
+      reason: 'CHAIN_FORK',
+    };
+    // Build with a VALID manifestHash + count so ONLY the reason enum can fail
+    // (proves the rejection is the enum, not a count/hash gate). We hash the
+    // structurally-identical body; readManifest still refuses on the enum first.
+    const body = { schemaVersion: 1 as const, generatedAt: 't', entryCount: 1, entries: [entry] };
+    // computeManifestHash accepts the shape structurally; the value doesn't
+    // matter because schema validation runs before the hash check.
+    writeFileSync(manifestPath, JSON.stringify({ ...body, manifestHash: 'anything' }));
+    expect(() => readManifest(manifestPath)).toThrow(ExceptionManifestError);
+    expect(() => readManifest(manifestPath)).toThrow(/schema validation/);
+  });
+
+  it('accepts a manifest with brainId explicitly null (nullable brainId)', () => {
+    const { rows } = chainWithMigrationBreak(3);
+    const rowsById = rowsByIdOf(rows);
+    const { breaks } = verifyAuditChain(mockRepo(rows));
+    const withNullBrain = manifestFor(breaks, rowsById);
+    // Serialise with an explicit brainId: null; the loader must accept it.
+    writeFileSync(manifestPath, JSON.stringify({ ...withNullBrain, brainId: null }));
+    const loaded = readManifest(manifestPath);
+    expect(loaded.entryCount).toBe(withNullBrain.entryCount);
+    // brainId normalises to absent in the returned body (null === omitted).
+    expect(loaded.brainId).toBeUndefined();
   });
 
   it('throws on non-JSON content', () => {

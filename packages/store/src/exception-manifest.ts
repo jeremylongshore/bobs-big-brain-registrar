@@ -51,39 +51,83 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
+import { z } from 'zod';
+
 import type { AuditChainBreak } from './audit-verify.js';
 
-/** Reason codes that indicate TAMPERING (as opposed to a non-malicious fork). */
-const TAMPER_REASONS: ReadonlySet<AuditChainBreak['reason']> = new Set([
+/**
+ * The THREE tamper-reason codes — the only reasons a manifest entry may carry.
+ * A `CHAIN_FORK` is a non-malicious ordering artifact and is NEVER pinned as a
+ * documented exception, so it is deliberately EXCLUDED from the manifest-entry
+ * reason enum (a manifest listing a fork reason is rejected on load).
+ */
+const TAMPER_REASONS = [
   'ENTRY_HASH_MISMATCH',
   'PREV_LINK_MISMATCH',
   'PREV_LINK_AND_ENTRY_HASH_MISMATCH',
-]);
+] as const;
+
+/** A tamper-reason code (the subset of `AuditChainBreak['reason']` a manifest may pin). */
+export type TamperReason = (typeof TAMPER_REASONS)[number];
+
+/** Set form of the tamper reasons for O(1) defence-in-depth membership checks. */
+const TAMPER_REASON_SET: ReadonlySet<AuditChainBreak['reason']> = new Set(TAMPER_REASONS);
+
+/**
+ * Zod schema for one pinned exception (repo convention: Zod is the source of
+ * truth for on-disk shapes). Note `entryHash` is NULLABLE — a tamper-reason
+ * break can have a NULL stored `entry_hash` (`AuditChainBreak.actualEntryHash`
+ * is `string | null`), e.g. a row whose hash column was cleared. The pin must
+ * capture that null accurately so a later null→value drift reads as tamper.
+ * `reason` is restricted to the three tamper reasons ONLY.
+ */
+export const ExceptionManifestEntrySchema = z.object({
+  /** Audit row primary key. Names the exception uniquely. */
+  id: z.string(),
+  /** The row's CURRENT stored `entry_hash` at manifest-generation time (nullable). */
+  entryHash: z.string().nullable(),
+  /** The row's CURRENT stored `prev_entry_hash` (null for the first chained row). */
+  prevEntryHash: z.string().nullable(),
+  /** The row's stored `hash_version` (1 = pre-migration v1 form, 2 = v2). */
+  hashVersion: z.number(),
+  /** The row's monotonic write-order key. Part of the pinned identity. */
+  seq: z.number(),
+  /**
+   * The tamper reason this exception covers. The classifier requires the live
+   * break's reason to still match this — a documented ENTRY_HASH_MISMATCH that
+   * later reads as PREV_LINK_MISMATCH is drift, not the same exception.
+   * CHAIN_FORK is intentionally NOT a permitted value.
+   */
+  reason: z.enum(TAMPER_REASONS),
+});
 
 /**
  * The current stored identity of one known-migration break row, pinned by its
  * EXACT tuple. This is the amnesty record: a break matching this tuple
  * byte-for-byte is a documented exception; any drift from it is tampering.
  */
-export interface ExceptionManifestEntry {
-  /** Audit row primary key. Names the exception uniquely. */
-  id: string;
-  /** The row's CURRENT stored `entry_hash` at manifest-generation time. */
-  entryHash: string;
-  /** The row's CURRENT stored `prev_entry_hash` (null for the first chained row). */
-  prevEntryHash: string | null;
-  /** The row's stored `hash_version` (1 = pre-migration v1 form, 2 = v2). */
-  hashVersion: number;
-  /** The row's monotonic write-order key. Part of the pinned identity. */
-  seq: number;
-  /**
-   * The break reason this exception covers (a tamper-reason code). The
-   * classifier requires the live break's reason to still match this — a
-   * documented ENTRY_HASH_MISMATCH that later reads as PREV_LINK_MISMATCH is
-   * drift, not the same exception.
-   */
-  reason: AuditChainBreak['reason'];
-}
+export type ExceptionManifestEntry = z.infer<typeof ExceptionManifestEntrySchema>;
+
+/**
+ * Zod schema for the manifest as it appears ON DISK. `brainId` is NULLABLE and
+ * OPTIONAL — it serialises as `null` in the canonical body when omitted, and
+ * the loader must accept an explicit `null`. This schema validates STRUCTURE
+ * only; the R2 count-assert and the `manifestHash` re-verify are additional
+ * gates applied in `readManifest` (they cross-reference fields, not shape).
+ */
+export const ExceptionManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  /** Optional brain identifier (a manifest is brain-specific data); null when absent. */
+  brainId: z.string().nullable().optional(),
+  /** ISO-8601 timestamp the manifest was generated. */
+  generatedAt: z.string(),
+  /** Frozen count of entries. `readManifest` HARD-asserts entries.length === this (R2). */
+  entryCount: z.number(),
+  /** The pinned exceptions. */
+  entries: z.array(ExceptionManifestEntrySchema),
+  /** SHA-256 hex over the canonical body (everything above, entries sorted). */
+  manifestHash: z.string(),
+});
 
 /**
  * A frozen, self-describing amnesty for a specific brain's known-migration
@@ -91,19 +135,7 @@ export interface ExceptionManifestEntry {
  * manifest itself is tamper-evident: editing any entry (or the count) changes
  * the hash, and `readManifest` re-verifies + count-asserts on load.
  */
-export interface ExceptionManifest {
-  schemaVersion: 1;
-  /** Optional brain identifier (a manifest is brain-specific data). */
-  brainId?: string;
-  /** ISO-8601 timestamp the manifest was generated. */
-  generatedAt: string;
-  /** Frozen count of entries. `readManifest` HARD-asserts entries.length === this (R2). */
-  entryCount: number;
-  /** The pinned exceptions. */
-  entries: ExceptionManifestEntry[];
-  /** SHA-256 hex over the canonical body (everything above, entries sorted). */
-  manifestHash: string;
-}
+export type ExceptionManifest = z.infer<typeof ExceptionManifestSchema>;
 
 /** The canonical body over which `manifestHash` is computed — excludes the hash itself. */
 export type ExceptionManifestBody = Omit<ExceptionManifest, 'manifestHash'>;
@@ -160,22 +192,6 @@ export class ExceptionManifestError extends Error {
   }
 }
 
-function isEntry(v: unknown): v is ExceptionManifestEntry {
-  if (typeof v !== 'object' || v === null) return false;
-  const e = v as Record<string, unknown>;
-  return (
-    typeof e['id'] === 'string' &&
-    typeof e['entryHash'] === 'string' &&
-    (e['prevEntryHash'] === null || typeof e['prevEntryHash'] === 'string') &&
-    typeof e['hashVersion'] === 'number' &&
-    typeof e['seq'] === 'number' &&
-    (e['reason'] === 'ENTRY_HASH_MISMATCH' ||
-      e['reason'] === 'PREV_LINK_MISMATCH' ||
-      e['reason'] === 'PREV_LINK_AND_ENTRY_HASH_MISMATCH' ||
-      e['reason'] === 'CHAIN_FORK')
-  );
-}
-
 /**
  * Read + validate an exception manifest from a single-JSON file.
  *
@@ -185,12 +201,17 @@ function isEntry(v: unknown): v is ExceptionManifestEntry {
  * and written once.)
  *
  * Integrity gates enforced on load (fail-closed):
- *  1. Structural validation of every field.
+ *  1. **Structural validation via `ExceptionManifestSchema` (Zod).** Rejects
+ *     any malformed field and any entry whose `reason` is not one of the three
+ *     tamper reasons — a manifest listing `CHAIN_FORK` is refused here.
  *  2. **HARD count-assert (R2):** `entries.length === entryCount`, else throw.
  *     A tampered manifest that adds/drops an entry without fixing `entryCount`
- *     is rejected here before it can launder or hide a break.
+ *     is rejected before it can launder or hide a break.
  *  3. **manifestHash re-verification:** recompute over the canonical body and
  *     compare; a mismatch means the manifest itself was edited → throw.
+ *
+ * Gates 2 and 3 are cross-field checks (they compare `entryCount`/`manifestHash`
+ * against derived values), so they live here rather than in the Zod shape.
  *
  * @throws ExceptionManifestError on any malformed/inconsistent manifest.
  */
@@ -209,62 +230,42 @@ export function readManifest(path: string): ExceptionManifest {
     throw new ExceptionManifestError(`manifest at ${path} is not valid JSON: ${String(e)}`);
   }
 
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new ExceptionManifestError(`manifest at ${path} is not a JSON object`);
-  }
-  const m = parsed as Record<string, unknown>;
-
-  if (m['schemaVersion'] !== 1) {
+  // (1) Structural validation — Zod is the source of truth for the shape.
+  const result = ExceptionManifestSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`);
     throw new ExceptionManifestError(
-      `manifest at ${path}: unsupported schemaVersion ${String(m['schemaVersion'])} (expected 1)`,
+      `manifest at ${path} failed schema validation: ${issues.join('; ')}`,
     );
   }
-  if (typeof m['generatedAt'] !== 'string') {
-    throw new ExceptionManifestError(`manifest at ${path}: generatedAt must be a string`);
-  }
-  if (typeof m['entryCount'] !== 'number') {
-    throw new ExceptionManifestError(`manifest at ${path}: entryCount must be a number`);
-  }
-  if (typeof m['manifestHash'] !== 'string') {
-    throw new ExceptionManifestError(`manifest at ${path}: manifestHash must be a string`);
-  }
-  if (m['brainId'] !== undefined && typeof m['brainId'] !== 'string') {
-    throw new ExceptionManifestError(`manifest at ${path}: brainId must be a string when present`);
-  }
-  if (!Array.isArray(m['entries']) || !m['entries'].every(isEntry)) {
-    throw new ExceptionManifestError(
-      `manifest at ${path}: entries must be an array of valid entries`,
-    );
-  }
+  const m = result.data;
 
-  const entries = m['entries'] as ExceptionManifestEntry[];
-  const entryCount = m['entryCount'];
-
-  // (R2) Freeze the entry count: a count that disagrees with the array length
-  // is a tampered manifest — refuse it. This is a HARD assert, not a warning.
-  if (entries.length !== entryCount) {
+  // (2) (R2) Freeze the entry count: a count that disagrees with the array
+  // length is a tampered manifest — refuse it. HARD assert, not a warning.
+  if (m.entries.length !== m.entryCount) {
     throw new ExceptionManifestError(
-      `manifest at ${path}: entryCount ${entryCount} != entries.length ${entries.length} ` +
+      `manifest at ${path}: entryCount ${m.entryCount} != entries.length ${m.entries.length} ` +
         `(count drift / tampered manifest)`,
     );
   }
 
+  // (3) manifestHash re-verification over the canonical body.
   const body: ExceptionManifestBody = {
     schemaVersion: 1,
-    ...(m['brainId'] !== undefined ? { brainId: m['brainId'] as string } : {}),
-    generatedAt: m['generatedAt'],
-    entryCount,
-    entries,
+    ...(m.brainId !== undefined && m.brainId !== null ? { brainId: m.brainId } : {}),
+    generatedAt: m.generatedAt,
+    entryCount: m.entryCount,
+    entries: m.entries,
   };
   const recomputed = computeManifestHash(body);
-  if (recomputed !== m['manifestHash']) {
+  if (recomputed !== m.manifestHash) {
     throw new ExceptionManifestError(
       `manifest at ${path}: manifestHash mismatch (recomputed ${recomputed} != stored ` +
-        `${String(m['manifestHash'])}) — manifest content was edited`,
+        `${m.manifestHash}) — manifest content was edited`,
     );
   }
 
-  return { ...body, manifestHash: m['manifestHash'] };
+  return { ...body, manifestHash: m.manifestHash };
 }
 
 /**
@@ -357,7 +358,9 @@ export function classifyChainBreaks(
     const isDocumented =
       entry !== undefined &&
       stored !== undefined &&
-      // Byte-match the CURRENT stored tuple against the pinned tuple.
+      // Byte-match the CURRENT stored tuple against the pinned tuple. `===` is
+      // null-aware: a null pin matches a null stored hash, and a null→value (or
+      // value→null) drift is unequal, so it correctly falls through to tamper.
       stored.entry_hash === entry.entryHash &&
       stored.prev_entry_hash === entry.prevEntryHash &&
       stored.hash_version === entry.hashVersion &&
@@ -365,8 +368,9 @@ export function classifyChainBreaks(
       // …and the break reason must still be the one the exception was minted for.
       entry.reason === brk.reason &&
       // Defence-in-depth: a manifest may only ever carry tamper-reason
-      // exceptions. If a CHAIN_FORK somehow got pinned, refuse to honour it.
-      TAMPER_REASONS.has(entry.reason);
+      // exceptions (the Zod enum already excludes CHAIN_FORK). If a fork reason
+      // somehow got pinned, refuse to honour it.
+      TAMPER_REASON_SET.has(entry.reason);
 
     if (isDocumented) {
       documentedExceptions.push(brk);

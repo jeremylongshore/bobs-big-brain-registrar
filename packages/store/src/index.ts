@@ -19,11 +19,14 @@ export {
   readManifest,
   classifyChainBreaks,
   ExceptionManifestError,
+  ExceptionManifestEntrySchema,
+  ExceptionManifestSchema,
 } from './exception-manifest.js';
 export type {
   ExceptionManifestEntry,
   ExceptionManifest,
   ExceptionManifestBody,
+  TamperReason,
   StoredRowTuple,
   ClassifiedChainBreaks,
 } from './exception-manifest.js';

@@ -541,7 +541,10 @@ async function cmdGenerateExceptionManifest(args: string[], deps: CuratorCliDeps
       if (row === undefined) continue; // defensive; a break always names a real row
       entries.push({
         id: row.id,
-        entryHash: row.entry_hash!, // a tamper-reason break implies a non-null stored hash
+        // Pin the stored entry_hash AS-IS (nullable): a tamper-reason break can
+        // have a NULL stored hash, and the pin must capture that faithfully so a
+        // later null→value drift reads as tamper (no non-null assertion).
+        entryHash: row.entry_hash,
         prevEntryHash: row.prev_entry_hash,
         hashVersion: row.hash_version ?? 1,
         seq: row.seq ?? 0,
