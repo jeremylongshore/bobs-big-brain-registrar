@@ -25,11 +25,15 @@ export interface TokenIdentity {
 /**
  * A token and the identity it grants.
  *
- * The on-disk `tokens.json` carries the bearer secret in the `token` field for
- * operator convenience (you write the secret you hand out). At load time the
- * registry **derives a salted scrypt hash and discards the plaintext** — see
- * {@link hashToken} / {@link InMemoryTokenRegistry}. The plaintext never lives
- * in process memory past construction, so a heap dump cannot leak live tokens.
+ * The on-disk `tokens.json` `token` field carries EITHER a plaintext bearer
+ * secret (operator convenience — you write the secret you hand out) OR an
+ * already-salted `scrypt$salt$hash` produced by {@link hashToken}. The
+ * pre-hashed form is the at-rest default: it keeps **no plaintext bearer secret
+ * on disk** (nor in any backup of `~/.teamkb`). Either way, at load the registry
+ * ends up holding only a salted scrypt hash — a plaintext value is hashed and
+ * discarded, a pre-hashed value is used verbatim — so the plaintext never lives
+ * in process memory past construction and a heap dump cannot leak live tokens.
+ * See {@link InMemoryTokenRegistry}.
  */
 export interface TokenRecord extends TokenIdentity {
   token: string;
@@ -123,14 +127,21 @@ export class InMemoryTokenRegistry implements TokenRegistry {
   private readonly records: HashedRecord[];
 
   /**
-   * @param records  Plaintext token records (the on-disk shape). The constructor
-   *                 hashes each secret and discards the plaintext immediately.
+   * @param records  Token records (the on-disk shape). Each `token` is either a
+   *                 plaintext bearer secret or an already-salted
+   *                 `scrypt$salt$hash`. The constructor keeps only a salted hash
+   *                 and discards any plaintext immediately.
    */
   constructor(records: readonly TokenRecord[]) {
     this.records = records.map((rec) => {
-      // hashToken always emits a well-formed `scrypt$salt$hash`, so parse never
-      // fails here; assert non-undefined to keep the field types narrow.
-      const parsed = parseStoredHash(hashToken(rec.token));
+      // A `token` may already be a salted `scrypt$salt$hash` (the at-rest form,
+      // so no plaintext bearer secret sits on disk) — use it verbatim so the
+      // stored salt verifies the presented plaintext. Otherwise treat it as a
+      // plaintext secret and hash it now. `??` short-circuits, so a pre-hashed
+      // record never pays a second scrypt. A plaintext value that merely looks
+      // like `scrypt$...` (non-hex segments) fails parseStoredHash and falls
+      // through to hashToken — fail-safe, never treated as a valid stored hash.
+      const parsed = parseStoredHash(rec.token) ?? parseStoredHash(hashToken(rec.token));
       if (parsed === undefined) {
         throw new Error('internal: hashToken produced an unparseable hash');
       }
