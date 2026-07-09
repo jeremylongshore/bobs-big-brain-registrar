@@ -84,6 +84,50 @@ describe('InMemoryTokenRegistry', () => {
     expect(reg.resolve('plaintext-leak-canary')).toEqual({ actor: 'a', role: 'admin' });
   });
 
+  // ---- pre-hashed at-rest tokens (E1 — no plaintext bearer secret on disk) --
+
+  it('accepts an already-hashed `scrypt$salt$hash` token and resolves the plaintext', () => {
+    // The on-disk record stores hashToken(secret) — NOT the secret. The holder
+    // still presents the plaintext; it verifies against the stored salt+hash.
+    const stored = hashToken('member-secret');
+    expect(stored).not.toContain('member-secret'); // nothing plaintext at rest
+    const reg = new InMemoryTokenRegistry([{ token: stored, actor: 'ezekiel', role: 'member' }]);
+    expect(reg.resolve('member-secret')).toEqual({ actor: 'ezekiel', role: 'member' });
+    expect(reg.resolve('wrong-secret')).toBeUndefined();
+    expect(reg.resolve(stored)).toBeUndefined(); // the hash itself is not a valid bearer token
+  });
+
+  it('mixes pre-hashed and plaintext records in one registry (both resolve)', () => {
+    const reg = new InMemoryTokenRegistry([
+      { token: hashToken('hashed-secret'), actor: 'tim', role: 'member' },
+      { token: 'plain-secret', actor: 'jeremy', role: 'admin' },
+    ]);
+    expect(reg.resolve('hashed-secret')).toEqual({ actor: 'tim', role: 'member' });
+    expect(reg.resolve('plain-secret')).toEqual({ actor: 'jeremy', role: 'admin' });
+  });
+
+  it('preserves tenant + expiry on a pre-hashed record', () => {
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const reg = new InMemoryTokenRegistry([
+      {
+        token: hashToken('scoped-secret'),
+        actor: 'a',
+        role: 'admin',
+        tenants: ['t1'],
+        expiresAt: future,
+      },
+    ]);
+    expect(reg.resolve('scoped-secret')).toEqual({ actor: 'a', role: 'admin', tenants: ['t1'] });
+  });
+
+  it('treats a plaintext token that merely looks like `scrypt$...` as plaintext (fail-safe)', () => {
+    // Non-hex segments make it an invalid stored hash, so it is hashed as a
+    // plaintext secret rather than mistaken for a valid at-rest hash.
+    const looksHashed = 'scrypt$not-hex$also-not-hex';
+    const reg = new InMemoryTokenRegistry([{ token: looksHashed, actor: 'a', role: 'admin' }]);
+    expect(reg.resolve(looksHashed)).toEqual({ actor: 'a', role: 'admin' });
+  });
+
   // ---- expiry (EPIC 0, compile-then-govern-c5k) --------------------------
 
   it('resolves a not-yet-expired token', () => {
