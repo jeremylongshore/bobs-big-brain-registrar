@@ -247,6 +247,82 @@ describe('promote', () => {
     expect(supersededEvent?.tenantId).toBe(TENANT);
   });
 
+  // ── R9: promote() is atomic (all-or-nothing) ────────────────────────────────
+  // The whole write block runs in ONE `db.transaction(...).immediate()`, so a
+  // crash partway (the cron `timeout 1800`, or a SIGTERM) can NEVER leave a
+  // promoted memory without its 'promoted' receipt — a durable row without a
+  // receipt would violate the product's append-only-receipts promise and never
+  // self-heal. We simulate the crash by making the 'promoted' audit insert throw
+  // AFTER the memory row is already inserted (the exact orphan window).
+  it('atomicity: a crash before the promoted receipt rolls the memory back — no orphan', () => {
+    const candidate = makeCandidate();
+    const contentHash = computeContentHash(candidate.content);
+    const memoryId = deriveMemoryId(candidate.id, contentHash);
+
+    const realInsert = auditRepo.insert.bind(auditRepo);
+    vi.spyOn(auditRepo, 'insert').mockImplementation((event) => {
+      if (event.action === 'promoted') {
+        throw new Error('simulated crash before the promoted receipt');
+      }
+      return realInsert(event);
+    });
+
+    expect(() =>
+      promote(
+        { candidate, contentHash, pipelineResult: makePipelineResult() },
+        memoryRepo,
+        auditRepo,
+      ),
+    ).toThrow(/simulated crash before the promoted receipt/);
+
+    // NEITHER the memory NOR any partial audit event survives.
+    expect(memoryRepo.findById(memoryId)).toBeNull();
+    expect(memoryRepo.count()).toBe(0);
+    expect(auditRepo.findByMemory(memoryId)).toHaveLength(0);
+  });
+
+  it('atomicity: a crash in a supersession promote also rolls back the earlier superseded event + old-memory update', () => {
+    const old = makeCuratedMemory({ title: 'Error handling guide', category: 'convention' });
+    memoryRepo.insert(old);
+
+    const candidate = makeCandidate({ title: 'Error handling guide v4', category: 'convention' });
+    const contentHash = computeContentHash(candidate.content);
+    const memoryId = deriveMemoryId(candidate.id, contentHash);
+    const supersession = {
+      supersededMemoryId: old.id,
+      supersededTitle: old.title,
+      similarity: 0.9,
+    };
+
+    const realInsert = auditRepo.insert.bind(auditRepo);
+    vi.spyOn(auditRepo, 'insert').mockImplementation((event) => {
+      if (event.action === 'promoted') {
+        throw new Error('simulated crash before the promoted receipt');
+      }
+      return realInsert(event);
+    });
+
+    expect(() =>
+      promote(
+        { candidate, contentHash, pipelineResult: makePipelineResult(), supersession },
+        memoryRepo,
+        auditRepo,
+      ),
+    ).toThrow(/simulated crash before the promoted receipt/);
+
+    // The new memory never lands.
+    expect(memoryRepo.findById(memoryId)).toBeNull();
+    // The old memory's active→superseded update — written EARLIER in the same
+    // transaction — is undone: it is still 'active' with no supersession link.
+    const oldAfter = memoryRepo.findById(old.id);
+    expect(oldAfter?.lifecycle).toBe('active');
+    expect(oldAfter?.supersession).toBeUndefined();
+    // The 'superseded' audit event (also written before the throw) is rolled back.
+    expect(auditRepo.findByMemory(old.id).some((e) => e.action === 'superseded')).toBe(false);
+    // Only the original memory remains — nothing partial.
+    expect(memoryRepo.count()).toBe(1);
+  });
+
   it('dry run does not insert memory into store', () => {
     const candidate = makeCandidate();
     const contentHash = computeContentHash(candidate.content);

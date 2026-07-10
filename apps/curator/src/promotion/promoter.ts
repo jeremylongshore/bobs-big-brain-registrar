@@ -139,144 +139,160 @@ export function promote(
   });
 
   if (!dryRun) {
-    if (input.supersession !== undefined) {
-      const oldMemory = memoryRepo.findById(input.supersession.supersededMemoryId);
-      if (oldMemory !== null) {
-        const updatedOld = CuratedMemorySchema.parse({
-          ...oldMemory,
-          lifecycle: 'superseded',
-          supersession: {
-            supersededBy: memoryId,
-            reason: `Title similarity: ${input.supersession.similarity.toFixed(2)}`,
-            linkedAt: now,
-          },
-          updatedAt: now,
-        });
-        memoryRepo.update(updatedOld);
-      }
-
-      auditRepo.insert(
-        AuditEventSchema.parse({
-          // Content-derived (bead 8da.5): identity is the superseded memory +
-          // the 'superseded' action + the superseding memory id as discriminator,
-          // so two clones supersede-by-the-same-memory mint the same audit id and
-          // hence the same v2 entry_hash at the same chain position.
-          id: deriveAuditEventId(input.supersession.supersededMemoryId, 'superseded', memoryId),
-          action: 'superseded',
-          memoryId: input.supersession.supersededMemoryId,
-          tenantId: input.candidate.tenantId,
-          actor: { type: 'system', id: 'curator' },
-          reason: `Superseded by ${memoryId}`,
-          details: {
-            newMemoryId: memoryId,
-            similarity: input.supersession.similarity,
-          },
-          timestamp: now,
-        }),
-      );
-    }
-
-    memoryRepo.insert(memory);
-
-    if (input.supersession !== undefined && linksRepo) {
-      linksRepo.insert({
-        // Content-derived (bead 8da.5): a graph edge's identity is its
-        // (source, target, type) triple, stable across clones for the same
-        // logical promotion. Not part of the audit chain, but kept deterministic
-        // so the whole promotion is byte-reproducible across clones.
-        id: deriveLinkId(memoryId, input.supersession.supersededMemoryId, 'supersedes'),
-        sourceMemoryId: memoryId,
-        targetMemoryId: input.supersession.supersededMemoryId,
-        linkType: 'supersedes',
-        weight: input.supersession.similarity,
-        createdBy: 'curator',
-        source: 'curator',
-        importBatchId: null,
-        createdAt: now,
-      });
-    }
-
-    // Extract wiki-links from content and create relates_to edges
-    if (linksRepo) {
-      const wikiLinks = extractWikiLinks(input.candidate.content);
-      for (const wl of wikiLinks) {
-        const targets = memoryRepo.searchByText(wl.slug);
-        const match = targets.find(
-          (m) => m.title.toLowerCase() === wl.slug.toLowerCase() && m.id !== memoryId,
-        );
-        if (match) {
-          try {
-            linksRepo.insert({
-              // Content-derived (bead 8da.5): (source, target, type) edge identity,
-              // stable across clones. See the supersedes edge above.
-              id: deriveLinkId(memoryId, match.id, 'relates_to'),
-              sourceMemoryId: memoryId,
-              targetMemoryId: match.id,
-              linkType: 'relates_to',
-              weight: 1.0,
-              createdBy: 'curator',
-              source: 'curator',
-              importBatchId: null,
-              createdAt: now,
+    // R9 (jfv.6.9): commit ALL durable writes of one promotion as a SINGLE
+    // transaction — the optional supersession update + its 'superseded' event,
+    // the memory insert, the graph-edge links, the 'promoted' receipt, and any
+    // eval-result events. Previously these ran as ~5 separate autocommits, so a
+    // kill mid-promote (the cron `timeout 1800`, or a SIGTERM) could persist a
+    // promoted memory with NO 'promoted' audit event — a durable row without its
+    // receipt, which breaks the append-only-receipts promise and never
+    // self-heals. All-or-nothing means a crash rolls the memory back too, so the
+    // store is never left in that receipt-less state. Run as `.immediate()`
+    // (BEGIN IMMEDIATE) so the write lock is taken upfront, preserving
+    // AuditRepository's anti-fork guarantee — its nested `appendTxn` degrades to
+    // a savepoint inside this outer transaction (bead yxp).
+    memoryRepo.connection
+      .transaction((): void => {
+        if (input.supersession !== undefined) {
+          const oldMemory = memoryRepo.findById(input.supersession.supersededMemoryId);
+          if (oldMemory !== null) {
+            const updatedOld = CuratedMemorySchema.parse({
+              ...oldMemory,
+              lifecycle: 'superseded',
+              supersession: {
+                supersededBy: memoryId,
+                reason: `Title similarity: ${input.supersession.similarity.toFixed(2)}`,
+                linkedAt: now,
+              },
+              updatedAt: now,
             });
-          } catch {
-            // Unique constraint violation — link already exists, skip
+            memoryRepo.update(updatedOld);
           }
-        }
-      }
-    }
 
-    auditRepo.insert(
-      AuditEventSchema.parse({
-        // Content-derived (bead 8da.5): one 'promoted' event per memory, so the
-        // (memoryId, action) pair is already unique, so no discriminator needed.
-        id: deriveAuditEventId(memoryId, 'promoted'),
-        action: 'promoted',
-        memoryId,
-        tenantId: input.candidate.tenantId,
-        actor: { type: 'system', id: 'curator' },
-        reason: 'Passed all governance rules',
-        details: { candidateId: input.candidate.id },
-        timestamp: now,
-      }),
-    );
-
-    // Evidence emission (DR-010 Q3 unification thesis): if an eval callback is
-    // supplied, run it and write each verdict as an `eval-result` audit event.
-    // The audit chain SHA-256-chains these rows, making them tamper-evident and
-    // signable downstream. Contained by design — a throwing/faulty callback must
-    // NOT abort a promotion whose memory is already persisted; failures are
-    // swallowed here (the memory + 'promoted' event stand regardless).
-    if (evalCallback !== undefined) {
-      try {
-        for (const verdict of evalCallback(memory, input.pipelineResult)) {
           auditRepo.insert(
             AuditEventSchema.parse({
-              // Content-derived (bead 8da.5): several eval-result rows can be
-              // emitted per promotion, so the evaluator name discriminates them.
-              // Identical evaluator verdicts on two clones mint the same id.
-              id: deriveAuditEventId(memoryId, 'eval-result', verdict.name),
-              action: 'eval-result',
-              memoryId,
+              // Content-derived (bead 8da.5): identity is the superseded memory +
+              // the 'superseded' action + the superseding memory id as discriminator,
+              // so two clones supersede-by-the-same-memory mint the same audit id and
+              // hence the same v2 entry_hash at the same chain position.
+              id: deriveAuditEventId(input.supersession.supersededMemoryId, 'superseded', memoryId),
+              action: 'superseded',
+              memoryId: input.supersession.supersededMemoryId,
               tenantId: input.candidate.tenantId,
               actor: { type: 'system', id: 'curator' },
-              reason: `eval ${verdict.name}: ${verdict.passed ? 'pass' : 'fail'}`,
+              reason: `Superseded by ${memoryId}`,
               details: {
-                evaluator: verdict.name,
-                passed: verdict.passed,
-                score: verdict.score,
-                threshold: verdict.threshold,
-                ...verdict.details,
+                newMemoryId: memoryId,
+                similarity: input.supersession.similarity,
               },
               timestamp: now,
             }),
           );
         }
-      } catch {
-        // Eval emission is best-effort; the promotion itself has already
-        // succeeded. Do not let an eval-surface fault corrupt the curation path.
-      }
-    }
+
+        memoryRepo.insert(memory);
+
+        if (input.supersession !== undefined && linksRepo) {
+          linksRepo.insert({
+            // Content-derived (bead 8da.5): a graph edge's identity is its
+            // (source, target, type) triple, stable across clones for the same
+            // logical promotion. Not part of the audit chain, but kept deterministic
+            // so the whole promotion is byte-reproducible across clones.
+            id: deriveLinkId(memoryId, input.supersession.supersededMemoryId, 'supersedes'),
+            sourceMemoryId: memoryId,
+            targetMemoryId: input.supersession.supersededMemoryId,
+            linkType: 'supersedes',
+            weight: input.supersession.similarity,
+            createdBy: 'curator',
+            source: 'curator',
+            importBatchId: null,
+            createdAt: now,
+          });
+        }
+
+        // Extract wiki-links from content and create relates_to edges
+        if (linksRepo) {
+          const wikiLinks = extractWikiLinks(input.candidate.content);
+          for (const wl of wikiLinks) {
+            const targets = memoryRepo.searchByText(wl.slug);
+            const match = targets.find(
+              (m) => m.title.toLowerCase() === wl.slug.toLowerCase() && m.id !== memoryId,
+            );
+            if (match) {
+              try {
+                linksRepo.insert({
+                  // Content-derived (bead 8da.5): (source, target, type) edge identity,
+                  // stable across clones. See the supersedes edge above.
+                  id: deriveLinkId(memoryId, match.id, 'relates_to'),
+                  sourceMemoryId: memoryId,
+                  targetMemoryId: match.id,
+                  linkType: 'relates_to',
+                  weight: 1.0,
+                  createdBy: 'curator',
+                  source: 'curator',
+                  importBatchId: null,
+                  createdAt: now,
+                });
+              } catch {
+                // Unique constraint violation — link already exists, skip
+              }
+            }
+          }
+        }
+
+        auditRepo.insert(
+          AuditEventSchema.parse({
+            // Content-derived (bead 8da.5): one 'promoted' event per memory, so the
+            // (memoryId, action) pair is already unique, so no discriminator needed.
+            id: deriveAuditEventId(memoryId, 'promoted'),
+            action: 'promoted',
+            memoryId,
+            tenantId: input.candidate.tenantId,
+            actor: { type: 'system', id: 'curator' },
+            reason: 'Passed all governance rules',
+            details: { candidateId: input.candidate.id },
+            timestamp: now,
+          }),
+        );
+
+        // Evidence emission (DR-010 Q3 unification thesis): if an eval callback is
+        // supplied, run it and write each verdict as an `eval-result` audit event.
+        // The audit chain SHA-256-chains these rows, making them tamper-evident and
+        // signable downstream. Contained by design — a throwing/faulty callback must
+        // NOT abort a promotion whose memory is already persisted; failures are
+        // swallowed here (the memory + 'promoted' event stand regardless).
+        if (evalCallback !== undefined) {
+          try {
+            for (const verdict of evalCallback(memory, input.pipelineResult)) {
+              auditRepo.insert(
+                AuditEventSchema.parse({
+                  // Content-derived (bead 8da.5): several eval-result rows can be
+                  // emitted per promotion, so the evaluator name discriminates them.
+                  // Identical evaluator verdicts on two clones mint the same id.
+                  id: deriveAuditEventId(memoryId, 'eval-result', verdict.name),
+                  action: 'eval-result',
+                  memoryId,
+                  tenantId: input.candidate.tenantId,
+                  actor: { type: 'system', id: 'curator' },
+                  reason: `eval ${verdict.name}: ${verdict.passed ? 'pass' : 'fail'}`,
+                  details: {
+                    evaluator: verdict.name,
+                    passed: verdict.passed,
+                    score: verdict.score,
+                    threshold: verdict.threshold,
+                    ...verdict.details,
+                  },
+                  timestamp: now,
+                }),
+              );
+            }
+          } catch {
+            // Eval emission is best-effort; the promotion itself has already
+            // succeeded. Do not let an eval-surface fault corrupt the curation path.
+          }
+        }
+      })
+      .immediate();
   }
 
   return memory;

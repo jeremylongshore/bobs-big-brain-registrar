@@ -275,6 +275,22 @@ export class MemoryRepository {
     `);
   }
 
+  /**
+   * The underlying better-sqlite3 connection this repository was built on.
+   *
+   * Exposed read-only so a caller that writes across SEVERAL repositories on the
+   * SAME connection — the curator's `promote()`, which touches curated_memories,
+   * audit_events, and memory_links — can wrap all of those writes in ONE
+   * transaction (all-or-nothing). Every repository constructed from a single
+   * `createDatabase()` (as govern.ts / the daemon / the plugin do) shares this
+   * exact handle, so a transaction opened here serializes every repo's writes on
+   * the connection. Do not use it to bypass a repository's prepared statements —
+   * it exists only to own a multi-repository transaction.
+   */
+  get connection(): Database.Database {
+    return this.db;
+  }
+
   /** Insert a new curated memory. */
   insert(memory: CuratedMemory): void {
     this.stmtInsert.run({
