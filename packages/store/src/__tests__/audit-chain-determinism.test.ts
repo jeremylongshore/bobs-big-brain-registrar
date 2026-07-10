@@ -139,8 +139,7 @@ describe('hash-version migration round-trip (8da.6 / migration 6)', () => {
       expect(hv?.notnull).toBe(1);
 
       const recorded = db.prepare(`SELECT name FROM schema_migrations WHERE version = 6`).get() as
-        | { name: string }
-        | undefined;
+        { name: string } | undefined;
       expect(recorded?.name).toBe('rehash_audit_chain_v2');
     } finally {
       db.close();
