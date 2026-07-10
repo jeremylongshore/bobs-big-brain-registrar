@@ -31,7 +31,7 @@ import { registerApiKeyAuth } from './middleware/api-key-auth.js';
 import { registerWriteGate } from './middleware/write-gate.js';
 import { registerTenancyGuard } from './middleware/tenancy-guard.js';
 import { registerInputSanitizer } from './middleware/input-sanitizer.js';
-import { InMemoryTokenRegistry, loadTokenRecords } from './auth/token-registry.js';
+import { buildTokenRegistry } from './auth/token-registry.js';
 import type { TokenRecord } from './auth/token-registry.js';
 import { registerOpenApi } from './openapi.js';
 
@@ -67,6 +67,14 @@ export interface AppDependencies {
    */
   bindHost?: string;
   /**
+   * Path to the durable revocation list (default env `TEAMKB_REVOKED_FILE`,
+   * else — set by `main.ts` — `~/.teamkb/revoked-actors.json`). Actors listed
+   * here are revoked at boot, and `POST /api/auth/revoke-actor` appends to it so
+   * a revoke-by-actor survives a restart. Left unset in tests → in-memory only,
+   * no file is touched.
+   */
+  revokedFile?: string;
+  /**
    * Optional qmd query port. When provided, search runs through qmd so every
    * hit carries a `qmd://` citation. When omitted, search falls back to SQLite
    * text-match over the curated store.
@@ -86,14 +94,16 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const app = Fastify({ logger: !deps.silent, bodyLimit });
 
   registerRateLimiter(app, deps.rateLimitMax ?? 100, deps.rateLimitWindowMs ?? 60000);
-  const tokenRegistry = new InMemoryTokenRegistry(
-    loadTokenRecords({
-      records: deps.tokens,
-      apiKey: deps.apiKey,
-      tokensJson: process.env['TEAMKB_TOKENS'],
-      tokensFile: process.env['TEAMKB_TOKENS_FILE'],
-    }),
-  );
+  // The durable revocation list: actors banned here are revoked at boot, and
+  // POST /api/auth/revoke-actor appends to it so a revoke survives a restart.
+  const revokedFile = deps.revokedFile ?? process.env['TEAMKB_REVOKED_FILE'];
+  const tokenRegistry = buildTokenRegistry({
+    records: deps.tokens,
+    apiKey: deps.apiKey,
+    tokensJson: process.env['TEAMKB_TOKENS'],
+    tokensFile: process.env['TEAMKB_TOKENS_FILE'],
+    revokedFile,
+  });
   // Pass the bind host so the no-auth dev path is refused off-loopback — an
   // unauthenticated admin-stamping brain must never be reachable off-host.
   registerApiKeyAuth(app, tokenRegistry, { bindHost: deps.bindHost ?? '127.0.0.1' });
@@ -144,7 +154,8 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     registerImportRoutes(scope, importService);
     registerGraphRoutes(scope, linksRepo, memoryRepo);
     // Live token revocation — admin-only, cuts a token off without a restart.
-    registerAuthRoutes(scope, tokenRegistry);
+    // The revoked-file path lets revoke-by-actor persist durably.
+    registerAuthRoutes(scope, tokenRegistry, revokedFile);
   });
 
   return app;
