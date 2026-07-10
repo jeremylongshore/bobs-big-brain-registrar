@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@intentsolutions/core": "^0.8.0",
+    "@intentsolutions/core": "^0.10.0",
     "@qmd-team-intent-kb/claude-runtime": "workspace:*",
     "@qmd-team-intent-kb/common": "workspace:*",
     "@qmd-team-intent-kb/policy-engine": "workspace:*",
