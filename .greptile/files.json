@@ -1,0 +1,40 @@
+{
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "description": "The repo's operating contract: a governed team-memory control plane where DETERMINISTIC code (not LLM judgment) decides what becomes durable memory; qmd is the retrieval edge; git is a mirror/export layer, not the canonical DB; default search targets curated knowledge only."
+    },
+    {
+      "path": "packages/policy-engine/src/pipeline.ts",
+      "description": "The deterministic 8-rule PolicyPipeline that runs BELOW the spool — dedupe / secret-scan / length / trust / tenant / sensitivity / relevance. No model call lives here; this is the govern gate."
+    },
+    {
+      "path": "packages/policy-engine/src/rules",
+      "description": "The eight individual policy rules (regex / heuristic, deterministic). secret-detection uses scanForSecrets (pattern-based); sensitivity-gate uses classifyContent — both deterministic despite the claude-runtime import name."
+    },
+    {
+      "path": "apps/curator/src/promotion/promoter.ts",
+      "description": "promote(): writes the curated_memories row and its hash-chained audit_events receipt atomically. The place the 'promote + receipt must be one transaction' invariant lives."
+    },
+    {
+      "path": "apps/curator/src/intake/spool-intake.ts",
+      "description": "Spool -> candidates intake (the ICO->INTKB handoff consumer). Home of the intake override + the `proposed` receipt path (R8); candidates are insert-only source of truth."
+    },
+    {
+      "path": "apps/api/src/auth/token-registry.ts",
+      "description": "The tailnet brain API bearer-token registry. Accepts pre-hashed scrypt tokens at rest (parseStoredHash) so ~/.teamkb/tokens.json carries hashes, never plaintext secrets."
+    },
+    {
+      "path": "packages/store/src/schema.ts",
+      "description": "The govern store schema: candidates (insert-only), curated_memories (lifecycle-managed), audit_events (append-only SHA-256 hash-chain), governance_policies, derived memory_links/FTS."
+    },
+    {
+      "path": "packages/store/src/audit-verify.ts",
+      "description": "Walks and verifies the audit_events hash-chain and cross-checks the git-anchored anchors. ok:false means real tamper; benign CHAIN_FORK (same-timestamp ordering) is reported separately and is NEVER re-hashed away."
+    },
+    {
+      "path": "scripts/deploy-brain-api.sh",
+      "description": "Immutable versioned-release deploy: current -> releases/<tag>, floor commit a2143be (E1). A pre-E1 build double-hashes the hashed tokens.json and locks out users; rollback is a symlink flip."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "strictness": 3,
+  "commentTypes": ["logic", "syntax"],
+  "triggerOnUpdates": true,
+  "fixWithAI": true,
+  "confidenceScoreSection": { "included": true },
+  "sequenceDiagramSection": { "included": true },
+  "ignorePatterns": "node_modules/\ndist/\nbuild/\ncoverage/\n*.min.js\n*.map\n*.tsbuildinfo\npnpm-lock.yaml\npackage-lock.json\n.audit-harness/\nkb-export/\nqmd-index/\n.beads/",
+  "rules": [
+    {
+      "id": "deterministic-govern-no-model-below-spool",
+      "severity": "high",
+      "scope": ["packages/policy-engine/**", "apps/curator/src/promotion/**", "packages/store/**"],
+      "rule": "The spool is the trust boundary. BELOW it — the `packages/policy-engine` pipeline, `apps/curator/src/promotion` promotion, and every audit write in `packages/store` — is DETERMINISTIC: no LLM inference. The 8-rule PolicyPipeline (content-length, content-sanitization, dedup-check, relevance-score, secret-detection, sensitivity-gate, source-trust, tenant-match) is pattern/heuristic logic — `scanForSecrets` is regex-based even though it imports from `@qmd-team-intent-kb/claude-runtime`. Flag any diff that introduces a real model-inference or network call (anthropic / openai / messages.create / generateText / an LLM `fetch`) into the policy engine, the promoter, or the audit path, or that lets the model own durable state, policy, promotion, or audit writes. The model proposes; deterministic code disposes."
+    },
+    {
+      "id": "promote-and-receipt-atomic",
+      "severity": "high",
+      "scope": ["apps/curator/src/promotion/promoter.ts", "packages/store/**"],
+      "rule": "A promotion writes the `curated_memories` row AND its hash-chained `audit_events` receipt; the two MUST be committed atomically (one transaction). A memory promoted without its receipt — or a receipt without the memory — breaks the audit guarantee. Flag any change that un-atomizes `promote()` by splitting the memory write and the receipt write into separate non-transactional steps, or that reorders them so a mid-write failure can leave one without the other."
+    },
+    {
+      "id": "candidates-insert-only-source-of-truth",
+      "severity": "high",
+      "scope": ["packages/store/**", "apps/curator/src/intake/**", "apps/api/src/**"],
+      "rule": "The `candidates` table is insert-only, Tier-A source of truth (005-AT-ARCH): the immutable record of what was proposed, and remote captures live nowhere else. A diff that DELETEs candidates, UPDATEs a candidate row in place, or retires flagged/rejected captures destructively must justify against that classification. Retirement is marker-based — keep flagged/rejected rows for admin review (the intake `proposed`/`inbox` receipt path, R8), never a hard delete."
+    },
+    {
+      "id": "receipts-append-only-never-rehash",
+      "severity": "high",
+      "scope": ["packages/store/audit-*.ts", "packages/store/src/**"],
+      "rule": "`audit_events` are append-only and SHA-256 hash-chained (`entry_hash` / `prev_entry_hash`). NEVER suggest re-hashing the chain, editing or deleting past events, or 'fixing' the 155 carried CHAIN_FORK breaks by re-hashing — ratified decision D5: those forks are benign same-timestamp ordering, every hash is intact. New writes append; the chain IS the tamper record. `brain_audit_verify` / audit-verify returning ok:false means REAL tamper — investigate, never migrate the chain."
+    },
+    {
+      "id": "tokens-hashed-at-rest",
+      "severity": "high",
+      "scope": ["apps/api/src/auth/**", "apps/api/src/**"],
+      "rule": "Brain API bearer tokens are scrypt-hashed at rest (`~/.teamkb/tokens.json`). `InMemoryTokenRegistry` accepts an already-salted `scrypt$salt$hash` record verbatim (via `parseStoredHash`) so no plaintext bearer secret ever lands on disk — any backup of `~/.teamkb` would otherwise leak live tokens. Never suggest storing a plaintext bearer secret, logging a token, or reverting the accept-pre-hashed path. No plaintext secret in any committed file."
+    },
+    {
+      "id": "immutable-release-floor",
+      "severity": "medium",
+      "scope": ["scripts/deploy-brain-api.sh", "apps/api/**", "000-docs/041-OD-OPSM-brain-api-immutable-release-deploy.md"],
+      "rule": "The brain API runs from an immutable, versioned release (`$TEAMKB_API_OPT/current -> releases/<tag>`), never Jeremy's working tree. The release floor is tag v0.8.0 (contains E1 commit `a2143be`). Never suggest deploying a ref that lacks `a2143be` — a pre-E1 build double-hashes the now-hashed `tokens.json` and locks out every user (041-OD-OPSM) — or reverting to a run-from-working-tree deploy. Rollback is a symlink flip to a prior release; note that after the live token reseed a plain code revert also requires reseeding `tokens.json` in the same step."
+    },
+    {
+      "id": "no-gate-weakening",
+      "severity": "high",
+      "rule": "The required CI checks are the deterministic merge gate: `ci.yml` `validate` (pnpm lint + typecheck + test-with-coverage / Codecov), the `security.yml` jobs (gitleaks, Semgrep SAST, dependency audit / CodeQL), and `docs-quality.yml` (markdownlint). Never suggest lowering a coverage threshold, skipping / deleting / weakening a test or assertion, or disabling a security / typecheck / policy check — unless the same PR replaces it with a strictly stronger equivalent."
+    },
+    {
+      "id": "honesty-invariants",
+      "severity": "high",
+      "rule": "NEVER introduce or accept the words tamper-proof / immutable / non-repudiation (for local mode) / blockchain as product claims — in code, comments, strings, or docs. The audit chain is tamper-EVIDENT only: integrity + ordering + rewrite-detection. Keep 'tamper-evident'. Flag any diff that softens the honesty framing or overclaims what a receipt proves; local mode does not, on its own, prove WHO wrote what (cross-actor attribution needs the pushed anchor + per-actor signatures)."
+    },
+    {
+      "id": "commit-pr-standard",
+      "severity": "medium",
+      "rule": "PRs follow 013-OD-STND (commit/branch/PR conventions): What / Why + decision rationale (chose X over Y because Z) / Layer(s) touched + any cross-layer invariant changed / Verification & evidence (linked artifact, not a bare 'verified') / Risk assessment / Operational impact / Follow-up & deferred (each with a bead) / Refs. Flag a non-trivial PR missing the Layer(s)-touched declaration or the evidence link, and any bare `fix`/`update` subject."
+    }
+  ]
+}
