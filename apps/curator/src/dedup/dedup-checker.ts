@@ -19,13 +19,24 @@ export interface DedupResult {
  * Returns a DedupResult with isDuplicate=true when an exact match is found,
  * or isDuplicate=false for novel content. The contentHash is always populated
  * so callers can reuse it without re-computing.
+ *
+ * TENANT SCOPING (B1, bead compile-then-govern-jfv.2.1): when `tenantId` is
+ * supplied the match is scoped to that tenant's memories, so a candidate is never
+ * suppressed as a "duplicate" of a DIFFERENT tenant's memory (a cross-tenant leak
+ * the API's promotion-service already guards against). The Curator always passes
+ * its `config.tenantId`. Omitting `tenantId` preserves the legacy global match for
+ * any caller that has not opted in.
  */
 export function checkDuplicate(
   candidate: MemoryCandidate,
   memoryRepo: MemoryRepository,
+  tenantId?: string,
 ): DedupResult {
   const contentHash = computeContentHash(candidate.content);
-  const existing = memoryRepo.findByContentHash(contentHash);
+  const existing =
+    tenantId !== undefined
+      ? memoryRepo.findByContentHashAndTenant(contentHash, tenantId)
+      : memoryRepo.findByContentHash(contentHash);
 
   if (existing !== null) {
     return {

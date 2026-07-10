@@ -20,7 +20,44 @@ export type MemoryCategory = z.infer<typeof MemoryCategory>;
 export const MemoryLifecycleState = z.enum(['active', 'deprecated', 'superseded', 'archived']);
 export type MemoryLifecycleState = z.infer<typeof MemoryLifecycleState>;
 
-export const CandidateStatus = z.literal('inbox');
+/**
+ * Lifecycle status of a raw memory candidate (B1, bead compile-then-govern-jfv.2.1).
+ *
+ * Widened from the original `z.literal('inbox')` so the nightly auto-govern sweep
+ * can MARK a governed candidate's terminal outcome IN PLACE, never deleting the
+ * row. `candidates` is INSERT-ONLY / Tier-A source of truth (005-AT-ARCH §candidates):
+ * a remote team-mode `brain_capture` writes the proposal NOWHERE else, so the row
+ * is the only copy — retirement is a status MARKER, not a DELETE.
+ *
+ * Semantics of each value:
+ *   - `inbox`       — awaiting governance (the capture default; every write path
+ *                     still inserts candidates as `inbox`).
+ *   - `promoted`    — the sweep promoted it to a curated memory; row retired, LEFT
+ *                     the inbox.
+ *   - `duplicate`   — the sweep found its content already curated; row retired.
+ *   - `quarantined` — a MEMBER-authored proposal held back from auto-promotion for
+ *                     admin digest-approval (the B1 member-quarantine gate); retired
+ *                     from the sweep but never silently promoted.
+ *   - `flagged` / `rejected` — reserved terminal markers for an ADMIN disposing of a
+ *                     candidate the sweep left in the inbox for review. The SWEEP
+ *                     itself never sets these (it leaves policy-flagged/rejected
+ *                     candidates in `inbox` so the human review queue + the content
+ *                     survive); they exist so a later admin action can retire a
+ *                     reviewed candidate non-destructively.
+ *
+ * A closed enum so the disclosure scanner and the repository enum-membership
+ * backstop keep treating `status` as closed-vocabulary. Additive/backward-compatible:
+ * the DB `status` column is already TEXT with a DEFAULT of `'inbox'`, and every
+ * pre-B1 row is `inbox`.
+ */
+export const CandidateStatus = z.enum([
+  'inbox',
+  'promoted',
+  'rejected',
+  'flagged',
+  'duplicate',
+  'quarantined',
+]);
 export type CandidateStatus = z.infer<typeof CandidateStatus>;
 
 export const SearchScope = z.enum(['curated', 'all', 'inbox', 'archived']).default('curated');
@@ -57,6 +94,14 @@ export const AuditAction = z.enum([
   // provenance receipt (actor + contentHash + tenant) from byte one, before any
   // promotion. `memoryId` on this row is the candidate's UUID.
   'proposed',
+  // Batch-level receipt for one auto-govern inbox SWEEP (B1, bead
+  // compile-then-govern-jfv.2.1). ONE event per sweep that changed durable state,
+  // recording the per-candidate outcomes (candidate ids + outcome, NEVER content)
+  // so the drain of the remote-capture inbox is on the append-only chain. Replaces
+  // the per-candidate reject receipts the sweep would otherwise emit (which would
+  // re-fire every night for a candidate left in the inbox → unbounded chain bloat).
+  // `memoryId` is a fixed sweep sentinel UUID (the sweep is not tied to one memory).
+  'governed',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 

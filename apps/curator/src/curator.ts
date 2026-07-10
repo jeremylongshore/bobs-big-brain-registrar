@@ -53,7 +53,8 @@ export class Curator {
   processSingle(candidate: MemoryCandidate, existingHashes?: Set<string>): CurationResult {
     const contentHash = computeContentHash(candidate.content);
 
-    const dedup = checkDuplicate(candidate, this.deps.memoryRepo);
+    // Tenant-scoped dedup (B1): never treat another tenant's memory as a duplicate.
+    const dedup = checkDuplicate(candidate, this.deps.memoryRepo, this.config.tenantId);
     if (dedup.isDuplicate) {
       return {
         candidateId: candidate.id,
@@ -82,14 +83,24 @@ export class Curator {
     }
 
     const pipeline = new PolicyPipeline(policy);
-    const hashSet = existingHashes ?? new Set(this.deps.memoryRepo.getAllContentHashes());
+    // Tenant-scoped existing-hash set (B1) — mirrors the API promotion-service so
+    // the policy dedup rule sees only this tenant's memories.
+    const hashSet =
+      existingHashes ??
+      new Set(this.deps.memoryRepo.getContentHashesByTenant(this.config.tenantId));
     const pipelineResult = pipeline.evaluate(candidate, {
       existingHashes: hashSet,
       tenantId: this.config.tenantId,
     });
 
+    // Suppress the per-candidate reject receipt when configured (B1 sweep) — the
+    // outcome still returns, only the audit write is skipped (see
+    // CuratorConfig.suppressRejectionReceipts). `dryRun` also suppresses it.
+    const suppressReject =
+      this.config.dryRun === true || this.config.suppressRejectionReceipts === true;
+
     if (pipelineResult.outcome === 'rejected') {
-      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, this.config.dryRun);
+      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
       return {
         candidateId: candidate.id,
         outcome: 'rejected',
@@ -99,7 +110,7 @@ export class Curator {
     }
 
     if (pipelineResult.outcome === 'flagged') {
-      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, this.config.dryRun);
+      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
       return {
         candidateId: candidate.id,
         outcome: 'flagged',
@@ -125,7 +136,10 @@ export class Curator {
     let flagged = 0;
     let duplicates = 0;
 
-    const existingHashes = new Set(this.deps.memoryRepo.getAllContentHashes());
+    // Tenant-scoped (B1): the batch's pre-existing-hash set is this tenant's only.
+    const existingHashes = new Set(
+      this.deps.memoryRepo.getContentHashesByTenant(this.config.tenantId),
+    );
 
     for (const candidate of candidates) {
       const result = this.processSingle(candidate, existingHashes);

@@ -299,4 +299,20 @@ UPDATE audit_events SET seq = rowid WHERE seq IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_seq ON audit_events(seq);
     `.trim(),
   },
+  {
+    // Index the auto-govern inbox sweep's hot lookup (B1, bead
+    // compile-then-govern-jfv.2.1). The nightly sweep calls
+    // `CandidateRepository.findByStatus('inbox', tenantId)` — a filter on
+    // (status, tenant_id) — to drain the remote-capture inbox. Purely additive:
+    // no column change (the `candidates.status` column is already TEXT with a
+    // DEFAULT of 'inbox'; the B1 enum widening is enforced in Zod, not by a DB
+    // CHECK), just a compound index so the sweep does not table-scan `candidates`
+    // as the inbox grows. `IF NOT EXISTS` keeps it replay-safe on fresh and
+    // pre-existing databases alike.
+    version: 8,
+    name: 'add_candidates_status_tenant_index',
+    sql: `
+CREATE INDEX IF NOT EXISTS idx_candidates_status_tenant ON candidates(status, tenant_id);
+    `.trim(),
+  },
 ];

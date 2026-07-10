@@ -163,6 +163,8 @@ export class MemoryRepository {
   private readonly stmtFindById: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByHash: Database.Statement;
+  private readonly stmtFindByHashAndTenant: Database.Statement;
+  private readonly stmtTenantHashes: Database.Statement;
   private readonly stmtFindByLifecycle: Database.Statement;
   private readonly stmtUpdateLifecycle: Database.Statement;
   private readonly stmtUpdate: Database.Statement;
@@ -213,6 +215,19 @@ export class MemoryRepository {
 
     this.stmtFindByHash = db.prepare(`
       SELECT * FROM curated_memories WHERE content_hash = ? LIMIT 1
+    `);
+
+    // Tenant-scoped dedup lookups (B1, bead compile-then-govern-jfv.2.1). The
+    // auto-govern sweep must NOT dedup across tenants — a global hash match would
+    // let tenant A's candidate be silently suppressed as a "duplicate" of tenant
+    // B's memory (a cross-tenant leak the API's promotion-service already guards
+    // against). These mirror that tenant scoping.
+    this.stmtFindByHashAndTenant = db.prepare(`
+      SELECT * FROM curated_memories WHERE content_hash = ? AND tenant_id = ? LIMIT 1
+    `);
+
+    this.stmtTenantHashes = db.prepare(`
+      SELECT content_hash FROM curated_memories WHERE tenant_id = ?
     `);
 
     this.stmtFindByLifecycle = db.prepare(`
@@ -393,6 +408,26 @@ export class MemoryRepository {
   getAllContentHashes(): string[] {
     const rows = this.stmtAllHashes.all() as Array<{ content_hash: string }>;
     return rows.map((r) => r.content_hash);
+  }
+
+  /**
+   * Return the content hashes of the given tenant's memories only (B1). The
+   * tenant-scoped counterpart to {@link getAllContentHashes}, used by the curator's
+   * dedup so a batch/sweep never treats another tenant's memory as a duplicate.
+   */
+  getContentHashesByTenant(tenantId: string): string[] {
+    const rows = this.stmtTenantHashes.all(tenantId) as Array<{ content_hash: string }>;
+    return rows.map((r) => r.content_hash);
+  }
+
+  /**
+   * Return the first memory in the given tenant with the given content hash, or
+   * null (B1). The tenant-scoped counterpart to {@link findByContentHash}, so
+   * exact-hash dedup never crosses the tenant boundary.
+   */
+  findByContentHashAndTenant(hash: string, tenantId: string): CuratedMemory | null {
+    const row = this.stmtFindByHashAndTenant.get(hash, tenantId);
+    return row !== undefined ? rowToMemory(row) : null;
   }
 
   /** Count memories grouped by lifecycle state */
