@@ -1,5 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 /** What a token grants. `admin` may write/promote; `member` is read-only. */
 export type TokenRole = 'admin' | 'member';
@@ -58,6 +59,19 @@ export interface TokenRegistry {
    * re-read on next restart, where the operator should also drop the record).
    */
   revoke(token: string): boolean;
+  /**
+   * Durable-incident revocation by IDENTITY, not by secret. Marks EVERY live
+   * record whose `identity.actor` matches as revoked, in-process and immediate.
+   * Returns the number of records revoked.
+   *
+   * This is the revoke path that still works AFTER tokens are hashed at rest
+   * (E1): an admin holds no plaintext bearer secret, so {@link revoke} by value
+   * is impossible for the realistic "an actor's laptop was stolen" case.
+   * Revoking by actor needs no secret — only the audit identity the token
+   * already carries. Pair it with {@link appendRevokedActor} to make the
+   * revocation survive a restart (the boot loader re-applies the list).
+   */
+  revokeByActor(actor: string): number;
 }
 
 /** Constant-time buffer compare (equal-length-safe). */
@@ -127,12 +141,18 @@ export class InMemoryTokenRegistry implements TokenRegistry {
   private readonly records: HashedRecord[];
 
   /**
-   * @param records  Token records (the on-disk shape). Each `token` is either a
-   *                 plaintext bearer secret or an already-salted
-   *                 `scrypt$salt$hash`. The constructor keeps only a salted hash
-   *                 and discards any plaintext immediately.
+   * @param records        Token records (the on-disk shape). Each `token` is
+   *                        either a plaintext bearer secret or an already-salted
+   *                        `scrypt$salt$hash`. The constructor keeps only a
+   *                        salted hash and discards any plaintext immediately.
+   * @param revokedActors  Actors from the durable revocation list. Any record
+   *                        whose `actor` is listed starts life revoked, so a
+   *                        revoked actor STAYS revoked across a restart (the
+   *                        file is re-read every boot). Prefer the
+   *                        {@link buildTokenRegistry} factory, which wires this
+   *                        from the revocation file for you.
    */
-  constructor(records: readonly TokenRecord[]) {
+  constructor(records: readonly TokenRecord[], revokedActors: readonly string[] = []) {
     this.records = records.map((rec) => {
       // A `token` may already be a salted `scrypt$salt$hash` (the at-rest form,
       // so no plaintext bearer secret sits on disk) — use it verbatim so the
@@ -160,6 +180,19 @@ export class InMemoryTokenRegistry implements TokenRegistry {
         revoked: false,
       };
     });
+
+    // Apply the durable, boot-time revocation list: any actor banned in the
+    // persisted file starts revoked. Applied AFTER the records are built so it
+    // also catches a token freshly issued to an already-banned actor — a ban is
+    // on the identity, not on one specific secret.
+    if (revokedActors.length > 0) {
+      const banned = new Set(revokedActors);
+      for (const rec of this.records) {
+        if (banned.has(rec.identity.actor)) {
+          rec.revoked = true;
+        }
+      }
+    }
   }
 
   isEmpty(): boolean {
@@ -193,6 +226,23 @@ export class InMemoryTokenRegistry implements TokenRegistry {
       }
     }
     return revokedAny;
+  }
+
+  revokeByActor(actor: string): number {
+    // Revoke by identity — no secret needed. This works after E1 hashed tokens
+    // at rest (an admin has no plaintext to pass to revoke()) and cuts off ALL
+    // of one actor's live tokens at once (e.g. a stolen laptop with a session).
+    // Constant-time comparison is irrelevant here: `actor` is a public audit
+    // identity, not a secret, so a plain string equals is correct.
+    let count = 0;
+    for (const rec of this.records) {
+      if (rec.revoked) continue;
+      if (rec.identity.actor === actor) {
+        rec.revoked = true;
+        count += 1;
+      }
+    }
+    return count;
   }
 }
 
@@ -307,4 +357,127 @@ function parseTenants(raw: unknown): string[] | undefined {
 function parseExpiry(raw: unknown): string | undefined {
   if (typeof raw !== 'string' || raw.length === 0) return undefined;
   return raw;
+}
+
+// --- Durable revocation list (revoke-by-actor, survives restart) -----------
+//
+// A token record already supports `expiresAt` for time-boxed retirement (see
+// TokenRecord / loadTokenRecords, both of which enforce it) — an operator caps
+// a token's life by adding `"expiresAt": "2026-12-31T00:00:00Z"` to its record
+// in tokens.json. That covers PLANNED retirement. The revocation list below
+// covers UNPLANNED, immediate incident response by actor ("Tim's laptop was
+// stolen") in a world where tokens are hashed at rest and no plaintext exists
+// to revoke by value.
+
+/**
+ * One entry in the durable revocation list. Append-only: an entry is never
+ * removed (un-revoking is re-issuing a fresh token, not editing this file), so
+ * the file doubles as a small, human-readable revocation audit trail.
+ */
+export interface RevokedActorEntry {
+  /** The audit actor whose tokens are cut off. */
+  actor: string;
+  /** When the revocation was recorded (ISO-8601). */
+  revokedAt: string;
+  /** Optional operator note ("laptop stolen", "left the team"). */
+  reason?: string;
+}
+
+/**
+ * Read the durable revocation list and return the DISTINCT set of revoked
+ * actors. The file is a JSON array of {@link RevokedActorEntry}.
+ *
+ * Fail-open-safe: a missing file (the normal first-run case) yields `[]`
+ * silently; a present-but-unparseable file yields `[]` but LOGS a warning. A
+ * revocation file is a safety add-on, not the primary auth gate — a corrupt
+ * file must never stop the brain from booting, but the operator should know it
+ * was ignored (a silently-dropped ban list is a security footgun).
+ */
+export function loadRevokedActors(path: string | undefined): string[] {
+  if (path === undefined || path === '') return [];
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf8');
+  } catch {
+    return []; // no file yet = nothing revoked
+  }
+  try {
+    const data: unknown = JSON.parse(raw);
+    if (!Array.isArray(data)) throw new Error('revocation file is not a JSON array');
+    const actors = new Set<string>();
+    for (const item of data) {
+      if (!item || typeof item !== 'object') continue;
+      const actor = (item as Record<string, unknown>)['actor'];
+      if (typeof actor === 'string' && actor.length > 0) actors.add(actor);
+    }
+    return [...actors];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(
+      `[teamkb-api] WARN: ignoring unparseable revocation file ${path}: ${msg}\n`,
+    );
+    return [];
+  }
+}
+
+/**
+ * Append one revocation to the durable list and return the entry written.
+ *
+ * Append-only semantics: the existing entries are read, the new one is pushed,
+ * and the whole array is rewritten (so a concurrent reader always parses valid
+ * JSON — never a torn half-write). A missing parent dir is created; a
+ * missing-or-corrupt existing file is treated as an empty list so the append
+ * still succeeds and heals a corrupt file forward without dropping the new
+ * revocation. The file is written mode 0600 (it lists actor identities + free
+ * -text reasons — no secrets, but no reason to be world-readable either).
+ */
+export function appendRevokedActor(
+  path: string,
+  actor: string,
+  reason?: string,
+): RevokedActorEntry {
+  const entry: RevokedActorEntry = { actor, revokedAt: new Date().toISOString() };
+  if (reason !== undefined && reason !== '') entry.reason = reason;
+
+  let existing: RevokedActorEntry[] = [];
+  const raw = readFileSafe(path);
+  if (raw !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        existing = parsed.filter(
+          (e): e is RevokedActorEntry =>
+            !!e && typeof e === 'object' && typeof (e as { actor?: unknown }).actor === 'string',
+        );
+      }
+    } catch {
+      existing = []; // corrupt existing file → heal forward, don't lose this revoke
+    }
+  }
+  existing.push(entry);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(existing, null, 2)}\n`, { mode: 0o600 });
+  return entry;
+}
+
+/** Options for {@link buildTokenRegistry}: token sources + the revocation list. */
+export interface RegistryBuildOptions extends TokenSourceOptions {
+  /**
+   * Path to the durable revocation list (env `TEAMKB_REVOKED_FILE`, default
+   * `~/.teamkb/revoked-actors.json`). Actors listed here are revoked at boot.
+   */
+  revokedFile?: string;
+}
+
+/**
+ * Build a registry from the token sources AND apply the durable revocation
+ * list — the single construction path that guarantees a revoked actor stays
+ * revoked across a restart. `buildApp` uses this instead of
+ * `new InMemoryTokenRegistry(...)` directly so the boot-time file read is never
+ * forgotten.
+ */
+export function buildTokenRegistry(opts: RegistryBuildOptions): InMemoryTokenRegistry {
+  const records = loadTokenRecords(opts);
+  const revoked = loadRevokedActors(opts.revokedFile);
+  return new InMemoryTokenRegistry(records, revoked);
 }

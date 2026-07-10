@@ -18,6 +18,7 @@
  *   TEAMKB_DB_PATH      — SQLite path (default ~/.teamkb/data/teamkb.db)
  *   TEAMKB_TENANT_ID    — tenant scope for qmd isolation (default intent-solutions)
  *   TEAMKB_EXPORT_DIR   — git-exporter output dir qmd indexes (default ~/.teamkb/kb-export)
+ *   TEAMKB_REVOKED_FILE — durable revoke-by-actor list (default ~/.teamkb/revoked-actors.json)
  */
 import { resolve } from 'node:path';
 import { createDatabase } from '@qmd-team-intent-kb/store';
@@ -64,10 +65,15 @@ async function main(): Promise<void> {
     process.stderr.write(`[teamkb-api] auth: ${tokens.length} token(s) loaded — ${roles}\n`);
   }
 
+  // Durable revoke-by-actor list — default under the brain base so a stolen
+  // laptop can be revoked by identity and the ban survives a restart.
+  const revokedFile =
+    process.env['TEAMKB_REVOKED_FILE'] ?? resolveTeamKbPath('revoked-actors.json');
+
   // Pass the real bind host so the no-auth dev path is refused off-loopback:
   // an empty registry on a tailnet/0.0.0.0 bind throws at boot rather than
   // serving every request as role=admin. Loopback stays the default.
-  const app = buildApp({ db, tokens, qmdAdapter, bindHost: config.host });
+  const app = buildApp({ db, tokens, qmdAdapter, bindHost: config.host, revokedFile });
   await app.ready();
 
   const shutdown = async (signal: string): Promise<void> => {

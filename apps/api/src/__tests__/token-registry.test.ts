@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -10,7 +10,11 @@ import {
   InMemoryTokenRegistry,
   loadTokenRecords,
   hashToken,
+  buildTokenRegistry,
+  loadRevokedActors,
+  appendRevokedActor,
   type TokenRecord,
+  type RevokedActorEntry,
 } from '../auth/token-registry.js';
 
 describe('InMemoryTokenRegistry', () => {
@@ -165,6 +169,50 @@ describe('InMemoryTokenRegistry', () => {
     const reg = new InMemoryTokenRegistry([{ token: 'live', actor: 'a', role: 'admin' }]);
     expect(reg.revoke('never-existed')).toBe(false);
   });
+
+  // ---- revoke-by-actor (durable incident response — jfv.6.2) --------------
+
+  it('revokeByActor revokes ALL of one actor’s records and returns the count', () => {
+    // Tim carries two tokens (laptop + workstation); revoking the identity must
+    // cut off both at once and report the count.
+    const reg = new InMemoryTokenRegistry([
+      { token: 'tim-laptop', actor: 'tim', role: 'member' },
+      { token: 'tim-workstation', actor: 'tim', role: 'member' },
+      { token: 'other', actor: 'jeremy', role: 'admin' },
+    ]);
+    expect(reg.revokeByActor('tim')).toBe(2);
+    // Both of Tim's tokens are dead; the other actor is untouched.
+    expect(reg.resolve('tim-laptop')).toBeUndefined();
+    expect(reg.resolve('tim-workstation')).toBeUndefined();
+    expect(reg.resolve('other')).toEqual({ actor: 'jeremy', role: 'admin' });
+  });
+
+  it('a revoked actor does NOT resolve after revokeByActor', () => {
+    const reg = new InMemoryTokenRegistry([{ token: 'tim-token', actor: 'tim', role: 'member' }]);
+    expect(reg.resolve('tim-token')).toEqual({ actor: 'tim', role: 'member' });
+    reg.revokeByActor('tim');
+    expect(reg.resolve('tim-token')).toBeUndefined();
+  });
+
+  it('revokeByActor returns 0 for an unknown actor (still safe, no throw)', () => {
+    const reg = new InMemoryTokenRegistry([{ token: 'live', actor: 'jeremy', role: 'admin' }]);
+    expect(reg.revokeByActor('nobody')).toBe(0);
+    expect(reg.resolve('live')).toEqual({ actor: 'jeremy', role: 'admin' });
+  });
+
+  it('applies a boot-time revoked-actors list at construction (survives restart)', () => {
+    // Simulate a restart: the same records reload, but the actor is on the
+    // durable revocation list, so their token starts life revoked.
+    const reg = new InMemoryTokenRegistry(
+      [
+        { token: 'tim-token', actor: 'tim', role: 'member' },
+        { token: 'jeremy-token', actor: 'jeremy', role: 'admin' },
+      ],
+      ['tim'],
+    );
+    expect(reg.resolve('tim-token')).toBeUndefined(); // banned at boot
+    expect(reg.resolve('jeremy-token')).toEqual({ actor: 'jeremy', role: 'admin' });
+  });
 });
 
 describe('loadTokenRecords', () => {
@@ -265,6 +313,78 @@ describe('loadTokenRecords', () => {
       { token: 'typo', actor: 'a', role: 'admin', expiresAt: 'not-a-date' },
     ]);
     expect(loadTokenRecords({ tokensJson: json })).toHaveLength(0);
+  });
+});
+
+describe('durable revocation list (revoke-by-actor persistence — jfv.6.2)', () => {
+  let dir: string;
+  let file: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'teamkb-revoked-'));
+    file = join(dir, 'revoked-actors.json');
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('loadRevokedActors returns [] for an undefined path or a missing file', () => {
+    expect(loadRevokedActors(undefined)).toEqual([]);
+    expect(loadRevokedActors(file)).toEqual([]); // file not created yet
+  });
+
+  it('loadRevokedActors reads the distinct set of revoked actors', () => {
+    const entries: RevokedActorEntry[] = [
+      { actor: 'tim', revokedAt: '2026-07-09T00:00:00.000Z', reason: 'laptop stolen' },
+      { actor: 'tim', revokedAt: '2026-07-09T01:00:00.000Z' }, // duplicate → collapsed
+      { actor: 'ope', revokedAt: '2026-07-09T02:00:00.000Z' },
+    ];
+    writeFileSync(file, JSON.stringify(entries));
+    expect(loadRevokedActors(file).sort()).toEqual(['ope', 'tim']);
+  });
+
+  it('loadRevokedActors fails OPEN on an unparseable file (returns [], does not throw)', () => {
+    writeFileSync(file, 'this is not json{');
+    expect(loadRevokedActors(file)).toEqual([]);
+  });
+
+  it('appendRevokedActor writes an entry (append-only) and is readable back', () => {
+    const first = appendRevokedActor(file, 'tim', 'laptop stolen');
+    expect(first.actor).toBe('tim');
+    expect(first.reason).toBe('laptop stolen');
+    expect(typeof first.revokedAt).toBe('string');
+
+    // A second append keeps the first (append-only), not overwrites it.
+    appendRevokedActor(file, 'ope');
+    const onDisk = JSON.parse(readFileSync(file, 'utf8')) as RevokedActorEntry[];
+    expect(onDisk).toHaveLength(2);
+    expect(onDisk.map((e) => e.actor)).toEqual(['tim', 'ope']);
+    expect(loadRevokedActors(file).sort()).toEqual(['ope', 'tim']);
+  });
+
+  it('appendRevokedActor heals a corrupt existing file forward (does not lose the new revoke)', () => {
+    writeFileSync(file, 'garbage-not-json');
+    appendRevokedActor(file, 'tim');
+    const onDisk = JSON.parse(readFileSync(file, 'utf8')) as RevokedActorEntry[];
+    expect(onDisk).toHaveLength(1);
+    expect(onDisk[0]!.actor).toBe('tim');
+  });
+
+  it('buildTokenRegistry applies a persisted revocation at boot (the R2 restart guarantee)', () => {
+    // Persist a ban, then build a fresh registry pointed at that file — exactly
+    // what happens on a service restart. The banned actor's token must NOT
+    // resolve; an unbanned actor's token must.
+    appendRevokedActor(file, 'tim', 'laptop stolen');
+    const reg = buildTokenRegistry({
+      records: [
+        { token: 'tim-token', actor: 'tim', role: 'member' },
+        { token: 'jeremy-token', actor: 'jeremy', role: 'admin' },
+      ],
+      revokedFile: file,
+    });
+    expect(reg.resolve('tim-token')).toBeUndefined();
+    expect(reg.resolve('jeremy-token')).toEqual({ actor: 'jeremy', role: 'admin' });
   });
 });
 
