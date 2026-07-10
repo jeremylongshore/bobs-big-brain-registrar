@@ -28,7 +28,14 @@ export function registerCandidateRoutes(
     },
     async (request, reply) => {
       try {
-        const candidate = service.intake(request.body);
+        // Thread the bearer-token identity into intake so the server — not the
+        // client — owns author / trustLevel / tenantId / prePolicyFlags and the
+        // quarantine marker (R8, compile-then-govern-jfv.6.7).
+        const candidate = service.intake(request.body, {
+          actor: request.actor,
+          role: request.role,
+          tenants: request.tenants,
+        });
         return reply.status(201).send(candidate);
       } catch (err) {
         if (err instanceof ApiError) {

@@ -18,6 +18,7 @@ describe('AuditEvent', () => {
       'deleted',
       'searched',
       'exported',
+      'proposed',
     ] as const;
     for (const action of actions) {
       const result = AuditEvent.parse(makeAuditEvent({ action }));

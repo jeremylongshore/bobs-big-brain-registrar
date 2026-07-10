@@ -129,6 +129,7 @@ describe('AuditAction', () => {
     'searched',
     'exported',
     'eval-result',
+    'proposed',
   ];
   it.each(actions)('accepts "%s"', (val) => {
     expect(AuditAction.parse(val)).toBe(val);

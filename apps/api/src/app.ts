@@ -126,7 +126,9 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const batchRepo = new ImportBatchRepository(deps.db);
   const linksRepo = new MemoryLinksRepository(deps.db);
 
-  const candidateService = new CandidateService(candidateRepo);
+  // The candidate service takes the audit repo so every accepted intake writes a
+  // `proposed` provenance receipt (R8, compile-then-govern-jfv.6.7).
+  const candidateService = new CandidateService(candidateRepo, auditRepo);
   const memoryService = new MemoryService(memoryRepo, auditRepo);
   const policyService = new PolicyService(policyRepo);
   const healthService = new HealthService(deps.db);
