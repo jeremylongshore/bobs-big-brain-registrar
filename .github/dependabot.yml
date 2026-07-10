@@ -4,28 +4,32 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels:
       - 'dependencies'
-    # Batch routine updates into a few PRs instead of one-per-package. Majors stay
-    # ungrouped (individual PRs) so breaking bumps still get reviewed on their own.
+    # Batch EVERYTHING (incl. majors) into two PRs — one dev, one prod — instead of
+    # one-PR-per-major. Kills the per-major noise; a breaking major fails the group's
+    # CI and gets triaged then (add an ignore or migrate) rather than sitting open.
     groups:
       dev-dependencies:
         dependency-type: 'development'
-        update-types:
-          - 'minor'
-          - 'patch'
       production-dependencies:
         dependency-type: 'production'
+    # Known-breaking majors held back until we do the migration (they broke `validate`):
+    #   dependency-cruiser 18 (config migration) · @eslint/js 10 (flat-config changes)
+    ignore:
+      - dependency-name: 'dependency-cruiser'
         update-types:
-          - 'minor'
-          - 'patch'
+          - 'version-update:semver-major'
+      - dependency-name: '@eslint/js'
+        update-types:
+          - 'version-update:semver-major'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
     labels:
       - 'dependencies'
       - 'ci'
