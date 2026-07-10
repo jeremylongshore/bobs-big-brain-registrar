@@ -40,7 +40,11 @@
     {
       "id": "immutable-release-floor",
       "severity": "medium",
-      "scope": ["scripts/deploy-brain-api.sh", "apps/api/**", "000-docs/041-OD-OPSM-brain-api-immutable-release-deploy.md"],
+      "scope": [
+        "scripts/deploy-brain-api.sh",
+        "apps/api/**",
+        "000-docs/041-OD-OPSM-brain-api-immutable-release-deploy.md"
+      ],
       "rule": "The brain API runs from an immutable, versioned release (`$TEAMKB_API_OPT/current -> releases/<tag>`), never Jeremy's working tree. The release floor is tag v0.8.0 (contains E1 commit `a2143be`). Never suggest deploying a ref that lacks `a2143be` — a pre-E1 build double-hashes the now-hashed `tokens.json` and locks out every user (041-OD-OPSM) — or reverting to a run-from-working-tree deploy. Rollback is a symlink flip to a prior release; note that after the live token reseed a plain code revert also requires reseeding `tokens.json` in the same step."
     },
     {
