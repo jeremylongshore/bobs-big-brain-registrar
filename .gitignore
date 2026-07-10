@@ -68,3 +68,4 @@ secrets/*.private.hex
 # The SOPS-encrypted private key (committed) and the public-key registry are NOT ignored:
 !secrets/*.sops.env
 !keys/*.pub
+.worktrees/
