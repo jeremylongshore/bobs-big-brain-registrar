@@ -29,6 +29,21 @@ export interface IngestFromSpoolOptions {
    * `<file>.tamper.json` evidence sidecar recording the hash mismatch.
    */
   quarantineDir?: string;
+  /**
+   * When set, each spool file is MOVED here after its candidates are
+   * successfully read + ingested (B1, bead compile-then-govern-jfv.2.1). Bounds
+   * the nightly sweep's re-read work and makes a re-run over unchanged input a
+   * genuine no-op: the auto-govern job re-runs every night but `listSpoolFiles`
+   * only lists the top-level spool dir, so an already-ingested file in the
+   * archive subdir is never re-read (or re-manifest-verified). The candidate
+   * `findById` dedup already prevents a re-INSERT; archiving additionally stops
+   * the O(all-spool-files-ever) growth in read/verify work. Best-effort: a move
+   * failure is logged, never fatal (findById still guards correctness). The
+   * `<file>.manifest.json` sidecar moves alongside. Left unset by the daemon/CLI
+   * (their behavior is unchanged); the plugin's nightly `runGovern` sets it to
+   * `<spool>/ingested`.
+   */
+  archiveIngestedDir?: string;
 }
 
 /** Record of a spool file refused during ingest because it failed manifest
@@ -157,9 +172,40 @@ export async function ingestFromSpoolDetailed(
         throw e;
       }
     }
+
+    // Idempotency (B1): once a file's candidates are read + ingested, move it out
+    // of the top-level spool dir so subsequent runs never re-read/re-verify it.
+    // Best-effort — a failed move is logged but not fatal (findById dedup already
+    // prevents any re-insert).
+    if (opts?.archiveIngestedDir !== undefined) {
+      await archiveIngestedFile(filepath, opts.archiveIngestedDir);
+    }
   }
 
   return { ok: true, value: { ingested, tampered, rejected } };
+}
+
+/**
+ * Move a fully-ingested spool file (and its `.manifest.json` sidecar, if present)
+ * into the archive directory (B1). Best-effort: any I/O failure is swallowed after
+ * a stderr note — the file simply stays in the spool dir and is skipped next run
+ * via the candidate `findById` dedup, so correctness never depends on this move.
+ */
+async function archiveIngestedFile(spoolFilePath: string, archiveDir: string): Promise<void> {
+  try {
+    await mkdir(archiveDir, { recursive: true });
+    const dest = join(archiveDir, basename(spoolFilePath));
+    await rename(spoolFilePath, dest);
+    try {
+      await rename(`${spoolFilePath}.manifest.json`, `${dest}.manifest.json`);
+    } catch {
+      // manifest may not exist — non-fatal.
+    }
+  } catch (e) {
+    process.stderr.write(
+      `[spool-intake] archive skipped for ${basename(spoolFilePath)}: ${e instanceof Error ? e.message : String(e)}\n`,
+    );
+  }
 }
 
 /**

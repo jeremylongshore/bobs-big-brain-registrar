@@ -32,4 +32,21 @@ export interface CuratorConfig {
    * Range 0.0–1.0. Default 0.6.
    */
   supersessionThreshold?: number;
+  /**
+   * When true, a rejected/flagged candidate does NOT get its own per-candidate
+   * `reject` audit receipt — only the batch outcome is returned in the
+   * {@link CurationResult} (B1, bead compile-then-govern-jfv.2.1). Promotions still
+   * write their full durable state + `promoted` receipt.
+   *
+   * The auto-govern inbox sweep sets this. Rationale: the sweep LEAVES
+   * policy-flagged/rejected candidates in the inbox for human review (it never
+   * retires them), so they are re-evaluated on EVERY nightly run. A per-candidate
+   * reject receipt (a fresh random-id audit event) each night would grow the audit
+   * chain without bound — the exact "second run is a no-op" idempotency the sweep
+   * must guarantee. The sweep instead emits ONE batch-level `governed` receipt (in
+   * runGovern) recording the outcomes, and only when durable state actually
+   * changed. Defaults to false (the daemon / CLI keep per-candidate reject
+   * receipts).
+   */
+  suppressRejectionReceipts?: boolean;
 }

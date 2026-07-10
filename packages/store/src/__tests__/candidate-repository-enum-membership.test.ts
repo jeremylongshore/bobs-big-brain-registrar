@@ -120,7 +120,9 @@ describe('CandidateRepository.insert - enum-membership choke point', () => {
   });
 
   it('rejects an off-vocabulary status that is NOT disclosure-shaped (EnumConstraintViolationError)', () => {
-    const { candidate, contentHash } = withRawEnumField('status', 'promoted');
+    // 'promoted' is now a valid CandidateStatus (B1 widened the enum), so use a
+    // value still outside the closed vocabulary to exercise the enum backstop.
+    const { candidate, contentHash } = withRawEnumField('status', 'not-a-real-status');
     let err: unknown;
     try {
       repo.insert(candidate, contentHash);

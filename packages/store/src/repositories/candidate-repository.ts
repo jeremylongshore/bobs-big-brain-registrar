@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
-import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import { MemoryCandidate, CandidateStatus } from '@qmd-team-intent-kb/schema';
 import { assertDisclosureClean } from '@qmd-team-intent-kb/common';
 import { assertEnumMembership } from './enum-membership.js';
 
@@ -87,6 +87,33 @@ function rowToCandidate(row: unknown): MemoryCandidate {
 }
 
 /**
+ * Skip-and-report variant of {@link rowToCandidate} for bulk reads that must not
+ * be aborted by a single malformed row (B1, bead compile-then-govern-jfv.2.1).
+ *
+ * The nightly auto-govern sweep reads the ENTIRE inbox via {@link
+ * CandidateRepository.findByStatus} and processes it. `rowToCandidate` THROWS on
+ * any row that fails validation, so one corrupt/partial row (a truncated write, a
+ * legacy row predating a schema field) would abort the whole sweep FOREVER — the
+ * inbox could never drain. This wrapper contains that: a bad row is logged to
+ * stderr (id + reason, never content) and dropped, so the sweep governs every good
+ * row and the operator still sees the poison row surfaced. Returns null on failure.
+ */
+function rowToCandidateSafe(row: unknown): MemoryCandidate | null {
+  try {
+    return rowToCandidate(row);
+  } catch (e) {
+    const id =
+      row !== null && typeof row === 'object' && 'id' in row
+        ? String((row as { id: unknown }).id)
+        : '<unknown>';
+    process.stderr.write(
+      `[candidate-repository] skipping unparseable candidate row id=${id}: ${e instanceof Error ? e.message : String(e)}\n`,
+    );
+    return null;
+  }
+}
+
+/**
  * Repository for raw memory candidate proposals.
  * All methods use prepared statements for safety and performance.
  * Validation is the responsibility of the caller.
@@ -95,10 +122,12 @@ export class CandidateRepository {
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindById: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
+  private readonly stmtFindByStatus: Database.Statement;
   private readonly stmtFindByHash: Database.Statement;
   private readonly stmtCount: Database.Statement;
   private readonly stmtCountByTenant: Database.Statement;
   private readonly stmtDeleteByBatch: Database.Statement;
+  private readonly stmtUpdateStatus: Database.Statement;
 
   constructor(db: Database.Database) {
     this.stmtInsert = db.prepare(`
@@ -123,8 +152,22 @@ export class CandidateRepository {
       SELECT * FROM candidates WHERE tenant_id = ?
     `);
 
+    // Tenant-scoped status lookup — the auto-govern sweep's drain query (B1).
+    // Scoped by (status, tenant_id) so one tenant's sweep never reads another
+    // tenant's candidates; backed by idx_candidates_status_tenant (migration 8).
+    this.stmtFindByStatus = db.prepare(`
+      SELECT * FROM candidates WHERE status = ? AND tenant_id = ?
+    `);
+
     this.stmtFindByHash = db.prepare(`
       SELECT * FROM candidates WHERE content_hash = ? LIMIT 1
+    `);
+
+    // Non-destructive terminal marker for a governed candidate (B1). The row is
+    // NEVER deleted (candidates is Tier-A source of truth); the sweep only stamps
+    // its outcome via this UPDATE.
+    this.stmtUpdateStatus = db.prepare(`
+      UPDATE candidates SET status = @status WHERE id = @id
     `);
 
     this.stmtCount = db.prepare(`
@@ -206,6 +249,45 @@ export class CandidateRepository {
   findByTenant(tenantId: string): MemoryCandidate[] {
     const rows = this.stmtFindByTenant.all(tenantId);
     return rows.map(rowToCandidate);
+  }
+
+  /**
+   * Return every candidate in the given `status`, scoped to `tenantId` (B1, bead
+   * compile-then-govern-jfv.2.1). The auto-govern sweep calls
+   * `findByStatus('inbox', config.tenantId)` to drain the pre-governance inbox.
+   *
+   * TOLERANT read: a row that fails validation is skipped and reported to stderr
+   * (via {@link rowToCandidateSafe}) rather than thrown, so a single malformed
+   * candidate can never abort the whole sweep — the inbox always drains. Tenant
+   * scoping is mandatory (not optional) so a sweep can never read across the
+   * tenant boundary.
+   */
+  findByStatus(status: CandidateStatus, tenantId: string): MemoryCandidate[] {
+    const rows = this.stmtFindByStatus.all(status, tenantId);
+    const out: MemoryCandidate[] = [];
+    for (const row of rows) {
+      const c = rowToCandidateSafe(row);
+      if (c !== null) out.push(c);
+    }
+    return out;
+  }
+
+  /**
+   * Stamp a candidate's terminal status IN PLACE (B1) — the non-destructive
+   * retirement primitive the sweep uses instead of DELETE. `candidates` is
+   * insert-only Tier-A source of truth, so a governed candidate LEAVES the inbox
+   * by changing its status marker, never by deletion (which would destroy the only
+   * copy of a remote teammate's proposal + the human review queue).
+   *
+   * Validates `status` against the closed {@link CandidateStatus} vocabulary before
+   * writing (a raw UPDATE otherwise bypasses the enum-membership backstop that
+   * `insert()` enforces). Returns the number of rows changed (0 if `id` is absent).
+   *
+   * @throws {z.ZodError} if `status` is not a valid CandidateStatus value.
+   */
+  updateStatus(id: string, status: CandidateStatus): number {
+    const validated = CandidateStatus.parse(status);
+    return this.stmtUpdateStatus.run({ id, status: validated }).changes;
   }
 
   /**
