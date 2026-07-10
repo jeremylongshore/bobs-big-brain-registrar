@@ -17,11 +17,16 @@ updates:
         dependency-type: 'production'
     # Known-breaking majors held back until we do the migration (they broke `validate`):
     #   dependency-cruiser 18 (config migration) · @eslint/js 10 (flat-config changes)
+    #   typescript 7 (native/preview "Corsa" — incompatible with @typescript-eslint 8,
+    #     crashed the Lint step with "reading 'Cjs'"; hold until the toolchain supports it)
     ignore:
       - dependency-name: 'dependency-cruiser'
         update-types:
           - 'version-update:semver-major'
       - dependency-name: '@eslint/js'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: 'typescript'
         update-types:
           - 'version-update:semver-major'
 
