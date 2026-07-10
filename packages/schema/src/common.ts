@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AuthorType, Confidence, Sensitivity } from './enums.js';
+import { AuthorType, Confidence, ProposerRole, Sensitivity } from './enums.js';
 
 /** UUID v4 string */
 export const Uuid = z.string().uuid();
@@ -53,5 +53,17 @@ export const ContentMetadata = z.object({
   confidence: Confidence.optional(),
   sensitivity: Sensitivity.optional(),
   tags: z.array(Tag).default([]),
+  /**
+   * The role of the token that proposed this candidate, stamped server-side at
+   * intake (R8, bead compile-then-govern-jfv.6.7). Never client-supplied — the
+   * intake path overwrites it from the bearer-token identity so a member cannot
+   * masquerade as an admin-authored proposal. A closed enum (`admin` | `member`),
+   * so the disclosure scanner and the enum-membership backstop treat it as
+   * closed-vocabulary. Optional/absent on legacy records and non-token (dev)
+   * intake; present on every token-authenticated proposal. Flows through
+   * promotion onto the curated memory so a later auto-govern step (B1) can
+   * quarantine member-authored content behind admin review.
+   */
+  proposedByRole: ProposerRole.optional(),
 });
 export type ContentMetadata = z.infer<typeof ContentMetadata>;

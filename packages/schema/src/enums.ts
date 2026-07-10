@@ -52,8 +52,25 @@ export const AuditAction = z.enum([
   // Evidence Bundle emission on a curation/promotion cycle (IEP unification
   // thesis, DR-010 Q3). Added for the eval-surface emit path (bead tr08.15/.17/.19).
   'eval-result',
+  // Candidate-intake receipt — a proposal enters the pre-governance inbox (R8,
+  // bead compile-then-govern-jfv.6.7). Written at intake so every candidate has a
+  // provenance receipt (actor + contentHash + tenant) from byte one, before any
+  // promotion. `memoryId` on this row is the candidate's UUID.
+  'proposed',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
+
+/**
+ * The role of the token that PROPOSED a candidate (R8, bead
+ * compile-then-govern-jfv.6.7). Stamped server-side at intake onto
+ * {@link ContentMetadata.proposedByRole} so a downstream auto-govern step (B1)
+ * can quarantine member-authored proposals behind admin review rather than
+ * auto-promoting them. Mirrors the API token roles (`admin` | `member`); kept in
+ * the schema package so it is a durable, persisted vocabulary, not an API-only
+ * type. A closed enum so it is treated as closed-vocabulary (never free text).
+ */
+export const ProposerRole = z.enum(['admin', 'member']);
+export type ProposerRole = z.infer<typeof ProposerRole>;
 
 export const Confidence = z.enum(['high', 'medium', 'low']);
 export type Confidence = z.infer<typeof Confidence>;
