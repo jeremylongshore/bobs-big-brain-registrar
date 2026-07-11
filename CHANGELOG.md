@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **B1 auto-govern primitives** (`packages/store` + `packages/curator`) — a **marker-based** inbox:
+  `CandidateStatus` widened so insert-only `candidates` are retired by a terminal status change,
+  **never deleted** (the review queue + only copy is preserved), plus tenant-scoped content-hash
+  dedup and spool archiving. The deterministic foundation for governing the remote-capture inbox.
+  (jfv.2.1, #236)
+
+### Changed
+
+- **Dependabot: hold `typescript` at its current major.** Added `typescript` semver-major to the
+  ignore list (alongside `dependency-cruiser` and `@eslint/js`): the dev-dependencies group tried to
+  bump `typescript` 5.x → **7.0.2** — the native/preview compiler — which crashes `@typescript-eslint`
+  and broke the `validate` Lint gate. Held back until the lint/tsx toolchain supports TS 7.
+- **Merged the batched dependency-group updates** (#234 dev-deps, #235 prod-deps): 13 dev-dep bumps
+  landed (vitest, knip, prettier 3.9.5, testcontainers, tsx, `@intentsolutions/audit-harness`, …)
+  with `typescript` held at 5.x; reformatted one test file for prettier 3.9.5.
+- Ignore `.worktrees/` (local Agent-isolation worktree checkouts).
+
 ## [0.7.0] - 2026-06-19
 
 ### Added
