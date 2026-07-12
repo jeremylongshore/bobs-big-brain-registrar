@@ -8,7 +8,12 @@ import {
   CuratedMemory as CuratedMemorySchema,
   AuditEvent as AuditEventSchema,
 } from '@qmd-team-intent-kb/schema';
-import type { MemoryCandidate, CuratedMemory, PolicyEvaluation } from '@qmd-team-intent-kb/schema';
+import type {
+  MemoryCandidate,
+  CuratedMemory,
+  PolicyEvaluation,
+  Author,
+} from '@qmd-team-intent-kb/schema';
 import type {
   MemoryRepository,
   AuditRepository,
@@ -24,7 +29,24 @@ export interface PromotionInput {
   contentHash: string;
   pipelineResult: PipelineResult;
   supersession?: SupersessionMatch;
+  /**
+   * Who is promoting this candidate — recorded verbatim as the actor of the
+   * 'promoted' audit receipt AND the curated memory's `promotedBy` (jfv.8). The
+   * agent-review path passes `{ type: 'ai', id: 'teamkb-review-agent' }` so the
+   * receipt is filterable by the reviewing actor (014-AT-DECR constraint #2).
+   * Defaults to the batch curator's identity when omitted, so every existing
+   * caller (merge-gate, batch pipeline) is unchanged.
+   */
+  promotedBy?: Author;
+  /**
+   * The reviewer's justification, folded into the 'promoted' receipt's reason so
+   * the agent's verdict + reasoning is on the append-only chain (014-AT-DECR).
+   */
+  promotionReason?: string;
 }
+
+/** The default promoter identity for the batch/merge paths that name no actor. */
+const CURATOR_ACTOR: Author = { type: 'system', id: 'curator' };
 
 /**
  * Verdict shape an {@link EvalCallback} may return — a structurally-minimal
@@ -133,7 +155,7 @@ export function promote(
     contentHash: input.contentHash,
     policyEvaluations,
     promotedAt: now,
-    promotedBy: { type: 'system', id: 'curator' },
+    promotedBy: input.promotedBy ?? CURATOR_ACTOR,
     updatedAt: now,
     version: 1,
   });
@@ -248,8 +270,11 @@ export function promote(
             action: 'promoted',
             memoryId,
             tenantId: input.candidate.tenantId,
-            actor: { type: 'system', id: 'curator' },
-            reason: 'Passed all governance rules',
+            actor: input.promotedBy ?? CURATOR_ACTOR,
+            reason:
+              input.promotionReason !== undefined && input.promotionReason.trim().length > 0
+                ? `${input.promotionReason} (passed all governance rules)`
+                : 'Passed all governance rules',
             details: { candidateId: input.candidate.id },
             timestamp: now,
           }),

@@ -165,9 +165,11 @@ export class CandidateRepository {
 
     // Non-destructive terminal marker for a governed candidate (B1). The row is
     // NEVER deleted (candidates is Tier-A source of truth); the sweep only stamps
-    // its outcome via this UPDATE.
+    // its outcome via this UPDATE. Tenant-scoped (id AND tenant_id) so a caller
+    // holding a candidate UUID can never flip another tenant's row by id alone
+    // (jfv.2.5(a) — closed as part of the agent-review approve surface, jfv.8).
     this.stmtUpdateStatus = db.prepare(`
-      UPDATE candidates SET status = @status WHERE id = @id
+      UPDATE candidates SET status = @status WHERE id = @id AND tenant_id = @tenantId
     `);
 
     this.stmtCount = db.prepare(`
@@ -281,13 +283,15 @@ export class CandidateRepository {
    *
    * Validates `status` against the closed {@link CandidateStatus} vocabulary before
    * writing (a raw UPDATE otherwise bypasses the enum-membership backstop that
-   * `insert()` enforces). Returns the number of rows changed (0 if `id` is absent).
+   * `insert()` enforces). Scoped to `tenantId` so the primitive cannot flip a row
+   * outside the caller's tenant. Returns the number of rows changed (0 if no row
+   * matches `id` AND `tenantId`).
    *
    * @throws {z.ZodError} if `status` is not a valid CandidateStatus value.
    */
-  updateStatus(id: string, status: CandidateStatus): number {
+  updateStatus(id: string, status: CandidateStatus, tenantId: string): number {
     const validated = CandidateStatus.parse(status);
-    return this.stmtUpdateStatus.run({ id, status: validated }).changes;
+    return this.stmtUpdateStatus.run({ id, status: validated, tenantId }).changes;
   }
 
   /**

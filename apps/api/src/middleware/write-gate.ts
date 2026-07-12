@@ -23,6 +23,13 @@ const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  */
 const PROMOTE_PATH = /^\/api\/candidates\/[^/]+\/promote$/;
 
+/**
+ * Rejecting a reviewed candidate is likewise an admin disposition act under the
+ * otherwise member-allowed `/api/candidates` prefix (jfv.8 agent-review surface):
+ * `POST /api/candidates/:id/reject`.
+ */
+const REJECT_PATH = /^\/api\/candidates\/[^/]+\/reject$/;
+
 export function registerWriteGate(app: FastifyInstance): void {
   app.addHook('onRequest', async (request, reply) => {
     if (!MUTATION_METHODS.has(request.method)) {
@@ -32,6 +39,7 @@ export function registerWriteGate(app: FastifyInstance): void {
     const path = request.url.split('?')[0] ?? request.url;
     const isAdminWrite =
       PROMOTE_PATH.test(path) ||
+      REJECT_PATH.test(path) ||
       ADMIN_WRITE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
     if (!isAdminWrite) {
       return;

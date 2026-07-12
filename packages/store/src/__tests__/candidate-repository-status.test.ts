@@ -44,7 +44,7 @@ describe('CandidateRepository — status marker (B1)', () => {
     expect(repo.findByStatus('inbox', 't2')).toHaveLength(1);
 
     // Retire one of t1's candidates → it leaves the t1 inbox.
-    expect(repo.updateStatus(a.id, 'promoted')).toBe(1);
+    expect(repo.updateStatus(a.id, 'promoted', 't1')).toBe(1);
     const inboxT1 = repo.findByStatus('inbox', 't1');
     expect(inboxT1.map((x) => x.id)).toEqual([b.id]);
     expect(repo.findByStatus('promoted', 't1').map((x) => x.id)).toEqual([a.id]);
@@ -56,7 +56,7 @@ describe('CandidateRepository — status marker (B1)', () => {
     const { candidate, contentHash } = makeCandidate({ tenantId: 't1' });
     repo.insert(candidate, contentHash);
 
-    const changed = repo.updateStatus(candidate.id, 'quarantined');
+    const changed = repo.updateStatus(candidate.id, 'quarantined', 't1');
     expect(changed).toBe(1);
 
     // Row still present — its content survives (Tier-A source of truth).
@@ -68,14 +68,25 @@ describe('CandidateRepository — status marker (B1)', () => {
   });
 
   it('updateStatus returns 0 for an unknown id (no row changed)', () => {
-    expect(repo.updateStatus('11111111-1111-4111-8111-111111111111', 'promoted')).toBe(0);
+    expect(repo.updateStatus('11111111-1111-4111-8111-111111111111', 'promoted', 't1')).toBe(0);
+  });
+
+  it('updateStatus is tenant-guarded — a matching id but wrong tenant changes nothing (jfv.2.5a)', () => {
+    const { candidate, contentHash } = makeCandidate({ tenantId: 't1' });
+    repo.insert(candidate, contentHash);
+    // Right id, WRONG tenant → 0 rows changed, row untouched (no cross-tenant flip).
+    expect(repo.updateStatus(candidate.id, 'promoted', 't2')).toBe(0);
+    expect(repo.findById(candidate.id)?.status).toBe('inbox');
+    // Right id AND right tenant → the flip lands.
+    expect(repo.updateStatus(candidate.id, 'promoted', 't1')).toBe(1);
+    expect(repo.findById(candidate.id)?.status).toBe('promoted');
   });
 
   it('updateStatus rejects a value outside the closed CandidateStatus vocabulary', () => {
-    const { candidate, contentHash } = makeCandidate();
+    const { candidate, contentHash } = makeCandidate({ tenantId: 't1' });
     repo.insert(candidate, contentHash);
     // @ts-expect-error — off-vocabulary status is a type error AND a runtime throw.
-    expect(() => repo.updateStatus(candidate.id, 'not-a-real-status')).toThrow();
+    expect(() => repo.updateStatus(candidate.id, 'not-a-real-status', 't1')).toThrow();
     // The row is untouched — still inbox.
     expect(repo.findById(candidate.id)?.status).toBe('inbox');
   });

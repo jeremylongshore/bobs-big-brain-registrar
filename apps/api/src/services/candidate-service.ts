@@ -1,5 +1,5 @@
 import type { AuditRepository, CandidateRepository } from '@qmd-team-intent-kb/store';
-import { AuditEvent, MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import { AuditEvent, CandidateStatus, MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import {
   computeContentHash,
   deriveAuditEventId,
@@ -235,15 +235,26 @@ export class CandidateService {
   }
 
   /**
-   * List candidates, optionally filtered by tenant.
-   * When no tenantId is provided, a 400 ApiError is thrown — the API
-   * always requires a tenant scope for list operations.
+   * List candidates for a tenant, optionally narrowed to a single lifecycle
+   * `status` (e.g. `quarantined` — the queue the agent-review `brain_inbox` tool
+   * reads, jfv.8). When no tenantId is provided a 400 is thrown — the API always
+   * requires a tenant scope for list operations. An unknown `status` is a 400
+   * (closed CandidateStatus vocabulary), never a silent empty result.
    */
-  list(tenantId: string | undefined): MemoryCandidate[] {
-    if (tenantId !== undefined && tenantId.length > 0) {
-      return this.repo.findByTenant(tenantId);
+  list(tenantId: string | undefined, status?: string): MemoryCandidate[] {
+    if (tenantId === undefined || tenantId.length === 0) {
+      throw badRequest('tenantId query parameter is required');
     }
-    throw badRequest('tenantId query parameter is required');
+    if (status !== undefined && status.length > 0) {
+      const parsed = CandidateStatus.safeParse(status);
+      if (!parsed.success) {
+        throw badRequest(
+          `Invalid status filter '${status}' — must be one of: ${CandidateStatus.options.join(', ')}`,
+        );
+      }
+      return this.repo.findByStatus(parsed.data, tenantId);
+    }
+    return this.repo.findByTenant(tenantId);
   }
 
   /**
