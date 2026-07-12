@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { createTestDatabase } from '@qmd-team-intent-kb/store';
+import { createTestDatabase, CandidateRepository } from '@qmd-team-intent-kb/store';
+import { computeContentHash } from '@qmd-team-intent-kb/common';
 import { buildApp } from '../app.js';
 import { makeCandidate, NOW } from './fixtures.js';
 import { injectJson } from './assertions.js';
@@ -165,6 +166,38 @@ describe('/api/candidates', () => {
     const res = await injectJson(app, 'GET', '/api/candidates');
     expect(res.status).toBe(400);
     expect((res.body as { error: string }).error).toMatch(/tenantId/);
+  });
+
+  it('GET list with ?status=quarantined returns only that queue (jfv.8 brain_inbox)', async () => {
+    // Seed one quarantined + one inbox candidate for the tenant via the repo
+    // (intake always lands `inbox`; quarantine is stamped later by the govern
+    // sweep, so we set it directly here to exercise the filter).
+    const repo = new CandidateRepository(db);
+    const held = makeCandidate({ tenantId: 'team-alpha', content: 'held for review aaa' });
+    const open = makeCandidate({ tenantId: 'team-alpha', content: 'still in the inbox bbb' });
+    repo.insert(held, computeContentHash(held.content));
+    repo.insert(open, computeContentHash(open.content));
+    repo.updateStatus(held.id, 'quarantined', 'team-alpha');
+
+    const res = await injectJson(
+      app,
+      'GET',
+      '/api/candidates?tenantId=team-alpha&status=quarantined',
+    );
+    expect(res.status).toBe(200);
+    const list = res.body as Array<{ id: string; status: string }>;
+    expect(list.map((c) => c.id)).toEqual([held.id]);
+    expect(list.every((c) => c.status === 'quarantined')).toBe(true);
+  });
+
+  it('GET list with an invalid status returns 400 (closed vocabulary, never silent-empty)', async () => {
+    const res = await injectJson(
+      app,
+      'GET',
+      '/api/candidates?tenantId=team-alpha&status=not-a-status',
+    );
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toMatch(/Invalid status/i);
   });
 
   it('POST preserves capturedAt timestamp exactly', async () => {
