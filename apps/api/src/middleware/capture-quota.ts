@@ -33,6 +33,10 @@ export function registerCaptureQuota(
     }
   }, windowMs);
   cleanup.unref();
+  // Clear the sweep timer when the app closes so it can't leak across app
+  // instances — buildApp is constructed per-test, so an un-cleared unref'd timer
+  // accumulates one live handle per test run.
+  app.addHook('onClose', async () => clearInterval(cleanup));
 
   app.addHook('onRequest', async (request, reply) => {
     if (request.method !== 'POST') return;
@@ -52,12 +56,14 @@ export function registerCaptureQuota(
 
     entry.count++;
     if (entry.count > maxCaptures) {
-      reply.status(429);
-      throw new Error(
-        `Capture quota exceeded for this token (max ${maxCaptures} per ${Math.round(
+      // Send a structured 429 + return, rather than THROWING a generic Error into
+      // Fastify's error pipeline — an expected quota rejection should not be logged
+      // as a server error / trip error-monitoring false alarms.
+      return reply.status(429).send({
+        error: `Capture quota exceeded for this token (max ${maxCaptures} per ${Math.round(
           windowMs / 1000,
         )}s). Slow down, or ask an admin to raise the quota.`,
-      );
+      });
     }
   });
 }
