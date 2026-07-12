@@ -27,6 +27,7 @@ import { ImportService } from './services/import-service.js';
 import { registerGraphRoutes } from './routes/graph.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerRateLimiter } from './middleware/rate-limiter.js';
+import { registerCaptureQuota } from './middleware/capture-quota.js';
 import { registerApiKeyAuth } from './middleware/api-key-auth.js';
 import { registerWriteGate } from './middleware/write-gate.js';
 import { registerTenancyGuard } from './middleware/tenancy-guard.js';
@@ -57,6 +58,10 @@ export interface AppDependencies {
   rateLimitMax?: number;
   /** Rate limit window in ms (default 60000) */
   rateLimitWindowMs?: number;
+  /** Max candidate intakes ONE token may propose per window (jfv.10, default 60) */
+  captureQuotaMax?: number;
+  /** Per-actor capture quota window in ms (default 60000) */
+  captureQuotaWindowMs?: number;
   /** Max body size in bytes (default 1MB) */
   maxBodySize?: number;
   /**
@@ -113,6 +118,10 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   // tenant-scoped read/write to the token's tenant allowlist and locks the raw
   // candidate inbox to admin (EPIC 0 — compile-then-govern-c5k).
   registerTenancyGuard(app);
+  // Must follow auth so `request.actor` is stamped: a per-actor cap on candidate
+  // intake so one token/hook can't flood the inbox (jfv.10 — the IP limiter can't,
+  // since every tailnet device is its own IP).
+  registerCaptureQuota(app, deps.captureQuotaMax ?? 60, deps.captureQuotaWindowMs ?? 60000);
   registerInputSanitizer(app, deps.maxBodySize ?? 1_048_576);
 
   // OpenAPI must be registered BEFORE routes so their schema metadata

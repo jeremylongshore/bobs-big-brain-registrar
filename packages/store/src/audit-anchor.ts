@@ -104,6 +104,23 @@ export function appendAnchor(
   const rows = chainedRowsOf(repo);
   const head = rows.length > 0 ? (rows[rows.length - 1]!.entry_hash ?? '') : '';
   const existing = readAnchors(anchorPath);
+
+  // No-op guard (jfv.2.5c): a govern/transition run that changed no durable state
+  // leaves the chain head AND the chained-row count identical to the last anchor.
+  // Re-appending an identical-head anchor (and, for the git-committing caller,
+  // re-committing it) every no-op nightly bloats the append-only log + git history
+  // for ZERO tamper-evidence gain — the head is already witnessed. Return the last
+  // record unchanged instead. Skips ONLY on an EXACT (chainHead, chainedRows) match,
+  // so any real new write still anchors; never touches or rewrites existing anchors.
+  const lastAnchor = existing.length > 0 ? existing[existing.length - 1]! : null;
+  if (
+    lastAnchor !== null &&
+    lastAnchor.chainHead === head &&
+    lastAnchor.chainedRows === rows.length
+  ) {
+    return lastAnchor;
+  }
+
   const prevAnchorHash = existing.length > 0 ? existing[existing.length - 1]!.anchorHash : null;
 
   const body: AnchorBody = {
