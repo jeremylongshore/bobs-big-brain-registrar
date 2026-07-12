@@ -54,6 +54,22 @@ describe('CandidateRepository', () => {
     expect(found?.id).toBe(candidate.id);
   });
 
+  it('findByContentHashAndTenant is tenant-scoped — same content, other tenant → null (jfv.9)', () => {
+    // team-alpha and team-beta both store the SAME content.
+    const { candidate: a, contentHash } = makeCandidate({
+      tenantId: 'team-alpha',
+      content: 'shared body',
+    });
+    const { candidate: b } = makeCandidate({ tenantId: 'team-beta', content: 'shared body' });
+    repo.insert(a, contentHash);
+    repo.insert(b, contentHash);
+    // The dedup lookup only ever returns the caller's OWN tenant's row.
+    expect(repo.findByContentHashAndTenant(contentHash, 'team-alpha')?.id).toBe(a.id);
+    expect(repo.findByContentHashAndTenant(contentHash, 'team-beta')?.id).toBe(b.id);
+    // A tenant with no such content gets null (not another tenant's row).
+    expect(repo.findByContentHashAndTenant(contentHash, 'team-gamma')).toBeNull();
+  });
+
   it('count returns the correct number of candidates', () => {
     expect(repo.count()).toBe(0);
     const { candidate: c1, contentHash: h1 } = makeCandidate();
