@@ -74,6 +74,26 @@ describe('audit-anchor', () => {
     expect(readAnchors(anchorPath)).toHaveLength(2);
   });
 
+  it('appendAnchor is a no-op on an UNCHANGED head — a no-op run adds no anchor (jfv.2.5c)', () => {
+    const repo = mockRepo(buildChain(['a', 'b', 'c']));
+    const first = appendAnchor(repo, anchorPath, {
+      tenantId: 'local',
+      nowFn: () => '2026-06-17T01:00:00.000Z',
+    });
+    // Same head, same row count (a no-op govern run) → returns the last record,
+    // writes NO new anchor line and no new chain link.
+    const again = appendAnchor(repo, anchorPath, {
+      tenantId: 'local',
+      nowFn: () => '2026-06-17T02:00:00.000Z',
+    });
+    expect(again).toEqual(first);
+    expect(readAnchors(anchorPath)).toHaveLength(1);
+    // But a REAL new write still anchors.
+    const grown = mockRepo(buildChain(['a', 'b', 'c', 'd']));
+    appendAnchor(grown, anchorPath, { tenantId: 'local', nowFn: () => '2026-06-17T03:00:00.000Z' });
+    expect(readAnchors(anchorPath)).toHaveLength(2);
+  });
+
   it('verifyAnchors passes on a clean chain + intact log', () => {
     const repo = mockRepo(buildChain(['a', 'b', 'c']));
     appendAnchor(repo, anchorPath, { tenantId: 'local' });
