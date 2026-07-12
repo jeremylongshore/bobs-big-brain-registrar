@@ -124,6 +124,7 @@ export class CandidateRepository {
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByStatus: Database.Statement;
   private readonly stmtFindByHash: Database.Statement;
+  private readonly stmtFindByHashAndTenant: Database.Statement;
   private readonly stmtCount: Database.Statement;
   private readonly stmtCountByTenant: Database.Statement;
   private readonly stmtDeleteByBatch: Database.Statement;
@@ -161,6 +162,13 @@ export class CandidateRepository {
 
     this.stmtFindByHash = db.prepare(`
       SELECT * FROM candidates WHERE content_hash = ? LIMIT 1
+    `);
+
+    // Tenant-scoped content-hash lookup — the idempotent-intake dedup (jfv.9). Scoped
+    // by (content_hash, tenant_id) so one tenant's re-sent proposal is never deduped
+    // against (nor can it read) another tenant's candidate.
+    this.stmtFindByHashAndTenant = db.prepare(`
+      SELECT * FROM candidates WHERE content_hash = ? AND tenant_id = ? LIMIT 1
     `);
 
     // Non-destructive terminal marker for a governed candidate (B1). The row is
@@ -300,6 +308,17 @@ export class CandidateRepository {
    */
   findByContentHash(hash: string): MemoryCandidate | null {
     const row = this.stmtFindByHash.get(hash);
+    return row !== undefined ? rowToCandidate(row) : null;
+  }
+
+  /**
+   * Return the first candidate with the given content hash FOR A TENANT, or null —
+   * the tenant-scoped dedup the idempotent intake path uses (jfv.9). Prefer this
+   * over {@link findByContentHash} on any per-tenant write path: the unscoped
+   * variant can return another tenant's row.
+   */
+  findByContentHashAndTenant(hash: string, tenantId: string): MemoryCandidate | null {
+    const row = this.stmtFindByHashAndTenant.get(hash, tenantId);
     return row !== undefined ? rowToCandidate(row) : null;
   }
 
