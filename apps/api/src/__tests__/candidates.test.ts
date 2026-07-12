@@ -62,16 +62,48 @@ describe('/api/candidates', () => {
     expect((getRes.body as { content: string }).content).toBe(content);
   });
 
-  it('POST accepts duplicate candidates with different IDs', async () => {
-    const content = 'Shared content between two candidates';
-    const first = makeCandidate({ content });
-    const second = makeCandidate({ content, id: randomUUID() });
+  it('POST is idempotent by content within a tenant — a re-send returns the existing row, no duplicate (jfv.9)', async () => {
+    const content = 'Shared content — a re-sent proposal must not duplicate the inbox row';
+    const first = makeCandidate({ content, tenantId: 'team-alpha' });
+    // A re-send: SAME content, DIFFERENT id (models a retry / outbox drain that
+    // re-derived the row). Content-hash dedup catches it regardless of id.
+    const second = makeCandidate({ content, id: randomUUID(), tenantId: 'team-alpha' });
 
     const r1 = await injectJson(app, 'POST', '/api/candidates', first);
     const r2 = await injectJson(app, 'POST', '/api/candidates', second);
 
     expect(r1.status).toBe(201);
     expect(r2.status).toBe(201);
+    // The re-send returns the FIRST candidate (deduped), not a second row.
+    expect((r2.body as { id: string }).id).toBe((r1.body as { id: string }).id);
+    const list = (await injectJson(app, 'GET', '/api/candidates?tenantId=team-alpha'))
+      .body as Array<{ content: string }>;
+    expect(list.filter((c) => c.content === content).length).toBe(1);
+  });
+
+  it('POST does NOT dedup identical content across tenants (tenant-scoped, jfv.9)', async () => {
+    const content = 'A convention two teams independently wrote down';
+    await injectJson(
+      app,
+      'POST',
+      '/api/candidates',
+      makeCandidate({ content, tenantId: 'team-alpha' }),
+    );
+    await injectJson(
+      app,
+      'POST',
+      '/api/candidates',
+      makeCandidate({ content, id: randomUUID(), tenantId: 'team-beta' }),
+    );
+    const a = (await injectJson(app, 'GET', '/api/candidates?tenantId=team-alpha')).body as Array<{
+      content: string;
+    }>;
+    const b = (await injectJson(app, 'GET', '/api/candidates?tenantId=team-beta')).body as Array<{
+      content: string;
+    }>;
+    // Each tenant keeps its own copy — one tenant's content is never deduped against another's.
+    expect(a.filter((c) => c.content === content).length).toBe(1);
+    expect(b.filter((c) => c.content === content).length).toBe(1);
   });
 
   it('POST with full metadata fields succeeds', async () => {

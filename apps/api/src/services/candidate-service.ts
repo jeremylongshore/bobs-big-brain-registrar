@@ -177,6 +177,18 @@ export class CandidateService {
     }
 
     const contentHash = computeContentHash(candidate.content);
+
+    // Idempotent intake (jfv.9): a re-sent proposal — a retried/hook-driven capture,
+    // or the plugin's durable-outbox drain replaying the SAME row — must not create a
+    // duplicate inbox candidate. If identical content already exists FOR THIS TENANT,
+    // return the existing candidate instead of inserting a second row (and skip a
+    // second 'proposed' receipt — the original already carries one). Tenant-scoped so
+    // one tenant's content can never be deduped against (or leak) another's.
+    const existing = this.repo.findByContentHashAndTenant(contentHash, candidate.tenantId);
+    if (existing !== null) {
+      return existing;
+    }
+
     this.repo.insert(candidate, contentHash);
 
     // R8 intake receipt: every accepted proposal gets a provenance receipt from
