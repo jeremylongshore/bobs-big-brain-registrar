@@ -68,25 +68,11 @@ jobs:
         # only the coverage instrumentation is added.
         run: pnpm test:coverage
 
-      - name: Provenance-integrity eval (real on-disk brain, forks pass / tamper fails)
-        # A REAL end-to-end run of evaluateProvenanceIntegrity against a seeded
-        # throwaway brain carrying a benign CHAIN_FORK. Named gate for
-        # 010-AT-RISK R5 / bead compile-then-govern-e06.2: proves the eval passes
-        # on a forked-but-untampered chain (the live brain's shape: 155 forks,
-        # 0 tamper) while still failing closed on genuine tampering. Complements
-        # the in-memory unit tests above with a real-DB regression guard.
-        run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
-
-      - name: Govern-decision eval (per-check precision/recall, fail-closed on missed secret/PII)
-        # 010-AT-RISK R5/R10 · bead compile-then-govern-e06.3: runs the govern
-        # decision over the versioned adversarial labeled set (dataset/v1) and
-        # prints PER-CHECK precision/recall + the false-negative list. Fails
-        # CLOSED on any UNDOCUMENTED false-negative — a missed secret/PII the
-        # dataset did not already flag as a known, tracked gap (i.e. a regression
-        # or a new evasion). Documented gaps (split keys, base64, boundary blind
-        # spots) are reported, not failed. Determinism is not efficacy; this gate
-        # makes the moat's catch-rate a required, measured property.
-        run: pnpm --filter @qmd-team-intent-kb/eval-surface govern:ci
+      # The provenance-integrity + govern-decision "moat" evals moved to their own
+      # required `moat-evals` job (below) so each is an INDIVIDUALLY-NAMED,
+      # branch-protection-required check — the moat's catch-rate is a first-class
+      # gate, not a step buried in `validate` that a refactor could silently weaken
+      # (bead compile-then-govern-6ps.5, Track 2).
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -118,6 +104,49 @@ jobs:
           name: test-results
           path: coverage/
           retention-days: 14
+
+  moat-evals:
+    # The govern-by-code moat as an INDIVIDUALLY-NAMED, required per-PR gate
+    # (bead compile-then-govern-6ps.5, Track 2). Runs in parallel with `validate`.
+    # Two fail-closed evals prove the differentiators with numbers, not adjectives:
+    #   • provenance-integrity — a forked-but-untampered chain passes; genuine
+    #     tampering fails closed (the receipts moat).
+    #   • govern-decision — per-check precision/recall over the versioned
+    #     adversarial labeled set; fails on any UNDOCUMENTED false-negative (a
+    #     missed secret/PII the dataset didn't already track). The catch-rate is
+    #     a required, measured property — determinism is not efficacy.
+    # Kept out of `validate` so a refactor there can't silently drop the gate, and
+    # so "moat-evals" is a distinct check the branch-protection rule requires.
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Put workspace bins on PATH (qmd)
+        run: echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build workspace (tsc -b emits the dist the eval tsx scripts import)
+        # provenance:ci imports @qmd-team-intent-kb/{common,store,schema} via their
+        # package.json "exports" -> dist/, so the project-references build must run
+        # first. In `validate` this happens as a side effect of `typecheck` (also
+        # `tsc -b`); moat-evals builds explicitly so it is self-contained.
+        run: pnpm build
+      - name: Provenance-integrity eval (real on-disk brain, forks pass / tamper fails)
+        # 010-AT-RISK R5 / bead compile-then-govern-e06.2: evaluateProvenanceIntegrity
+        # against a seeded throwaway brain with a benign CHAIN_FORK — passes on a
+        # forked-but-untampered chain (the live brain's shape: 155 forks, 0 tamper)
+        # while failing closed on genuine tampering.
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
+      - name: Govern-decision eval (per-check precision/recall, fail-closed on missed secret/PII)
+        # 010-AT-RISK R5/R10 · bead compile-then-govern-e06.3: the govern decision
+        # over the versioned adversarial labeled set (dataset/v1); prints PER-CHECK
+        # precision/recall + the false-negative list. Fails CLOSED on any
+        # UNDOCUMENTED false-negative. Documented gaps are reported, not failed.
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface govern:ci
 
   integration:
     # L4 integration tests via testcontainers. Pulls real Docker images
