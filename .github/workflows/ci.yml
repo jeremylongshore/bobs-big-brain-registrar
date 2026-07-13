@@ -129,6 +129,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Put workspace bins on PATH (qmd)
         run: echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build workspace (tsc -b emits the dist the eval tsx scripts import)
+        # provenance:ci imports @qmd-team-intent-kb/{common,store,schema} via their
+        # package.json "exports" -> dist/, so the project-references build must run
+        # first. In `validate` this happens as a side effect of `typecheck` (also
+        # `tsc -b`); moat-evals builds explicitly so it is self-contained.
+        run: pnpm build
       - name: Provenance-integrity eval (real on-disk brain, forks pass / tamper fails)
         # 010-AT-RISK R5 / bead compile-then-govern-e06.2: evaluateProvenanceIntegrity
         # against a seeded throwaway brain with a benign CHAIN_FORK — passes on a
