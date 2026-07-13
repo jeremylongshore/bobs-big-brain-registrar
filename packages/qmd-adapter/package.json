@@ -21,7 +21,8 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "reindex": "node dist/cli.js reindex",
-    "search-canary": "node dist/cli.js canary"
+    "search-canary": "node dist/cli.js canary",
+    "eval:retrieval:ci": "node dist/eval/ci-retrieval-ratchet.js"
   },
   "dependencies": {
     "@qmd-team-intent-kb/schema": "workspace:*",

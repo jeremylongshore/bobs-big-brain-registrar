@@ -17,3 +17,8 @@ export { stratify, formatStratifiedReport } from './stratified-report.js';
 export type { StratumMetrics, StratifiedReport } from './stratified-report.js';
 export { qmdRetrievalFn } from './qmd-retrieval.js';
 export { GOVERNED_BRAIN_V1_DATASET } from './datasets/governed-brain-v1.js';
+export {
+  SYNTHETIC_V1_DATASET,
+  SYNTHETIC_V1_BASELINE,
+  RATCHET_EPSILON,
+} from './datasets/synthetic-v1.js';

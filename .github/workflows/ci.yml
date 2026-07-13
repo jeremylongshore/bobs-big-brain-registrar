@@ -148,6 +148,38 @@ jobs:
         # UNDOCUMENTED false-negative. Documented gaps are reported, not failed.
         run: pnpm --filter @qmd-team-intent-kb/eval-surface govern:ci
 
+  retrieval-eval:
+    # Self-contained retrieval RATCHET (bead compile-then-govern-6ps.6, Track 2).
+    # Runs in parallel with the other CI jobs. The live retrieval eval
+    # (governed-brain-v1) reads `~/.teamkb` and so skips on every cold runner —
+    # its number is measured but never enforced. This job builds a THROWAWAY qmd
+    # index over the COMMITTED synthetic corpus (never ~/.teamkb), runs the
+    # `synthetic-v1` stratified set through the production BM25 path, and fails
+    # if lexical OR semantic Recall@10 regresses below its committed baseline.
+    # Kept as its own individually-named check so retrieval quality is a
+    # first-class, branch-protection-eligible gate — not a step buried in
+    # `validate` a refactor could silently drop.
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Put workspace bins on PATH (pinned @tobilu/qmd)
+        # The ratchet baseline is measured against the pinned workspace qmd, so
+        # the gate must run against that same binary, not a stray system qmd.
+        run: echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Verify qmd on PATH
+        run: qmd --version
+      - name: Build workspace (the compiled eval script imports workspace packages via dist)
+        run: pnpm build
+      - name: Retrieval ratchet (stratified Recall@10 over the committed synthetic corpus)
+        run: pnpm --filter @qmd-team-intent-kb/qmd-adapter eval:retrieval:ci
+
   integration:
     # L4 integration tests via testcontainers. Pulls real Docker images
     # (~50MB postgres:16-alpine for now). Slower than the validate job;
