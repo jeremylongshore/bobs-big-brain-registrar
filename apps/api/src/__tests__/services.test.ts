@@ -27,7 +27,7 @@ describe('CandidateService', () => {
 
   it('intake validates and inserts a candidate', () => {
     const data = makeCandidate();
-    const candidate = service.intake(data);
+    const candidate = service.intake(data).candidate;
     expect(candidate.id).toBe(data['id']);
     expect(candidate.status).toBe('inbox');
     // Verify persistence
@@ -222,7 +222,7 @@ describe('CandidateService', () => {
         projectContext: 'governed brain intake',
       },
     });
-    const candidate = service.intake(data);
+    const candidate = service.intake(data).candidate;
     expect(candidate.id).toBe(data['id']);
     expect(repo.findById(candidate.id)).not.toBeNull();
   });

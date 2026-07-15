@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Candidate intake: id-first idempotency + created vs already_exists knowledge.**
+  `CandidateService.intake` now short-circuits on existing **id** (same tenant) before content-hash
+  dedup, so session-stable client ids collapse re-distilled retries. Returns
+  `{ candidate, intake: 'created' | 'already_exists' }`; `POST /api/candidates` responds **201** +
+  `intake: created` or **200** + `intake: already_exists`. Skips a second `proposed` receipt on
+  collapse. Closes the Property 1/2 seam called out in the fire-and-forget writer review.
+
 ### Added
 
 - **`scripts/bbb-qmd`** — operator wrapper that runs the pinned `@tobilu/qmd` against the team brain
