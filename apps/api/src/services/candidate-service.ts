@@ -105,6 +105,13 @@ export function applyIntakeOverrides(
   });
 }
 
+/** Outcome of {@link CandidateService.intake} — safety vs knowledge (created ≠ replay). */
+export type IntakeResult = {
+  candidate: MemoryCandidate;
+  /** First land vs collapsed duplicate (id or content-hash). */
+  intake: 'created' | 'already_exists';
+};
+
 /**
  * Service layer for memory candidate intake and retrieval.
  * Validates all inputs with Zod before writing to the repository.
@@ -127,6 +134,14 @@ export class CandidateService {
    * Computes the content hash, inserts the record, and writes a provenance
    * receipt.
    *
+   * Idempotency (jfv.9 + session-stable ids):
+   *  1. Same **id** for this tenant → already_exists (covers outbox replay and
+   *     session-key retries where distillation text may have changed).
+   *  2. Same **content hash** for this tenant → already_exists (content backstop).
+   *  3. Else insert + created + proposed receipt.
+   *
+   * `intake` on the result is knowledge for the caller (safety ≠ first-land proof).
+   *
    * @param data  The raw (client-supplied) candidate payload.
    * @param ctx   The bearer-token identity of the caller. Drives the R8 overrides
    *              (author / trustLevel / tenantId / prePolicyFlags / proposedByRole).
@@ -138,7 +153,7 @@ export class CandidateService {
    *   no-PII disclosure rule — the candidate is rejected before it can enter
    *   the inbox (bead `3iu.1`).
    */
-  intake(data: unknown, ctx: IntakeActorContext = {}): MemoryCandidate {
+  intake(data: unknown, ctx: IntakeActorContext = {}): IntakeResult {
     const parsed = MemoryCandidate.safeParse(data);
     if (!parsed.success) {
       throw badRequest(`Invalid candidate: ${parsed.error.message}`);
@@ -176,17 +191,28 @@ export class CandidateService {
       );
     }
 
+    // (1) Id-first: session-stable / frozen-outbox replays share the same id even
+    // when distillation text differs. Tenant must match so a cross-tenant UUID
+    // collision cannot leak another tenant's row.
+    const byId = this.repo.findById(candidate.id);
+    if (byId !== null) {
+      if (byId.tenantId === candidate.tenantId) {
+        return { candidate: byId, intake: 'already_exists' };
+      }
+      // Extremely unlikely with tenant in the UUIDv5 name; refuse rather than
+      // insert a colliding primary key or return the wrong tenant's row.
+      throw badRequest(
+        `Candidate id ${candidate.id} already exists for another tenant; refuse to intake.`,
+      );
+    }
+
     const contentHash = computeContentHash(candidate.content);
 
-    // Idempotent intake (jfv.9): a re-sent proposal — a retried/hook-driven capture,
-    // or the plugin's durable-outbox drain replaying the SAME row — must not create a
-    // duplicate inbox candidate. If identical content already exists FOR THIS TENANT,
-    // return the existing candidate instead of inserting a second row (and skip a
-    // second 'proposed' receipt — the original already carries one). Tenant-scoped so
-    // one tenant's content can never be deduped against (or leak) another's.
+    // (2) Content-hash backstop (jfv.9): same bytes within tenant collapse even if
+    // two different ids were minted (legacy clients / content-derived ids).
     const existing = this.repo.findByContentHashAndTenant(contentHash, candidate.tenantId);
     if (existing !== null) {
-      return existing;
+      return { candidate: existing, intake: 'already_exists' };
     }
 
     this.repo.insert(candidate, contentHash);
@@ -196,7 +222,7 @@ export class CandidateService {
     // never anonymous and B1 has an auditable record before any promotion.
     this.writeIntakeReceipt(candidate, contentHash, ctx);
 
-    return candidate;
+    return { candidate, intake: 'created' };
   }
 
   /**

@@ -73,12 +73,42 @@ describe('/api/candidates', () => {
     const r2 = await injectJson(app, 'POST', '/api/candidates', second);
 
     expect(r1.status).toBe(201);
-    expect(r2.status).toBe(201);
+    expect((r1.body as { intake: string }).intake).toBe('created');
+    expect(r2.status).toBe(200);
+    expect((r2.body as { intake: string }).intake).toBe('already_exists');
     // The re-send returns the FIRST candidate (deduped), not a second row.
     expect((r2.body as { id: string }).id).toBe((r1.body as { id: string }).id);
     const list = (await injectJson(app, 'GET', '/api/candidates?tenantId=team-alpha'))
       .body as Array<{ content: string }>;
     expect(list.filter((c) => c.content === content).length).toBe(1);
+  });
+
+  it('POST is idempotent by id within a tenant even when content differs (session-stable key)', async () => {
+    const id = randomUUID();
+    const first = makeCandidate({
+      id,
+      content: 'first distillation of the session',
+      tenantId: 'team-alpha',
+    });
+    const second = makeCandidate({
+      id,
+      content: 're-distilled wording — different bytes, same session id',
+      tenantId: 'team-alpha',
+    });
+
+    const r1 = await injectJson(app, 'POST', '/api/candidates', first);
+    const r2 = await injectJson(app, 'POST', '/api/candidates', second);
+
+    expect(r1.status).toBe(201);
+    expect((r1.body as { intake: string }).intake).toBe('created');
+    expect(r2.status).toBe(200);
+    expect((r2.body as { intake: string }).intake).toBe('already_exists');
+    expect((r2.body as { id: string }).id).toBe(id);
+    // First-write content wins — we do not replace the row with re-distilled text.
+    expect((r2.body as { content: string }).content).toBe(first.content);
+    const list = (await injectJson(app, 'GET', '/api/candidates?tenantId=team-alpha'))
+      .body as Array<{ id: string }>;
+    expect(list.filter((c) => c.id === id).length).toBe(1);
   });
 
   it('POST does NOT dedup identical content across tenants (tenant-scoped, jfv.9)', async () => {

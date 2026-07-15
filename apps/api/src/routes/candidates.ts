@@ -6,7 +6,7 @@ import type { PromotionService } from '../services/promotion-service.js';
 /**
  * Register candidate intake, retrieval, and promotion routes.
  *
- * POST   /api/candidates              — intake a new candidate (201)
+ * POST   /api/candidates              — intake (201 created | 200 already_exists)
  * POST   /api/candidates/:id/promote  — promote to a governed memory (200 | admin-only)
  * POST   /api/candidates/:id/reject   — retire a reviewed candidate (200 | admin-only)
  * GET    /api/candidates/:id          — retrieve by UUID (200 | 404)
@@ -24,7 +24,10 @@ export function registerCandidateRoutes(
         tags: ['candidates'],
         summary: 'Intake a new memory candidate',
         description:
-          'Accepts a candidate payload from a Claude Code session and stores it in the inbox.',
+          'Accepts a candidate payload from a Claude Code session and stores it in the inbox. ' +
+          'Idempotent: re-send with the same id (session-stable / frozen outbox) or same content ' +
+          'within the tenant returns the existing row. Response field `intake` is ' +
+          '`created` (201) or `already_exists` (200) so callers can tell first land from collapse.',
       },
     },
     async (request, reply) => {
@@ -32,12 +35,13 @@ export function registerCandidateRoutes(
         // Thread the bearer-token identity into intake so the server — not the
         // client — owns author / trustLevel / tenantId / prePolicyFlags and the
         // quarantine marker (R8, compile-then-govern-jfv.6.7).
-        const candidate = service.intake(request.body, {
+        const { candidate, intake } = service.intake(request.body, {
           actor: request.actor,
           role: request.role,
           tenants: request.tenants,
         });
-        return reply.status(201).send(candidate);
+        const status = intake === 'created' ? 201 : 200;
+        return reply.status(status).send({ ...candidate, intake });
       } catch (err) {
         if (err instanceof ApiError) {
           return reply.status(err.statusCode).send({ error: err.message });
