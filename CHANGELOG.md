@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`scripts/bbb-qmd`** — operator wrapper that runs the pinned `@tobilu/qmd` against the team brain
+  index (`~/.teamkb/qmd-index/<tenant>` via XDG), not personal `~/.cache/qmd`. `pnpm bbb-qmd --which`
+  shows binary + version + tenant paths. Ride Tobi's releases via Dependabot pin; do not fork qmd.
+- **Operator runbook** `000-docs/042-OD-OPSM-bbb-qmd-operator-runbook.md` and **onboarding Q-bank**
+  `000-docs/043-OD-EVAL-onboarding-qbank-v1.md` for day-1 retrieval regression scoring.
+- **Search canary** expanded with SOPS / beads / Contabo VPS known-positive controls (fail loud if
+  estate themes disappear from the index).
 - **B1 auto-govern primitives** (`packages/store` + `packages/curator`) — a **marker-based** inbox:
   `CandidateStatus` widened so insert-only `candidates` are retired by a terminal status change,
   **never deleted** (the review queue + only copy is preserved), plus tenant-scoped content-hash

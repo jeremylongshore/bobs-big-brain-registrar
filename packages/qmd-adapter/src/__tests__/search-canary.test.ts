@@ -50,10 +50,10 @@ describe('runSearchCanary', () => {
   });
 
   it('is DEGRADED (the incident) when any control returns 0 hits', async () => {
-    // First control OK, second returns an empty array (0 hits), third OK.
-    mock.queueSuccess(hitsJson(2));
-    mock.queueSuccess(hitsJson(0)); // <- the "SEARCH DEGRADED" signal
-    mock.queueSuccess(hitsJson(2));
+    // First control OK, second returns an empty array (0 hits), rest OK.
+    for (let i = 0; i < DEFAULT_CANARY_CONTROLS.length; i++) {
+      mock.queueSuccess(hitsJson(i === 1 ? 0 : 2)); // index 1 = "SEARCH DEGRADED" signal
+    }
 
     const report = await runSearchCanary(adapter, TENANT);
 
@@ -64,9 +64,10 @@ describe('runSearchCanary', () => {
   });
 
   it('captures a failed search command per-control without throwing', async () => {
-    mock.queueSuccess(hitsJson(1));
-    mock.queueFailure('qmd exploded'); // second control's search fails
-    mock.queueSuccess(hitsJson(1));
+    for (let i = 0; i < DEFAULT_CANARY_CONTROLS.length; i++) {
+      if (i === 1) mock.queueFailure('qmd exploded');
+      else mock.queueSuccess(hitsJson(1));
+    }
 
     const report = await runSearchCanary(adapter, TENANT);
 

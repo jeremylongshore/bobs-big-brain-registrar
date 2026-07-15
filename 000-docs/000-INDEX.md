@@ -48,6 +48,9 @@
 
 ### OD — Operations & Deployment (continued)
 
+- `042-OD-OPSM-bbb-qmd-operator-runbook.md` — Bob's Big Brain + Tobi qmd: personal vs team index, `bbb-qmd` wrapper, pin/Dependabot, canary
+- `043-OD-EVAL-onboarding-qbank-v1.md` — Outsider day-1 Q-bank + baseline scoring for retrieval productization
+
 - `016-OD-OPSM-branch-protection-checklist.md` — GitHub branch protection configuration checklist
 - `027-OD-OPSM-edge-daemon-runbook.md` — edge-daemon operations runbook (install, config, health check, recovery, upgrade, rollback)
 - `040-OD-OPSM-brain-api-tailnet-deploy.md` — brain API tailnet deploy runbook (systemd --user service, token management, team-mode client, verify, hardening gaps)
