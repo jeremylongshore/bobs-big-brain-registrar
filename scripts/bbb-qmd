@@ -33,9 +33,15 @@ export XDG_CACHE_HOME="${INDEX_BASE}/cache"
 mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}"
 
 resolve_qmd() {
-  if [[ -n "${BBB_QMD_BIN:-}" && -x "${BBB_QMD_BIN}" ]]; then
-    echo "${BBB_QMD_BIN}"
-    return
+  # If the operator set BBB_QMD_BIN, honor it or fail loud — never silent fallback.
+  if [[ -n "${BBB_QMD_BIN:-}" ]]; then
+    if [[ -x "${BBB_QMD_BIN}" ]]; then
+      echo "${BBB_QMD_BIN}"
+      return
+    fi
+    echo "bbb-qmd: BBB_QMD_BIN is set but not executable: ${BBB_QMD_BIN}" >&2
+    echo "bbb-qmd: unset BBB_QMD_BIN to use monorepo pin or PATH qmd" >&2
+    exit 1
   fi
   if [[ -x "${ROOT}/node_modules/.bin/qmd" ]]; then
     echo "${ROOT}/node_modules/.bin/qmd"
