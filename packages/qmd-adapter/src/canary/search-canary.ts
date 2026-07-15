@@ -34,6 +34,11 @@ export const DEFAULT_CANARY_CONTROLS: readonly CanaryControl[] = [
   { query: 'audit chain receipts' },
   { query: 'governed brain backup' },
   { query: 'compile then govern architecture' },
+  // Estate / ops themes that must stay searchable (day-1 operator brain).
+  // If any returns 0 hits, the index is empty/stale/misrouted or corpus was gutted.
+  { query: 'SOPS age secrets' },
+  { query: 'beads issue tracking' },
+  { query: 'Contabo VPS intentsolutions' },
 ];
 
 /** Per-control result. */

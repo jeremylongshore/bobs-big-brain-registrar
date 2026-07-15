@@ -101,9 +101,10 @@ describe('run', () => {
 
   it('canary returns 1 (loud failure) when a control returns 0 hits', async () => {
     const { mock, makeAdapter } = makeInjected();
-    mock.queueSuccess(hitsJson(1));
-    mock.queueSuccess(hitsJson(0)); // degraded
-    mock.queueSuccess(hitsJson(1));
+    // One control degraded; rest OK — queue length must match DEFAULT_CANARY_CONTROLS.
+    for (let i = 0; i < DEFAULT_CANARY_CONTROLS.length; i++) {
+      mock.queueSuccess(hitsJson(i === 1 ? 0 : 1));
+    }
     const logs: string[] = [];
 
     const code = await run(['canary'], { env, makeAdapter, log: (m) => logs.push(m) });
@@ -114,12 +115,11 @@ describe('run', () => {
 
   it('canary --heal reindexes then re-checks', async () => {
     const { mock, makeAdapter } = makeInjected();
-    // single-control heal path
     const singleEnv = { ...env };
-    // Pass 1 for all 3 default controls -> first is 0 (degraded)
-    mock.queueSuccess(hitsJson(0));
-    mock.queueSuccess(hitsJson(2));
-    mock.queueSuccess(hitsJson(2));
+    // Pass 1: first control 0 hits (degraded), rest OK
+    for (let i = 0; i < DEFAULT_CANARY_CONTROLS.length; i++) {
+      mock.queueSuccess(hitsJson(i === 0 ? 0 : 2));
+    }
     // heal reindex: list + 4 adds + update
     mock.queueSuccess('');
     for (let i = 0; i < 4; i++) mock.queueSuccess('');

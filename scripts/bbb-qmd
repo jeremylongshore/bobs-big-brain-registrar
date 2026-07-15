@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# bbb-qmd — run Tobi's qmd against Bob's Big Brain team index (not personal ~/.cache/qmd).
+#
+# Why: qmd 2.x has no --data-dir. The INTKB adapter isolates the team brain via
+# XDG_CONFIG_HOME + XDG_CACHE_HOME under ~/.teamkb/qmd-index/<tenant>/. Bare
+# `qmd` on PATH often hits an empty personal index (or a stale binary vs the
+# pinned @tobilu/qmd in this monorepo).
+#
+# This wrapper:
+#   1. Prefers the monorepo-pinned @tobilu/qmd (node_modules/.bin/qmd)
+#   2. Points XDG at the team tenant index
+#   3. exec's qmd with all original args (status | search | embed | collection | …)
+#
+# Usage:
+#   ./scripts/bbb-qmd status
+#   ./scripts/bbb-qmd search --json -- SOPS
+#   TEAMKB_TENANT_ID=other ./scripts/bbb-qmd status
+#
+# Env:
+#   TEAMKB_TENANT_ID   default: intent-solutions
+#   TEAMKB_BASE_PATH   default: $HOME/.teamkb
+#   BBB_QMD_BIN        force a specific qmd binary path
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TENANT="${TEAMKB_TENANT_ID:-intent-solutions}"
+BASE="${TEAMKB_BASE_PATH:-$HOME/.teamkb}"
+INDEX_BASE="${BASE}/qmd-index/${TENANT}"
+
+export XDG_CONFIG_HOME="${INDEX_BASE}/config"
+export XDG_CACHE_HOME="${INDEX_BASE}/cache"
+mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}"
+
+resolve_qmd() {
+  # If the operator set BBB_QMD_BIN, honor it or fail loud — never silent fallback.
+  if [[ -n "${BBB_QMD_BIN:-}" ]]; then
+    if [[ -x "${BBB_QMD_BIN}" ]]; then
+      echo "${BBB_QMD_BIN}"
+      return
+    fi
+    echo "bbb-qmd: BBB_QMD_BIN is set but not executable: ${BBB_QMD_BIN}" >&2
+    echo "bbb-qmd: unset BBB_QMD_BIN to use monorepo pin or PATH qmd" >&2
+    exit 1
+  fi
+  if [[ -x "${ROOT}/node_modules/.bin/qmd" ]]; then
+    echo "${ROOT}/node_modules/.bin/qmd"
+    return
+  fi
+  if command -v qmd >/dev/null 2>&1; then
+    command -v qmd
+    return
+  fi
+  echo "bbb-qmd: no qmd binary found. Install pin: cd ${ROOT} && pnpm install (@tobilu/qmd)" >&2
+  exit 1
+}
+
+QMD_BIN="$(resolve_qmd)"
+
+if [[ "${1:-}" == "--which" ]]; then
+  echo "binary:  ${QMD_BIN}"
+  echo "version: $(${QMD_BIN} --version 2>/dev/null || echo unknown)"
+  echo "tenant:  ${TENANT}"
+  echo "XDG_CONFIG_HOME=${XDG_CONFIG_HOME}"
+  echo "XDG_CACHE_HOME=${XDG_CACHE_HOME}"
+  exit 0
+fi
+
+exec "${QMD_BIN}" "$@"
