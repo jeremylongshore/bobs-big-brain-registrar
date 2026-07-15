@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `000-docs/043-OD-EVAL-onboarding-qbank-v1.md` for day-1 retrieval regression scoring.
 - **Search canary** expanded with SOPS / beads / Contabo VPS known-positive controls (fail loud if
   estate themes disappear from the index).
+- **`pnpm eval:onboarding`** (`scripts/eval-onboarding-qbank.sh`) — day-1 outsider keyword probes via
+  `bbb-qmd`; exit 0 at ≥80% (baseline after day-1 pack: **23/24**).
 - **B1 auto-govern primitives** (`packages/store` + `packages/curator`) — a **marker-based** inbox:
   `CandidateStatus` widened so insert-only `candidates` are retired by a terminal status change,
   **never deleted** (the review queue + only copy is preserved), plus tenant-scoped content-hash
