@@ -478,10 +478,10 @@ function gitSha(): string {
   }
 }
 
-function packageVersion(): string {
+function packageVersion(repoRoot: string): string {
   try {
     const pkg = JSON.parse(
-      readFileSync(join(process.cwd(), 'ci', 'emit-evidence', 'package.json'), 'utf8'),
+      readFileSync(join(repoRoot, 'ci', 'emit-evidence', 'package.json'), 'utf8'),
     ) as { version?: string };
     return pkg.version ?? '0.0.0';
   } catch {
@@ -490,12 +490,15 @@ function packageVersion(): string {
 }
 
 function ciCtx(repoRoot: string): EmitContext {
+  // One Date instance: the uuidv7 timestamp bits and created_at/evaluated_at
+  // must agree — separate Date.now()/toISOString() calls could straddle a tick.
+  const now = new Date();
   return {
-    nowIso: new Date().toISOString(),
-    nowMs: Date.now(),
+    nowIso: now.toISOString(),
+    nowMs: now.getTime(),
     commitSha: gitSha(),
     policyHashHex: computePolicyHashHex(repoRoot),
-    runnerVersion: packageVersion(),
+    runnerVersion: packageVersion(repoRoot),
     rand16: () => Uint8Array.from(randomBytes(16)),
   };
 }

@@ -79,12 +79,41 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+/** Fail-closed shape check for the sibling emitter's skeleton (data boundary). */
+function isSkeleton(value: unknown): value is Skeleton {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v['repo'] !== 'string') return false;
+  const signing = v['signing'];
+  if (typeof signing !== 'object' || signing === null) return false;
+  const s = signing as Record<string, unknown>;
+  if (typeof s['issuer'] !== 'string') return false;
+  if (typeof s['subject'] !== 'string') return false;
+  if (typeof s['workflowRef'] !== 'string') return false;
+  if (!Array.isArray(v['rows'])) return false;
+  return v['rows'].every((r) => {
+    if (typeof r !== 'object' || r === null) return false;
+    const row = r as Record<string, unknown>;
+    return (
+      typeof row['bundleFile'] === 'string' &&
+      Array.isArray(row['gateResults']) &&
+      typeof row['sourceSha'] === 'string'
+    );
+  });
+}
+
 export function assemble(dir: string): ReportManifest {
   const skeletonPath = join(dir, 'manifest-skeleton.json');
   if (!existsSync(skeletonPath)) {
     throw new Error(`missing ${skeletonPath} — run ci/emit-evidence/emit-evidence.ts first`);
   }
-  const skeleton = readJson(skeletonPath) as Skeleton;
+  const skeletonRaw = readJson(skeletonPath);
+  if (!isSkeleton(skeletonRaw)) {
+    throw new Error(
+      `${skeletonPath} failed the skeleton shape check — was it written by this repo's emit-evidence.ts?`,
+    );
+  }
+  const skeleton: Skeleton = skeletonRaw;
 
   const rows: ManifestRow[] = skeleton.rows.map((row) => {
     const bundlePath = join(dir, row.bundleFile);
