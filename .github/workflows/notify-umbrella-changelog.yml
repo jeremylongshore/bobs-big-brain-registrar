@@ -1,0 +1,40 @@
+name: Notify umbrella changelog aggregator
+
+# Sender side of the umbrella's pull-based changelog aggregation.
+#
+# When CHANGELOG.md changes on main (i.e. a PR touching it merges), POST a
+# repository_dispatch (event_type=changelog-updated) to
+# intent-solutions-io/bobs-big-brain-umbrella. Its aggregate-changelogs.yml
+# listens for that event and refreshes changelogs/<this-repo>.md, so the
+# umbrella mirror updates within minutes of a release instead of waiting for
+# the weekly Monday cron.
+#
+# Requires the UMBRELLA_DISPATCH_TOKEN secret (a PAT able to write the
+# umbrella repo). If unset, this job warn-skips — the weekly cron still
+# refreshes the mirror, so nothing breaks.
+
+on:
+  push:
+    branches: [main]
+    paths: [CHANGELOG.md]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST changelog-updated to the umbrella
+        env:
+          TOKEN: ${{ secrets.UMBRELLA_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::warning::UMBRELLA_DISPATCH_TOKEN not set — skipping dispatch (the umbrella's weekly cron will still refresh)."
+            exit 0
+          fi
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/intent-solutions-io/bobs-big-brain-umbrella/dispatches \
+            -d "{\"event_type\":\"changelog-updated\",\"client_payload\":{\"repo\":\"${GITHUB_REPOSITORY}\",\"sha\":\"${GITHUB_SHA}\"}}"
