@@ -10,8 +10,11 @@
  *                           decision over an adversarial labeled set (is the moat
  *                           merely deterministic, or actually EFFECTIVE?)
  *
- * This package MEASURES. It does not emit or sign Evidence Bundles — wiring the
- * results into a signed bundle at promotion time is bead tr08.19. Keeping
+ * This package MEASURES. It does not emit or sign Evidence Bundles — the
+ * emit wiring (bead tr08.19) now exists at ci/emit-evidence/, which runs the
+ * CI eval gates as subprocesses and shapes their verdicts into signed
+ * gate-result/v1 bundles for the labs dashboard (subprocess-level v1; an
+ * EvaluatorResult-level in-package emitter remains future work). Keeping
  * measurement pure (no I/O beyond the repositories/data handed in) makes each
  * evaluator independently testable and side-effect-free.
  */
