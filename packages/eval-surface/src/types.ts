@@ -3,10 +3,13 @@
  *
  * These shapes are deliberately Evidence-Bundle-friendly: each evaluator yields
  * an `EvaluatorResult` with a stable `name`, a binary `passed`, a numeric
- * `score` in [0,1], a `threshold`, and a `details` map. The wiring bead
- * (tr08.19) rolls a set of these into a canonical Evidence Bundle via
- * @intentsolutions/core, naming each subject `qmd:<name>` and hashing the
- * verdict. This package stays pure: it measures, it does not emit or sign.
+ * `score` in [0,1], a `threshold`, and a `details` map. The emit wiring
+ * (bead tr08.19) now lives at ci/emit-evidence/: it runs the CI eval gates as
+ * subprocesses and rolls their verdicts into canonical Evidence Bundles via
+ * @intentsolutions/core, naming each subject `qmd:ci:<gate>` and hashing the
+ * verdict (subprocess-level v1; rolling EvaluatorResult objects directly into
+ * bundles in-package remains future work). This package stays pure: it
+ * measures, it does not emit or sign.
  */
 
 /** A single evaluator's verdict. */
