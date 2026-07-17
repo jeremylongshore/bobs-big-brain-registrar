@@ -14,7 +14,7 @@ export interface EvalQuery {
   /** Gold-relevant doc identifiers (same id space as RetrievalFn output). */
   relevant: string[];
   /** Which class this query stresses — lexical (exact terms) vs semantic (paraphrase). */
-  kind?: 'lexical' | 'semantic';
+  kind?: 'lexical' | 'semantic' | 'tokenization';
   notes?: string;
 }
 
@@ -33,7 +33,7 @@ export type RetrievalFn = (query: string, k: number) => Promise<string[]>;
 export interface QueryEvalResult {
   id: string;
   query: string;
-  kind?: 'lexical' | 'semantic';
+  kind?: 'lexical' | 'semantic' | 'tokenization';
   retrieved: string[];
   recallAtK: number;
   ndcgAtK: number;

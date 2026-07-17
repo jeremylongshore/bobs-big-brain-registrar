@@ -23,7 +23,7 @@ corpus is dual-usable as a public showcase. The id space is exactly what
 `qmd search` returns for a locally-built index over these files:
 `qmd://kb-{curated,decisions,guides}/<file-basename>.md`.
 
-## The queries (stratified, semantic-weighted: 8 lexical, 12 semantic)
+## The queries (stratified: 8 lexical, 12 semantic, 5 tokenization)
 
 The split is the whole point — a blended average hides a semantic collapse.
 
@@ -34,6 +34,13 @@ The split is the whole point — a blended average hides a semantic collapse.
   _synonym / low-overlap_ paraphrases that restate the concept in words the doc
   never uses (the genuine BM25 recall wall → miss). Real misses are **kept**, not
   reworded away — that is the signal.
+- **tokenization (5)** are the 2026-07-16 incident class (retrieval epic
+  vps.3): hyphen/dot-joined query terms ("governed-brain", "CLAUDE.md",
+  "bd-sync", "settings.json") that appear VERBATIM in the target doc but that
+  the qmd binary's keyword-AND tokenizer returns 0 hits for. The fused path
+  (vps.2: RRF over qmd + native FTS5) hits all 5; measured qmd-alone
+  (`disableNativeFusion: true`) hits only 2/5. These are permanent regression
+  guards for the fusion.
 
 ## The ratchet
 
@@ -46,11 +53,17 @@ Baselines are **measured, not guessed** — the numbers this corpus + query set
 actually produce against the pinned `@tobilu/qmd` (see `SYNTHETIC_V1_BASELINE`
 in `synthetic-v1.ts`):
 
-| Stratum  | Hits  | Recall@10 |
-| -------- | ----- | --------- |
-| lexical  | 8/8   | 1.0       |
-| semantic | 7/12  | ≈ 0.5833  |
-| overall  | 15/20 | 0.75      |
+| Stratum      | Hits  | Recall@10 |
+| ------------ | ----- | --------- |
+| lexical      | 8/8   | 1.0       |
+| semantic     | 7/12  | ≈ 0.5833  |
+| tokenization | 5/5   | 1.0       |
+| overall      | 20/25 | 0.80      |
+
+The ratchet also writes a machine-readable artifact
+(`eval-results/synthetic-v1.json`: stratified metrics, ratchet verdicts,
+per-query outcomes) which CI uploads on pass AND fail, so eval history is a
+tracked series of numbers rather than console scrollback.
 
 The ratchet guards the retrieval we already ship against regression. It does
 **not** gate on the absolute 0.85 BM25-sufficiency bar — that is the

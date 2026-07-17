@@ -35,7 +35,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -164,9 +164,11 @@ export async function runRetrievalRatchet(): Promise<number> {
 
     const lexical = sr.byKind.find((s) => s.stratum === 'lexical');
     const semantic = sr.byKind.find((s) => s.stratum === 'semantic');
+    const tokenization = sr.byKind.find((s) => s.stratum === 'tokenization');
     const checks = [
       checkStratum(lexical, 'lexical', SYNTHETIC_V1_BASELINE.lexicalRecallAtK),
       checkStratum(semantic, 'semantic', SYNTHETIC_V1_BASELINE.semanticRecallAtK),
+      checkStratum(tokenization, 'tokenization', SYNTHETIC_V1_BASELINE.tokenizationRecallAtK),
     ];
 
     console.log(`\n=== ratchet (per-stratum Recall@10 ≥ baseline − ${RATCHET_EPSILON}) ===`);
@@ -177,6 +179,11 @@ export async function runRetrievalRatchet(): Promise<number> {
           `${c.held ? 'OK' : 'REGRESSED'}`,
       );
     }
+
+    // Emit the machine-readable eval artifact (vps.3) — written on PASS and
+    // FAIL alike so CI always uploads a tracked history of the numbers, not
+    // just a green/red bit. Path overridable for local runs.
+    writeEvalArtifact(sr, checks, report.perQuery);
 
     const regressed = checks.filter((c) => !c.held);
     if (regressed.length > 0) {
@@ -205,6 +212,55 @@ export async function runRetrievalRatchet(): Promise<number> {
     return 0;
   } finally {
     rmSync(tmpBase, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Write the JSON eval artifact (vps.3): the stratified metrics, the ratchet
+ * verdicts, and the per-query outcomes. CI uploads this as a build artifact so
+ * eval history is a tracked series of numbers rather than console scrollback.
+ * Default path is `eval-results/synthetic-v1.json` under the package dir;
+ * override with RETRIEVAL_EVAL_JSON_PATH.
+ */
+function writeEvalArtifact(
+  sr: ReturnType<typeof stratify>,
+  checks: RatchetCheck[],
+  perQuery: ReadonlyArray<{
+    id: string;
+    kind?: string;
+    query: string;
+    recallAtK: number;
+    retrieved: readonly string[];
+  }>,
+): void {
+  const hereDir = dirname(fileURLToPath(import.meta.url));
+  const defaultPath = join(hereDir, '..', '..', 'eval-results', 'synthetic-v1.json');
+  const outPath = process.env['RETRIEVAL_EVAL_JSON_PATH'] ?? defaultPath;
+  const artifact = {
+    dataset: sr.dataset,
+    backend: sr.backend,
+    k: sr.k,
+    generatedAt: new Date().toISOString(),
+    overall: sr.overall,
+    byKind: sr.byKind,
+    ratchet: { epsilon: RATCHET_EPSILON, checks, pass: checks.every((c) => c.held) },
+    perQuery: perQuery.map((q) => ({
+      id: q.id,
+      kind: q.kind ?? 'untagged',
+      query: q.query,
+      hit: q.recallAtK > 0,
+      recallAtK: q.recallAtK,
+      retrievedTop3: q.retrieved.slice(0, 3),
+    })),
+  };
+  try {
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, `${JSON.stringify(artifact, null, 2)}\n`);
+    console.log(`\neval artifact written: ${outPath}`);
+  } catch (err: unknown) {
+    // The artifact is evidence, not the gate — never let a write failure flip
+    // the ratchet verdict.
+    console.error(`WARN could not write eval artifact to ${outPath}:`, err);
   }
 }
 
