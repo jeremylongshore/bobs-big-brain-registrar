@@ -187,6 +187,51 @@ export const SYNTHETIC_V1_DATASET: EvalDataset = {
       notes:
         'Single-tasking concept in fresh words (concentrate/lone objective/interruptions). MISS.',
     },
+
+    // --- tokenization (5) — hyphen/dot-joined terms (retrieval epic vps.3).
+    //     The 2026-07-16 incident class: qmd's keyword-AND tokenizer returns 0
+    //     hits when a query term is hyphen- or dot-joined ("governed-brain",
+    //     "CLAUDE.md"), even though the term appears VERBATIM in the doc. The
+    //     native FTS5 fusion half (vps.2) tokenizes these and matches. These
+    //     queries are regression guards for that miss class — labeled against
+    //     the FUSED production path. ---
+    {
+      id: 'q-tok-01',
+      kind: 'tokenization',
+      query: 'governed-brain MCP registered twice',
+      relevant: ['qmd://kb-curated/governed-brain-mcp.md'],
+      notes: 'The literal incident query (2026-07-16). qmd-alone: MISS (hyphen). Fused: HIT.',
+    },
+    {
+      id: 'q-tok-02',
+      kind: 'tokenization',
+      query: 'CLAUDE.md currency fixes',
+      relevant: ['qmd://kb-guides/claudemd-currency.md'],
+      notes:
+        'The second incident query — dotted filename term. On the small synthetic corpus qmd-alone happens to HIT; on the 17k-file live brain it returned 0 hits. Fused: HIT.',
+    },
+    {
+      id: 'q-tok-03',
+      kind: 'tokenization',
+      query: 'bd-sync three-layer mirror',
+      relevant: ['qmd://kb-guides/bd-sync-mirror.md'],
+      notes: 'Two hyphenated terms in one query. qmd-alone: MISS. Fused: HIT.',
+    },
+    {
+      id: 'q-tok-04',
+      kind: 'tokenization',
+      query: 'settings.json attribution drift',
+      relevant: ['qmd://kb-guides/claudemd-currency.md'],
+      notes: 'Dotted config-file term in the query body. qmd-alone: MISS. Fused: HIT.',
+    },
+    {
+      id: 'q-tok-05',
+      kind: 'tokenization',
+      query: 'governed brain MCP duplicate registration',
+      relevant: ['qmd://kb-curated/governed-brain-mcp.md'],
+      notes:
+        'Cross-form control: un-hyphenated query phrasing must still reach the hyphenated doc.',
+    },
   ],
 };
 
@@ -215,6 +260,13 @@ export const SYNTHETIC_V1_BASELINE = {
   lexicalRecallAtK: 1.0,
   /** 7/12 semantic queries hit. */
   semanticRecallAtK: 7 / 12,
+  /**
+   * 5/5 tokenization queries hit on the FUSED path (vps.2 RRF fusion of qmd +
+   * native FTS5). Measured with `disableNativeFusion: true` this stratum is
+   * 2/5 (the three multi-hyphen/dot queries miss) — the 2026-07-16 miss class
+   * this ratchet now permanently guards.
+   */
+  tokenizationRecallAtK: 1.0,
 } as const;
 
 /** Float-noise tolerance for the ratchet; a genuine regression is far larger. */

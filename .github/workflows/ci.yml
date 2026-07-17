@@ -179,6 +179,15 @@ jobs:
         run: pnpm build
       - name: Retrieval ratchet (stratified Recall@10 over the committed synthetic corpus)
         run: pnpm --filter @qmd-team-intent-kb/qmd-adapter eval:retrieval:ci
+      - name: Upload eval artifact (JSON metrics + per-query outcomes, vps.3)
+        # if: always() — the artifact is written on ratchet FAIL too; a red run's
+        # numbers are exactly the ones worth keeping.
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: retrieval-eval-synthetic-v1
+          path: packages/qmd-adapter/eval-results/synthetic-v1.json
+          if-no-files-found: warn
 
   integration:
     # L4 integration tests via testcontainers. Pulls real Docker images

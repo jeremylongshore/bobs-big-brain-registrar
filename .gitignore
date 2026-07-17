@@ -69,3 +69,6 @@ secrets/*.private.hex
 !secrets/*.sops.env
 !keys/*.pub
 .worktrees/
+
+# Retrieval eval JSON artifacts (vps.3) — emitted per run, uploaded by CI, never committed
+packages/qmd-adapter/eval-results/
