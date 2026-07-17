@@ -80,7 +80,15 @@ export type {
 } from './eval/index.js';
 
 // Native FTS5 — model-free keyword backend, no external binary (bead 0t9.2)
-export { Fts5Backend, fts5RetrievalFn, buildFts5MatchQuery } from './native/index.js';
+export {
+  Fts5Backend,
+  fts5RetrievalFn,
+  buildFts5MatchQuery,
+  NativeIndexManager,
+  getNativeIndexManager,
+} from './native/index.js';
+export { fuseReciprocalRank, RRF_K } from './search/rrf-fusion.js';
+export { resolveScopeCollections } from './search/search-client.js';
 export type { IndexedDoc, Fts5SearchHit } from './native/index.js';
 
 // Reindex — idempotent rebuild of the derived qmd-index from kb-export (e06.13)

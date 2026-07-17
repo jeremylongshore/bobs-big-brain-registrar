@@ -70,14 +70,19 @@ export interface SearchCanaryReport {
 
 async function runControls(
   adapter: QmdAdapter,
-  tenantId: string,
   controls: readonly CanaryControl[],
 ): Promise<CanaryControlResult[]> {
   const results: CanaryControlResult[] = [];
   for (const control of controls) {
     const minHits = control.minHits ?? 1;
     const scope = control.scope ?? 'all';
-    const searchResult = await adapter.query(control.query, scope, tenantId);
+    // Probe the qmd backend DIRECTLY, not the fused query() surface: the
+    // canary exists to catch an empty/unregistered qmd index (the incident)
+    // and drive `reindex`. The native FTS5 fusion half (vps.2) would keep
+    // serving hits over an empty qmd index — graceful degradation for users,
+    // but exactly the masking this canary must see through. The adapter was
+    // constructed for `tenantId`, so the direct call stays tenant-scoped.
+    const searchResult = await adapter.search.search(control.query, scope);
     if (!searchResult.ok) {
       results.push({
         query: control.query,
@@ -131,7 +136,23 @@ export async function runSearchCanary(
 ): Promise<SearchCanaryReport> {
   const controls = options.controls ?? DEFAULT_CANARY_CONTROLS;
 
-  const firstPass = await runControls(adapter, tenantId, controls);
+  // Fail-closed tenant guard, preserved from when the canary probed the fused
+  // query() surface (which refuses mismatched tenants): a canary pointed at
+  // the wrong tenant reports degraded without touching the executor at all.
+  if (tenantId !== adapter.boundTenantId) {
+    return {
+      healthy: false,
+      tenantId,
+      controls: controls.map((c) => ({
+        query: c.query,
+        minHits: c.minHits ?? 1,
+        hits: 0,
+        passed: false,
+      })),
+    };
+  }
+
+  const firstPass = await runControls(adapter, controls);
   const firstHealthy = firstPass.every((c) => c.passed);
 
   if (firstHealthy || !options.heal) {
@@ -140,7 +161,7 @@ export async function runSearchCanary(
 
   // Unhealthy + heal requested: attempt an idempotent reindex, then re-check.
   const reindexResult = await reindex(adapter);
-  const secondPass = await runControls(adapter, tenantId, controls);
+  const secondPass = await runControls(adapter, controls);
   const recheckHealthy = secondPass.every((c) => c.passed);
 
   return {

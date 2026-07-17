@@ -14,7 +14,10 @@ describe('reindex', () => {
   beforeEach(() => {
     mock = new MockQmdExecutor();
     exportDir = mkdtempSync(join(tmpdir(), 'qmd-reindex-test-'));
-    adapter = new QmdAdapter({ tenantId: 'test-tenant', exportDir }, mock);
+    adapter = new QmdAdapter(
+      { tenantId: 'test-tenant', exportDir, nativeIndexPath: ':memory:' },
+      mock,
+    );
   });
 
   afterEach(() => {

@@ -44,17 +44,26 @@ export class SearchClient {
 
   /** Resolve which collections to include based on scope */
   private resolveCollections(scope: SearchScope): string[] {
-    switch (scope) {
-      case 'curated':
-        return getDefaultSearchCollections();
-      case 'inbox':
-        return ['kb-inbox'];
-      case 'archived':
-        return ['kb-archive'];
-      case 'all':
-        return []; // No filtering
-      default:
-        return getDefaultSearchCollections();
-    }
+    return resolveScopeCollections(scope);
+  }
+}
+
+/**
+ * Map a search scope to the collections it may return (empty = no filter).
+ * Shared by the qmd path and the native FTS5 fusion path so both halves of a
+ * fused result honour the same scope contract.
+ */
+export function resolveScopeCollections(scope: SearchScope): string[] {
+  switch (scope) {
+    case 'curated':
+      return getDefaultSearchCollections();
+    case 'inbox':
+      return ['kb-inbox'];
+    case 'archived':
+      return ['kb-archive'];
+    case 'all':
+      return []; // No filtering
+    default:
+      return getDefaultSearchCollections();
   }
 }
