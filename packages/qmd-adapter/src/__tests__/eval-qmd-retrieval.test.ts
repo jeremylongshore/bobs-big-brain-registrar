@@ -7,7 +7,10 @@ import { qmdRetrievalFn } from '../eval/qmd-retrieval.js';
 const TENANT = 'intent-solutions';
 
 function adapterWith(mock: MockQmdExecutor): QmdAdapter {
-  return new QmdAdapter({ tenantId: TENANT, exportDir: '/tmp/does-not-matter' }, mock);
+  return new QmdAdapter(
+    { tenantId: TENANT, exportDir: '/tmp/does-not-matter', nativeIndexPath: ':memory:' },
+    mock,
+  );
 }
 
 /** A qmd `search --json` payload with ranked qmd:// citations. */

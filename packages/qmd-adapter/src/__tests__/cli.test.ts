@@ -11,7 +11,7 @@ function makeInjected(): {
 } {
   const mock = new MockQmdExecutor();
   const makeAdapter = (t: string, e: string): QmdAdapter =>
-    new QmdAdapter({ tenantId: t, exportDir: e }, mock);
+    new QmdAdapter({ tenantId: t, exportDir: e, nativeIndexPath: ':memory:' }, mock);
   return { mock, makeAdapter };
 }
 

@@ -50,6 +50,14 @@ export interface QmdAdapterConfig {
   exportDir: string;
   qmdBinary?: string;
   timeout?: number;
+  /**
+   * Override for the native FTS5 fusion index file (tests use `:memory:`).
+   * Defaults to `<qmd-index>/<tenantId>/native-fts5.sqlite` — derived data
+   * next to the qmd index it fuses with.
+   */
+  nativeIndexPath?: string;
+  /** Kill switch: serve qmd-only results with no native FTS5 fusion. */
+  disableNativeFusion?: boolean;
 }
 
 /** Default configuration values */

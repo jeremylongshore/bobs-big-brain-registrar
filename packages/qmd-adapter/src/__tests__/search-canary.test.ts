@@ -31,7 +31,7 @@ describe('runSearchCanary', () => {
   beforeEach(() => {
     mock = new MockQmdExecutor();
     exportDir = mkdtempSync(join(tmpdir(), 'qmd-canary-test-'));
-    adapter = new QmdAdapter({ tenantId: TENANT, exportDir }, mock);
+    adapter = new QmdAdapter({ tenantId: TENANT, exportDir, nativeIndexPath: ':memory:' }, mock);
   });
 
   afterEach(() => {

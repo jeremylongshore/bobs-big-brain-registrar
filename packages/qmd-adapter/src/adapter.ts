@@ -9,10 +9,16 @@ import type { QmdAdapterConfig } from './config.js';
 import { RealQmdExecutor } from './executor/real-executor.js';
 import { CollectionManager } from './collections/collection-manager.js';
 import { getExportableCollections } from './collections/collection-registry.js';
-import { SearchClient } from './search/search-client.js';
+import { SearchClient, resolveScopeCollections } from './search/search-client.js';
+import { fuseReciprocalRank } from './search/rrf-fusion.js';
 import { IndexLifecycleManager } from './index-manager/index-lifecycle.js';
 import { checkHealth } from './health/health-check.js';
-import { getQmdTenantEnv } from './config.js';
+import { getQmdTenantEnv, getQmdTenantIndexPath } from './config.js';
+import { getNativeIndexManager, type NativeIndexManager } from './native/native-index-manager.js';
+import type { Fts5SearchHit } from './native/fts5-backend.js';
+
+/** How many native FTS5 hits to feed the fusion (pre scope-filter). */
+const NATIVE_SEARCH_K = 50;
 
 /** Facade class composing all qmd adapter managers */
 export class QmdAdapter {
@@ -20,9 +26,15 @@ export class QmdAdapter {
   readonly collections: CollectionManager;
   readonly search: SearchClient;
   readonly indexLifecycle: IndexLifecycleManager;
+  private readonly native: NativeIndexManager | null;
   private readonly exportDir: string;
   /** The single tenant this adapter's qmd registry + index are bound to. */
   private readonly tenantId: string;
+
+  /** The tenant this adapter serves (read-only; used by the search canary's fail-closed guard). */
+  get boundTenantId(): string {
+    return this.tenantId;
+  }
 
   constructor(config: QmdAdapterConfig, executor?: QmdExecutor) {
     this.exportDir = config.exportDir;
@@ -38,6 +50,23 @@ export class QmdAdapter {
     this.collections = new CollectionManager(this.executor);
     this.search = new SearchClient(this.executor);
     this.indexLifecycle = new IndexLifecycleManager(this.executor);
+    // Native FTS5 fusion half (vps.2). Failure to open the index (read-only
+    // fs, missing native dep) degrades to qmd-only search rather than
+    // breaking the adapter.
+    if (config.disableNativeFusion === true) {
+      this.native = null;
+    } else {
+      try {
+        this.native = getNativeIndexManager({
+          exportDir: config.exportDir,
+          indexPath:
+            config.nativeIndexPath ??
+            join(getQmdTenantIndexPath(config.tenantId), 'native-fts5.sqlite'),
+        });
+      } catch {
+        this.native = null;
+      }
+    }
   }
 
   /**
@@ -69,7 +98,36 @@ export class QmdAdapter {
       // refuse rather than serve the bound tenant's index unscoped/mislabelled.
       return { ok: true, value: [] };
     }
-    return this.search.search(queryText, scope);
+
+    // Two lexical backends, one deterministic fusion (vps.2): the external
+    // qmd binary (keyword-AND tokenizer) and the native FTS5 index over the
+    // same export tree (unicode61 tokenizer, catches hyphen/dot-joined terms
+    // qmd misses). Their ranked lists join by qmd:// citation and fuse via
+    // reciprocal-rank fusion. Either backend failing degrades to the other.
+    const effectiveScope: SearchScope = scope ?? 'curated';
+    const qmdResult = await this.search.search(queryText, effectiveScope);
+    const nativeHits = this.nativeSearch(queryText, effectiveScope);
+
+    if (!qmdResult.ok) {
+      // qmd unavailable — native results alone still serve the query (this
+      // also makes local search work when the qmd binary is not installed).
+      if (nativeHits.length > 0) {
+        return { ok: true, value: fuseReciprocalRank([], nativeHits) };
+      }
+      return qmdResult;
+    }
+    if (nativeHits.length === 0) return qmdResult;
+    return { ok: true, value: fuseReciprocalRank(qmdResult.value, nativeHits) };
+  }
+
+  /** Native FTS5 half of the fused query. Any failure degrades to []. */
+  private nativeSearch(queryText: string, scope: SearchScope): Fts5SearchHit[] {
+    if (this.native === null) return [];
+    try {
+      return this.native.search(queryText, NATIVE_SEARCH_K, resolveScopeCollections(scope));
+    } catch {
+      return [];
+    }
   }
 
   /** Check health of qmd and index state */

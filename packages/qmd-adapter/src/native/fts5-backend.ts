@@ -55,9 +55,12 @@ export class Fts5Backend {
   private readonly searchStmt: Database.Statement;
   private readonly countStmt: Database.Statement;
 
-  constructor(opts: { path?: string } = {}) {
-    this.db = new Database(opts.path ?? ':memory:');
+  constructor(opts: { path?: string; db?: Database.Database } = {}) {
+    // An injected db lets a caller (NativeIndexManager) share one SQLite file
+    // between the FTS5 docs table and its own bookkeeping tables.
+    this.db = opts.db ?? new Database(opts.path ?? ':memory:');
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('busy_timeout = 5000');
     this.db.exec(
       'CREATE VIRTUAL TABLE IF NOT EXISTS docs USING fts5(id UNINDEXED, collection UNINDEXED, content)',
     );
@@ -79,6 +82,31 @@ export class Fts5Backend {
       }
     });
     tx(docs);
+  }
+
+  /**
+   * Insert documents KNOWN to be absent from the index — skips the per-doc
+   * delete. `id` is UNINDEXED in the FTS5 table, so each upsert delete is a
+   * full scan of the virtual table; on a bulk first build that turns 17k
+   * inserts into O(n²) minutes. Callers that track index membership (the
+   * NativeIndexManager's files table) use this for new docs and reserve
+   * `index()`/`remove()` for the few changed/deleted ones.
+   */
+  insert(docs: readonly IndexedDoc[]): void {
+    const tx = this.db.transaction((items: readonly IndexedDoc[]) => {
+      for (const doc of items) {
+        this.insertStmt.run(doc.id, doc.collection ?? '', doc.content);
+      }
+    });
+    tx(docs);
+  }
+
+  /** Remove documents by id (no-op for ids that are not indexed). */
+  remove(ids: readonly string[]): void {
+    const tx = this.db.transaction((items: readonly string[]) => {
+      for (const id of items) this.deleteStmt.run(id);
+    });
+    tx(ids);
   }
 
   /** Remove every indexed document. */
