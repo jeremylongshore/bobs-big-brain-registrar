@@ -45,3 +45,50 @@ export function rerankSearchHits<T extends { score: number; category: string; up
     })
     .sort((a, b) => b.finalScore - a.finalScore);
 }
+
+/**
+ * Extract the memory id from a qmd citation URI or exported file path.
+ * The git-exporter names every file `{memoryId}.md`, so the basename minus
+ * its extension IS the memory id. Returns null for an empty basename.
+ */
+export function extractMemoryIdFromCitation(citation: string): string | null {
+  const lastSlash = citation.lastIndexOf('/');
+  const base = lastSlash === -1 ? citation : citation.slice(lastSlash + 1);
+  const stripped = base.replace(/\.[^.]+$/, '');
+  return stripped.length > 0 ? stripped : null;
+}
+
+/** Metadata needed to freshness-rerank a cited hit. */
+export interface CitedHitMetadata {
+  category: string;
+  updatedAt: string;
+}
+
+/**
+ * Rerank qmd-cited hits with freshness + category boost by resolving each
+ * citation back to its governed memory's metadata.
+ *
+ * A hit whose citation cannot be resolved (memory removed from the store, or
+ * a non-standard filename) is treated as fresh and unboosted — freshness 1.0
+ * (updatedAt = now) and category boost 1.0 — so resolution failure never
+ * penalizes a hit; it just doesn't get boosted. Resolved hits carry their
+ * memoryId so callers can enrich the response.
+ */
+export function rerankCitedHits<T extends { file: string; score: number }>(
+  hits: T[],
+  resolveMetadata: (memoryId: string) => CitedHitMetadata | null,
+  nowIso: string,
+  halfLifeDays: number = 90,
+): Array<T & { finalScore: number; category: string; updatedAt: string; memoryId: string | null }> {
+  const enriched = hits.map((h) => {
+    const id = extractMemoryIdFromCitation(h.file);
+    const meta = id === null ? null : resolveMetadata(id);
+    return {
+      ...h,
+      memoryId: meta === null ? null : id,
+      category: meta?.category ?? '',
+      updatedAt: meta?.updatedAt ?? nowIso,
+    };
+  });
+  return rerankSearchHits(enriched, nowIso, halfLifeDays);
+}

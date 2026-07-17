@@ -1,6 +1,6 @@
 import type { MemoryRepository } from '@qmd-team-intent-kb/store';
 import type { SearchQuery, SearchResult, SearchHit, SearchScope } from '@qmd-team-intent-kb/schema';
-import { rerankSearchHits } from '@qmd-team-intent-kb/common';
+import { rerankSearchHits, rerankCitedHits } from '@qmd-team-intent-kb/common';
 import { badRequest } from '../errors.js';
 
 /**
@@ -52,7 +52,9 @@ export class SearchService {
   /**
    * Search curated memories by text query.
    *
-   * qmd path: returns `qmd://`-cited hits ranked by qmd relevance.
+   * qmd path: returns `qmd://`-cited hits, qmd relevance normalised to [0,1]
+   * then reranked with the same exponential time decay + category boost as
+   * the fallback (citations resolve to store rows for the metadata).
    * SQLite fallback: title match = 0.9, content-only = 0.6, then exponential
    * time decay + category boost.
    */
@@ -98,10 +100,34 @@ export class SearchService {
     const ranked = result.value;
     const maxScore = ranked.reduce((m, h) => (h.score > m ? h.score : m), 0);
 
-    const allHits: SearchHit[] = ranked.map((hit, index) => ({
+    // Normalise BEFORE the freshness rerank: qmd exact hits can all score 0,
+    // where normaliseScore falls back to a rank-derived score — reranking the
+    // raw zeros instead would multiply freshness into 0 and erase the ranking.
+    const normalised = ranked.map((hit, index) => ({
+      ...hit,
+      score: normaliseScore(hit.score, maxScore, index, ranked.length),
+    }));
+
+    // Freshness + category rerank (same policy as the SQLite fallback, R1 of
+    // the retrieval epic). Citations resolve back to store rows by id — the
+    // exporter names files `{memoryId}.md` — purely for ranking metadata; the
+    // qmd index itself is already tenant-scoped, and ids are globally unique.
+    const reranked = rerankCitedHits(
+      normalised,
+      (memoryId) => {
+        const memory = this.memoryRepo.findById(memoryId);
+        return memory === null ? null : { category: memory.category, updatedAt: memory.updatedAt };
+      },
+      nowIso,
+    );
+
+    const allHits: SearchHit[] = reranked.map((hit) => ({
+      memoryId: hit.memoryId ?? undefined,
       title: titleFromCitation(hit.file),
       snippet: hit.snippet,
-      score: normaliseScore(hit.score, maxScore, index, ranked.length),
+      score: Math.min(hit.finalScore, 1),
+      // Category came off a governed store row, so it is a valid MemoryCategory.
+      category: hit.memoryId !== null ? (hit.category as SearchHit['category']) : undefined,
       citation: hit.file,
       collection: hit.collection,
       matchedAt: nowIso,
