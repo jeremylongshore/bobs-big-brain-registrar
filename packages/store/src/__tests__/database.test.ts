@@ -135,7 +135,7 @@ describe('curated_memories CHECK literals stay in lock-step with the Zod enums (
       'i',
     ).exec(ddl);
     expect(m, `no CHECK(${col} IN (...)) found in curated_memories DDL`).not.toBeNull();
-    const inSet = (m as RegExpExecArray)[1]
+    const inSet = (m?.[1] ?? '')
       .split(',')
       .map((v) => v.trim().replace(/^'|'$/g, ''))
       .filter((v) => v.length > 0)
