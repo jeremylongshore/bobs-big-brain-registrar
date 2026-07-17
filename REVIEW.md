@@ -53,14 +53,14 @@ the required remediation.
 ## Tamper-evidence honesty invariant
 
 The audit chain is tamper-**evident**, not tamper-**proof**: a local writer with write access can edit
-an event *and* re-hash the chain forward, and verification will pass again. Keep every audit/receipt
+an event _and_ re-hash the chain forward, and verification will pass again. Keep every audit/receipt
 claim honest to that trust model.
 
 - **Forbidden claim words** anywhere in code comments, docs, or the PR body: **tamper-proof**,
   **immutable**, **non-repudiation** (for local mode), **blockchain**. Flag any that a change
   introduces.
-- Flag a bare **"append-only"** claim that is not qualified — say *append-only by protocol*,
-  *hash-chained*, or *tamper-evident*, or negate it. The chain gives local integrity + ordering;
+- Flag a bare **"append-only"** claim that is not qualified — say _append-only by protocol_,
+  _hash-chained_, or _tamper-evident_, or negate it. The chain gives local integrity + ordering;
   cross-actor non-repudiation needs the external chain-head anchor, not the local chain alone.
 
 ## Deterministic-governance invariant
@@ -83,7 +83,7 @@ promotion, and ALL audit writes.**
 The spool is the ICO → INTKB hand-off and the trust boundary.
 
 - Candidate ids are content-stable **UUID-v5** over `namespace + workspaceId\x00relPath\x00
-  bodySha256`. A one-byte drift in the derivation inputs produces a new id, which breaks dedupe and
+bodySha256`. A one-byte drift in the derivation inputs produces a new id, which breaks dedupe and
   severs the audit link. Flag any change to id derivation, the field separator, or the hashed body
   without a `schemaVersion` bump and a migration/alias story.
 - The spool contract (candidate shape, field semantics, ordering) changes only through an explicit,
@@ -112,7 +112,7 @@ mocks.
 Do not repeat CI output inline; the blocking gate already runs `pnpm validate` (format, lint,
 typecheck, test), `depcruise` (architecture), `crap` (complexity), `harness-pin`, coverage/Codecov,
 the provenance + govern-decision evals, the retrieval ratchet, and `security.yml` (gitleaks, semgrep,
-npm audit). Review *why* green checks might still mask unsafe design or a false claim. Durable-state
+npm audit). Review _why_ green checks might still mask unsafe design or a false claim. Durable-state
 or schema changes require migration coverage, fixture/validator/consumer updates, and rollback-aware
 review proportional to the claim.
 
