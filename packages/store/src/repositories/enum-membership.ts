@@ -36,11 +36,13 @@ import {
   MemorySource,
   TrustLevel,
   MemoryCategory,
+  MemoryLifecycleState,
   CandidateStatus,
   Confidence,
   Sensitivity,
   AuthorType,
   type MemoryCandidate,
+  type CuratedMemory,
 } from '@qmd-team-intent-kb/schema';
 import { scanForDisclosure, DisclosureRejectedError } from '@qmd-team-intent-kb/common';
 import type { z } from 'zod';
@@ -101,7 +103,7 @@ interface EnumCheck {
  * @throws {EnumConstraintViolationError} when an off-vocabulary value is otherwise invalid.
  */
 export function assertEnumMembership(candidate: MemoryCandidate): void {
-  const checks: EnumCheck[] = [
+  runEnumChecks([
     { field: 'status', schema: CandidateStatus, value: candidate.status },
     { field: 'source', schema: MemorySource, value: candidate.source },
     { field: 'category', schema: MemoryCategory, value: candidate.category },
@@ -117,8 +119,48 @@ export function assertEnumMembership(candidate: MemoryCandidate): void {
       schema: Sensitivity,
       value: candidate.metadata?.sensitivity,
     },
-  ];
+  ]);
+}
 
+/**
+ * Re-assert closed-vocabulary membership for every enum-constrained field of a
+ * CURATED MEMORY, or throw. The govern-side twin of {@link assertEnumMembership}
+ * (bead qmd-team-intent-kb-5bm.1).
+ *
+ * `assertEnumMembership` guards the candidates table; nothing guarded
+ * `curated_memories` — the highest-trust table. `MemoryRepository.insert/update`
+ * bind `category`/`trustLevel`/`sensitivity`/`lifecycle`/`source`/`author.type`
+ * raw, and `MemoryRowSchema` validates only on READ, so a raw caller (or a
+ * bypassed promotion path) can plant an arbitrary — or disclosure-shaped — string
+ * in an enum column of the governed store, where the disclosure scan skips it by
+ * name. This closes that gap at the same repository choke point.
+ *
+ * A CuratedMemory always carries `lifecycle` and `sensitivity` (both required in
+ * the schema), and has no `status`/`confidence` (those are candidate-side), so
+ * the field set differs from the candidate twin. Same fail-closed, value-non-leaking
+ * contract: an off-vocabulary value is routed through the disclosure scan first
+ * (precise category if disclosure-shaped) then rejected by field name only.
+ *
+ * @throws {DisclosureRejectedError} when an off-vocabulary value is disclosure-shaped.
+ * @throws {EnumConstraintViolationError} when an off-vocabulary value is otherwise invalid.
+ */
+export function assertMemoryEnumMembership(memory: CuratedMemory): void {
+  runEnumChecks([
+    { field: 'source', schema: MemorySource, value: memory.source },
+    { field: 'category', schema: MemoryCategory, value: memory.category },
+    { field: 'trustLevel', schema: TrustLevel, value: memory.trustLevel },
+    { field: 'sensitivity', schema: Sensitivity, value: memory.sensitivity },
+    { field: 'lifecycle', schema: MemoryLifecycleState, value: memory.lifecycle },
+    { field: 'author.type', schema: AuthorType, value: memory.author?.type },
+  ]);
+}
+
+/**
+ * Run a set of enum-membership checks, fail-closed and value-non-leaking.
+ * Shared by the candidate ({@link assertEnumMembership}) and memory
+ * ({@link assertMemoryEnumMembership}) choke points.
+ */
+function runEnumChecks(checks: EnumCheck[]): void {
   for (const { field, schema, value } of checks) {
     // Absent optional enum (confidence / sensitivity) is not a violation.
     if (value === undefined) continue;

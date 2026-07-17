@@ -49,3 +49,59 @@ describe('createTestDatabase', () => {
     db.close();
   });
 });
+
+describe('curated_memories enum CHECK constraints (5bm.1)', () => {
+  const cols = [
+    ['category', 'made-up-category'],
+    ['trust_level', 'super-high'],
+    ['sensitivity', 'top-secret'],
+    ['lifecycle', 'zombie'],
+    ['source', 'telepathy'],
+  ] as const;
+
+  it.each(cols)('the DB rejects an off-vocabulary %s at the row level', (col, bad) => {
+    const db = createTestDatabase();
+    const author = JSON.stringify({ type: 'human', id: 'u', name: 'U' });
+    const vals: Record<string, string> = {
+      source: 'manual',
+      category: 'pattern',
+      trust_level: 'high',
+      sensitivity: 'internal',
+      lifecycle: 'active',
+    };
+    vals[col] = bad;
+    const stmt = db.prepare(
+      `INSERT INTO curated_memories (
+        id, candidate_id, source, content, title, category, trust_level, sensitivity,
+        author_json, tenant_id, metadata_json, lifecycle, content_hash,
+        policy_evaluations_json, supersession_json, promoted_at, promoted_by_json, updated_at, version
+      ) VALUES (
+        'i', 'c', @source, 'x', 'x', @category, @trust_level, @sensitivity,
+        @author, 't', '{}', @lifecycle, 'h', '[]', NULL, 'now', @author, 'now', 1
+      )`,
+    );
+    // SQLite raises a CHECK constraint failure — the off-vocabulary value never lands.
+    expect(() => stmt.run({ ...vals, author })).toThrow(/CHECK constraint/i);
+    db.close();
+  });
+
+  it('accepts a fully in-vocabulary row', () => {
+    const db = createTestDatabase();
+    const author = JSON.stringify({ type: 'human', id: 'u', name: 'U' });
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO curated_memories (
+            id, candidate_id, source, content, title, category, trust_level, sensitivity,
+            author_json, tenant_id, metadata_json, lifecycle, content_hash,
+            policy_evaluations_json, supersession_json, promoted_at, promoted_by_json, updated_at, version
+          ) VALUES (
+            'i', 'c', 'manual', 'x', 'x', 'decision', 'high', 'internal',
+            ?, 't', '{}', 'active', 'h', '[]', NULL, 'now', ?, 'now', 1
+          )`,
+        )
+        .run(author, author),
+    ).not.toThrow();
+    db.close();
+  });
+});

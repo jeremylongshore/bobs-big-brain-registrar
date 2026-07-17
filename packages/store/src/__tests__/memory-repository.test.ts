@@ -481,7 +481,11 @@ describe('MemoryRepository — Zod-on-read malformed row rejection', () => {
   });
 
   it('throws a descriptive error when lifecycle contains an invalid enum value', () => {
-    // Insert a row with an unrecognised lifecycle value to simulate schema drift
+    // Insert a row with an unrecognised lifecycle value to simulate schema drift.
+    // The new enum CHECK constraints (5bm.1) would otherwise refuse to plant this
+    // drift row on a fresh DB — but the read-side Zod guard still matters for the
+    // live CHECK-less DB, so disable CHECK enforcement just to stage the scenario.
+    db.pragma('ignore_check_constraints = ON');
     const id = randomUUID();
     const validAuthor = JSON.stringify({ type: 'human', id: 'user-1', name: 'Test User' });
     db.prepare(

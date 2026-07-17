@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { CuratedMemory } from '@qmd-team-intent-kb/schema';
 import type { MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
+import { assertMemoryEnumMembership } from './enum-membership.js';
 
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
@@ -308,6 +309,11 @@ export class MemoryRepository {
 
   /** Insert a new curated memory. */
   insert(memory: CuratedMemory): void {
+    // Closed-vocabulary re-assertion at the write choke point (5bm.1): reject an
+    // off-vocabulary (or disclosure-shaped) value in any enum column before it
+    // reaches the highest-trust table. MemoryRowSchema validates only on READ, so
+    // this is the write-side guard the candidates table already had.
+    assertMemoryEnumMembership(memory);
     this.stmtInsert.run({
       id: memory.id,
       candidate_id: memory.candidateId,
@@ -373,6 +379,9 @@ export class MemoryRepository {
    * Returns true if a row was modified, false if the id was not found.
    */
   update(memory: CuratedMemory): boolean {
+    // Same write-side enum guard as insert (5bm.1) — an update path must not be a
+    // back door for an off-vocabulary value into an enum column.
+    assertMemoryEnumMembership(memory);
     const result = this.stmtUpdate.run({
       id: memory.id,
       candidate_id: memory.candidateId,
