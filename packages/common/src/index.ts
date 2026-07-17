@@ -13,7 +13,14 @@ export {
 export { DEFAULT_TEAMKB_BASE, getTeamKbBasePath, resolveTeamKbPath } from './paths.js';
 export { isPathSafe } from './path-safety.js';
 export type { PathSafetyResult } from './path-safety.js';
-export { computeFreshnessScore, CATEGORY_BOOST, rerankSearchHits } from './freshness.js';
+export {
+  computeFreshnessScore,
+  CATEGORY_BOOST,
+  rerankSearchHits,
+  extractMemoryIdFromCitation,
+  rerankCitedHits,
+} from './freshness.js';
+export type { CitedHitMetadata } from './freshness.js';
 export {
   scanForDisclosure,
   scanDisclosureFields,

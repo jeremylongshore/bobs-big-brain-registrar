@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { createTestDatabase } from '@qmd-team-intent-kb/store';
+import { createTestDatabase, MemoryRepository } from '@qmd-team-intent-kb/store';
 import type { SearchScope } from '@qmd-team-intent-kb/schema';
 import { buildApp } from '../app.js';
 import type { QmdCiteHit, QmdQueryPort } from '../services/search-service.js';
+import { makeMemory } from './fixtures.js';
 
 /**
  * A controllable fake qmd port. Records the (query, scope) it was asked for so
@@ -174,5 +175,90 @@ describe('POST /api/search — qmd cited path', () => {
     const body = res.json();
     expect(body.hits[0].score).toBe(1); // 8/8
     expect(body.hits[1].score).toBe(0.5); // 4/8
+  });
+});
+
+// ─── R1: freshness + category rerank on the qmd path ─────────────────────────
+// (retrieval epic qmd-team-intent-kb-vps.1)
+
+describe('POST /api/search — qmd path freshness/category rerank', () => {
+  let db: Database.Database;
+  let app: FastifyInstance;
+
+  const STALE_ID = '11111111-1111-4111-8111-111111111111';
+  const FRESH_ID = '22222222-2222-4222-8222-222222222222';
+
+  beforeEach(() => {
+    db = createTestDatabase();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    db.close();
+  });
+
+  it('reranks a fresh decision above a stale reference with equal qmd scores', async () => {
+    const repo = new MemoryRepository(db);
+    const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    repo.insert(
+      makeMemory({
+        id: STALE_ID,
+        title: 'Old reference',
+        category: 'reference',
+        updatedAt: yearAgo,
+        content: 'stale reference content',
+      }),
+    );
+    repo.insert(
+      makeMemory({
+        id: FRESH_ID,
+        title: 'Fresh decision',
+        category: 'decision',
+        updatedAt: new Date().toISOString(),
+        content: 'fresh decision content',
+      }),
+    );
+
+    // qmd returns the stale memory FIRST with an identical raw score.
+    const qmd = new FakeQmd([
+      hit(`qmd://kb-guides/${STALE_ID}.md`, 5),
+      hit(`qmd://kb-decisions/${FRESH_ID}.md`, 5, 'snip', 'kb-decisions'),
+    ]);
+    app = buildApp({ db, qmdAdapter: qmd });
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'x', scope: 'curated' },
+    });
+    const body = res.json();
+    expect(body.hits[0].citation).toBe(`qmd://kb-decisions/${FRESH_ID}.md`);
+    expect(body.hits[0].score).toBeGreaterThan(body.hits[1].score);
+    // Resolved hits are enriched with the governed row's identity + category.
+    expect(body.hits[0].memoryId).toBe(FRESH_ID);
+    expect(body.hits[0].category).toBe('decision');
+    // Citations remain the anchor on every hit.
+    for (const h of body.hits) expect(h.citation).toMatch(/^qmd:\/\//);
+  });
+
+  it('leaves unresolvable citations in qmd order without enrichment', async () => {
+    const qmd = new FakeQmd([
+      hit('qmd://kb-curated/not-a-row.md', 0.9),
+      hit('qmd://kb-curated/also-gone.md', 0.6),
+    ]);
+    app = buildApp({ db, qmdAdapter: qmd });
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'x', scope: 'curated' },
+    });
+    const body = res.json();
+    expect(body.hits[0].citation).toBe('qmd://kb-curated/not-a-row.md');
+    expect(body.hits[0].memoryId).toBeUndefined();
+    expect(body.hits[0].category).toBeUndefined();
+    expect(body.hits[1].score).toBeCloseTo(0.6 / 0.9, 3);
   });
 });

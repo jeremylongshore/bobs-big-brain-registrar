@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { computeFreshnessScore, CATEGORY_BOOST, rerankSearchHits } from '../freshness.js';
+import {
+  computeFreshnessScore,
+  CATEGORY_BOOST,
+  rerankSearchHits,
+  extractMemoryIdFromCitation,
+  rerankCitedHits,
+} from '../freshness.js';
 
 const NOW = '2026-03-19T00:00:00.000Z';
 
@@ -107,5 +113,69 @@ describe('rerankSearchHits', () => {
   it('returns an empty array when given an empty input', () => {
     const result = rerankSearchHits([], NOW);
     expect(result).toEqual([]);
+  });
+});
+
+// ─── R1: cited-hit rerank (retrieval epic qmd-team-intent-kb-vps.1) ──────────
+
+describe('extractMemoryIdFromCitation', () => {
+  it('extracts the id from a qmd:// URI with a collection path', () => {
+    expect(
+      extractMemoryIdFromCitation('qmd://kb-curated/6f1a2b3c-4d5e-6789-abcd-ef0123456789.md'),
+    ).toBe('6f1a2b3c-4d5e-6789-abcd-ef0123456789');
+  });
+
+  it('extracts the id from a nested exported path', () => {
+    expect(extractMemoryIdFromCitation('decisions/abc-123.md')).toBe('abc-123');
+  });
+
+  it('handles a bare filename with no directory', () => {
+    expect(extractMemoryIdFromCitation('abc-123.md')).toBe('abc-123');
+  });
+
+  it('only strips the final extension, preserving dots in the id', () => {
+    expect(extractMemoryIdFromCitation('qmd://kb-guides/CLAUDE.md.md')).toBe('CLAUDE.md');
+  });
+
+  it('returns null for an empty basename', () => {
+    expect(extractMemoryIdFromCitation('qmd://kb-curated/')).toBeNull();
+    expect(extractMemoryIdFromCitation('')).toBeNull();
+  });
+});
+
+describe('rerankCitedHits', () => {
+  const NOW = '2026-07-17T12:00:00.000Z';
+  const STALE = '2025-07-17T12:00:00.000Z'; // one year old ≈ 4 half-lives
+
+  it('reorders a fresh decision above a stale reference with equal raw scores', () => {
+    const hits = [
+      { file: 'qmd://kb-guides/stale-ref.md', score: 1 },
+      { file: 'qmd://kb-decisions/fresh-dec.md', score: 1 },
+    ];
+    const meta: Record<string, { category: string; updatedAt: string }> = {
+      'stale-ref': { category: 'reference', updatedAt: STALE },
+      'fresh-dec': { category: 'decision', updatedAt: NOW },
+    };
+    const reranked = rerankCitedHits(hits, (id) => meta[id] ?? null, NOW);
+    expect(reranked[0]!.file).toBe('qmd://kb-decisions/fresh-dec.md');
+    expect(reranked[0]!.finalScore).toBeGreaterThan(reranked[1]!.finalScore);
+    expect(reranked[0]!.memoryId).toBe('fresh-dec');
+  });
+
+  it('leaves an unresolved citation unboosted and unpenalized', () => {
+    const hits = [{ file: 'qmd://kb-curated/gone.md', score: 0.8 }];
+    const reranked = rerankCitedHits(hits, () => null, NOW);
+    expect(reranked[0]!.finalScore).toBe(0.8);
+    expect(reranked[0]!.memoryId).toBeNull();
+    expect(reranked[0]!.category).toBe('');
+  });
+
+  it('preserves qmd order between hits with identical metadata and scores', () => {
+    const hits = [
+      { file: 'qmd://kb-curated/a.md', score: 0.5 },
+      { file: 'qmd://kb-curated/b.md', score: 0.5 },
+    ];
+    const reranked = rerankCitedHits(hits, () => null, NOW);
+    expect(reranked.map((h) => h.file)).toEqual(hits.map((h) => h.file));
   });
 });
