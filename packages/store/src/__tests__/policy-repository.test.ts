@@ -38,6 +38,15 @@ describe('PolicyRepository', () => {
     expect(alphaResults[0]?.tenantId).toBe('team-alpha');
   });
 
+  it('list returns every policy across all tenants (5bm.10)', () => {
+    expect(repo.list()).toEqual([]);
+    repo.insert(makePolicy({ tenantId: 'team-alpha' }));
+    repo.insert(makePolicy({ tenantId: 'team-beta' }));
+    const all = repo.list();
+    expect(all).toHaveLength(2);
+    expect(all.map((p) => p.tenantId).sort()).toEqual(['team-alpha', 'team-beta']);
+  });
+
   it('update modifies an existing policy and returns true', () => {
     const policy = makePolicy();
     repo.insert(policy);
