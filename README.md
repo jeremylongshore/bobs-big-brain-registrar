@@ -11,14 +11,14 @@
 
 Turn ephemeral Claude Code session insights into persistent, governed, team-wide memory. qmd-team-intent-kb captures institutional knowledge generated during AI-assisted development, applies deterministic governance policies, and makes curated knowledge searchable through qmd's local full-text indexing.
 
-> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/governed-second-brain) stack** — INTKB is the **govern** layer. Upstream, [intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os) (compile) emits the spool it consumes; downstream, [qmd](https://github.com/tobi/qmd) (retrieve) serves the curated result with `qmd://` citations. → [Ecosystem overview](https://github.com/intent-solutions-io/governed-second-brain)
+> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack (Bob's Big Brain)** — INTKB is the **govern** layer. Upstream, [intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os) (compile) emits the spool it consumes; downstream, [qmd](https://github.com/tobi/qmd) (retrieve) serves the curated result with `qmd://` citations. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
 ## Positioning
 
 This project has a clear separation of responsibilities:
 
-- **qmd** is the local search and index engine. It does one thing well: fast, offline full-text retrieval.
-- **qmd-team-intent-kb** provides everything around it: orchestration, governance, lifecycle management, deduplication, analytics, and the team-shared memory model.
+- **qmd** is one of two local retrieval backends. It does one thing well: fast, offline full-text search.
+- **qmd-team-intent-kb** provides everything around it: orchestration, governance, lifecycle management, deduplication, analytics, the team-shared memory model, and hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via deterministic reciprocal-rank fusion, then reranked by freshness and category. Serving stays model-free and deterministic; a semantic (sqlite-vec) backend is deferred behind the retrieval eval gate.
 - **Enterprise-capable from day one.** Tenant isolation, audit trails, and governance policies are architectural requirements, not afterthoughts.
 
 ## Architecture Thesis
@@ -48,12 +48,14 @@ qmd-team-intent-kb/
 │   ├── curator/             # Memory promotion, dedupe, supersession
 │   ├── edge-daemon/         # Local qmd sync daemon
 │   ├── git-exporter/        # Git mirror/export
+│   ├── mcp-server/          # MCP server — local + team brain tools
 │   └── reporting/           # Analytics and lifecycle dashboards
 ├── packages/                # Shared libraries
 │   ├── schema/              # Shared Zod schemas and domain types
-│   ├── qmd-adapter/         # qmd CLI/API integration layer
+│   ├── qmd-adapter/         # Fused qmd + native FTS5 retrieval, eval harness
 │   ├── claude-runtime/      # Claude Code session capture
 │   ├── policy-engine/       # Memory governance policy evaluation
+│   ├── eval-surface/        # Govern-decision + provenance CI evals
 │   ├── repo-resolver/       # Multi-repo context resolution
 │   └── common/              # Shared utilities
 ├── kb-export/               # Git-exported curated knowledge output
@@ -66,33 +68,35 @@ qmd-team-intent-kb/
 
 ### Applications
 
-| Package             | Purpose                                                                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`          | Control plane REST API. Memory CRUD, search delegation, governance admin, authentication. The central authority for canonical memory state. |
-| `apps/curator`      | Memory promotion engine. Validates candidates against policy, deduplicates, detects supersession, assigns lifecycle states.                 |
-| `apps/edge-daemon`  | Local sync daemon with spool watch, curation cycle, staleness sweep, PID locking, and graceful shutdown. Replicates to local qmd indexes.   |
-| `apps/git-exporter` | Publishes curated knowledge to git repos in structured Markdown + frontmatter. Incremental export only.                                     |
-| `apps/reporting`    | Analytics, lifecycle reporting, governance audit trails, and team knowledge dashboards.                                                     |
+| Package | Purpose |
+| --- | --- |
+| `apps/api` | Control plane REST API. Memory CRUD, search delegation, governance admin, authentication. The central authority for canonical memory state. |
+| `apps/curator` | Memory promotion engine. Validates candidates against policy, deduplicates, detects supersession, assigns lifecycle states. |
+| `apps/edge-daemon` | Local sync daemon with spool watch, curation cycle, staleness sweep, PID locking, and graceful shutdown. Replicates to local qmd indexes. |
+| `apps/git-exporter` | Publishes curated knowledge to git repos in structured Markdown + frontmatter. Incremental export only. |
+| `apps/mcp-server` | MCP server exposing the brain to Claude Code. Read tools (`teamkb_search`, `teamkb_status`, `teamkb_neighbors`) always register; write tools (`teamkb_propose`, `teamkb_import`, `teamkb_transition`, `teamkb_sync`) are admin-gated. Runs local (in-process qmd) or team mode (proxy to the remote brain over the tailnet when `TEAMKB_API_URL` is set). |
+| `apps/reporting` | Analytics, lifecycle reporting, governance audit trails, and team knowledge dashboards. |
 
 ### Libraries
 
-| Package                   | Purpose                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/schema`         | Shared Zod schemas and derived TypeScript types for the entire domain model. Single source of truth for data shapes.            |
-| `packages/qmd-adapter`    | Integration layer wrapping qmd CLI/API. Manages indexes, enforces curated-only default search semantics.                        |
-| `packages/claude-runtime` | Captures memory proposals from Claude Code sessions. Hooks into session events, applies pre-policy secret filtering.            |
-| `packages/policy-engine`  | Evaluates candidates against governance rules. Secret detection, dedup scoring, relevance, tenant isolation. All deterministic. |
-| `packages/store`          | SQLite persistence layer via better-sqlite3. WAL mode, 5 repository classes, in-memory test database helper.                    |
-| `packages/repo-resolver`  | Multi-repo context resolution. Determines project/team ownership and enforces tenant boundaries.                                |
-| `packages/common`         | Shared utilities: Result<T, E> type, SHA-256 content hashing, path-safety validation, freshness scoring with reranking.         |
+| Package | Purpose |
+| --- | --- |
+| `packages/schema` | Shared Zod schemas and derived TypeScript types for the entire domain model. Single source of truth for data shapes. |
+| `packages/qmd-adapter` | Hybrid retrieval. Fuses the qmd binary with a native in-process FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), reranks by freshness + category, and enforces curated-only default search. Ships the Recall@10 / nDCG@10 stratified eval harness that gates ranking changes in CI. |
+| `packages/claude-runtime` | Captures memory proposals from Claude Code sessions. Hooks into session events, applies pre-policy secret filtering. |
+| `packages/policy-engine` | Evaluates candidates against governance rules. Secret detection, dedup scoring, relevance, tenant isolation. All deterministic. Ships a recommended full-coverage policy + an anti-dormancy gate that flags uncovered rule types. |
+| `packages/eval-surface` | Deterministic evaluation surface — govern-decision precision/recall (fail-closed on a missed secret/PII) and provenance-integrity evals, run as named CI gates. |
+| `packages/store` | SQLite persistence layer via better-sqlite3. WAL mode, 7 repository classes, in-memory test database helper. Enum-membership backstop + CHECK constraints on `curated_memories`; lifecycle state-graph enforced at the write path. |
+| `packages/repo-resolver` | Multi-repo context resolution. Determines project/team ownership and enforces tenant boundaries. |
+| `packages/common` | Shared utilities: Result<T, E> type, SHA-256 content hashing, path-safety validation, freshness scoring with reranking. |
 
 ## Status
 
 **v0.7.0 — Production-ready platform with full Intent Solutions Testing SOP enforced in CI.**
 
-**v0.7.0 marquee:** native FTS5/BM25 retrieval backend (model-free, in-process) · Recall@10/nDCG@10 eval harness · MCP tool surface (`teamkb_search` / `teamkb_propose`) · hash-chained tamper-evident audit receipts with an external chain-head anchor.
+**v0.7.0 marquee:** hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), reranked by freshness + category, model-free · a stratified Recall@10/nDCG@10 eval harness that gates ranking changes in CI · MCP tool surface (`teamkb_search` / `teamkb_status` / `teamkb_neighbors` read; `teamkb_propose` / `teamkb_transition` write, admin-gated) with local and team-brain modes · hash-chained tamper-evident audit receipts with an external chain-head anchor.
 
-All core subsystems functional. 1,313 unit tests + 4 testcontainers-based L4 integration tests passing. CI enforces 10 gates per PR: typecheck → lint → format → architecture (dep-cruiser) → complexity (CRAP) → unit tests → coverage 80% line / 70% branch → secrets (gitleaks) → npm audit (when deps change) → SAST (Semgrep advisory). Policy artifacts hash-pinned via `scripts/harness-pin.sh` so the testing-SOP is self-defending against silent AI policy edits.
+All core subsystems functional. 1,900+ unit tests + a testcontainers-based L4 integration suite (postgres forward-compat) passing. The per-PR CI (`ci.yml`) enforces: format → lint → typecheck → architecture (dependency-cruiser) → complexity (CRAP) → policy-artifact hash pin (`harness-pin --verify`) → unit tests + coverage (80% line / 70% branch) → govern-decision & provenance-integrity evals → retrieval ratchet (stratified Recall@10) → L4 integration (testcontainers). Weekly/nightly workflows (`security.yml`, `nightly.yml`) add gitleaks, Semgrep, and npm audit. Policy artifacts are hash-pinned via `scripts/harness-pin.sh` so the testing SOP is self-defending against silent AI policy edits.
 
 Highlights:
 
@@ -109,6 +113,9 @@ Highlights:
 - **Repo Resolver** — Multi-repo context resolution with monorepo detection, tenant derivation, and caching (Phase 9)
 - **OpenAPI Documentation** — Generated OpenAPI 3.1 spec at `/openapi.json` and Swagger UI at `/docs` (Phase 10)
 - **Supply-Chain Security** — Cosign keyless signing + SLSA Level 3 provenance for container images (Phase 10)
+- **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (semantic sqlite-vec path deferred behind the eval gate)
+- **MCP Server** — local + team-brain tool surface for Claude Code; read tools always register, write tools are admin-gated, team mode proxies the remote brain over the tailnet
+- **Govern Hardening** — write-time enum-membership backstop + CHECK constraints on curated memories, lifecycle state-graph enforcement, sensitivity classified at promotion, fail-closed export category mapping, spool `schemaVersion` validation, and an anti-dormancy policy-coverage gate
 
 ## Getting Started
 
