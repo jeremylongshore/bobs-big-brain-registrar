@@ -68,27 +68,27 @@ qmd-team-intent-kb/
 
 ### Applications
 
-| Package | Purpose |
-| --- | --- |
-| `apps/api` | Control plane REST API. Memory CRUD, search delegation, governance admin, authentication. The central authority for canonical memory state. |
-| `apps/curator` | Memory promotion engine. Validates candidates against policy, deduplicates, detects supersession, assigns lifecycle states. |
-| `apps/edge-daemon` | Local sync daemon with spool watch, curation cycle, staleness sweep, PID locking, and graceful shutdown. Replicates to local qmd indexes. |
-| `apps/git-exporter` | Publishes curated knowledge to git repos in structured Markdown + frontmatter. Incremental export only. |
-| `apps/mcp-server` | MCP server exposing the brain to Claude Code. Read tools (`teamkb_search`, `teamkb_status`, `teamkb_neighbors`) always register; write tools (`teamkb_propose`, `teamkb_import`, `teamkb_transition`, `teamkb_sync`) are admin-gated. Runs local (in-process qmd) or team mode (proxy to the remote brain over the tailnet when `TEAMKB_API_URL` is set). |
-| `apps/reporting` | Analytics, lifecycle reporting, governance audit trails, and team knowledge dashboards. |
+| Package             | Purpose                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`          | Control plane REST API. Memory CRUD, search delegation, governance admin, authentication. The central authority for canonical memory state.                                                                                                                                                                                                               |
+| `apps/curator`      | Memory promotion engine. Validates candidates against policy, deduplicates, detects supersession, assigns lifecycle states.                                                                                                                                                                                                                               |
+| `apps/edge-daemon`  | Local sync daemon with spool watch, curation cycle, staleness sweep, PID locking, and graceful shutdown. Replicates to local qmd indexes.                                                                                                                                                                                                                 |
+| `apps/git-exporter` | Publishes curated knowledge to git repos in structured Markdown + frontmatter. Incremental export only.                                                                                                                                                                                                                                                   |
+| `apps/mcp-server`   | MCP server exposing the brain to Claude Code. Read tools (`teamkb_search`, `teamkb_status`, `teamkb_neighbors`) always register; write tools (`teamkb_propose`, `teamkb_import`, `teamkb_transition`, `teamkb_sync`) are admin-gated. Runs local (in-process qmd) or team mode (proxy to the remote brain over the tailnet when `TEAMKB_API_URL` is set). |
+| `apps/reporting`    | Analytics, lifecycle reporting, governance audit trails, and team knowledge dashboards.                                                                                                                                                                                                                                                                   |
 
 ### Libraries
 
-| Package | Purpose |
-| --- | --- |
-| `packages/schema` | Shared Zod schemas and derived TypeScript types for the entire domain model. Single source of truth for data shapes. |
-| `packages/qmd-adapter` | Hybrid retrieval. Fuses the qmd binary with a native in-process FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), reranks by freshness + category, and enforces curated-only default search. Ships the Recall@10 / nDCG@10 stratified eval harness that gates ranking changes in CI. |
-| `packages/claude-runtime` | Captures memory proposals from Claude Code sessions. Hooks into session events, applies pre-policy secret filtering. |
-| `packages/policy-engine` | Evaluates candidates against governance rules. Secret detection, dedup scoring, relevance, tenant isolation. All deterministic. Ships a recommended full-coverage policy + an anti-dormancy gate that flags uncovered rule types. |
-| `packages/eval-surface` | Deterministic evaluation surface — govern-decision precision/recall (fail-closed on a missed secret/PII) and provenance-integrity evals, run as named CI gates. |
-| `packages/store` | SQLite persistence layer via better-sqlite3. WAL mode, 7 repository classes, in-memory test database helper. Enum-membership backstop + CHECK constraints on `curated_memories`; lifecycle state-graph enforced at the write path. |
-| `packages/repo-resolver` | Multi-repo context resolution. Determines project/team ownership and enforces tenant boundaries. |
-| `packages/common` | Shared utilities: Result<T, E> type, SHA-256 content hashing, path-safety validation, freshness scoring with reranking. |
+| Package                   | Purpose                                                                                                                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/schema`         | Shared Zod schemas and derived TypeScript types for the entire domain model. Single source of truth for data shapes.                                                                                                                                                                           |
+| `packages/qmd-adapter`    | Hybrid retrieval. Fuses the qmd binary with a native in-process FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), reranks by freshness + category, and enforces curated-only default search. Ships the Recall@10 / nDCG@10 stratified eval harness that gates ranking changes in CI. |
+| `packages/claude-runtime` | Captures memory proposals from Claude Code sessions. Hooks into session events, applies pre-policy secret filtering.                                                                                                                                                                           |
+| `packages/policy-engine`  | Evaluates candidates against governance rules. Secret detection, dedup scoring, relevance, tenant isolation. All deterministic. Ships a recommended full-coverage policy + an anti-dormancy gate that flags uncovered rule types.                                                              |
+| `packages/eval-surface`   | Deterministic evaluation surface — govern-decision precision/recall (fail-closed on a missed secret/PII) and provenance-integrity evals, run as named CI gates.                                                                                                                                |
+| `packages/store`          | SQLite persistence layer via better-sqlite3. WAL mode, 7 repository classes, in-memory test database helper. Enum-membership backstop + CHECK constraints on `curated_memories`; lifecycle state-graph enforced at the write path.                                                             |
+| `packages/repo-resolver`  | Multi-repo context resolution. Determines project/team ownership and enforces tenant boundaries.                                                                                                                                                                                               |
+| `packages/common`         | Shared utilities: Result<T, E> type, SHA-256 content hashing, path-safety validation, freshness scoring with reranking.                                                                                                                                                                        |
 
 ## Status
 
