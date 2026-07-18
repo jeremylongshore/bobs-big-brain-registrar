@@ -115,7 +115,7 @@ Highlights:
 - **Supply-Chain Security** — Cosign keyless signing + SLSA Level 3 provenance for container images (Phase 10)
 - **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (semantic sqlite-vec path deferred behind the eval gate)
 - **MCP Server** — local + team-brain tool surface for Claude Code; read tools always register, write tools are admin-gated, team mode proxies the remote brain over the tailnet
-- **Govern Hardening** — write-time enum-membership backstop + CHECK constraints on curated memories, lifecycle state-graph enforcement, sensitivity classified at promotion, fail-closed export category mapping, spool `schemaVersion` validation, and an anti-dormancy policy-coverage gate
+- **Govern Hardening** — write-time enum-membership backstop + CHECK constraints on curated memories, lifecycle state-graph enforcement, sensitivity persisted at promotion and enforced at read time (curated search never returns confidential/restricted memories), fail-closed export category mapping, spool `schemaVersion` validation, and an anti-dormancy policy-coverage gate
 
 ## Getting Started
 
