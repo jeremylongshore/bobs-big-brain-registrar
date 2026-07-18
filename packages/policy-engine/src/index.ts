@@ -9,3 +9,9 @@ export { evaluateTenantMatch } from './rules/tenant-match-rule.js';
 export { evaluateSensitivityGate } from './rules/sensitivity-gate-rule.js';
 export { evaluateContentSanitization } from './rules/content-sanitization-rule.js';
 export { PolicyPipeline } from './pipeline.js';
+export {
+  RECOMMENDED_POLICY_RULES,
+  buildRecommendedPolicy,
+  findUncoveredRuleTypes,
+  assertPolicyCompleteness,
+} from './recommended-policy.js';
