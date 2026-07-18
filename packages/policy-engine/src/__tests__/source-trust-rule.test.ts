@@ -71,3 +71,21 @@ describe('evaluateSourceTrust', () => {
     expect(result.outcome).toBe('flag');
   });
 });
+
+describe('evaluateSourceTrust — bulk_import gating (5bm.8)', () => {
+  it('fails a bulk_import candidate stamped untrusted (below the default low minimum)', () => {
+    // untrusted (1) < default minimumTrust 'low' (2) → the rule fails, so a
+    // source_trust rule with action 'flag' (the recommended policy) gates the
+    // whole-machine digestion for review instead of promoting it silently.
+    const candidate = makeCandidate({ source: 'bulk_import', trustLevel: 'untrusted' });
+    const rule = makeRule({});
+    const result = evaluateSourceTrust(candidate, rule, makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+  });
+
+  it('passes a normal import at the default medium trust', () => {
+    const candidate = makeCandidate({ source: 'import', trustLevel: 'medium' });
+    const rule = makeRule({});
+    expect(evaluateSourceTrust(candidate, rule, makeContext(candidate)).outcome).toBe('pass');
+  });
+});
