@@ -19,8 +19,7 @@ import type {
   AuditRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
-import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
-import { classifyContent } from '@qmd-team-intent-kb/claude-runtime';
+import { classifyContent, type PipelineResult } from '@qmd-team-intent-kb/policy-engine';
 import type { SupersessionMatch } from '../supersession/supersession-detector.js';
 import { extractWikiLinks } from '../import/wikilink-parser.js';
 
@@ -141,8 +140,10 @@ export function promote(
   );
 
   // Persist the CLASSIFIED sensitivity (5bm.3), not a hardcoded 'internal'. The
-  // deterministic content classifier — the same one the sensitivity-gate policy
-  // rule already runs and then discarded — derives the level from the content
+  // deterministic content classifier (pure sync regex — no LLM/network/clock —
+  // imported via the govern package policy-engine, never claude-runtime, to keep
+  // this write path's dependency LLM-free) is the same one the sensitivity-gate
+  // policy rule already runs and then discarded. It derives the level from content
   // (restricted=credentials, confidential=PII, internal=internal paths, else
   // public). Persisting it makes the git-exporter's pre-existing
   // confidential/restricted skip effective (dead code while every memory was

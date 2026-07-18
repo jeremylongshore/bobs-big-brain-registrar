@@ -785,6 +785,17 @@ describe('promote — persists classified sensitivity (5bm.3)', () => {
     expect(memory.sensitivity).toBe('public');
   });
 
+  it('falls back to public for content matching no sensitivity signal', () => {
+    // classifyContent has no "unclassifiable" crash path — it defaults to the
+    // valid enum member 'public' — so an input with no credential/PII/path
+    // signal always yields a parseable sensitivity, never a Zod throw in
+    // promote(). (Empty/whitespace content is rejected earlier by the schema's
+    // NonEmptyString guard, a separate concern.)
+    expect(promoteWith('routine note about queue backpressure and retries').sensitivity).toBe(
+      'public',
+    );
+  });
+
   it('classifies content with an internal absolute path as internal', () => {
     const memory = promoteWith(
       'The config lives at /home/jeremy/000-projects/foo/bar.yaml on the box.',

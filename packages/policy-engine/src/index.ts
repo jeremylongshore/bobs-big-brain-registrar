@@ -15,3 +15,14 @@ export {
   findUncoveredRuleTypes,
   assertPolicyCompleteness,
 } from './recommended-policy.js';
+/**
+ * Deterministic content classifier, re-exported from the govern layer so the
+ * deterministic write path (curator's promoter) depends on policy-engine — a
+ * govern package — rather than importing `@qmd-team-intent-kb/claude-runtime`
+ * directly. The function itself is pure sync regex today; routing it through
+ * here keeps the govern path's declared dependency LLM-free by layering, so a
+ * future model call in `claude-runtime` cannot silently reach the write path
+ * without also changing this deliberate re-export.
+ */
+export { classifyContent } from '@qmd-team-intent-kb/claude-runtime';
+export type { ContentClassification } from '@qmd-team-intent-kb/claude-runtime';
