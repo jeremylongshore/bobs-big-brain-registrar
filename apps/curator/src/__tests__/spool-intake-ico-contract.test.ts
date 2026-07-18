@@ -103,17 +103,32 @@ describe('cross-repo contract: ICO emission → INTKB ingestFromSpool', () => {
     expect(candidateRepo.count()).toBe(1);
   });
 
-  it('silently strips the ICO-only schemaVersion field', async () => {
+  it("preserves ICO's schemaVersion '1' rather than stripping it (5bm.6)", async () => {
     const emission = makeIcoEmission();
     await writeIcoSpoolFile(spoolDir, '2026-05-24T030100Z', [emission]);
 
     const result = await ingestFromSpool(candidateRepo, spoolDir);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // INTKB's Zod schema doesn't define schemaVersion — z.object() strips it.
-      // Confirm the stored candidate doesn't carry an unknown surface field.
-      expect((result.value[0] as Record<string, unknown>)['schemaVersion']).toBeUndefined();
+      // INTKB now defines schemaVersion (z.literal('1')), so the version is a
+      // validated, retained field — not a silently-stripped unknown. This is the
+      // gate that lets a v2 line be rejected (next test) instead of downgraded.
+      expect(result.value[0]?.schemaVersion).toBe('1');
     }
+    expect(candidateRepo.count()).toBe(1);
+  });
+
+  it('rejects a v2 spool line instead of ingesting it as v1 (5bm.6)', async () => {
+    // A future ICO v2 sets schemaVersion:'2'. The literal-'1' schema fails
+    // safeParse on that line, so readSpoolFile skips it — the line is NOT
+    // silently downgraded to v1 with its new fields dropped.
+    const v2 = { ...makeIcoEmission(), schemaVersion: '2' };
+    await writeIcoSpoolFile(spoolDir, '2026-05-24T030200Z', [v2]);
+
+    const result = await ingestFromSpool(candidateRepo, spoolDir);
+    expect(result.ok).toBe(true);
+    // The v2 line was rejected, so nothing was ingested.
+    expect(candidateRepo.count()).toBe(0);
   });
 
   it('handles ICO timestamp-granular spool filenames (spool-YYYY-MM-DDTHHMMSSZ.jsonl)', async () => {
