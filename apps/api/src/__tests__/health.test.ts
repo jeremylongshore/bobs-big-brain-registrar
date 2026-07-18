@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { createTestDatabase } from '@qmd-team-intent-kb/store';
+import { createTestDatabase, PolicyRepository } from '@qmd-team-intent-kb/store';
+import { buildRecommendedPolicy } from '@qmd-team-intent-kb/policy-engine';
+import type { PolicyRule } from '@qmd-team-intent-kb/schema';
 import { buildApp } from '../app.js';
+
+const NOW = '2026-07-17T00:00:00.000Z';
 
 describe('GET /api/health', () => {
   let db: Database.Database;
@@ -37,5 +41,56 @@ describe('GET /api/health', () => {
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     const body = res.json<{ version: string }>();
     expect(body.version).toBe('0.4.0');
+  });
+
+  // ─── Policy dormancy surfacing (5bm.10) ────────────────────────────────────
+
+  it('reports no policy dormancy when no policy exists', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
+  });
+
+  it('reports zero dormancy for the complete recommended policy', async () => {
+    new PolicyRepository(db).insert(buildRecommendedPolicy('acme', NOW));
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
+    expect(res.statusCode).toBe(200); // dormancy never degrades liveness
+  });
+
+  it('lists the dormant rule types for an incomplete enabled policy', async () => {
+    // Only two rules enabled — the shape of the pre-5bm.2 live policy.
+    const partial = buildRecommendedPolicy('acme', NOW);
+    const twoRules = partial.rules.filter(
+      (r: PolicyRule) => r.type === 'secret_detection' || r.type === 'content_length',
+    );
+    new PolicyRepository(db).insert({ ...partial, rules: twoRules });
+
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const body = res.json<{
+      status: string;
+      policyDormancy: Array<{ policyName: string; dormantRuleTypes: string[] }>;
+    }>();
+    expect(res.statusCode).toBe(200);
+    expect(body.status).toBe('healthy'); // still live
+    expect(body.policyDormancy).toHaveLength(1);
+    // The six uncovered registered rule types are named.
+    expect(body.policyDormancy[0]!.dormantRuleTypes).toEqual(
+      expect.arrayContaining([
+        'tenant_match',
+        'source_trust',
+        'relevance_score',
+        'sensitivity_gate',
+        'dedup_check',
+        'content_sanitization',
+      ]),
+    );
+    expect(body.policyDormancy[0]!.dormantRuleTypes).not.toContain('secret_detection');
+  });
+
+  it('ignores a disabled policy for dormancy', async () => {
+    const partial = buildRecommendedPolicy('acme', NOW);
+    new PolicyRepository(db).insert({ ...partial, rules: [], enabled: false });
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
   });
 });

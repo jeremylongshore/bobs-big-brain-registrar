@@ -71,10 +71,12 @@ export class PolicyRepository {
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindById: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
+  private readonly stmtList: Database.Statement;
   private readonly stmtUpdate: Database.Statement;
   private readonly stmtDelete: Database.Statement;
 
   constructor(db: Database.Database) {
+    this.stmtList = db.prepare('SELECT * FROM governance_policies');
     this.stmtInsert = db.prepare(`
       INSERT INTO governance_policies (
         id, name, tenant_id, rules_json, enabled, version, created_at, updated_at
@@ -131,6 +133,14 @@ export class PolicyRepository {
   findByTenant(tenantId: string): GovernancePolicy[] {
     const rows = this.stmtFindByTenant.all(tenantId);
     return rows.map(rowToPolicy);
+  }
+
+  /**
+   * Return every policy across all tenants (5bm.10) — used by the health/status
+   * dormancy check to find policies that leave registered rules unenforced.
+   */
+  list(): GovernancePolicy[] {
+    return this.stmtList.all().map(rowToPolicy);
   }
 
   /**
