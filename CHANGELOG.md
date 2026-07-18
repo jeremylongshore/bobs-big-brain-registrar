@@ -51,8 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same-content dedup, gate-entry id invariant, N-way merge proof (#209).
 - **First real retrieval + govern numbers:** hand-labeled Recall@10 / nDCG@10 over the live corpus
   (#223) and per-check govern-decision precision/recall with an R10 boundary-scan fix (#221).
-- **Advisory CI reviewer + evidence:** an in-repo **MiniMax-M3 two-lane** PR reviewer (defect lane
-  + adversarial-claims lane) with `REVIEW.md` as the canonical reviewer law (#263); signed
+- **Advisory CI reviewer + evidence:** an in-repo **MiniMax-M3 two-lane** PR reviewer (a defect
+  lane and an adversarial-claims lane) with `REVIEW.md` as the canonical reviewer law (#263); signed
   gate-result evidence emitted for the labs dashboard (#252); a `changelog-updated` dispatch to the
   umbrella on merge (#250); a repo-tailored `.greptile` config (#232); and `SUPPORT.md` (#244).
 - **`scripts/bbb-qmd`** — operator wrapper that runs the pinned `@tobilu/qmd` against the team brain
