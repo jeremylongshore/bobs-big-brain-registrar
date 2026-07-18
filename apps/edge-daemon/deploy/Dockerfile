@@ -18,6 +18,12 @@ ENV PNPM_VERSION=9.15.4
 # Install pnpm via corepack (ships with Node 20; no extra network calls).
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
+# Native build toolchain for better-sqlite3 (node-gyp): the alpine base ships
+# neither Python nor a C++ compiler, so `pnpm install` fails to compile the
+# better-sqlite3 addon ("Could not find any Python installation to use"). Only
+# needed in the builder stage; the runtime stage copies the compiled output.
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /build
 
 # Copy workspace manifests first so Docker can cache the install layer
@@ -53,7 +59,11 @@ RUN pnpm --filter @qmd-team-intent-kb/edge-daemon... build
 
 # Prune the install tree to production-only deps so we only copy what the
 # runtime image needs.
-RUN pnpm --filter @qmd-team-intent-kb/edge-daemon... --prod deploy /app/deploy
+# `deploy` bundles exactly one project plus its (workspace + external) prod
+# deps — so the filter must name the single target WITHOUT the `...`
+# dependency-expansion suffix, which selects many projects and trips
+# ERR_PNPM_CANNOT_DEPLOY_MANY on pnpm 9.x.
+RUN pnpm --filter @qmd-team-intent-kb/edge-daemon --prod deploy /app/deploy
 
 
 # ---- Stage 2: runtime -------------------------------------------------------
