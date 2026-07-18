@@ -6,6 +6,7 @@ import {
   UnknownCategoryError,
 } from '../formatter/directory-mapper.js';
 import { makeCuratedMemory, NOW } from './fixtures.js';
+import { MemoryCategory } from '@qmd-team-intent-kb/schema';
 import { randomUUID } from 'node:crypto';
 
 describe('getCategoryDirectory', () => {
@@ -39,15 +40,10 @@ describe('getCategoryDirectory', () => {
 
   it('throws UnknownCategoryError on an unmapped category (fail-closed, 5bm.5)', () => {
     // Previously an unknown category silently landed in curated/ — the
-    // governance-approved, default-searched bucket. It must now fail loud.
+    // governance-approved, default-searched bucket. It must now fail loud, and
+    // the error carries the offending category for diagnosis.
     expect(() => getCategoryDirectory('unknown-category')).toThrow(UnknownCategoryError);
-    try {
-      getCategoryDirectory('made-up');
-      expect.unreachable('should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(UnknownCategoryError);
-      expect((e as UnknownCategoryError).category).toBe('made-up');
-    }
+    expect(() => getCategoryDirectory('made-up')).toThrow(new UnknownCategoryError('made-up'));
   });
 });
 
@@ -107,5 +103,17 @@ describe('getRelativePath', () => {
   it('guides memory path uses guides/', () => {
     const memory = makeCuratedMemory({ category: 'onboarding', lifecycle: 'active' });
     expect(getRelativePath(memory)).toBe(`guides/${memory.id}.md`);
+  });
+});
+
+describe('getCategoryDirectory ↔ schema enum lock-step (5bm.5 follow-up)', () => {
+  it('maps every MemoryCategory the schema defines without throwing', () => {
+    // Drift guard: if the schema enum grows, this fails until the mapper adds
+    // the new category — so a schema-valid memory can never hit the fail-closed
+    // default at export time (the operational regression the reviewer flagged).
+    for (const category of MemoryCategory.options) {
+      expect(() => getCategoryDirectory(category)).not.toThrow();
+      expect(['decisions', 'curated', 'guides']).toContain(getCategoryDirectory(category));
+    }
   });
 });
