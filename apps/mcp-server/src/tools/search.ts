@@ -1,7 +1,50 @@
 import { join } from 'node:path';
 import type { SearchScope } from '@qmd-team-intent-kb/schema';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+import {
+  extractMemoryIdFromCitation,
+  isSearchVisibleSensitivity,
+} from '@qmd-team-intent-kb/common';
+import { createDatabase, MemoryRepository } from '@qmd-team-intent-kb/store';
 import type { McpServerConfig } from '../config.js';
+
+/** One raw qmd hit before it is mapped to the caller-facing shape. */
+interface RawQmdHit {
+  file: string;
+  score: number;
+  snippet: string;
+  collection: string;
+}
+
+/**
+ * Read-time sensitivity filter (5bm.11) for the local qmd path. Resolves each
+ * hit's citation back to its stored row and drops confidential/restricted
+ * memories, mirroring the exporter's skip (5bm.3) and the API search-service.
+ * A hit whose citation does not resolve to a stored row is NOT an identifiable
+ * sensitive memory, so it is kept. Opens the store read-only; on any store error
+ * it fails OPEN to the raw hits — the qmd index itself already excludes sensitive
+ * rows for a post-5bm.3 export, so this is defense-in-depth, not the only gate.
+ */
+function filterSensitiveHits(hits: RawQmdHit[], dbPath: string): RawQmdHit[] {
+  if (hits.length === 0) return hits;
+  try {
+    const db = createDatabase({ path: dbPath, readonly: true });
+    try {
+      const repo = new MemoryRepository(db);
+      return hits.filter((h) => {
+        const id = extractMemoryIdFromCitation(h.file);
+        if (id === null) return true;
+        const memory = repo.findById(id);
+        if (memory === null) return true;
+        return isSearchVisibleSensitivity(memory.sensitivity);
+      });
+    } finally {
+      db.close();
+    }
+  } catch {
+    return hits;
+  }
+}
 
 /** One cited hit returned to the MCP caller. */
 export interface SearchHitOut {
@@ -95,14 +138,20 @@ async function searchLocal(
   const adapter = makeAdapter(config.tenantId, exportDir);
   const result = await adapter.query(query, scope);
 
-  const results: SearchHitOut[] = result.ok
-    ? result.value.slice(0, limit).map((r) => ({
-        citation: r.file,
-        snippet: r.snippet,
-        score: r.score,
-        collection: r.collection,
-      }))
-    : [];
+  const hits = result.ok ? result.value : [];
+  // Read-time sensitivity enforcement (5bm.11): drop confidential/restricted
+  // hits so a sensitive memory is never returned. The qmd index should already
+  // exclude them (exporter skip, 5bm.3); this resolves each hit's stored row as
+  // defense-in-depth for a pre-skip index. A hit that doesn't resolve is not an
+  // identifiable sensitive memory — kept.
+  const visible = filterSensitiveHits(hits, config.dbPath);
+
+  const results: SearchHitOut[] = visible.slice(0, limit).map((r) => ({
+    citation: r.file,
+    snippet: r.snippet,
+    score: r.score,
+    collection: r.collection,
+  }));
 
   return { source: 'qmd-local', query, scope, count: results.length, results };
 }

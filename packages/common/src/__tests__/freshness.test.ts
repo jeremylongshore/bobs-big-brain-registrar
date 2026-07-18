@@ -5,6 +5,7 @@ import {
   rerankSearchHits,
   extractMemoryIdFromCitation,
   rerankCitedHits,
+  isSearchVisibleSensitivity,
 } from '../freshness.js';
 
 const NOW = '2026-03-19T00:00:00.000Z';
@@ -177,5 +178,33 @@ describe('rerankCitedHits', () => {
     ];
     const reranked = rerankCitedHits(hits, () => null, NOW);
     expect(reranked.map((h) => h.file)).toEqual(hits.map((h) => h.file));
+  });
+
+  it('threads a resolved memory sensitivity onto the cited hit (5bm.11)', () => {
+    const hits = [{ file: 'qmd://kb-curated/secret.md', score: 0.9 }];
+    const reranked = rerankCitedHits(
+      hits,
+      () => ({ category: 'reference', updatedAt: NOW, sensitivity: 'confidential' }),
+      NOW,
+    );
+    expect(reranked[0]!.sensitivity).toBe('confidential');
+  });
+
+  it('defaults an unresolved cited hit to public sensitivity (5bm.11)', () => {
+    const hits = [{ file: 'qmd://kb-curated/gone.md', score: 0.5 }];
+    const reranked = rerankCitedHits(hits, () => null, NOW);
+    expect(reranked[0]!.sensitivity).toBe('public');
+  });
+});
+
+describe('isSearchVisibleSensitivity (5bm.11)', () => {
+  it('keeps public and internal search-visible', () => {
+    expect(isSearchVisibleSensitivity('public')).toBe(true);
+    expect(isSearchVisibleSensitivity('internal')).toBe(true);
+  });
+
+  it('hides confidential and restricted from search', () => {
+    expect(isSearchVisibleSensitivity('confidential')).toBe(false);
+    expect(isSearchVisibleSensitivity('restricted')).toBe(false);
   });
 });

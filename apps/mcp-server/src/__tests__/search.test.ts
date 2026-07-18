@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { join } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createDatabase, MemoryRepository } from '@qmd-team-intent-kb/store';
+import { makeMemory } from '@qmd-team-intent-kb/test-fixtures';
 import { searchTool } from '../tools/search.js';
 import type { QmdQueryPort } from '../tools/search.js';
 import type { McpServerConfig } from '../config.js';
@@ -140,5 +144,60 @@ describe('searchTool — remote brain mode (TEAMKB_API_URL set)', () => {
 
     await searchTool({ query: 'x' }, makeConfig({ apiUrl: 'http://dev:3847' }), { fetchFn });
     expect(auth).toBeUndefined();
+  });
+});
+
+describe('searchTool — local read-time sensitivity filter (5bm.11)', () => {
+  let dir: string;
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('drops a confidential hit whose citation resolves to a sensitive stored row', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'teamkb-sens-'));
+    const dbPath = join(dir, 'teamkb.db');
+    const db = createDatabase({ path: dbPath });
+    const repo = new MemoryRepository(db);
+    const visible = makeMemory({ title: 'Public map', sensitivity: 'internal' });
+    const secret = makeMemory({
+      title: 'Secret map',
+      sensitivity: 'confidential',
+      contentHash: 'c'.repeat(64),
+    });
+    repo.insert(visible);
+    repo.insert(secret);
+    db.close();
+
+    // A stale/pre-skip index could surface BOTH citations; the read-time filter
+    // must still drop the confidential one.
+    const adapter: QmdQueryPort = {
+      query: () =>
+        Promise.resolve({
+          ok: true as const,
+          value: [
+            {
+              file: `qmd://kb-curated/${visible.id}.md`,
+              score: 0.9,
+              snippet: '',
+              collection: 'kb-curated',
+            },
+            {
+              file: `qmd://kb-curated/${secret.id}.md`,
+              score: 0.8,
+              snippet: '',
+              collection: 'kb-curated',
+            },
+          ],
+        }),
+    };
+
+    const result = await searchTool({ query: 'map' }, makeConfig({ dbPath }), {
+      makeAdapter: () => adapter,
+    });
+
+    const citations = result.results.map((r) => r.citation);
+    expect(citations).toContain(`qmd://kb-curated/${visible.id}.md`);
+    expect(citations).not.toContain(`qmd://kb-curated/${secret.id}.md`);
+    expect(result.count).toBe(1);
   });
 });

@@ -19,6 +19,8 @@ export {
   rerankSearchHits,
   extractMemoryIdFromCitation,
   rerankCitedHits,
+  isSearchVisibleSensitivity,
+  SEARCH_HIDDEN_SENSITIVITY,
 } from './freshness.js';
 export type { CitedHitMetadata } from './freshness.js';
 export {
