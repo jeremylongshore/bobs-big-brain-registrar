@@ -1,6 +1,6 @@
 {
   "name": "@qmd-team-intent-kb/root",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "Governed team memory platform for Claude Code powered by qmd",
   "author": "Jeremy Longshore",

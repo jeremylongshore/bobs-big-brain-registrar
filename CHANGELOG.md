@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-18
+
 ### Added
 
 - **Fused lexical retrieval on the production query path.** The dormant native FTS5 (BM25) backend
