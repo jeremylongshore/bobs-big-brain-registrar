@@ -42,6 +42,7 @@ export { AuditEvent } from './audit-event.js';
 
 export {
   TransitionRequest,
+  RecategorizeRequest,
   ALLOWED_TRANSITIONS,
   isTransitionAllowed,
   validateTransition,

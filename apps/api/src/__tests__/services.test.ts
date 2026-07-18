@@ -278,6 +278,72 @@ describe('MemoryService', () => {
     expect(events[0]?.action).toBe('archived');
     expect(events[0]?.tenantId).toBe('team-audit');
   });
+
+  // --- governed recategorization (5bm.7) --------------------------------------
+
+  it('recategorize corrects the category in place and returns the updated memory', () => {
+    const memory = makeMemory({ category: 'reference' });
+    memoryRepo.insert(memory);
+
+    const result = service.recategorize(memory.id, {
+      category: 'decision',
+      reason: 'Miscompiled — this is a decision record',
+      actor: { type: 'human', id: 'user-1', name: 'Test User' },
+    });
+
+    expect(result.category).toBe('decision');
+    expect(memoryRepo.findById(memory.id)?.category).toBe('decision');
+  });
+
+  it('recategorize writes a receipted audit event with from/to categories', () => {
+    const memory = makeMemory({ category: 'reference', tenantId: 'team-recat' });
+    memoryRepo.insert(memory);
+
+    service.recategorize(memory.id, {
+      category: 'architecture',
+      reason: 'Belongs in architecture',
+      actor: { type: 'human', id: 'user-1', name: 'Test User' },
+    });
+
+    const events = auditRepo.findByMemory(memory.id);
+    expect(events.length).toBe(1);
+    expect(events[0]?.action).toBe('recategorized');
+    expect(events[0]?.tenantId).toBe('team-recat');
+    expect(events[0]?.details).toMatchObject({
+      fromCategory: 'reference',
+      toCategory: 'architecture',
+    });
+  });
+
+  it('recategorize rejects a same-category no-op with 400', () => {
+    const memory = makeMemory({ category: 'pattern' });
+    memoryRepo.insert(memory);
+    expect(() =>
+      service.recategorize(memory.id, {
+        category: 'pattern',
+        reason: 'no change',
+        actor: { type: 'human', id: 'user-1' },
+      }),
+    ).toThrow(ApiError);
+    // No spurious audit event on a rejected no-op.
+    expect(auditRepo.findByMemory(memory.id).length).toBe(0);
+  });
+
+  it('recategorize throws 404 for a missing memory', () => {
+    expect(() =>
+      service.recategorize('00000000-0000-4000-8000-000000000000', {
+        category: 'decision',
+        reason: 'x',
+        actor: { type: 'human', id: 'user-1' },
+      }),
+    ).toThrow(ApiError);
+  });
+
+  it('recategorize rejects an invalid request body with 400', () => {
+    const memory = makeMemory();
+    memoryRepo.insert(memory);
+    expect(() => service.recategorize(memory.id, { category: 'not-a-category' })).toThrow(ApiError);
+  });
 });
 
 describe('PolicyService', () => {
