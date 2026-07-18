@@ -3,6 +3,7 @@ import {
   getDirectory,
   getCategoryDirectory,
   getRelativePath,
+  UnknownCategoryError,
 } from '../formatter/directory-mapper.js';
 import { makeCuratedMemory, NOW } from './fixtures.js';
 import { randomUUID } from 'node:crypto';
@@ -36,8 +37,17 @@ describe('getCategoryDirectory', () => {
     expect(getCategoryDirectory('onboarding')).toBe('guides');
   });
 
-  it('maps unknown category → curated (fallback)', () => {
-    expect(getCategoryDirectory('unknown-category')).toBe('curated');
+  it('throws UnknownCategoryError on an unmapped category (fail-closed, 5bm.5)', () => {
+    // Previously an unknown category silently landed in curated/ — the
+    // governance-approved, default-searched bucket. It must now fail loud.
+    expect(() => getCategoryDirectory('unknown-category')).toThrow(UnknownCategoryError);
+    try {
+      getCategoryDirectory('made-up');
+      expect.unreachable('should have thrown');
+    } catch (e) {
+      expect(e).toBeInstanceOf(UnknownCategoryError);
+      expect((e as UnknownCategoryError).category).toBe('made-up');
+    }
   });
 });
 
