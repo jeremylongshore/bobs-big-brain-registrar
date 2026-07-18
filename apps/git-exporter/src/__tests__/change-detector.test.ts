@@ -147,4 +147,19 @@ describe('detectChanges', () => {
     expect(changeset.toWrite).toHaveLength(2); // active + deprecated
     expect(changeset.toArchive).toHaveLength(2); // archived + superseded
   });
+
+  it('quarantines an unreadable row (5bm.12) without dropping the healthy ones', () => {
+    const good = makeCuratedMemory({ category: 'pattern', lifecycle: 'active' });
+    const bad = makeCuratedMemory({ category: 'decision', lifecycle: 'active' });
+    memoryRepo.insert(good);
+    memoryRepo.insert(bad);
+    db.pragma('ignore_check_constraints = ON');
+    db.prepare('UPDATE curated_memories SET category = ? WHERE id = ?').run('vanished', bad.id);
+    db.pragma('ignore_check_constraints = OFF');
+
+    const changeset = detectChanges(memoryRepo, exportStateRepo, makeConfig());
+    expect(changeset.toWrite.map((w) => w.memory.id)).toEqual([good.id]);
+    expect(changeset.quarantined).toHaveLength(1);
+    expect(changeset.quarantined[0]!.id).toBe(bad.id);
+  });
 });

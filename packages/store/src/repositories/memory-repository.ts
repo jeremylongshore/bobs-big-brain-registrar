@@ -53,6 +53,43 @@ const MemoryRowSchema = z.object({
  * @returns validated CuratedMemory
  * @throws Error with row id and Zod issue details if parsing fails
  */
+/** One row that could not be deserialized into a CuratedMemory (5bm.12). */
+export interface RowDeserializationFailure {
+  /** The row's primary key, or '<unknown>' if even that could not be read. */
+  id: string;
+  /** Why deserialization failed. */
+  reason: string;
+}
+
+/** Result of a resilient (per-row error-isolated) batch read (5bm.12). */
+export interface ResilientReadResult {
+  memories: CuratedMemory[];
+  failures: RowDeserializationFailure[];
+}
+
+/**
+ * Deserialize rows one-by-one, collecting per-row failures instead of letting
+ * one bad row abort the whole batch (5bm.12). The DB always stores the primary
+ * key in the `id` column, so a failure can still name the offending row even
+ * when its domain validation fails.
+ */
+function deserializeRowsResilient(rows: unknown[]): ResilientReadResult {
+  const memories: CuratedMemory[] = [];
+  const failures: RowDeserializationFailure[] = [];
+  for (const row of rows) {
+    try {
+      memories.push(rowToMemory(row));
+    } catch (err) {
+      const rawId = (row as { id?: unknown } | null)?.id;
+      failures.push({
+        id: typeof rawId === 'string' ? rawId : '<unknown>',
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return { memories, failures };
+}
+
 function rowToMemory(row: unknown): CuratedMemory {
   const flatResult = MemoryRowSchema.safeParse(row);
   if (!flatResult.success) {
@@ -383,6 +420,23 @@ export class MemoryRepository {
   findByLifecycle(lifecycle: MemoryLifecycleState): CuratedMemory[] {
     const rows = this.stmtFindByLifecycle.all(lifecycle);
     return rows.map(rowToMemory);
+  }
+
+  /**
+   * Like {@link findByLifecycle} but isolates per-row deserialization failures
+   * (5bm.12) instead of throwing the whole batch when one row fails domain
+   * validation (e.g. a legacy category later removed from the enum). Used by the
+   * git-exporter so a single corrupt row is quarantined + reported, not allowed
+   * to abort the export of every healthy memory. Strict callers keep using
+   * {@link findByLifecycle}.
+   */
+  findByLifecycleResilient(lifecycle: MemoryLifecycleState): ResilientReadResult {
+    return deserializeRowsResilient(this.stmtFindByLifecycle.all(lifecycle));
+  }
+
+  /** Tenant-scoped counterpart of {@link findByLifecycleResilient} (5bm.12). */
+  findByTenantResilient(tenantId: string): ResilientReadResult {
+    return deserializeRowsResilient(this.stmtFindByTenant.all(tenantId));
   }
 
   /**

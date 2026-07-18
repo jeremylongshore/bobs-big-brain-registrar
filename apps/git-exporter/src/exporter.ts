@@ -42,6 +42,9 @@ export function runExport(
   const archived: string[] = [];
   const removed: string[] = [];
   const skipped: string[] = [];
+  // Carry forward the memories the change-detector could not map (5bm.12) and
+  // append any that fail during formatting/writing below.
+  const quarantined = [...changeset.quarantined];
   let unchanged = 0;
 
   for (const item of changeset.toWrite) {
@@ -49,19 +52,29 @@ export function runExport(
       skipped.push(item.memory.id);
       continue;
     }
-    const content = formatMemoryAsMarkdown(item.memory);
+    // Per-memory quarantine (5bm.12): a formatter/write failure on one memory
+    // must not abort the whole run — set it aside and keep exporting the rest.
+    try {
+      const content = formatMemoryAsMarkdown(item.memory);
 
-    // Skip if file content is already identical (idempotency guard)
-    if (existsSync(item.filePath)) {
-      const existing = readFileSync(item.filePath, 'utf8');
-      if (existing === content) {
-        unchanged++;
-        continue;
+      // Skip if file content is already identical (idempotency guard)
+      if (existsSync(item.filePath)) {
+        const existing = readFileSync(item.filePath, 'utf8');
+        if (existing === content) {
+          unchanged++;
+          continue;
+        }
       }
-    }
 
-    writeFile(item.filePath, content);
-    written.push(item.filePath);
+      writeFile(item.filePath, content);
+      written.push(item.filePath);
+    } catch (err) {
+      quarantined.push({
+        id: item.memory.id,
+        category: item.memory.category ?? '',
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   for (const item of changeset.toArchive) {
@@ -69,9 +82,17 @@ export function runExport(
       skipped.push(item.memory.id);
       continue;
     }
-    const content = formatMemoryAsMarkdown(item.memory);
-    archiveFile(item.fromPath, item.toPath, content);
-    archived.push(item.toPath);
+    try {
+      const content = formatMemoryAsMarkdown(item.memory);
+      archiveFile(item.fromPath, item.toPath, content);
+      archived.push(item.toPath);
+    } catch (err) {
+      quarantined.push({
+        id: item.memory.id,
+        category: item.memory.category ?? '',
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   for (const filePath of changeset.toRemove) {
@@ -87,6 +108,7 @@ export function runExport(
     archived,
     removed,
     skipped,
+    quarantined,
     unchanged,
     totalProcessed:
       changeset.toWrite.length + changeset.toArchive.length + changeset.toRemove.length,

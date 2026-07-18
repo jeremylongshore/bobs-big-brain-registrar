@@ -150,6 +150,9 @@ async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number>
           archived: result.archived.length,
           removed: result.removed.length,
           skipped: result.skipped.length,
+          quarantined: result.quarantined.length,
+          // Full quarantine detail so a cron wrapper can alert + name the rows.
+          quarantined_memories: result.quarantined,
           unchanged: result.unchanged,
         }) + '\n',
       );
@@ -160,7 +163,20 @@ async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number>
           `Archived:   ${result.archived.length}\n` +
           `Removed:    ${result.removed.length}\n` +
           `Skipped:    ${result.skipped.length}\n` +
+          `Quarantined:${result.quarantined.length}\n` +
           `Unchanged:  ${result.unchanged}\n`,
+      );
+    }
+    // Quarantine is a partial-success signal, not a failure (the run still
+    // exported every healthy memory) — but make it LOUD on stderr so a cron
+    // wrapper or operator notices the set-aside rows and can fix them at source.
+    if (result.quarantined.length > 0) {
+      process.stderr.write(
+        `⚠ ${result.quarantined.length} memory(ies) quarantined (not exported):\n` +
+          result.quarantined
+            .map((q) => `  - ${q.id} [category=${q.category || '<none>'}]: ${q.reason}`)
+            .join('\n') +
+          '\n',
       );
     }
     return 0;

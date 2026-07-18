@@ -282,4 +282,41 @@ describe('runExport', () => {
     expect(result.unchanged).toBe(1);
     expect(result.written).toHaveLength(0);
   });
+
+  // ─── Per-memory quarantine (5bm.12) ────────────────────────────────────────
+
+  it('quarantines a corrupt-category row and still exports the healthy ones', () => {
+    const good1 = makeCuratedMemory({ category: 'pattern', lifecycle: 'active' });
+    const good2 = makeCuratedMemory({ category: 'decision', lifecycle: 'active' });
+    const bad = makeCuratedMemory({ category: 'convention', lifecycle: 'active' });
+    memoryRepo.insert(good1);
+    memoryRepo.insert(good2);
+    memoryRepo.insert(bad);
+    // Plant a pre-CHECK-style corrupt category the mapper/schema will reject.
+    db.pragma('ignore_check_constraints = ON');
+    db.prepare('UPDATE curated_memories SET category = ? WHERE id = ?').run(
+      'gone-category',
+      bad.id,
+    );
+    db.pragma('ignore_check_constraints = OFF');
+
+    // The run does NOT throw even though one row is unreadable.
+    const result = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir));
+
+    // Both healthy memories exported; the corrupt one set aside + named.
+    expect(result.written).toHaveLength(2);
+    expect(result.quarantined).toHaveLength(1);
+    expect(result.quarantined[0]!.id).toBe(bad.id);
+    expect(result.quarantined[0]!.reason).toMatch(/category/i);
+    // No file was written for the quarantined memory.
+    for (const path of result.written) {
+      expect(path).not.toContain(bad.id);
+    }
+  });
+
+  it('reports an empty quarantine list when every memory is healthy', () => {
+    memoryRepo.insert(makeCuratedMemory({ category: 'pattern', lifecycle: 'active' }));
+    const result = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir));
+    expect(result.quarantined).toEqual([]);
+  });
 });

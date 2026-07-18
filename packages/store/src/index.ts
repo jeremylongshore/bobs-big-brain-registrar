@@ -10,6 +10,10 @@ export {
   MemoryRepository,
   InvalidLifecycleTransitionError,
 } from './repositories/memory-repository.js';
+export type {
+  RowDeserializationFailure,
+  ResilientReadResult,
+} from './repositories/memory-repository.js';
 export { PolicyRepository } from './repositories/policy-repository.js';
 export { AuditRepository } from './repositories/audit-repository.js';
 export type { AuditChainRow } from './repositories/audit-repository.js';
