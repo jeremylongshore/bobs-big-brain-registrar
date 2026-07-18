@@ -1,4 +1,5 @@
 import type { MemoryLifecycleState } from './enums.js';
+import { MemoryCategory } from './enums.js';
 import { Author, NonEmptyString, Uuid } from './common.js';
 import { z } from 'zod';
 
@@ -9,6 +10,18 @@ export const TransitionRequest = z.object({
   supersededBy: Uuid.optional(),
 });
 export type TransitionRequest = z.infer<typeof TransitionRequest>;
+
+/**
+ * Metadata required for a governed recategorization (5bm.7) — an in-place
+ * category correction with a receipted audit event, so a miscategorized memory
+ * is fixed without the supersede-and-recreate churn.
+ */
+export const RecategorizeRequest = z.object({
+  category: MemoryCategory,
+  reason: NonEmptyString,
+  actor: Author,
+});
+export type RecategorizeRequest = z.infer<typeof RecategorizeRequest>;
 
 /** All allowed transitions from each state */
 export const ALLOWED_TRANSITIONS: Record<MemoryLifecycleState, MemoryLifecycleState[]> = {

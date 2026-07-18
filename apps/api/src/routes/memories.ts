@@ -149,4 +149,29 @@ export function registerMemoryRoutes(
       }
     },
   );
+
+  // POST /api/memories/:id/recategorize — governed in-place category correction (5bm.7)
+  app.post(
+    '/api/memories/:id/recategorize',
+    {
+      schema: {
+        tags: ['memories'],
+        summary: 'Correct a memory’s category in place with a receipted audit event',
+        description:
+          'Governed recategorization: updates category without supersession, writing a `recategorized` audit event with {fromCategory, toCategory}. Body: { category, reason, actor }.',
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const memory = service.recategorize(id, request.body);
+        return reply.send(memory);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          return reply.status(err.statusCode).send({ error: err.message });
+        }
+        throw err;
+      }
+    },
+  );
 }

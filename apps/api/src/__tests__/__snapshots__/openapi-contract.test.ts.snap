@@ -91,6 +91,11 @@ exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] =
         "get",
       ],
     },
+    "/api/memories/{id}/recategorize": {
+      "methods": [
+        "post",
+      ],
+    },
     "/api/memories/{id}/transition": {
       "methods": [
         "post",

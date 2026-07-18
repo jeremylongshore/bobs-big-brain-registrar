@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { MemoryRepository, AuditRepository } from '@qmd-team-intent-kb/store';
-import { AuditEvent, TransitionRequest, validateTransition } from '@qmd-team-intent-kb/schema';
+import {
+  AuditEvent,
+  TransitionRequest,
+  RecategorizeRequest,
+  validateTransition,
+} from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
 import { badRequest, notFound } from '../errors.js';
 
@@ -91,5 +96,47 @@ export class MemoryService {
 
     // Return the updated memory without a second DB fetch
     return { ...memory, lifecycle: to, updatedAt: now };
+  }
+
+  /**
+   * Governed in-place recategorization (5bm.7): correct a memory's category
+   * without the supersede-and-recreate churn. Validates the request, rejects a
+   * no-op (same category), writes the corrected row (the repository re-asserts
+   * enum membership), and appends a `recategorized` audit event carrying
+   * {fromCategory, toCategory} so the correction is on the append-only chain.
+   * Changing the category also moves the memory's export collection on the next
+   * exporter run (getDirectory keys on category).
+   *
+   * Throws 400 on a bad body or a same-category no-op; 404 when the memory does
+   * not exist.
+   */
+  recategorize(id: string, requestBody: unknown): CuratedMemory {
+    const parsed = RecategorizeRequest.safeParse(requestBody);
+    if (!parsed.success) {
+      throw badRequest(`Invalid recategorize request: ${parsed.error.message}`);
+    }
+
+    const memory = this.getById(id); // throws 404 if missing
+    if (memory.category === parsed.data.category) {
+      throw badRequest(`Memory ${id} is already category "${memory.category}"`);
+    }
+
+    const now = new Date().toISOString();
+    const updated: CuratedMemory = { ...memory, category: parsed.data.category, updatedAt: now };
+    this.memoryRepo.update(updated);
+
+    const auditEvent = AuditEvent.parse({
+      id: randomUUID(),
+      action: 'recategorized',
+      memoryId: id,
+      tenantId: memory.tenantId,
+      actor: parsed.data.actor,
+      reason: parsed.data.reason,
+      details: { fromCategory: memory.category, toCategory: parsed.data.category },
+      timestamp: now,
+    });
+    this.auditRepo.insert(auditEvent);
+
+    return updated;
   }
 }

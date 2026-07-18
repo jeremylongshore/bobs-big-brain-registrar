@@ -7,6 +7,7 @@ import { searchTool } from './tools/search.js';
 import { importFiles } from './tools/import.js';
 import { getStatus } from './tools/status.js';
 import { applyTransition } from './tools/transition.js';
+import { applyRecategorize } from './tools/recategorize.js';
 import { runSync, isQmdAvailable } from './tools/sync.js';
 import { vaultPreview, vaultExecute, vaultRollback } from './tools/vault-import.js';
 import { createDatabase, MemoryLinksRepository } from '@qmd-team-intent-kb/store';
@@ -171,6 +172,35 @@ export function createServer(
           {
             memoryId: params.memoryId,
             to: params.to,
+            reason: params.reason,
+            actor: params.actor,
+          },
+          config,
+        );
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        };
+      },
+    );
+
+    // teamkb_recategorize — governed in-place category correction (5bm.7)
+    server.tool(
+      'teamkb_recategorize',
+      'Correct a curated memory’s category in place (no supersession). Re-asserts enum membership and writes a `recategorized` audit event with {fromCategory, toCategory}.',
+      {
+        memoryId: z.string().uuid().describe('UUID of the curated memory to recategorize'),
+        category: MemoryCategory.describe('The corrected category'),
+        reason: z.string().min(1).describe('Human-readable reason for the correction'),
+        actor: z
+          .string()
+          .min(1)
+          .describe('Identifier of the person or system initiating the recategorization'),
+      },
+      async (params) => {
+        const result = applyRecategorize(
+          {
+            memoryId: params.memoryId,
+            category: params.category,
             reason: params.reason,
             actor: params.actor,
           },
