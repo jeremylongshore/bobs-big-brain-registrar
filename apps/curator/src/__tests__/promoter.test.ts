@@ -755,3 +755,51 @@ describe('promote: cross-clone determinism on the supersession path (8da.5)', ()
     );
   });
 });
+
+describe('promote — persists classified sensitivity (5bm.3)', () => {
+  let memoryRepo: MemoryRepository;
+  let auditRepo: AuditRepository;
+  let db: ReturnType<typeof createTestDatabase>;
+
+  beforeEach(() => {
+    db = createTestDatabase();
+    memoryRepo = new MemoryRepository(db);
+    auditRepo = new AuditRepository(db);
+  });
+  afterEach(() => db.close());
+
+  function promoteWith(content: string) {
+    const candidate = makeCandidate({ content });
+    const contentHash = computeContentHash(content);
+    return promote(
+      { candidate, contentHash, pipelineResult: makePipelineResult({ candidateId: candidate.id }) },
+      memoryRepo,
+      auditRepo,
+    );
+  }
+
+  it('classifies clean prose as public (no longer hardcoded internal)', () => {
+    const memory = promoteWith(
+      'A perfectly ordinary technical note about deterministic pipelines.',
+    );
+    expect(memory.sensitivity).toBe('public');
+  });
+
+  it('classifies content with an internal absolute path as internal', () => {
+    const memory = promoteWith(
+      'The config lives at /home/jeremy/000-projects/foo/bar.yaml on the box.',
+    );
+    expect(memory.sensitivity).toBe('internal');
+  });
+
+  it('classifies content carrying PII as confidential', () => {
+    const memory = promoteWith('Reach the operator at operator.person@example.com for escalation.');
+    expect(memory.sensitivity).toBe('confidential');
+  });
+
+  it('persists the classified value to the store, not a constant', () => {
+    const memory = promoteWith('Ping ops.contact@example.com about the runbook.');
+    const stored = memoryRepo.findById(memory.id);
+    expect(stored?.sensitivity).toBe('confidential');
+  });
+});

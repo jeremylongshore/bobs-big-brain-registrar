@@ -20,6 +20,7 @@ import type {
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
 import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
+import { classifyContent } from '@qmd-team-intent-kb/claude-runtime';
 import type { SupersessionMatch } from '../supersession/supersession-detector.js';
 import { extractWikiLinks } from '../import/wikilink-parser.js';
 
@@ -139,6 +140,17 @@ export function promote(
     }),
   );
 
+  // Persist the CLASSIFIED sensitivity (5bm.3), not a hardcoded 'internal'. The
+  // deterministic content classifier — the same one the sensitivity-gate policy
+  // rule already runs and then discarded — derives the level from the content
+  // (restricted=credentials, confidential=PII, internal=internal paths, else
+  // public). Persisting it makes the git-exporter's pre-existing
+  // confidential/restricted skip effective (dead code while every memory was
+  // 'internal') so PII-bearing memories are not written into the general
+  // searchable corpus. Existing rows are unaffected; this classifies new
+  // promotions only.
+  const sensitivity = classifyContent(input.candidate.content).sensitivityLevel;
+
   const memory = CuratedMemorySchema.parse({
     id: memoryId,
     candidateId: input.candidate.id,
@@ -147,7 +159,7 @@ export function promote(
     title: input.candidate.title,
     category: input.candidate.category,
     trustLevel: input.candidate.trustLevel,
-    sensitivity: 'internal',
+    sensitivity,
     author: input.candidate.author,
     tenantId: input.candidate.tenantId,
     metadata: input.candidate.metadata,
