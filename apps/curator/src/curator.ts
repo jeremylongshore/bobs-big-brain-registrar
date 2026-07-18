@@ -38,6 +38,13 @@ export interface CuratorDependencies {
  * All operations are synchronous. Only `ingestFromSpool` (file I/O) is async.
  */
 export class Curator {
+  /**
+   * Policy ids already warned about for dormant rules (5bm.2), so the runtime
+   * completeness check fires ONCE per policy rather than per candidate — a
+   * digestion batch must not emit 17k identical warnings.
+   */
+  private readonly warnedDormantPolicies = new Set<string>();
+
   constructor(
     private readonly deps: CuratorDependencies,
     private readonly config: CuratorConfig,
@@ -83,6 +90,19 @@ export class Curator {
     }
 
     const pipeline = new PolicyPipeline(policy);
+    // Runtime completeness check (5bm.2): fire the anti-dormancy gate against the
+    // LIVE policy, not only in CI. Warn (never throw — a throw here would refuse
+    // to govern on a dormant policy and stall the whole brain) once per policy so
+    // an operator sees which registered rules gate nothing on the running store.
+    if (pipeline.dormantRuleTypes.length > 0 && !this.warnedDormantPolicies.has(policy.id)) {
+      this.warnedDormantPolicies.add(policy.id);
+      console.warn(
+        `[curator] governance policy "${policy.name}" (${policy.id}) leaves ` +
+          `${pipeline.dormantRuleTypes.length} registered rule(s) dormant: ` +
+          `${pipeline.dormantRuleTypes.join(', ')}. They gate nothing on this store. ` +
+          `See buildRecommendedPolicy / bead qmd-team-intent-kb-5bm.10.`,
+      );
+    }
     // Tenant-scoped existing-hash set (B1) — mirrors the API promotion-service so
     // the policy dedup rule sees only this tenant's memories.
     const hashSet =

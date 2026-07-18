@@ -134,3 +134,66 @@ describe('findUncoveredRuleTypes + assertPolicyCompleteness', () => {
     ).not.toThrow();
   });
 });
+
+describe('PolicyPipeline.dormantRuleTypes (runtime completeness gate, 5bm.2)', () => {
+  it('is empty for a full-coverage recommended policy', async () => {
+    const { PolicyPipeline } = await import('../pipeline.js');
+    const policy = buildRecommendedPolicy('t', NOW, '00000000-0000-4000-8000-000000000001');
+    expect(new PolicyPipeline(policy).dormantRuleTypes).toEqual([]);
+  });
+
+  it('lists the 6 dormant rules of the audited 2-rule live shape', async () => {
+    const { PolicyPipeline } = await import('../pipeline.js');
+    const twoRule = GovernancePolicy.parse({
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'Audited live shape',
+      tenantId: 't',
+      rules: [
+        {
+          id: 'a',
+          type: 'secret_detection',
+          action: 'reject',
+          enabled: true,
+          priority: 0,
+          parameters: {},
+        },
+        {
+          id: 'b',
+          type: 'content_length',
+          action: 'reject',
+          enabled: true,
+          priority: 1,
+          parameters: { min: 25 },
+        },
+      ],
+      enabled: true,
+      version: 1,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(new PolicyPipeline(twoRule).dormantRuleTypes).toEqual(
+      [
+        'content_sanitization',
+        'dedup_check',
+        'relevance_score',
+        'sensitivity_gate',
+        'source_trust',
+        'tenant_match',
+      ].sort(),
+    );
+  });
+});
+
+describe('buildRecommendedPolicy determinism', () => {
+  it('is fully deterministic when id is supplied', () => {
+    const a = buildRecommendedPolicy('t', NOW, '33333333-3333-4333-8333-333333333333');
+    const b = buildRecommendedPolicy('t', NOW, '33333333-3333-4333-8333-333333333333');
+    expect(a).toEqual(b);
+  });
+
+  it('produces distinct ids when id is omitted', () => {
+    const a = buildRecommendedPolicy('t', NOW);
+    const b = buildRecommendedPolicy('t', NOW);
+    expect(a.id).not.toBe(b.id);
+  });
+});

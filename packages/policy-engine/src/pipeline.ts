@@ -1,6 +1,7 @@
-import type { GovernancePolicy, MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import type { GovernancePolicy, MemoryCandidate, PolicyRuleType } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, PipelineResult, RuleResult } from './types.js';
 import { createRule } from './rules/index.js';
+import { findUncoveredRuleTypes } from './recommended-policy.js';
 
 /**
  * Executes the full governance policy pipeline against a memory candidate.
@@ -16,8 +17,18 @@ import { createRule } from './rules/index.js';
 export class PolicyPipeline {
   private readonly policy: GovernancePolicy;
 
+  /**
+   * Registered rule types this policy does NOT actively enforce (5bm.2).
+   * Computed once at construction so the completeness gate is available at
+   * RUNTIME, not only in CI — a caller (e.g. the curator) can surface which
+   * rules are silently dormant on the loaded policy. Empty when the policy
+   * covers the full registry.
+   */
+  readonly dormantRuleTypes: PolicyRuleType[];
+
   constructor(policy: GovernancePolicy) {
     this.policy = policy;
+    this.dormantRuleTypes = findUncoveredRuleTypes(policy);
   }
 
   evaluate(

@@ -119,12 +119,17 @@ export const RECOMMENDED_POLICY_RULES: readonly PolicyRule[] = [
 
 /**
  * Build a full {@link GovernancePolicy} from {@link RECOMMENDED_POLICY_RULES} for a
- * given tenant. `now` is injected (no ambient clock) so the result is
- * deterministic and testable.
+ * given tenant. `now` is injected (no ambient clock). Pass `id` to make the
+ * result fully deterministic (e.g. in tests); it defaults to a fresh UUID, so
+ * calls that omit it produce distinct policy ids.
  */
-export function buildRecommendedPolicy(tenantId: string, now: string): GovernancePolicy {
+export function buildRecommendedPolicy(
+  tenantId: string,
+  now: string,
+  id: string = randomUUID(),
+): GovernancePolicy {
   return GovernancePolicy.parse({
-    id: randomUUID(),
+    id,
     name: 'Recommended Governance Policy',
     tenantId,
     rules: RECOMMENDED_POLICY_RULES,
