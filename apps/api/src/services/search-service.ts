@@ -1,6 +1,10 @@
 import type { MemoryRepository } from '@qmd-team-intent-kb/store';
 import type { SearchQuery, SearchResult, SearchHit, SearchScope } from '@qmd-team-intent-kb/schema';
-import { rerankSearchHits, rerankCitedHits } from '@qmd-team-intent-kb/common';
+import {
+  rerankSearchHits,
+  rerankCitedHits,
+  isSearchVisibleSensitivity,
+} from '@qmd-team-intent-kb/common';
 import { badRequest } from '../errors.js';
 
 /**
@@ -116,12 +120,24 @@ export class SearchService {
       normalised,
       (memoryId) => {
         const memory = this.memoryRepo.findById(memoryId);
-        return memory === null ? null : { category: memory.category, updatedAt: memory.updatedAt };
+        return memory === null
+          ? null
+          : {
+              category: memory.category,
+              updatedAt: memory.updatedAt,
+              sensitivity: memory.sensitivity,
+            };
       },
       nowIso,
     );
 
-    const allHits: SearchHit[] = reranked.map((hit) => ({
+    // Read-time sensitivity enforcement (5bm.11): drop confidential/restricted
+    // hits so a sensitive memory is never returned to a search caller — the same
+    // levels the exporter skips (5bm.3). The qmd index should already exclude
+    // them; this is the defense-in-depth for a pre-skip index or a resolved row.
+    const visible = reranked.filter((hit) => isSearchVisibleSensitivity(hit.sensitivity));
+
+    const allHits: SearchHit[] = visible.map((hit) => ({
       memoryId: hit.memoryId ?? undefined,
       title: titleFromCitation(hit.file),
       snippet: hit.snippet,
@@ -138,7 +154,10 @@ export class SearchService {
 
   /** SQLite text-match fallback with freshness reranking. */
   private searchViaSqlite(query: SearchQuery): SearchResult {
-    const memories = this.memoryRepo.searchByText(query.query, query.tenantId, query.categories);
+    const allMemories = this.memoryRepo.searchByText(query.query, query.tenantId, query.categories);
+    // Read-time sensitivity enforcement (5bm.11): the SQLite path returns rows
+    // directly, so drop confidential/restricted here — the leak the audit found.
+    const memories = allMemories.filter((m) => isSearchVisibleSensitivity(m.sensitivity));
 
     const nowIso = new Date().toISOString();
     const queryLower = query.query.toLowerCase();

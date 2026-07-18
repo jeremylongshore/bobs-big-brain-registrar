@@ -173,4 +173,38 @@ describe('POST /api/search', () => {
     expect(hit.score).toBeGreaterThan(0);
     expect(hit.score).toBeLessThanOrEqual(1);
   });
+
+  it('excludes confidential and restricted memories from search results (5bm.11)', () => {
+    const visible = makeMemory({ title: 'Indexing strategy public', sensitivity: 'internal' });
+    const confidential = makeMemory({
+      title: 'Indexing strategy secret',
+      sensitivity: 'confidential',
+      contentHash: 'c'.repeat(64),
+    });
+    const restricted = makeMemory({
+      title: 'Indexing strategy locked',
+      sensitivity: 'restricted',
+      contentHash: 'd'.repeat(64),
+    });
+    memoryRepo.insert(visible);
+    memoryRepo.insert(confidential);
+    memoryRepo.insert(restricted);
+
+    return app
+      .inject({
+        method: 'POST',
+        url: '/api/search',
+        payload: { query: 'indexing', scope: 'curated' },
+      })
+      .then((res) => {
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        // Only the internal-sensitivity memory is search-visible.
+        expect(body.totalCount).toBe(1);
+        const ids = body.hits.map((h: { memoryId: string }) => h.memoryId);
+        expect(ids).toContain(visible.id);
+        expect(ids).not.toContain(confidential.id);
+        expect(ids).not.toContain(restricted.id);
+      });
+  });
 });

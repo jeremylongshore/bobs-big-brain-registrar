@@ -62,6 +62,26 @@ export function extractMemoryIdFromCitation(citation: string): string | null {
 export interface CitedHitMetadata {
   category: string;
   updatedAt: string;
+  /** Sensitivity of the resolved memory (5bm.11), so a cited hit can be
+   * sensitivity-filtered at read time. Optional: a resolver that doesn't supply
+   * it (e.g. a rank-only caller) leaves the hit search-visible ('public'). */
+  sensitivity?: string;
+}
+
+/**
+ * Sensitivity levels kept OUT of general search results (5bm.11) — the same
+ * levels the git-exporter skips (5bm.3), so a confidential/restricted memory is
+ * never returned to a search caller. A memory whose sensitivity is not one of
+ * these is search-visible.
+ */
+export const SEARCH_HIDDEN_SENSITIVITY: ReadonlySet<string> = new Set([
+  'confidential',
+  'restricted',
+]);
+
+/** True if a memory of this sensitivity may appear in general search results. */
+export function isSearchVisibleSensitivity(sensitivity: string): boolean {
+  return !SEARCH_HIDDEN_SENSITIVITY.has(sensitivity);
 }
 
 /**
@@ -79,7 +99,15 @@ export function rerankCitedHits<T extends { file: string; score: number }>(
   resolveMetadata: (memoryId: string) => CitedHitMetadata | null,
   nowIso: string,
   halfLifeDays: number = 90,
-): Array<T & { finalScore: number; category: string; updatedAt: string; memoryId: string | null }> {
+): Array<
+  T & {
+    finalScore: number;
+    category: string;
+    updatedAt: string;
+    sensitivity: string;
+    memoryId: string | null;
+  }
+> {
   const enriched = hits.map((h) => {
     const id = extractMemoryIdFromCitation(h.file);
     const meta = id === null ? null : resolveMetadata(id);
@@ -88,6 +116,9 @@ export function rerankCitedHits<T extends { file: string; score: number }>(
       memoryId: meta === null ? null : id,
       category: meta?.category ?? '',
       updatedAt: meta?.updatedAt ?? nowIso,
+      // Unresolvable hit (orphaned citation) is not an identifiable sensitive
+      // memory — treat as public/searchable; a resolved hit carries its real level.
+      sensitivity: meta?.sensitivity ?? 'public',
     };
   });
   return rerankSearchHits(enriched, nowIso, halfLifeDays);
