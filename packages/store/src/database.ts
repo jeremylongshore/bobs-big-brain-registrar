@@ -91,17 +91,52 @@ function runMigrations(db: Database.Database): void {
 
   if (pending.length === 0) return;
 
+  // A table-rebuild migration (5bm.9) does DROP + RENAME on a table referenced
+  // by a foreign key. `PRAGMA foreign_keys` is a no-op inside a transaction, so
+  // it must be toggled here, around the batch. We disable enforcement for the
+  // rebuild and re-verify integrity with `foreign_key_check` before commit.
+  const needsForeignKeysOff = pending.some((m) => m.rebuildsTable === true);
+  if (needsForeignKeysOff) {
+    db.pragma('foreign_keys = OFF');
+  }
+
   const applyAll = db.transaction(() => {
     for (const migration of pending) {
-      db.exec(migration.sql);
+      if (migration.apply !== undefined) {
+        migration.apply(db);
+      } else if (migration.sql !== undefined) {
+        db.exec(migration.sql);
+      } else {
+        throw new Error(
+          `Migration ${migration.version} (${migration.name}) has neither sql nor apply`,
+        );
+      }
       db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(
         migration.version,
         migration.name,
       );
     }
+    // Verify referential integrity inside the transaction so a violation rolls
+    // the whole rebuild back rather than committing a corrupt graph.
+    if (needsForeignKeysOff) {
+      const violations = db.pragma('foreign_key_check') as unknown[];
+      if (Array.isArray(violations) && violations.length > 0) {
+        throw new Error(
+          `Migration foreign_key_check found ${violations.length} violation(s): ${JSON.stringify(
+            violations,
+          )}`,
+        );
+      }
+    }
   });
 
-  applyAll();
+  try {
+    applyAll();
+  } finally {
+    if (needsForeignKeysOff) {
+      db.pragma('foreign_keys = ON');
+    }
+  }
 }
 
 /**

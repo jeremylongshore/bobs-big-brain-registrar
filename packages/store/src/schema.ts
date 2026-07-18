@@ -3,6 +3,8 @@
  * Each entry creates one table and its associated indexes idempotently.
  */
 
+import type Database from 'better-sqlite3';
+
 const CANDIDATES_DDL = `
 CREATE TABLE IF NOT EXISTS candidates (
   id TEXT PRIMARY KEY,
@@ -121,7 +123,112 @@ export const TABLE_DDL: string[] = [
 interface Migration {
   version: number;
   name: string;
-  sql: string;
+  /** Static DDL migration. Exactly one of `sql` / `apply` must be set. */
+  sql?: string;
+  /**
+   * Procedural migration (5bm.9) for changes SQL-only migrations can't express
+   * — e.g. a conditional table rebuild that must inspect the live schema first.
+   * Runs inside the same migration transaction as `sql` migrations.
+   */
+  apply?: (db: Database.Database) => void;
+  /**
+   * Set when this migration rebuilds a table referenced by a foreign key
+   * (DROP + RENAME). The runner disables `foreign_keys` for the batch and runs
+   * `foreign_key_check` before commit, since the pragma is a no-op inside a
+   * transaction and DROP of an FK-referenced table would otherwise fail.
+   */
+  rebuildsTable?: boolean;
+}
+
+/**
+ * The exact `curated_memories` schema as of migration v9 — a frozen snapshot,
+ * intentionally NOT a reference to CURATED_MEMORIES_DDL (migrations must not
+ * drift with the live DDL). Used only by the v9 rebuild below.
+ */
+const CURATED_MEMORIES_V9_REBUILD = `
+CREATE TABLE curated_memories_v9_new (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('claude_session', 'manual', 'import', 'mcp', 'bulk_import')),
+  content TEXT NOT NULL,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('decision', 'pattern', 'convention', 'architecture', 'troubleshooting', 'reference', 'onboarding')),
+  trust_level TEXT NOT NULL CHECK (trust_level IN ('high', 'medium', 'low', 'untrusted')),
+  sensitivity TEXT NOT NULL DEFAULT 'internal' CHECK (sensitivity IN ('public', 'internal', 'confidential', 'restricted')),
+  author_json TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  lifecycle TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle IN ('active', 'deprecated', 'superseded', 'archived')),
+  content_hash TEXT NOT NULL,
+  policy_evaluations_json TEXT NOT NULL DEFAULT '[]',
+  supersession_json TEXT,
+  promoted_at TEXT NOT NULL,
+  promoted_by_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1
+);
+INSERT INTO curated_memories_v9_new (
+  rowid, id, candidate_id, source, content, title, category, trust_level, sensitivity,
+  author_json, tenant_id, metadata_json, lifecycle, content_hash, policy_evaluations_json,
+  supersession_json, promoted_at, promoted_by_json, updated_at, version
+)
+SELECT
+  rowid, id, candidate_id, source, content, title, category, trust_level, sensitivity,
+  author_json, tenant_id, metadata_json, lifecycle, content_hash, policy_evaluations_json,
+  supersession_json, promoted_at, promoted_by_json, updated_at, version
+FROM curated_memories;
+DROP TABLE curated_memories;
+ALTER TABLE curated_memories_v9_new RENAME TO curated_memories;
+CREATE INDEX idx_memories_tenant ON curated_memories(tenant_id);
+CREATE INDEX idx_memories_hash ON curated_memories(content_hash);
+CREATE INDEX idx_memories_lifecycle ON curated_memories(lifecycle);
+CREATE INDEX idx_memories_updated ON curated_memories(updated_at);
+CREATE INDEX idx_memories_tenant_lifecycle ON curated_memories(tenant_id, lifecycle);
+CREATE INDEX idx_memories_lifecycle_updated ON curated_memories(lifecycle, updated_at);
+CREATE INDEX idx_memories_tenant_category ON curated_memories(tenant_id, category);
+CREATE TRIGGER curated_memories_fts_insert
+AFTER INSERT ON curated_memories BEGIN
+  INSERT INTO curated_memories_fts(rowid, title, content)
+  VALUES (new.rowid, new.title, new.content);
+END;
+CREATE TRIGGER curated_memories_fts_delete
+AFTER DELETE ON curated_memories BEGIN
+  INSERT INTO curated_memories_fts(curated_memories_fts, rowid, title, content)
+  VALUES ('delete', old.rowid, old.title, old.content);
+END;
+CREATE TRIGGER curated_memories_fts_update
+AFTER UPDATE ON curated_memories BEGIN
+  INSERT INTO curated_memories_fts(curated_memories_fts, rowid, title, content)
+  VALUES ('delete', old.rowid, old.title, old.content);
+  INSERT INTO curated_memories_fts(rowid, title, content)
+  VALUES (new.rowid, new.title, new.content);
+END;
+`.trim();
+
+/**
+ * Migration v9 (bead 5bm.9): backfill the enum CHECK constraints onto a legacy
+ * `curated_memories` table. New DBs already get the constraints from
+ * CURATED_MEMORIES_DDL, so this is a NO-OP unless the live table predates 5bm.1
+ * (detected by the absence of a category CHECK) — giving it zero blast radius on
+ * fresh DBs and tests. When a legacy table IS found it is rebuilt in place
+ * (rowid preserved so the external-content FTS index stays valid), then the FTS
+ * index is rebuilt as belt-and-suspenders. `rebuildsTable` tells the runner to
+ * disable foreign_keys for the DROP + run foreign_key_check before commit.
+ */
+function applyCheckConstraintBackfill(db: Database.Database): void {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'curated_memories'")
+    .get() as { sql: string } | undefined;
+
+  // Already constrained (fresh DB from CURATED_MEMORIES_DDL) → nothing to do.
+  if (row !== undefined && /CHECK\s*\(\s*category\s+IN/i.test(row.sql)) {
+    return;
+  }
+
+  db.exec(CURATED_MEMORIES_V9_REBUILD);
+  // Rebuild the external-content FTS index from the (rowid-preserved) content so
+  // it is provably consistent regardless of any rowid edge case.
+  db.exec("INSERT INTO curated_memories_fts(curated_memories_fts) VALUES ('rebuild');");
 }
 
 export const MIGRATIONS: Migration[] = [
@@ -314,5 +421,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_seq ON audit_events(seq);
     sql: `
 CREATE INDEX IF NOT EXISTS idx_candidates_status_tenant ON candidates(status, tenant_id);
     `.trim(),
+  },
+  {
+    version: 9,
+    name: 'backfill_curated_memories_enum_check_constraints',
+    apply: applyCheckConstraintBackfill,
+    rebuildsTable: true,
   },
 ];
