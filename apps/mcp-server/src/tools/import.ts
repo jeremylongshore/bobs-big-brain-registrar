@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join, basename, extname } from 'node:path';
 import fg from 'fast-glob';
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import { MEMORY_CANDIDATE_SCHEMA_VERSION } from '@qmd-team-intent-kb/schema';
 import { writeToSpool } from '@qmd-team-intent-kb/claude-runtime';
 import { categorizeFromPath } from '../categorize.js';
 import type { McpServerConfig } from '../config.js';
@@ -86,6 +87,7 @@ export async function importFiles(
     }
 
     const candidate: MemoryCandidate = {
+      schemaVersion: MEMORY_CANDIDATE_SCHEMA_VERSION,
       id: candidateId,
       status: 'inbox',
       source: 'import',

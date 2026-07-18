@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import { deriveCandidateId } from '@qmd-team-intent-kb/common';
 import type { MemoryCandidate, MemoryCategory } from '@qmd-team-intent-kb/schema';
+import { MEMORY_CANDIDATE_SCHEMA_VERSION } from '@qmd-team-intent-kb/schema';
 import type {
   CandidateRepository,
   MemoryRepository,
@@ -201,6 +202,7 @@ export async function executeImport(
     const tags: string[] = Array.isArray(fmTags) ? fmTags.filter((t) => typeof t === 'string') : [];
 
     const candidate: MemoryCandidate = {
+      schemaVersion: MEMORY_CANDIDATE_SCHEMA_VERSION,
       id: candidateId,
       status: 'inbox',
       source: 'import',

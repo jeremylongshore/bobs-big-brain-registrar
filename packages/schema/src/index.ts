@@ -29,7 +29,11 @@ export {
   ContentMetadata,
 } from './common.js';
 
-export { PrePolicyFlags, MemoryCandidate } from './memory-candidate.js';
+export {
+  PrePolicyFlags,
+  MemoryCandidate,
+  MEMORY_CANDIDATE_SCHEMA_VERSION,
+} from './memory-candidate.js';
 export { PolicyEvaluation, SupersessionLink, CuratedMemory } from './curated-memory.js';
 export type { ActiveMemory, SupersededMemory } from './curated-memory.js';
 export { PolicyRule, GovernancePolicy } from './governance-policy.js';
