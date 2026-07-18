@@ -6,7 +6,10 @@ export {
   assertEnumMembership,
   EnumConstraintViolationError,
 } from './repositories/enum-membership.js';
-export { MemoryRepository } from './repositories/memory-repository.js';
+export {
+  MemoryRepository,
+  InvalidLifecycleTransitionError,
+} from './repositories/memory-repository.js';
 export { PolicyRepository } from './repositories/policy-repository.js';
 export { AuditRepository } from './repositories/audit-repository.js';
 export type { AuditChainRow } from './repositories/audit-repository.js';

@@ -1,8 +1,23 @@
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
-import { CuratedMemory } from '@qmd-team-intent-kb/schema';
+import { CuratedMemory, isTransitionAllowed } from '@qmd-team-intent-kb/schema';
 import type { MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
 import { assertMemoryEnumMembership } from './enum-membership.js';
+
+/**
+ * Thrown by {@link MemoryRepository.updateLifecycle} when a lifecycle change is
+ * not a legal transition in the state graph (5bm.4). Carries the from/to states
+ * (both are closed-vocabulary enum members, never free text, so no leak).
+ */
+export class InvalidLifecycleTransitionError extends Error {
+  constructor(
+    readonly from: MemoryLifecycleState,
+    readonly to: MemoryLifecycleState,
+  ) {
+    super(`Invalid lifecycle transition: "${from}" -> "${to}" is not allowed`);
+    this.name = 'InvalidLifecycleTransitionError';
+  }
+}
 
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
@@ -168,6 +183,7 @@ export class MemoryRepository {
   private readonly stmtTenantHashes: Database.Statement;
   private readonly stmtFindByLifecycle: Database.Statement;
   private readonly stmtUpdateLifecycle: Database.Statement;
+  private readonly stmtGetLifecycle: Database.Statement;
   private readonly stmtUpdate: Database.Statement;
   private readonly stmtCount: Database.Statement;
   private readonly stmtAllHashes: Database.Statement;
@@ -237,6 +253,10 @@ export class MemoryRepository {
 
     this.stmtUpdateLifecycle = db.prepare(`
       UPDATE curated_memories SET lifecycle = @lifecycle, updated_at = @updated_at WHERE id = @id
+    `);
+
+    this.stmtGetLifecycle = db.prepare(`
+      SELECT lifecycle FROM curated_memories WHERE id = ?
     `);
 
     this.stmtUpdate = db.prepare(`
@@ -370,6 +390,18 @@ export class MemoryRepository {
    * Returns true if a row was modified, false if the id was not found.
    */
   updateLifecycle(id: string, lifecycle: MemoryLifecycleState, updatedAt: string): boolean {
+    // State-graph guard at the repository layer (5bm.4): validateTransition was
+    // enforced only at app entry points, so this raw UPDATE was a back door for
+    // an illegal transition (e.g. archived -> active). Reject one that the state
+    // graph forbids. A same-state call is treated as an idempotent no-op (from ==
+    // to is not an "allowed transition" but is not a violation either). A missing
+    // row is not found -> false, unchanged from before (never a throw).
+    const row = this.stmtGetLifecycle.get(id) as { lifecycle: MemoryLifecycleState } | undefined;
+    if (row === undefined) return false;
+    const current = row.lifecycle;
+    if (current !== lifecycle && !isTransitionAllowed(current, lifecycle)) {
+      throw new InvalidLifecycleTransitionError(current, lifecycle);
+    }
     const result = this.stmtUpdateLifecycle.run({ id, lifecycle, updated_at: updatedAt });
     return result.changes > 0;
   }
