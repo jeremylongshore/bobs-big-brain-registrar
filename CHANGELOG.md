@@ -7,17 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **Candidate intake: id-first idempotency + created vs already_exists knowledge.**
-  `CandidateService.intake` now short-circuits on existing **id** (same tenant) before content-hash
-  dedup, so session-stable client ids collapse re-distilled retries. Returns
-  `{ candidate, intake: 'created' | 'already_exists' }`; `POST /api/candidates` responds **201** +
-  `intake: created` or **200** + `intake: already_exists`. Skips a second `proposed` receipt on
-  collapse. Closes the Property 1/2 seam called out in the fire-and-forget writer review.
-
 ### Added
 
+- **Fused lexical retrieval on the production query path.** The dormant native FTS5 (BM25) backend
+  is now activated and fused with the external qmd binary via deterministic **reciprocal-rank
+  fusion** (k=60) behind `QmdAdapter.query()` — a new persistent per-tenant `NativeIndexManager`
+  (incremental mtime-diff refresh, first-build fast path 453s → 3.8s on the live 17k-file corpus)
+  plus a pure `rrf-fusion`, with `disableNativeFusion` as the kill switch. Kills the 2026-07-16
+  0-hits-for-our-own-memory miss class (qmd's keyword-AND tokenizer can't match `governed-brain` /
+  `CLAUDE.md`; FTS5's unicode61 tokenizer can), serving stays 100% model-free (#257).
+- **Freshness + category rerank on the cited (qmd) path.** `rerankCitedHits` +
+  `extractMemoryIdFromCitation` in `@qmd-team-intent-kb/common`, applied in `searchViaQmd` after
+  score normalisation, so last week's decision no longer loses to a year-old reference doc; every
+  hit keeps its `qmd://` citation (#256).
+- **Retrieval eval as a CI-gated regression series.** A self-contained stratified ratchet over a
+  committed synthetic corpus (never `~/.teamkb`) that fails if lexical **or** semantic Recall@10
+  regresses, reported separately (#243); a dedicated `tokenization` stratum locking the two literal
+  2026-07-16 incident queries (fused 5/5 vs 2/5 with fusion off) that emits a machine-readable
+  `eval-results/synthetic-v1.json` artifact on pass and fail (#258); and the govern-decision +
+  provenance evals promoted to a named required CI job (#242).
+- **Recommended full-coverage governance policy + anti-dormancy gate** (`packages/policy-engine`):
+  `RECOMMENDED_POLICY_RULES` / `buildRecommendedPolicy` covering every registered rule, plus
+  `findUncoveredRuleTypes` / `assertPolicyCompleteness` — a CI gate that makes it impossible to add
+  a rule the recommended policy leaves inert (the live policy ran only 2 of 8 rules, a direct cause
+  of the 2026-07-16 ~15k-candidate flood) (#266). Live-policy dormancy is now surfaced as a distinct
+  field in `GET /api/health` so an operator can see inert rules (#278).
+- **Governed in-place recategorization** — a tool + API + receipted audit transition to correct a
+  memory's category without supersede-and-recreate, which was inflating lifecycle churn (#272).
+- **`bulk_import` MemorySource** added to the enum + `curated_memories.source` CHECK so policy can
+  gate whole-machine digestions distinctly from deliberate imports (#274).
+- **Brain team-bridge API hardening** (EPIC 0 / R-series): one-shot promote-candidate →
+  governed-memory endpoint (#203); no-comp/no-PII disclosure gate enforced at candidate intake
+  (#201, regexes hardened #202); agent-review approve/reject surface + candidate status-flip fix
+  (#238); server-side candidate-intake override with a provenance receipt (#230); idempotent
+  tenant-scoped content-hash candidate dedup (#241); per-actor capture quota + aligned DB path
+  (#240); pre-hashed scrypt tokens accepted at rest (#227); durable revoke-by-actor persisted
+  revocation list (#229); promote() writes wrapped in one transaction for atomic receipts (#231);
+  immutable tag-pinned release deploy for the brain API (#228) with a tailnet deploy runbook (#211).
+- **EPIC 1 merge substrate (demand-gated, foundation only):** content-derived UUID v5 +
+  deterministic audit-chain timestamps (#206), a govern-at-merge gate that re-derives the union as
+  untrusted (#207), a per-actor Ed25519 signed DAG anchor + merge-aware verifier (#208), a
+  cross-repo namespace drift guard (#210), and residual EPIC 0/1 hardening — enum-membership scan,
+  same-content dedup, gate-entry id invariant, N-way merge proof (#209).
+- **First real retrieval + govern numbers:** hand-labeled Recall@10 / nDCG@10 over the live corpus
+  (#223) and per-check govern-decision precision/recall with an R10 boundary-scan fix (#221).
+- **Advisory CI reviewer + evidence:** an in-repo **MiniMax-M3 two-lane** PR reviewer (defect lane
+  + adversarial-claims lane) with `REVIEW.md` as the canonical reviewer law (#263); signed
+  gate-result evidence emitted for the labs dashboard (#252); a `changelog-updated` dispatch to the
+  umbrella on merge (#250); a repo-tailored `.greptile` config (#232); and `SUPPORT.md` (#244).
 - **`scripts/bbb-qmd`** — operator wrapper that runs the pinned `@tobilu/qmd` against the team brain
   index (`~/.teamkb/qmd-index/<tenant>` via XDG), not personal `~/.cache/qmd`. `pnpm bbb-qmd --which`
   shows binary + version + tenant paths. Ride Tobi's releases via Dependabot pin; do not fork qmd.
@@ -35,6 +72,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Ontology write-path hardening (epic `5bm`), so the governed store can't be enum-smuggled.**
+  `assertMemoryEnumMembership` now guards `category` / `trust_level` / `sensitivity` / `lifecycle` /
+  `source` / `author.type` at the top of `MemoryRepository.insert` and `update` (previously only
+  read-time schema validation stood between a raw caller and a disclosure-shaped string in an enum
+  column), plus row-level CHECK constraints on the new-DB DDL (#265); migration **v9** backfills
+  those CHECK constraints onto the live legacy `curated_memories` table via a fail-closed, in-place
+  rebuild with zero blast radius on fresh DBs (#277). The promoter now persists the **classified**
+  sensitivity from the deterministic content classifier instead of hardcoding `internal` — which had
+  made the exporter's confidential/restricted skip dead code (#267). `updateLifecycle` now rejects
+  transitions the lifecycle state graph forbids (#268). The spool `MemoryCandidate` carries a
+  validated `schemaVersion` so a future ICO v2 line is rejected, not silently downgraded to v1 (#271).
 - **Dependabot: hold `typescript` at its current major.** Added `typescript` semver-major to the
   ignore list (alongside `dependency-cruiser` and `@eslint/js`): the dev-dependencies group tried to
   bump `typescript` 5.x → **7.0.2** — the native/preview compiler — which crashes `@typescript-eslint`
@@ -43,6 +91,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   landed (vitest, knip, prettier 3.9.5, testcontainers, tsx, `@intentsolutions/audit-harness`, …)
   with `typescript` held at 5.x; reformatted one test file for prettier 3.9.5.
 - Ignore `.worktrees/` (local Agent-isolation worktree checkouts).
+
+### Fixed
+
+- **Candidate intake: id-first idempotency + created vs already_exists knowledge.**
+  `CandidateService.intake` now short-circuits on existing **id** (same tenant) before content-hash
+  dedup, so session-stable client ids collapse re-distilled retries. Returns
+  `{ candidate, intake: 'created' | 'already_exists' }`; `POST /api/candidates` responds **201** +
+  `intake: created` or **200** + `intake: already_exists`. Skips a second `proposed` receipt on
+  collapse. Closes the Property 1/2 seam called out in the fire-and-forget writer review (#249).
+- **git-exporter fails closed on an unmapped category** instead of laundering it into the
+  governance-approved `curated/` bucket (#269), with the category→directory mapper locked to the
+  schema enum (#270); a single malformed memory is now **quarantined and reported** rather than
+  aborting the whole export run (#276).
+- **Retrieval reliability:** idempotent qmd reindex + a search-health canary to end silent 0-hit
+  degradation (#220).
+- **Honest audit-chain verify:** sequence-ordering + `CHAIN_FORK` classification (#212); a byte-pinned
+  exception manifest + 3-state audit-break classifier (#214); provenance-integrity now passes on
+  no-tampering and discloses benign forks (#215).
+- **Govern precision:** gate the heroku UUID rule + converge the PII vocab to raise precision (#224).
+- **repo-resolver:** classify git "dubious ownership" as `NotAGitRepo` (#213).
+
+### Security
+
+- **Read-time sensitivity enforcement — confidential/restricted memories are never returned on any
+  search path.** The git-exporter already skipped them from the qmd index at write time, but the API
+  SQLite fallback and the MCP local-mode path still returned raw `curated_memories` rows; a
+  default-exclude read filter closes that leak (#275).
+- **Closed two secret-scan evasions the govern-eval measured** — split-newline and base64-wrapped
+  keys — so a smuggled credential no longer slips the disclosure gate (#222).
 
 ## [0.7.0] - 2026-06-19
 
