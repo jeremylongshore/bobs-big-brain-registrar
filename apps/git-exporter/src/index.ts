@@ -4,6 +4,7 @@ export { formatMemoryAsMarkdown, getFilename } from './formatter/markdown-format
 export {
   getDirectory,
   getCategoryDirectory,
+  UnknownCategoryError,
   getRelativePath,
 } from './formatter/directory-mapper.js';
 export { detectChanges } from './diff/change-detector.js';
