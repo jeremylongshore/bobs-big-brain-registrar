@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const MemorySource = z.enum(['claude_session', 'manual', 'import', 'mcp']);
+// `bulk_import` (5bm.8) marks a whole-machine / large digestion — ICO stamps it
+// (with low trust) so a whole-machine mount is distinguishable from a deliberate
+// `import` and the source-trust policy can gate it, instead of a 17k-candidate
+// digestion looking identical to a curated import (the 2026-07-16 flood).
+export const MemorySource = z.enum(['claude_session', 'manual', 'import', 'mcp', 'bulk_import']);
 export type MemorySource = z.infer<typeof MemorySource>;
 
 export const TrustLevel = z.enum(['high', 'medium', 'low', 'untrusted']);

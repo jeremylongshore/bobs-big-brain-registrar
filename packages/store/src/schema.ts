@@ -28,7 +28,7 @@ const CURATED_MEMORIES_DDL = `
 CREATE TABLE IF NOT EXISTS curated_memories (
   id TEXT PRIMARY KEY,
   candidate_id TEXT NOT NULL,
-  source TEXT NOT NULL CHECK (source IN ('claude_session', 'manual', 'import', 'mcp')),
+  source TEXT NOT NULL CHECK (source IN ('claude_session', 'manual', 'import', 'mcp', 'bulk_import')),
   content TEXT NOT NULL,
   title TEXT NOT NULL,
   category TEXT NOT NULL CHECK (category IN ('decision', 'pattern', 'convention', 'architecture', 'troubleshooting', 'reference', 'onboarding')),

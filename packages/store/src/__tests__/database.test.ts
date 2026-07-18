@@ -93,6 +93,26 @@ describe('curated_memories enum CHECK constraints (5bm.1)', () => {
     db.close();
   });
 
+  it('accepts the bulk_import source (5bm.8)', () => {
+    const db = createTestDatabase();
+    const author = JSON.stringify({ type: 'human', id: 'u', name: 'U' });
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO curated_memories (
+            id, candidate_id, source, content, title, category, trust_level, sensitivity,
+            author_json, tenant_id, metadata_json, lifecycle, content_hash,
+            policy_evaluations_json, supersession_json, promoted_at, promoted_by_json, updated_at, version
+          ) VALUES (
+            'i', 'c', 'bulk_import', 'x', 'x', 'reference', 'untrusted', 'internal',
+            ?, 't', '{}', 'active', 'h', '[]', NULL, 'now', ?, 'now', 1
+          )`,
+        )
+        .run(author, author),
+    ).not.toThrow();
+    db.close();
+  });
+
   it('accepts a fully in-vocabulary row', () => {
     const db = createTestDatabase();
     const author = JSON.stringify({ type: 'human', id: 'u', name: 'U' });
