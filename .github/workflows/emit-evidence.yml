@@ -24,8 +24,8 @@
 #   releases/download/evidence-latest/report-manifest.json
 # and pins these OIDC claims for the `qmd` row:
 #   issuer      https://token.actions.githubusercontent.com
-#   subject     repo:jeremylongshore/qmd-team-intent-kb:ref:refs/heads/main
-#   workflowRef jeremylongshore/qmd-team-intent-kb/.github/workflows/emit-evidence.yml@refs/heads/main
+#   subject     repo:jeremylongshore/bobs-big-brain-registrar:ref:refs/heads/main
+#   workflowRef jeremylongshore/bobs-big-brain-registrar/.github/workflows/emit-evidence.yml@refs/heads/main
 name: Emit signed evidence (labs dashboard)
 
 on:

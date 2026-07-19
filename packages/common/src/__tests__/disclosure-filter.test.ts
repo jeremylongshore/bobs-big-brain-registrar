@@ -331,7 +331,7 @@ describe('assertDisclosureClean — metadata / author free-text surfaces (c5k.1)
           tags: ['errors'],
           filePaths: ['src/kernel.ts'],
           projectContext: 'governed brain',
-          repoUrl: 'https://github.com/jeremylongshore/qmd-team-intent-kb',
+          repoUrl: 'https://github.com/jeremylongshore/bobs-big-brain-registrar',
           branch: 'main',
           language: 'typescript',
         },

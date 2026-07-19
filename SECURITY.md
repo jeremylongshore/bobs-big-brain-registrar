@@ -2,10 +2,10 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in qmd-team-intent-kb, please report it responsibly:
+If you discover a security vulnerability in Bob's Big Brain Registrar (formerly qmd-team-intent-kb), please report it responsibly:
 
 - **Email:** [security@jeremylongshore.com](mailto:security@jeremylongshore.com)
-- **GitHub Security Advisory:** Open a [private security advisory](https://github.com/jeremylongshore/qmd-team-intent-kb/security/advisories/new) on this repository.
+- **GitHub Security Advisory:** Open a [private security advisory](https://github.com/jeremylongshore/bobs-big-brain-registrar/security/advisories/new) on this repository.
 
 Do not open a public issue for security vulnerabilities.
 
@@ -30,7 +30,7 @@ Only the latest minor release receives security patches. Upgrade to stay protect
 
 ## Project-Specific Threat Model
 
-qmd-team-intent-kb operates at the intersection of AI-generated content, team knowledge, and local development environments. This creates a unique threat surface that generic security guidance does not cover.
+Bob's Big Brain Registrar operates at the intersection of AI-generated content, team knowledge, and local development environments. This creates a unique threat surface that generic security guidance does not cover.
 
 ### 1. Secret Leakage into Memory Candidates
 

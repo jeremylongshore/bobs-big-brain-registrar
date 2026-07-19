@@ -1,6 +1,6 @@
-# qmd-team-intent-kb (INTKB — the govern engine) — review context for Greptile
+# Bob's Big Brain Registrar (the govern engine; repo renamed from qmd-team-intent-kb 2026-07-19) — review context for Greptile
 
-INTKB is the **deterministic control plane** of the Governed Second Brain ("Bob's Big Brain"). It
+The Registrar is the **deterministic control plane** of Bob's Big Brain. It
 consumes the compile engine's (ICO's) spool and runs **dedupe -> policy -> promotion** into an
 append-only, hash-chained audit log. It is **not** a qmd fork, **not** git-as-database, and **not**
 prompt-only memory governance. TypeScript/Node monorepo (pnpm, Node >= 20).
@@ -51,8 +51,8 @@ anchor + per-actor signatures.
 
 ## Related repos (multi-repo context)
 
-INTKB is one of five repos under the `intent-solutions-io/governed-second-brain` umbrella. It is
-bundled by the public `governed-second-brain-plugin` (local + team modes) and consumes the ICO
-compile engine's spool. Greptile's config schema has no multi-repo key, so these are noted here for
+The Registrar is one of the repos under the `intent-solutions-io/bobs-big-brain-umbrella` umbrella.
+It is bundled by the public `bobs-big-brain-plugin` (local + team modes) and consumes the spool of
+the compile engine (`jeremylongshore/bobs-big-brain-compiler`). Greptile's config schema has no multi-repo key, so these are noted here for
 reviewer context. Full topology + the code-verified system map: umbrella `000-docs/005-AT-ARCH` and
 `007-AT-SMAP`.

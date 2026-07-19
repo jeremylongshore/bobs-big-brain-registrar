@@ -1,24 +1,26 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img alt="qmd-team-intent-kb — governed team memory for Claude Code. The govern layer." src="assets/banner-light.svg" width="860">
+    <img alt="Bob's Big Brain Registrar — governed team memory for Claude Code. The govern layer." src="assets/banner-light.svg" width="860">
   </picture>
 </p>
 
-# qmd-team-intent-kb
+# Bob's Big Brain Registrar
 
-**A governed team memory platform for Claude Code powered by qmd.**
+> Formerly `qmd-team-intent-kb` — the `@qmd-team-intent-kb/*` npm scope and the GHCR image name keep that name.
 
-Turn ephemeral Claude Code session insights into persistent, governed, team-wide memory. qmd-team-intent-kb captures institutional knowledge generated during AI-assisted development, applies deterministic governance policies, and makes curated knowledge searchable through qmd's local full-text indexing.
+Bob's Big Brain Registrar is the memory keeper: it decides what's worth keeping — by deterministic rules you can read, not an AI's judgment call — stores it, retires what goes stale, and writes a tamper-evident receipt for what it admits.
 
-> **Part of the [Compile-Then-Govern](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack (Bob's Big Brain)** — INTKB is the **govern** layer. Upstream, [intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os) (compile) emits the spool it consumes; downstream, [qmd](https://github.com/tobi/qmd) (retrieve) serves the curated result with `qmd://` citations. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
+Turn ephemeral Claude Code session insights into persistent, governed, team-wide memory. The Registrar captures institutional knowledge generated during AI-assisted development, applies deterministic governance policies, and makes curated knowledge searchable through qmd's local full-text indexing.
+
+> **Part of the [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack** — the Registrar is the **govern** layer. Upstream, [Bob's Big Brain Compiler](https://github.com/jeremylongshore/bobs-big-brain-compiler) (compile) emits the spool it consumes; downstream, [qmd](https://github.com/tobi/qmd) (retrieve) serves the curated result with `qmd://` citations. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
 ## Positioning
 
 This project has a clear separation of responsibilities:
 
 - **qmd** is one of two local retrieval backends. It does one thing well: fast, offline full-text search.
-- **qmd-team-intent-kb** provides everything around it: orchestration, governance, lifecycle management, deduplication, analytics, the team-shared memory model, and hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via deterministic reciprocal-rank fusion, then reranked by freshness and category. Serving stays model-free and deterministic; a semantic (sqlite-vec) backend is deferred behind the retrieval eval gate.
+- **Bob's Big Brain Registrar** provides everything around it: orchestration, governance, lifecycle management, deduplication, analytics, the team-shared memory model, and hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via deterministic reciprocal-rank fusion, then reranked by freshness and category. Serving stays model-free and deterministic; a semantic (sqlite-vec) backend is deferred behind the retrieval eval gate.
 - **Enterprise-capable from day one.** Tenant isolation, audit trails, and governance policies are architectural requirements, not afterthoughts.
 
 ## Architecture Thesis
@@ -42,7 +44,7 @@ The system is built on a strict information flow with deliberate trust boundarie
 ## Monorepo Structure
 
 ```
-qmd-team-intent-kb/
+bobs-big-brain-registrar/
 ├── apps/                    # Deployable applications
 │   ├── api/                 # Control plane REST API (Fastify)
 │   ├── curator/             # Memory promotion, dedupe, supersession
@@ -128,8 +130,8 @@ Highlights:
 
 ```bash
 # Clone the repository
-git clone https://github.com/jeremylongshore/qmd-team-intent-kb.git
-cd qmd-team-intent-kb
+git clone https://github.com/jeremylongshore/bobs-big-brain-registrar.git
+cd bobs-big-brain-registrar
 
 # Install dependencies
 pnpm install

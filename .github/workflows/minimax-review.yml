@@ -1,7 +1,7 @@
 name: 'MiniMax Code Review'
 
 # In-repo advisory AI review, two independent lanes (enforcement travels with
-# the code) for qmd-team-intent-kb (INTKB) — the deterministic GOVERN engine of
+# the code) for Bob's Big Brain Registrar (formerly qmd-team-intent-kb) — the deterministic GOVERN engine of
 # Bob's Big Brain (consumes ICO's spool of MemoryCandidates → dedupe → policy →
 # promotion → hash-chained append-only audit log; pnpm/TypeScript monorepo):
 #
@@ -83,7 +83,7 @@ jobs:
           # the MINIMAX_SYSTEM_PROMPT repo variable.
           MINIMAX_SYSTEM_PROMPT: >-
             ${{ vars.MINIMAX_SYSTEM_PROMPT || 'You are an advisory code reviewer
-            for qmd-team-intent-kb (INTKB), the deterministic GOVERN engine of
+            for Bob's Big Brain Registrar (formerly qmd-team-intent-kb), the deterministic GOVERN engine of
             Bob''s Big Brain: a pnpm/TypeScript monorepo (packages/schema,
             policy-engine, common, qmd-adapter, store; apps/api, curator,
             git-exporter, edge-daemon) that consumes ICO''s spool of memory
@@ -153,7 +153,7 @@ jobs:
           INCLUDE_PR_BODY: 'true'
           MINIMAX_SYSTEM_PROMPT: >-
             ${{ vars.MINIMAX_ADVERSARIAL_PROMPT || 'You are an ADVERSARIAL
-            claims auditor for qmd-team-intent-kb (INTKB), the deterministic
+            claims auditor for Bob's Big Brain Registrar (formerly qmd-team-intent-kb), the deterministic
             GOVERN engine of Bob''s Big Brain, where the costliest failure mode
             is a status claim that outruns its evidence. Assume the pull request
             overstates what it proves, then try to REFUTE every claim it makes —

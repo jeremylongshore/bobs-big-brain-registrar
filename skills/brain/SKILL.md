@@ -128,6 +128,6 @@ Sources:
 
 ## Resources
 
-- [Compile-Then-Govern](https://github.com/intent-solutions-io/compile-then-govern) — the stack this brain belongs to.
-- [intentional-cognition-os](https://github.com/jeremylongshore/intentional-cognition-os) — the compiler (ICO).
-- [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance + retrieval plane (this plugin's home).
+- [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) — the stack this brain belongs to.
+- [Bob's Big Brain Compiler](https://github.com/jeremylongshore/bobs-big-brain-compiler) — the compiler (ICO).
+- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — the governance + retrieval plane (this plugin's home).

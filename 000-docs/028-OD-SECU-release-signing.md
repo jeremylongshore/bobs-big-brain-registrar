@@ -63,7 +63,10 @@ The `provenance` reusable workflow requests `actions: read`,
 Cosign keyless signing binds the signature to the GitHub Actions OIDC
 identity. The certificate SANs identify:
 
-- **Workflow identity**: `https://github.com/jeremylongshore/qmd-team-intent-kb/.github/workflows/release.yml@refs/tags/vX.Y.Z`
+- **Workflow identity**: `https://github.com/jeremylongshore/bobs-big-brain-registrar/.github/workflows/release.yml@refs/tags/vX.Y.Z`
+  (repo renamed from `qmd-team-intent-kb` on 2026-07-19 — the identity regexp must use the new
+  slug for post-rename releases; pre-rename releases were signed under the old slug. The GHCR
+  image name intentionally keeps the historical slug: it is a published artifact identifier.)
 - **OIDC issuer**: `https://token.actions.githubusercontent.com`
 
 There is no long-lived signing key to manage, rotate, or leak. All
@@ -75,7 +78,7 @@ signatures are recorded in the public Rekor transparency log.
 
 ```sh
 cosign verify \
-  --certificate-identity-regexp 'https://github\.com/jeremylongshore/qmd-team-intent-kb/\.github/workflows/release\.yml@refs/tags/v.*' \
+  --certificate-identity-regexp 'https://github\.com/jeremylongshore/bobs-big-brain-registrar/\.github/workflows/release\.yml@refs/tags/v.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   ghcr.io/jeremylongshore/qmd-team-intent-kb-edge-daemon:<tag>
 ```
@@ -91,7 +94,7 @@ and exits 0. A failure exits non-zero and must block deployment.
 #   go install github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@latest
 slsa-verifier verify-image \
   ghcr.io/jeremylongshore/qmd-team-intent-kb-edge-daemon:<tag> \
-  --source-uri github.com/jeremylongshore/qmd-team-intent-kb \
+  --source-uri github.com/jeremylongshore/bobs-big-brain-registrar \
   --source-tag <tag>
 ```
 

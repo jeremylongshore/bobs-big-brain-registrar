@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a feature for qmd-team-intent-kb
+about: Suggest a feature for Bob's Big Brain Registrar
 title: '[FEATURE] '
 labels: enhancement
 assignees: jeremylongshore

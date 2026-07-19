@@ -71,12 +71,15 @@ jobs:
   #
   # Outputs:
   #   - ghcr.io/jeremylongshore/qmd-team-intent-kb-edge-daemon:${TAG}
+  #     (the GHCR image name INTENTIONALLY keeps the historical repo slug — it
+  #     is a published artifact identifier, same logic as the unchanged
+  #     @qmd-team-intent-kb/* npm scope; do not "fix" it to the new repo name)
   #   - cosign keyless signature (OIDC, Rekor transparency log)
   #   - SLSA Level 3 build provenance attestation
   #
   # Verification (after release):
   #   cosign verify \
-  #     --certificate-identity-regexp 'https://github\.com/jeremylongshore/qmd-team-intent-kb/\.github/workflows/release\.yml@refs/tags/v.*' \
+  #     --certificate-identity-regexp 'https://github\.com/jeremylongshore/bobs-big-brain-registrar/\.github/workflows/release\.yml@refs/tags/v.*' \
   #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   #     ghcr.io/jeremylongshore/qmd-team-intent-kb-edge-daemon:<tag>
   # --------------------------------------------------------------------------
