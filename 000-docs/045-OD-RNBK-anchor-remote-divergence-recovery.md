@@ -42,7 +42,13 @@ and local mode makes no cross-actor guarantee about _who_ performed a write.
 
 Because the ruleset has **no bypass actors**, not even the repo owner can
 force-push or delete the branch through the normal push path. That is
-deliberate: the remote's value is that its history only ever moves forward.
+deliberate: the remote's value is that its history moves only forward **while
+the ruleset stands**. The ruleset itself is an admin-editable GitHub object —
+a repo admin could delete or weaken it and force-push afterwards — so treat
+any change to the `protect-anchor-history` ruleset as a governance event in
+its own right (it is visible in the repo's audit log), and re-verify the
+ruleset (`gh api repos/jeremylongshore/bobs-big-brain-anchors/rulesets`)
+whenever this runbook is exercised.
 
 ## The divergence check
 
