@@ -2,11 +2,11 @@
 title: 'Governed Second Brain: Wave-0 Retrieval Reconciliation (Reranker-First, Apache/MIT, Dense Deferred to Measurement)'
 filing_code: 044-AT-DECR
 date: 2026-07-19
-deciding_authority: Jeremy Longshore (Intent Solutions), acting head of board
+acting_head_of_board: Jeremy Longshore (Intent Solutions)
 reconciles: 016-AT-PLAN (Axis 1, reranker-first) vs 038-AT-DECR (dense-only, EmbeddingGemma, reranker rejected)
 supersedes: the retrieval-arm and embedder-model elements of 038-AT-DECR only; all other 038 decisions stand
 serves: O1 (retrieval measured), O4 (seam holds); unblocks Epic B (019-PP-PLAN bead A1)
-status: binding decision record: supersedes only by explicit later DECR
+status: binding decision record, supersedes only by explicit later DECR
 license: Apache-2.0
 ---
 
