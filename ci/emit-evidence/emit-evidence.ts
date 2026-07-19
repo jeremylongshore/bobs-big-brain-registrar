@@ -67,7 +67,7 @@ import { EvidenceBundleSchema } from '@intentsolutions/core/validators/v1/eviden
 // ALWAYS matches the cosign OIDC certificate identity, which CI derives from
 // ${GITHUB_REPOSITORY} — a repo rename can never split the two. The fallback
 // (current slug, post-2026-07-19 rename) only applies outside GitHub Actions.
-const GITHUB_REPO = process.env['GITHUB_REPOSITORY'] ?? 'jeremylongshore/bobs-big-brain-registrar';
+const GITHUB_REPO = process.env['GITHUB_REPOSITORY'] || 'jeremylongshore/bobs-big-brain-registrar';
 const REPO_KEY = 'qmd';
 const WORKFLOW_FILE = 'emit-evidence.yml';
 
