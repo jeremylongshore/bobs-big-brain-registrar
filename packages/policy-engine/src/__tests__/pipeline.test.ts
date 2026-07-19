@@ -260,3 +260,95 @@ describe('PolicyPipeline', () => {
     expect(result.rejectedBy).toBe('rule-dedup_check');
   });
 });
+
+// ---------------------------------------------------------------------------
+// E1 ordering invariant: contradiction_check evaluates BEFORE any reject
+// short-circuit — structurally, not by priority convention.
+// ---------------------------------------------------------------------------
+
+describe('PolicyPipeline contradiction_check pre-phase (E1)', () => {
+  const CONVENTION_TEXT =
+    'Always wrap async boundaries in try/catch and convert failures to Result types for the caller.';
+  const CONTRADICTING_TEXT =
+    'Never wrap async boundaries in try/catch and convert failures to Result types for the caller.';
+
+  /** Lookup returning one active same-category memory that heavily overlaps. */
+  const contradictingLookup = (category: string) =>
+    category === 'convention' ? [{ id: 'mem-existing', content: CONTRADICTING_TEXT }] : [];
+
+  it('records the contradiction flag even when a reject rule also trips (reject cannot skip it)', () => {
+    // tenant_match rejects (context tenant mismatch) AND the candidate
+    // contradicts an existing memory. The reject rule carries priority 0 — the
+    // most favourable priority a reject rule can have — while contradiction_check
+    // carries the WORST priority, so only the structural pre-phase (not priority
+    // luck) can explain it running.
+    const policy = makePolicy([
+      makeRule('tenant_match', { action: 'reject', priority: 0 }),
+      makeRule('contradiction_check', { action: 'flag', priority: 99 }),
+    ]);
+    const pipeline = new PolicyPipeline(policy);
+    const candidate = makeCandidate({
+      tenantId: 'team-alpha',
+      category: 'convention',
+      content: CONVENTION_TEXT,
+    });
+    const result = pipeline.evaluate(candidate, {
+      tenantId: 'team-beta',
+      getActiveMemoriesInCategory: contradictingLookup,
+    });
+
+    // The reject still wins the OUTCOME…
+    expect(result.outcome).toBe('rejected');
+    expect(result.rejectedBy).toBe('rule-tenant_match');
+    // …but the contradiction evaluation ran first and its flag is in the
+    // decision output.
+    expect(result.flaggedBy).toContain('rule-contradiction_check');
+    const contradictionEval = result.evaluations.find((e) => e.ruleType === 'contradiction_check');
+    expect(contradictionEval?.outcome).toBe('flag');
+    // Structural ordering: the contradiction evaluation precedes the rejecting one.
+    expect(result.evaluations[0]?.ruleType).toBe('contradiction_check');
+  });
+
+  it('evaluates contradiction rules first even when every priority favours the reject rule', () => {
+    const policy = makePolicy([
+      makeRule('content_length', {
+        action: 'reject',
+        priority: 0,
+        parameters: { min: 999999 }, // always fails → rejects
+      }),
+      makeRule('contradiction_check', { action: 'flag', priority: 100 }),
+    ]);
+    const pipeline = new PolicyPipeline(policy);
+    const candidate = makeCandidate({ category: 'convention', content: CONVENTION_TEXT });
+    const result = pipeline.evaluate(candidate, {
+      getActiveMemoriesInCategory: contradictingLookup,
+    });
+    expect(result.outcome).toBe('rejected');
+    expect(result.flaggedBy).toContain('rule-contradiction_check');
+    // Both evaluations are present: contradiction (pre-phase) + the rejecting rule.
+    expect(result.evaluations.map((e) => e.ruleType)).toEqual([
+      'contradiction_check',
+      'content_length',
+    ]);
+  });
+
+  it('flags (never rejects) on contradiction even when configured with action=reject', () => {
+    const policy = makePolicy([makeRule('contradiction_check', { action: 'reject' })]);
+    const pipeline = new PolicyPipeline(policy);
+    const candidate = makeCandidate({ category: 'convention', content: CONVENTION_TEXT });
+    const result = pipeline.evaluate(candidate, {
+      getActiveMemoriesInCategory: contradictingLookup,
+    });
+    expect(result.outcome).toBe('flagged');
+    expect(result.rejectedBy).toBeUndefined();
+    expect(result.flaggedBy).toContain('rule-contradiction_check');
+  });
+
+  it('approves cleanly when the lookup is not injected (vacuous pass, like dedup)', () => {
+    const policy = makePolicy([makeRule('contradiction_check', { action: 'flag' })]);
+    const pipeline = new PolicyPipeline(policy);
+    const candidate = makeCandidate({ category: 'convention', content: CONVENTION_TEXT });
+    const result = pipeline.evaluate(candidate);
+    expect(result.outcome).toBe('approved');
+  });
+});

@@ -115,6 +115,19 @@ export const RECOMMENDED_POLICY_RULES: readonly PolicyRule[] = [
     parameters: {},
     description: 'Flag content that required sanitization.',
   },
+  {
+    // E1: flag-only in v1, and the pipeline evaluates contradiction rules in a
+    // dedicated pre-phase regardless of this priority number — the priority
+    // only orders it among other contradiction rules.
+    id: 'rec-contradiction-check',
+    type: 'contradiction_check',
+    action: 'flag',
+    enabled: true,
+    priority: 8,
+    parameters: {},
+    description:
+      'Flag candidates that heavily overlap an existing active same-category memory (potential contradiction, v1 token-overlap heuristic).',
+  },
 ];
 
 /**
