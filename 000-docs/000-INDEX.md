@@ -51,6 +51,7 @@
 - `042-OD-OPSM-bbb-qmd-operator-runbook.md` — Bob's Big Brain + Tobi qmd: personal vs team index, `bbb-qmd` wrapper, pin/Dependabot, canary
 - `043-OD-EVAL-onboarding-qbank-v1.md` — Outsider day-1 Q-bank + baseline scoring for retrieval productization
 - `044-AT-DECR-wave0-retrieval-reconciliation.md` — Wave-0 retrieval reconciliation: ship the reranker first (Apache/MIT), defer the dense arm to a measured P2 gate, EmbeddingGemma out. Supersedes only the retrieval-arm + embedder elements of `038-AT-DECR`; unblocks the retrieval beads in the umbrella blueprint (`019-PP-PLAN` A1/B1/B2).
+- `045-OD-RNBK-anchor-remote-divergence-recovery.md` — Anchor remote divergence recovery: the private anchor-witness remote (`bobs-big-brain-anchors`, force-push-blocked), the fetch/status divergence check, per-state recovery (ahead = plain push; behind/diverged = investigate with the HISTORY_REWRITTEN tooling before ANY reconciliation), honest trust framing (detectable, not impossible)
 
 - `016-OD-OPSM-branch-protection-checklist.md` — GitHub branch protection configuration checklist
 - `027-OD-OPSM-edge-daemon-runbook.md` — edge-daemon operations runbook (install, config, health check, recovery, upgrade, rollback)
@@ -118,4 +119,4 @@
 | 039 | RL-REPT | qmd-team-intent-kb-release-v0.7.0   | v0.7.0 release report            |
 | 040 | OD-OPSM | brain-api-tailnet-deploy            | Brain API tailnet deploy runbook |
 
-## Next Available Sequence: 045
+## Next Available Sequence: 046
