@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "dataset": "governed-brain-v1",
   "k": 10,
   "epsilon": 0.001,

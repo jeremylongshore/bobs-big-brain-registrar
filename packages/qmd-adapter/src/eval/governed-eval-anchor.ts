@@ -67,6 +67,9 @@ import { stratify, formatStratifiedReport } from './stratified-report.js';
 import type { StratifiedReport } from './stratified-report.js';
 import { qmdRetrievalFn } from './qmd-retrieval.js';
 import { GOVERNED_BRAIN_V1_DATASET } from './datasets/governed-brain-v1.js';
+// Deliberate coupling: the synthetic ratchet's epsilon is the project's one
+// canonical regression-slack value; the anchor reuses it so the two gates can
+// never drift apart silently.
 import { RATCHET_EPSILON } from './datasets/synthetic-v1.js';
 
 /** The throwaway tenant the temp anchor index is bound to. Never the real brain's tenant. */
@@ -88,7 +91,14 @@ export const FLOOR_BASENAME = 'governed-brain-v1-floor.json';
 
 /** Shape of `eval-results/governed-brain-v1-snapshot.lock.json`. */
 export interface SnapshotLock {
-  /** Absolute default path of the frozen tarball on the eval box (override: GOVERNED_EVAL_SNAPSHOT). */
+  /** Lock-format version — bump on any breaking shape change. */
+  schemaVersion: number;
+  /**
+   * Default path of the frozen tarball on the eval box (override:
+   * GOVERNED_EVAL_SNAPSHOT). A leading `~/` resolves against the runtime
+   * home directory so the committed lock carries no box-specific username —
+   * the binding content of the lock is the SHA-256, not the path.
+   */
   tarballPath: string;
   /** SHA-256 (hex) of the tarball — the pin. Mismatch = refuse to eval. */
   sha256: string;
@@ -100,6 +110,8 @@ export interface SnapshotLock {
 
 /** Shape of `eval-results/governed-brain-v1-floor.json`. */
 export interface GovernedFloor {
+  /** Floor-format version — bump on any breaking shape change. */
+  schemaVersion: number;
   dataset: string;
   k: number;
   /** Slack below each floor value before a measurement counts as a regression. */
@@ -110,6 +122,15 @@ export interface GovernedFloor {
   /** SHA-256 of the snapshot the floors were measured against. */
   snapshotSha256: string;
   note: string;
+}
+
+/**
+ * Expand a leading `~/` against the runtime home directory. The committed lock
+ * stores the tarball path in `~/`-form so no box-specific username lands in
+ * the repo; the SHA-256 pin — not the path — is what binds the snapshot.
+ */
+export function expandHome(p: string): string {
+  return p.startsWith('~/') ? join(homedir(), p.slice(2)) : p;
 }
 
 /** One stratum's floor verdict. */
@@ -177,6 +198,7 @@ export function proposeFloor(sr: StratifiedReport, snapshotSha256: string): Gove
     floors[s.stratum] = round4(s.meanRecallAtK);
   }
   return {
+    schemaVersion: 1,
     dataset: sr.dataset,
     k: sr.k,
     epsilon: RATCHET_EPSILON,
@@ -302,7 +324,7 @@ export async function runGovernedEvalAnchor(): Promise<number> {
     return 2;
   }
   const lock = JSON.parse(readFileSync(lockPath, 'utf8')) as SnapshotLock;
-  const tarballPath = process.env['GOVERNED_EVAL_SNAPSHOT'] ?? lock.tarballPath;
+  const tarballPath = expandHome(process.env['GOVERNED_EVAL_SNAPSHOT'] ?? lock.tarballPath);
 
   const verified = verifySnapshotAgainstLock(lock, tarballPath);
   if (!verified.ok) {

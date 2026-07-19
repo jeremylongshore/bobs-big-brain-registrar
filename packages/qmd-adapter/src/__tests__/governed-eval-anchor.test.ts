@@ -35,6 +35,7 @@ afterAll(() => {
 
 function lockFor(path: string, sha256: string): SnapshotLock {
   return {
+    schemaVersion: 1,
     tarballPath: path,
     sha256,
     createdAtUtc: '2026-07-19T00:00:00Z',
