@@ -185,7 +185,7 @@ describe('CandidateRepository.insert — disclosure / secret choke point', () =>
         filePaths: ['src/kernel.ts'],
         tags: ['kernel'],
         projectContext: 'governed brain control plane',
-        repoUrl: 'https://github.com/jeremylongshore/qmd-team-intent-kb',
+        repoUrl: 'https://github.com/jeremylongshore/bobs-big-brain-registrar',
         branch: 'main',
         language: 'typescript',
       },

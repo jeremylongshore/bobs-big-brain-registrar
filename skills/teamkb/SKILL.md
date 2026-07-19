@@ -132,4 +132,4 @@ Do NOT propose:
 
 - The read counterpart: the `/brain` skill (cited, member-safe queries).
 - The one-shot capture: the `/brain-save` skill.
-- [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance plane.
+- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — the governance plane.

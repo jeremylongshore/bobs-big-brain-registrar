@@ -1,4 +1,4 @@
-# Contributing to qmd-team-intent-kb
+# Contributing to Bob's Big Brain Registrar
 
 Thank you for your interest in contributing. This document covers the workflows, conventions, and expectations for contributing to this project.
 

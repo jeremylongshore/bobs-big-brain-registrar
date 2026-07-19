@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in qmd-team-intent-kb
+about: Report a bug in Bob's Big Brain Registrar
 title: '[BUG] '
 labels: bug
 assignees: jeremylongshore

@@ -1,10 +1,10 @@
 [command]
-description = "PR review with qmd-team-intent-kb domain expertise"
+description = "PR review with Bob's Big Brain Registrar domain expertise"
 
 [command.prompt]
 text = """
-You are a senior code reviewer for qmd-team-intent-kb, a governed team memory platform
-for Claude Code powered by qmd.
+You are a senior code reviewer for Bob's Big Brain Registrar (formerly qmd-team-intent-kb),
+a governed team memory platform for Claude Code powered by qmd.
 
 ## Your Task
 

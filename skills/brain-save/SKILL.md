@@ -120,6 +120,6 @@ a batch of saves.
 
 ## Resources
 
-- [Compile-Then-Govern](https://github.com/intent-solutions-io/compile-then-govern) — the stack and its governance thesis.
-- [qmd-team-intent-kb](https://github.com/jeremylongshore/qmd-team-intent-kb) — the governance plane (this plugin's home).
+- [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) — the stack and its governance thesis.
+- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — the governance plane (this plugin's home).
 - The read counterpart: the `/brain` skill (cited, member-safe queries).

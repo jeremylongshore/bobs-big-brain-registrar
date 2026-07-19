@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-A governed team memory platform for Claude Code powered by qmd. TypeScript/Node.js monorepo providing orchestration, governance, lifecycle management, and team-shared memory for Claude Code sessions.
+**Bob's Big Brain Registrar** — a governed team memory platform for Claude Code powered by qmd. TypeScript/Node.js monorepo providing orchestration, governance, lifecycle management, and team-shared memory for Claude Code sessions.
+
+**Renamed 2026-07-19:** the GitHub repo is now `jeremylongshore/bobs-big-brain-registrar` (formerly `jeremylongshore/qmd-team-intent-kb`; old URLs 301-redirect). Deliberately UNCHANGED: the `@qmd-team-intent-kb/*` npm scope, the `ghcr.io/jeremylongshore/qmd-team-intent-kb-edge-daemon` image name, and all `qmd-team-intent-kb-*` bead IDs — those are artifact identifiers, not the repo name. The sibling compile engine is now `jeremylongshore/bobs-big-brain-compiler` (formerly `intentional-cognition-os`).
 
 **This is not**: a qmd fork, not git-as-database, not prompt-only memory governance.
 
@@ -274,7 +276,7 @@ The ICO → INTKB spool bridge itself is currently deferred (`qmd-team-intent-kb
 Twin cross-repo epic with ICO. The end-to-end proof-of-work demo drives a real corpus through ICO compile → INTKB curator → qmd index → MCP retrieval → audit verify. Tracked as:
 
 - INTKB epic: `qmd-team-intent-kb-66t` ↔ ICO twin `intentional-cognition-os-73m`
-- GH: `jeremylongshore/qmd-team-intent-kb#149` ↔ ICO `#114`
+- GH: `jeremylongshore/bobs-big-brain-registrar#149` ↔ ICO `#114`
 - INTKB children: `9jx` (curator CLI for the demo), `gvt` (promote `kmr` audit-log hash-chain verifier to load-bearing), `6yg` (smoke test — blocked on 9jx + gvt)
 
 Parallel hygiene epic on INTKB only: `qmd-team-intent-kb-2x0` / GH `#150` — wire every `tests/JOURNEYS.md` step to its proving test via JSDoc annotations + rebuild via `journey-mapper-agent`. Closes the 42-of-43 unlinked journey-step gap.

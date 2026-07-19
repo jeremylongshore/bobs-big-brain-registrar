@@ -1,4 +1,4 @@
-# Code Review Style Guide — qmd-team-intent-kb
+# Code Review Style Guide — Bob's Big Brain Registrar (formerly qmd-team-intent-kb)
 
 ## Project Context
 

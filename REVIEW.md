@@ -8,7 +8,7 @@ introduced by the pull request and verify each against surrounding source. The r
 
 ## Review objective
 
-qmd-team-intent-kb (INTKB) is the **deterministic govern engine** of Bob's Big Brain. It consumes
+Bob's Big Brain Registrar (formerly qmd-team-intent-kb) is the **deterministic govern engine** of Bob's Big Brain. It consumes
 ICO's spool of `MemoryCandidate`s and runs dedupe → policy → promotion, writing every operation to a
 SHA-256 hash-chained append-only audit log; `qmd` (BM25 + native FTS5) serves retrieval. Review for:
 the propose-vs-own determinism boundary, disclosure safety, spool-contract integrity, honest
