@@ -1,6 +1,6 @@
 # Reranker Service Runbook — `bbb-reranker` (B1)
 
-**Doc:** 045-AT-RNBK · **Status:** Active · **Date:** 2026-07-19
+**Doc:** 046-AT-RNBK · **Status:** Active · **Date:** 2026-07-19
 **Scope:** the local cross-encoder rerank runtime (llama.cpp `llama-server` + Qwen3-Reranker-0.6B) and the adapter stage that consumes it.
 **Decision record:** [`044-AT-DECR`](044-AT-DECR-wave0-retrieval-reconciliation.md) (Wave-0, reranker-first). Seam firewall: B2 (`packages/policy-engine/src/deterministic-score.ts`).
 

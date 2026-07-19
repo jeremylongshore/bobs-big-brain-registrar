@@ -7,7 +7,7 @@ import { RerankClient } from '../rerank/rerank-client.js';
 /**
  * Live integration against the real `bbb-reranker` systemd user service
  * (llama-server + pinned Qwen3-Reranker-0.6B on loopback :8097; see
- * scripts/bbb-reranker.service and the runbook 045-AT-RNBK).
+ * scripts/bbb-reranker.service and the runbook 046-AT-RNBK).
  *
  * Skipped (not failed) when nothing is listening on the port, so CI and boxes
  * without the service stay green — the same posture as the other live tests.

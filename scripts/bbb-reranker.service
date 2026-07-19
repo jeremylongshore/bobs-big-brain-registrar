@@ -23,7 +23,7 @@
 # it fail-closed with a coreutils binary. Keep the two in lock-step on any
 # weight bump. (~2 s to hash 639 MB at start; acceptable.)
 #
-# Runbook: 000-docs/045-AT-RNBK-reranker-service-runbook.md
+# Runbook: 000-docs/046-AT-RNBK-reranker-service-runbook.md
 
 [Unit]
 Description=Bob's Big Brain reranker (llama-server + Qwen3-Reranker-0.6B, loopback :8097)
