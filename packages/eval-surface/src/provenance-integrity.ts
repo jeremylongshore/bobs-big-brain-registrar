@@ -64,7 +64,19 @@
  * anchor divergence is treated as evidence of a post-anchor rewrite. Bootstrap
  * is graceful: a missing or empty anchor log reports
  * `anchor_status: 'no_anchors_yet'` and does NOT fail — a brain that has never
- * anchored has nothing to diverge from. The anchor-log path is configurable
+ * anchored has nothing to diverge from.
+ *
+ * ## What this evaluator does NOT do (runbook 045 carries the same bullets)
+ *
+ *   - It cannot tell a bootstrap brain from one whose LOCAL anchor log was
+ *     deleted: both collapse to `no_anchors_yet` and pass vacuously. The gap
+ *     is closed OUTSIDE this evaluator by the off-box witness — the runbook's
+ *     `git -C ~/.teamkb/audit fetch origin && git status` divergence check
+ *     against the force-push-protected remote — not by this code.
+ *   - It does not identify WHO rewrote history (no actor attribution; local
+ *     mode has no cross-actor non-repudiation).
+ *   - It does not make rewrites impossible — only detectable once anchored,
+ *     within one govern-cycle's anchoring window. The anchor-log path is configurable
  * (`options.anchorLogPath` or `$TEAMKB_ANCHOR_LOG`, default
  * `~/.teamkb/audit/anchors.jsonl`).
  *
@@ -174,9 +186,25 @@ interface AnchorBreakCounts {
 function countAnchorBreaks(breaks: readonly AnchorBreak[]): AnchorBreakCounts {
   const counts: AnchorBreakCounts = { historyTruncated: 0, historyRewritten: 0, logIntegrity: 0 };
   for (const b of breaks) {
-    if (b.reason === 'HISTORY_TRUNCATED') counts.historyTruncated += 1;
-    else if (b.reason === 'HISTORY_REWRITTEN') counts.historyRewritten += 1;
-    else counts.logIntegrity += 1;
+    // Exhaustive over the AnchorBreak reason union: a future variant fails
+    // compilation here instead of being silently laundered into one of the
+    // existing buckets. Every branch still counts toward a fail-closed verdict.
+    switch (b.reason) {
+      case 'HISTORY_TRUNCATED':
+        counts.historyTruncated += 1;
+        break;
+      case 'HISTORY_REWRITTEN':
+        counts.historyRewritten += 1;
+        break;
+      case 'ANCHOR_HASH_MISMATCH':
+      case 'ANCHOR_LINK_MISMATCH':
+        counts.logIntegrity += 1;
+        break;
+      default: {
+        const unhandled: never = b.reason;
+        throw new Error(`unhandled anchor break reason: ${String(unhandled)}`);
+      }
+    }
   }
   return counts;
 }

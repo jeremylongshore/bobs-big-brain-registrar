@@ -447,19 +447,63 @@ describe('evaluateProvenanceIntegrity', () => {
       expect(r.score).toBeLessThan(1);
     });
 
-    it('FAILS CLOSED when the head at an anchored position was rewritten', () => {
+    it('FAILS CLOSED on a full re-hash-forward rewrite that intra-chain verification cannot see', () => {
       memRepo.insert(makeMemory({ content: 'soon-to-be-rewritten brain' }));
       const ids = seedChain(3);
       appendAnchor(auditRepo, anchorPath, { tenantId: DEFAULT_TENANT });
 
-      // Rewrite the anchored head row's stored hash after anchoring.
-      db.prepare(`UPDATE audit_events SET entry_hash = ? WHERE id = ?`).run('f'.repeat(64), ids[2]);
+      // TRUE re-hash-forward (the attack the anchor witness exists for): edit
+      // the MIDDLE row's payload, recompute its entry_hash under its stored
+      // hash version, then recompute every downstream row's prev_entry_hash +
+      // entry_hash — the chain now verifies CLEAN internally, and only the
+      // anchored snapshot betrays the rewrite.
+      interface RawRow {
+        id: string;
+        action: string;
+        memory_id: string;
+        tenant_id: string;
+        actor_json: string;
+        reason: string | null;
+        details_json: string;
+        timestamp: string;
+        prev_entry_hash: string | null;
+        hash_version: 1 | 2;
+      }
+      const rowOf = (id: string): RawRow =>
+        db
+          .prepare(
+            `SELECT id, action, memory_id, tenant_id, actor_json, reason, details_json,
+                    timestamp, prev_entry_hash, hash_version
+             FROM audit_events WHERE id = ?`,
+          )
+          .get(id) as RawRow;
+
+      const mid = rowOf(ids[1]!);
+      mid.reason = 'laundered by a local writer';
+      const midHash = computeEntryHash(mid, mid.hash_version);
+      db.prepare(`UPDATE audit_events SET reason = ?, entry_hash = ? WHERE id = ?`).run(
+        mid.reason,
+        midHash,
+        mid.id,
+      );
+      const head = rowOf(ids[2]!);
+      head.prev_entry_hash = midHash;
+      const headHash = computeEntryHash(head, head.hash_version);
+      db.prepare(`UPDATE audit_events SET prev_entry_hash = ?, entry_hash = ? WHERE id = ?`).run(
+        midHash,
+        headHash,
+        head.id,
+      );
 
       const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
         tenantId: DEFAULT_TENANT,
         exceptionManifestPath: NO_MANIFEST,
         anchorLogPath: anchorPath,
       });
+      // The headline claim, both halves: intra-chain verification sees NOTHING
+      // (the rewrite re-hashed forward cleanly) …
+      expect(r.details.tamper_signatures).toBe(0);
+      // … and the anchor cross-check still fails it closed.
       expect(Number(r.details.anchor_history_rewritten)).toBeGreaterThan(0);
       expect(r.details.anchor_status).toBe('divergent');
       expect(r.passed).toBe(false);
