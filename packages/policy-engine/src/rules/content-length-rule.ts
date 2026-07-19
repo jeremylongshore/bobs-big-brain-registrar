@@ -1,5 +1,6 @@
 import type { MemoryCandidate, PolicyRule } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, RuleResult } from '../types.js';
+import { deterministicScore } from '../deterministic-score.js';
 
 const DEFAULT_MIN = 10;
 const DEFAULT_MAX = 50000;
@@ -43,6 +44,6 @@ export function evaluateContentLength(
     ruleType: rule.type,
     outcome: 'pass',
     reason: `Content length ${length} chars is within bounds [${min}, ${max}]`,
-    score,
+    score: deterministicScore(score),
   };
 }

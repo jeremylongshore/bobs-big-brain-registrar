@@ -1,5 +1,6 @@
 import type { MemoryCandidate, PolicyRule, TrustLevel } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, RuleResult } from '../types.js';
+import { deterministicScore } from '../deterministic-score.js';
 
 /** Numeric ordering for trust levels — higher = more trusted */
 const TRUST_ORDER: Record<TrustLevel, number> = {
@@ -39,7 +40,7 @@ export function evaluateSourceTrust(
       ruleType: rule.type,
       outcome: 'pass',
       reason: `Trust level '${candidate.trustLevel}' meets minimum '${minimumTrust}'`,
-      score,
+      score: deterministicScore(score),
     };
   }
 
