@@ -269,6 +269,7 @@ async function indexUpdateStep(
   config: DaemonConfig,
   deps: DaemonDependencies,
   logger: DaemonLogger,
+  nowFn: () => string,
   result: CycleResult,
 ): Promise<void> {
   if (!config.enableIndexUpdate || !deps.qmdAdapter) return;
@@ -279,6 +280,11 @@ async function indexUpdateStep(
     maxJitterMs: config.retryMaxJitterMs,
     sleepFn: config.sleepFn,
   };
+  // Capture the freshness watermark BEFORE the index update runs: a promotion
+  // landing mid-update may or may not be absorbed, so marking with the
+  // pre-update instant can only UNDER-claim freshness (it stays "dirty" and is
+  // re-absorbed next cycle) — never over-claim it.
+  const indexedAt = nowFn();
   try {
     await withRetry(async () => {
       const ensureResult = await adapter.ensureCollections();
@@ -291,6 +297,16 @@ async function indexUpdateStep(
       }
     }, retryOpts);
     result.indexUpdate = { ok: true };
+    // Freshness consumption (D1/D2): the export→reindex chain COMPLETED, so
+    // record it — this is what clears the derived index-dirty state and zeroes
+    // the staleness gauge. Only on full success; a failed update must leave
+    // the gauge reporting stale.
+    try {
+      deps.indexStateRepo?.markIndexed(config.tenantId, indexedAt);
+    } catch (markErr) {
+      const msg = markErr instanceof Error ? markErr.message : String(markErr);
+      logger.warn(`Index-state mark failed (staleness gauge may over-report): ${msg}`);
+    }
     logger.info('Index update complete');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -344,7 +360,7 @@ export async function runCycle(
 
   stalenessStep(config, deps, logger, nowFn, result);
   await exportStep(config, deps, logger, nowFn, result);
-  await indexUpdateStep(config, deps, logger, result);
+  await indexUpdateStep(config, deps, logger, nowFn, result);
 
   result.completedAt = nowFn();
   return result;

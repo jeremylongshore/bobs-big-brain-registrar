@@ -9,12 +9,29 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/schema" },
-    { "path": "../../packages/common" },
-    { "path": "../../packages/store" },
-    { "path": "../../packages/policy-engine" },
-    { "path": "../../packages/test-fixtures" },
-    { "path": "../../packages/qmd-adapter" },
-    { "path": "../curator" }
+    {
+      "path": "../../packages/schema"
+    },
+    {
+      "path": "../../packages/common"
+    },
+    {
+      "path": "../../packages/store"
+    },
+    {
+      "path": "../../packages/policy-engine"
+    },
+    {
+      "path": "../../packages/test-fixtures"
+    },
+    {
+      "path": "../../packages/qmd-adapter"
+    },
+    {
+      "path": "../curator"
+    },
+    {
+      "path": "../git-exporter"
+    }
   ]
 }

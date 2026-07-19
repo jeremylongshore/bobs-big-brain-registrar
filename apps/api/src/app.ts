@@ -16,6 +16,7 @@ import { PolicyService } from './services/policy-service.js';
 import { HealthService } from './services/health-service.js';
 import { SearchService } from './services/search-service.js';
 import type { QmdQueryPort } from './services/search-service.js';
+import type { IndexRefresher } from './services/index-refresher.js';
 import { registerCandidateRoutes } from './routes/candidates.js';
 import { registerMemoryRoutes } from './routes/memories.js';
 import { registerPolicyRoutes } from './routes/policies.js';
@@ -85,6 +86,15 @@ export interface AppDependencies {
    * text-match over the curated store.
    */
   qmdAdapter?: QmdQueryPort;
+  /**
+   * Optional post-promotion index refresher (D1). When provided, a successful
+   * `POST /api/candidates/:id/promote` triggers the export→reindex chain AFTER
+   * the promotion transaction commits, so the new memory is searchable
+   * immediately instead of waiting for the next daemon cycle / nightly govern.
+   * Omitted (tests / no-qmd deployments) → promotion behavior is unchanged and
+   * the D2 staleness gauge reports the accumulating drift.
+   */
+  indexRefresher?: IndexRefresher;
 }
 
 /**
@@ -157,7 +167,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   // hook is active would be missing from the generated spec.
   void app.register(async (scope) => {
     registerHealthRoutes(scope, healthService);
-    registerCandidateRoutes(scope, candidateService, promotionService);
+    registerCandidateRoutes(scope, candidateService, promotionService, deps.indexRefresher);
     registerMemoryRoutes(scope, memoryService, memoryRepo);
     registerPolicyRoutes(scope, policyService);
     registerAuditRoutes(scope, auditRepo);

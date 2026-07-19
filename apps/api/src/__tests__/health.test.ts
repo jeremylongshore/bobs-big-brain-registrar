@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
-import { createTestDatabase, PolicyRepository } from '@qmd-team-intent-kb/store';
+import {
+  createTestDatabase,
+  PolicyRepository,
+  IndexStateRepository,
+  MemoryRepository,
+} from '@qmd-team-intent-kb/store';
 import { buildRecommendedPolicy } from '@qmd-team-intent-kb/policy-engine';
 import type { PolicyRule } from '@qmd-team-intent-kb/schema';
 import { buildApp } from '../app.js';
+import { makeMemory } from './fixtures.js';
 
 const NOW = '2026-07-17T00:00:00.000Z';
 
@@ -92,5 +98,31 @@ describe('GET /api/health', () => {
     new PolicyRepository(db).insert({ ...partial, rules: [], enabled: false });
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
+  });
+
+  // ─── Index staleness surfacing (D2) ────────────────────────────────────────
+
+  it('reports indexStalenessSeconds null before measurement starts', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json<{ indexStalenessSeconds: number | null }>().indexStalenessSeconds).toBeNull();
+  });
+
+  it('reports 0 staleness when the index has absorbed every promotion', async () => {
+    new IndexStateRepository(db).markIndexed('acme', NOW);
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json<{ indexStalenessSeconds: number | null }>().indexStalenessSeconds).toBe(0);
+  });
+
+  it('reports positive staleness when a promotion post-dates the last index run — never degrading liveness', async () => {
+    new IndexStateRepository(db).markIndexed('acme', NOW);
+    // A promotion 1ms after the last index run → measured stale.
+    new MemoryRepository(db).insert(
+      makeMemory({ tenantId: 'acme', promotedAt: '2026-07-17T00:00:00.001Z' }),
+    );
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const body = res.json<{ status: string; indexStalenessSeconds: number | null }>();
+    expect(body.indexStalenessSeconds).toBeGreaterThan(0);
+    expect(body.status).toBe('healthy'); // staleness is an operator signal, not an outage
+    expect(res.statusCode).toBe(200);
   });
 });

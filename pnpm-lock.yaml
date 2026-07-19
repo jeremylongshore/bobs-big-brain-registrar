@@ -105,6 +105,9 @@ importers:
       '@qmd-team-intent-kb/curator':
         specifier: workspace:*
         version: link:../curator
+      '@qmd-team-intent-kb/git-exporter':
+        specifier: workspace:*
+        version: link:../git-exporter
       '@qmd-team-intent-kb/policy-engine':
         specifier: workspace:*
         version: link:../../packages/policy-engine
@@ -322,6 +325,9 @@ importers:
       '@qmd-team-intent-kb/schema':
         specifier: workspace:*
         version: link:../schema
+      '@qmd-team-intent-kb/store':
+        specifier: workspace:*
+        version: link:../store
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1

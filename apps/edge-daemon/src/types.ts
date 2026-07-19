@@ -6,6 +6,7 @@ import type {
   PolicyRepository,
   AuditRepository,
   ExportStateRepository,
+  IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
 import type { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import type { RepoContext } from '@qmd-team-intent-kb/repo-resolver';
@@ -64,6 +65,14 @@ export interface DaemonDependencies {
   exportStateRepo: ExportStateRepository;
   /** Optional — skip index update if absent. */
   qmdAdapter?: QmdAdapter;
+  /**
+   * Optional — when present, a SUCCESSFUL index update records
+   * `last_indexed_at` for the tenant (D1/D2 freshness consumption: the daemon's
+   * cycle is the poll loop that absorbs pending promotions, so it is the one
+   * that clears the derived index-dirty state and keeps the staleness gauge
+   * honest). Absent (legacy/test wiring) → freshness simply stays unmeasured.
+   */
+  indexStateRepo?: IndexStateRepository;
   /**
    * Pre-resolved repo context, stashed at daemon startup.
    *

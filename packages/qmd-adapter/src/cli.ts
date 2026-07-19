@@ -5,6 +5,12 @@
  *   node dist/cli.js reindex            # rebuild the derived qmd-index from kb-export (idempotent)
  *   node dist/cli.js canary             # run known-positive controls; exit 1 if any returns 0 hits
  *   node dist/cli.js canary --heal      # canary; on failure, reindex once and re-check
+ *   node dist/cli.js canary --max-staleness-seconds 86400
+ *                                       # ALSO fail if a promotion has waited longer than the
+ *                                       # threshold to become searchable (D2 staleness gate;
+ *                                       # measured from TEAMKB_DB_PATH / <base>/teamkb.db when
+ *                                       # present — no brain DB → gate reports "unmeasured" and
+ *                                       # passes, so the CI fixture canary stays green)
  *
  * Tenant + paths resolve from the same env the rest of INTKB uses:
  *   TEAMKB_TENANT_ID  (default: intent-solutions — the live brain's tenant)
@@ -19,11 +25,15 @@
  * nightly / an operator sees it; `reindex` is the repeatable, idempotent
  * rebuild of the derived index (never touches teamkb.db or brain/raw).
  */
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import Database from 'better-sqlite3';
 import { getTeamKbBasePath } from '@qmd-team-intent-kb/common';
+import { IndexStateRepository } from '@qmd-team-intent-kb/store';
 import { QmdAdapter } from './adapter.js';
+import type { StalenessProbe } from './types.js';
 import { reindex } from './reindex/reindex.js';
 import { runSearchCanary, formatCanaryReport } from './canary/search-canary.js';
 
@@ -51,6 +61,40 @@ export interface CliDeps {
   errLog?: (msg: string) => void;
   /** Adapter factory — defaults to the real `QmdAdapter`; tests inject a fake. */
   makeAdapter?: (tenantId: string, exportDir: string) => QmdAdapter;
+  /**
+   * Staleness-probe factory for the canary's D2 gate — defaults to
+   * {@link makeStoreStalenessProbe} (reads the live brain DB read-only); tests
+   * inject a fake.
+   */
+  makeStalenessProbe?: (tenantId: string, env: NodeJS.ProcessEnv) => StalenessProbe;
+}
+
+/**
+ * Build a staleness probe over the governed store (D2).
+ *
+ * Resolves the brain DB the same way apps/api does (`TEAMKB_DB_PATH`, else
+ * `<base>/teamkb.db`) and opens it READ-ONLY — a canary must never create or
+ * migrate a database as a side effect. Any failure (no DB file — e.g. the CI
+ * fixture brain — missing `index_state` table on an old store, locked file)
+ * degrades to `null` = unmeasured, which passes the gate.
+ */
+export function makeStoreStalenessProbe(
+  tenantId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): StalenessProbe {
+  return () => {
+    const dbPath = env['TEAMKB_DB_PATH']?.trim() || join(getTeamKbBasePath(), 'teamkb.db');
+    if (!existsSync(dbPath)) return null;
+    let db: Database.Database | undefined;
+    try {
+      db = new Database(dbPath, { readonly: true, fileMustExist: true });
+      return new IndexStateRepository(db).stalenessSeconds(tenantId);
+    } catch {
+      return null;
+    } finally {
+      db?.close();
+    }
+  };
 }
 
 /**
@@ -84,12 +128,36 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
 
   if (command === 'canary') {
     const heal = rest.includes('--heal');
-    const report = await runSearchCanary(adapter, tenantId, { heal });
+
+    // D2 staleness gate: opt-in via --max-staleness-seconds. An invalid value
+    // is a usage error (exit 2), NOT a silently skipped gate — a typo'd
+    // threshold must never disable the assertion it was meant to enforce.
+    let maxStalenessSeconds: number | undefined;
+    const maxIdx = rest.indexOf('--max-staleness-seconds');
+    if (maxIdx !== -1) {
+      const raw = rest[maxIdx + 1];
+      const value = raw === undefined ? Number.NaN : Number(raw);
+      if (!Number.isFinite(value) || value < 0) {
+        errLog('usage: qmd-index canary [--heal] [--max-staleness-seconds <non-negative seconds>]');
+        return 2;
+      }
+      maxStalenessSeconds = value;
+    }
+    const stalenessProbe =
+      maxStalenessSeconds !== undefined
+        ? (deps.makeStalenessProbe ?? makeStoreStalenessProbe)(tenantId, env)
+        : undefined;
+
+    const report = await runSearchCanary(adapter, tenantId, {
+      heal,
+      maxStalenessSeconds,
+      stalenessProbe,
+    });
     log(formatCanaryReport(report));
     return report.healthy ? 0 : 1;
   }
 
-  errLog('usage: qmd-index <reindex|canary [--heal]>');
+  errLog('usage: qmd-index <reindex|canary [--heal] [--max-staleness-seconds <seconds>]>');
   return 2;
 }
 

@@ -6,6 +6,7 @@ import {
   PolicyRepository,
   AuditRepository,
   ExportStateRepository,
+  IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
 import type Database from 'better-sqlite3';
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
@@ -29,6 +30,9 @@ export function makeDeps(db: Database.Database): DaemonDependencies {
     policyRepo: new PolicyRepository(db),
     auditRepo: new AuditRepository(db),
     exportStateRepo: new ExportStateRepository(db),
+    // Mirrors production wiring (main.ts): a successful index update records
+    // last_indexed_at, which the D2 staleness gauge consumes.
+    indexStateRepo: new IndexStateRepository(db),
   };
 }
 

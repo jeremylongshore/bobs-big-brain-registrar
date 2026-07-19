@@ -73,7 +73,12 @@ jobs:
           export TEAMKB_BASE_PATH="$FIXTURE"
           export TEAMKB_TENANT_ID="ci-canary"
           node packages/qmd-adapter/dist/cli.js reindex
-          node packages/qmd-adapter/dist/cli.js canary
+          # --max-staleness-seconds (D2): also fail if a promotion has waited
+          # >24h to become searchable. On this ephemeral fixture there is no
+          # brain DB, so the gate reports "unmeasured" and passes — the
+          # assertion bites on the live-brain canary (runbook 027-OD-OPSM),
+          # which runs this same CLI against the real ~/.teamkb.
+          node packages/qmd-adapter/dist/cli.js canary --max-staleness-seconds 86400
 
       - name: Dependency audit
         run: pnpm audit --audit-level=moderate

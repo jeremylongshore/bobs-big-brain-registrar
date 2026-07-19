@@ -139,4 +139,68 @@ describe('run', () => {
     expect(code).toBe(2);
     expect(errs.join('\n')).toContain('usage:');
   });
+
+  // ─── canary --max-staleness-seconds (D2 staleness gate) ────────────────────
+
+  it('canary fails (1) when measured staleness exceeds --max-staleness-seconds', async () => {
+    const { mock, makeAdapter } = makeInjected();
+    for (const _ of DEFAULT_CANARY_CONTROLS) mock.queueSuccess(hitsJson(3)); // controls all pass
+    const logs: string[] = [];
+
+    const code = await run(['canary', '--max-staleness-seconds', '86400'], {
+      env,
+      makeAdapter,
+      makeStalenessProbe: () => () => 90_000,
+      log: (m) => logs.push(m),
+    });
+
+    expect(code).toBe(1);
+    expect(logs.join('\n')).toContain('index staleness -> 90000s (max 86400s)');
+  });
+
+  it('canary passes (0) when staleness is within the threshold', async () => {
+    const { mock, makeAdapter } = makeInjected();
+    for (const _ of DEFAULT_CANARY_CONTROLS) mock.queueSuccess(hitsJson(3));
+
+    const code = await run(['canary', '--max-staleness-seconds', '86400'], {
+      env,
+      makeAdapter,
+      makeStalenessProbe: () => () => 60,
+    });
+
+    expect(code).toBe(0);
+  });
+
+  it('canary passes (0) on unmeasured staleness — e.g. the CI fixture brain with no DB', async () => {
+    const { mock, makeAdapter } = makeInjected();
+    for (const _ of DEFAULT_CANARY_CONTROLS) mock.queueSuccess(hitsJson(3));
+    const logs: string[] = [];
+
+    // The default probe against an env with no brain DB yields null (unmeasured);
+    // modeled here with an explicit null probe.
+    const code = await run(['canary', '--max-staleness-seconds', '86400'], {
+      env,
+      makeAdapter,
+      makeStalenessProbe: () => () => null,
+      log: (m) => logs.push(m),
+    });
+
+    expect(code).toBe(0);
+    expect(logs.join('\n')).toContain('index staleness -> unmeasured');
+  });
+
+  it('canary returns 2 (usage error) on an invalid --max-staleness-seconds value', async () => {
+    const { makeAdapter } = makeInjected();
+    const errs: string[] = [];
+
+    const code = await run(['canary', '--max-staleness-seconds', 'tomorrow'], {
+      env,
+      makeAdapter,
+      errLog: (m) => errs.push(m),
+    });
+
+    // A typo'd threshold must be a loud usage error, never a silently skipped gate.
+    expect(code).toBe(2);
+    expect(errs.join('\n')).toContain('--max-staleness-seconds');
+  });
 });
