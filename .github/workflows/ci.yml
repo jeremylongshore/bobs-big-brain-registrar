@@ -191,19 +191,18 @@ jobs:
 
   integration:
     # L4 integration tests via testcontainers. Pulls real Docker images
-    # (~50MB postgres:16-alpine for now). Slower than the validate job;
-    # runs only on:
-    #   - push to main / develop (full belt-and-suspenders)
-    #   - pull_request with the 'integration' label (opt-in for PRs that
-    #     touch L4 surfaces — store schema, future postgres backend,
-    #     container-based dependencies)
+    # (~50MB postgres:16-alpine for now). Slower than the validate job.
+    #
+    # Now runs on EVERY pull_request + push (previously PR-opt-in via the
+    # 'integration' label): the full test suite — including L4 — is a required
+    # merge gate, so the whole suite runs in CI on every change rather than only
+    # post-merge or when a contributor remembers the label. The ~1-2 min image
+    # pull is an accepted cost of gating the complete suite.
     # Tracked in qmd-team-intent-kb-oqd. Triggers documented in
     # tests/TESTING.md §"Integration tests (L4)".
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: |
-      github.event_name == 'push' ||
-      contains(github.event.pull_request.labels.*.name, 'integration')
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -211,7 +210,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
