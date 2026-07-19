@@ -1,0 +1,49 @@
+# bbb-reranker.service — Bob's Big Brain reranker runtime (blueprint bead B1).
+#
+# Serves Qwen3-Reranker-0.6B (Apache-2.0, GGUF q8_0) via the SHA-256-pinned
+# llama.cpp `llama-server` (installed by scripts/install-llama-server.sh) with
+# ONLY the /v1/rerank endpoint enabled, bound to loopback. No external API is
+# ever in the serving path; the qmd-adapter calls http://127.0.0.1:8097/v1/rerank
+# and fails open to the fused deterministic order if this service is down.
+#
+# Install (copy, don't symlink — systemd user units should survive worktree GC):
+#   cp scripts/bbb-reranker.service ~/.config/systemd/user/bbb-reranker.service
+#   printf '%s  %s\n' \
+#     22c9979ce4fbcdc5acdc310c6641c32797eff1aa980b8f7a2db8a8ea23429a48 \
+#     "$HOME/.cache/qmd/models/hf_ggml-org_qwen3-reranker-0.6b-q8_0.gguf" \
+#     > ~/.local/lib/bbb/reranker-weights.sha256
+#   systemctl --user daemon-reload && systemctl --user enable --now bbb-reranker
+#
+# Weight gate choice: ExecStartPre runs `sha256sum -c` against a one-line pin
+# file whose hash is the SAME constant pinned for id 'reranker' in
+# packages/qmd-adapter/src/weights/weights-manifest.ts. Chosen over invoking the
+# compiled assertWeightsVerified from the main checkout because a service unit
+# must not depend on a repo checkout's build state (dist/ may be stale or
+# absent); the pin file is the manifest value, restated where systemd can check
+# it fail-closed with a coreutils binary. Keep the two in lock-step on any
+# weight bump. (~2 s to hash 639 MB at start; acceptable.)
+#
+# Runbook: 000-docs/045-AT-RNBK-reranker-service-runbook.md
+
+[Unit]
+Description=Bob's Big Brain reranker (llama-server + Qwen3-Reranker-0.6B, loopback :8097)
+
+[Service]
+Type=simple
+# Fail-closed weight integrity gate before the model is ever loaded.
+ExecStartPre=/usr/bin/sha256sum -c %h/.local/lib/bbb/reranker-weights.sha256
+ExecStart=%h/.local/lib/bbb/llama-server/current/llama-server \
+  --host 127.0.0.1 \
+  --port 8097 \
+  -m %h/.cache/qmd/models/hf_ggml-org_qwen3-reranker-0.6b-q8_0.gguf \
+  --rerank \
+  --ctx-size 4096 \
+  --threads 4
+# ~640 MB model + KV/compute buffers; guard well below that so a runaway can
+# never pressure the dev box (17 GiB free, but this box has OOM history).
+MemoryMax=2G
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
