@@ -117,5 +117,6 @@
 | 038 | AT-DECR | retrieval-backend-decision          | Retrieval backend decision       |
 | 039 | RL-REPT | qmd-team-intent-kb-release-v0.7.0   | v0.7.0 release report            |
 | 040 | OD-OPSM | brain-api-tailnet-deploy            | Brain API tailnet deploy runbook |
+| 045 | AT-RNBK | reranker-service-runbook            | bbb-reranker service runbook     |
 
-## Next Available Sequence: 045
+## Next Available Sequence: 046
