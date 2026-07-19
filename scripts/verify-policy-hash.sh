@@ -37,6 +37,7 @@ FILES=(
   "packages/policy-engine/src/rules/tenant-match-rule.ts"
   "packages/policy-engine/src/rules/sensitivity-gate-rule.ts"
   "packages/policy-engine/src/rules/content-sanitization-rule.ts"
+  "packages/policy-engine/src/rules/contradiction-check-rule.ts"
   "packages/policy-engine/src/rules/index.ts"
   "packages/policy-engine/src/policy-engine.ts"
 )
