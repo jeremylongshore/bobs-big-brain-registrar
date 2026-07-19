@@ -17,6 +17,13 @@
  * asserts { passed:true, chain_forks>0, tamper_signatures:0 }. Then it seeds a
  * genuine tamper break and asserts { passed:false, tamper_signatures>0 }.
  *
+ * Track F2 adds the external-anchor cross-check scenarios on a SECOND
+ * throwaway brain: (a) an anchored, untouched chain reads `consistent` and
+ * passes; (b) truncating the chain AFTER anchoring — which leaves the chain
+ * internally clean, so intra-chain verification alone sees NOTHING — fails
+ * closed with `anchor_history_truncated > 0`. The first brain runs with a
+ * missing anchor log, proving the graceful bootstrap (`no_anchors_yet`).
+ *
  * Exit 0 on success; non-zero (with a diagnostic) on any assertion failure.
  */
 
@@ -31,6 +38,7 @@ import {
   AuditRepository,
   CURRENT_AUDIT_HASH_VERSION,
   MemoryRepository,
+  appendAnchor,
   computeEntryHash,
   createDatabase,
 } from '@qmd-team-intent-kb/store';
@@ -89,11 +97,18 @@ const dir = mkdtempSync(join(tmpdir(), 'gsb-ci-provenance-'));
 const dbPath = join(dir, 'teamkb.db');
 // A manifest path that does NOT exist → the evaluator's "no amnesty" branch.
 const noManifest = join(dir, 'no-such-exceptions.manifest.json');
+// An anchor-log path that does NOT exist → the F2 bootstrap ('no_anchors_yet')
+// branch for the fork/tamper scenarios, and never a read of ~/.teamkb.
+const noAnchors = join(dir, 'no-such-anchors.jsonl');
+// A REAL anchor log for the F2 anchored-then-truncated scenario.
+const anchorLog = join(dir, 'anchors.jsonl');
+const dbPath2 = join(dir, 'teamkb-anchored.db');
 
-// `db` is declared OUTSIDE the try so the single top-level `finally` can safely
-// `db?.close()` it on every path (success, assertion failure, unexpected throw)
-// before the temp dir is removed.
+// `db`/`db2` are declared OUTSIDE the try so the single top-level `finally` can
+// safely close them on every path (success, assertion failure, unexpected
+// throw) before the temp dir is removed.
 let db: ReturnType<typeof createDatabase> | undefined;
+let db2: ReturnType<typeof createDatabase> | undefined;
 
 try {
   db = createDatabase({ path: dbPath });
@@ -148,6 +163,7 @@ try {
   const forked = evaluateProvenanceIntegrity(memRepo, auditRepo, {
     tenantId: TENANT,
     exceptionManifestPath: noManifest,
+    anchorLogPath: noAnchors,
   });
   process.stdout.write(`forked-brain verdict: ${JSON.stringify(forked.details)}\n`);
   if (!forked.passed) fail('forked-but-untampered brain must PASS, got passed=false');
@@ -155,20 +171,67 @@ try {
     fail(`expected chain_forks > 0, got ${forked.details.chain_forks}`);
   if (Number(forked.details.tamper_signatures) !== 0)
     fail(`expected tamper_signatures 0, got ${forked.details.tamper_signatures}`);
+  // F2 bootstrap: a missing anchor log must report itself and NOT fail.
+  if (forked.details.anchor_status !== 'no_anchors_yet')
+    fail(`expected anchor_status 'no_anchors_yet', got ${forked.details.anchor_status}`);
 
   // --- now introduce a REAL tamper break and assert the eval fails closed.
   db.prepare(`UPDATE audit_events SET reason = 'TAMPERED' WHERE id = ?`).run(ids[1]);
   const tampered = evaluateProvenanceIntegrity(memRepo, auditRepo, {
     tenantId: TENANT,
     exceptionManifestPath: noManifest,
+    anchorLogPath: noAnchors,
   });
   process.stdout.write(`tampered-brain verdict: ${JSON.stringify(tampered.details)}\n`);
   if (tampered.passed) fail('a tampered brain must FAIL, got passed=true');
   if (Number(tampered.details.tamper_signatures) <= 0)
     fail('expected tamper_signatures > 0 on a tampered brain');
 
+  // --- F2: second brain — anchored, then truncated after anchoring. ---------
+  db2 = createDatabase({ path: dbPath2 });
+  const memRepo2 = new MemoryRepository(db2);
+  const auditRepo2 = new AuditRepository(db2);
+  memRepo2.insert(makeMemory('ci anchored brain seed memory'));
+  const ids2: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const e = makeEvent(i);
+    ids2.push(e.id);
+    auditRepo2.insert(e);
+  }
+  appendAnchor(auditRepo2, anchorLog, { tenantId: TENANT });
+
+  const anchored = evaluateProvenanceIntegrity(memRepo2, auditRepo2, {
+    tenantId: TENANT,
+    exceptionManifestPath: noManifest,
+    anchorLogPath: anchorLog,
+  });
+  process.stdout.write(`anchored-brain verdict: ${JSON.stringify(anchored.details)}\n`);
+  if (!anchored.passed) fail('an anchored, untouched brain must PASS, got passed=false');
+  if (anchored.details.anchor_status !== 'consistent')
+    fail(`expected anchor_status 'consistent', got ${anchored.details.anchor_status}`);
+
+  // Truncate AFTER anchoring: drop the newest row. The remaining chain is
+  // internally clean — intra-chain verification alone sees NOTHING — so only
+  // the anchor cross-check can (and must) fail this closed.
+  db2.prepare('DELETE FROM audit_events WHERE id = ?').run(ids2[2]);
+  const truncated = evaluateProvenanceIntegrity(memRepo2, auditRepo2, {
+    tenantId: TENANT,
+    exceptionManifestPath: noManifest,
+    anchorLogPath: anchorLog,
+  });
+  process.stdout.write(`truncated-brain verdict: ${JSON.stringify(truncated.details)}\n`);
+  if (truncated.passed) fail('an anchored-then-truncated brain must FAIL, got passed=true');
+  if (Number(truncated.details.tamper_signatures) !== 0)
+    fail(
+      `truncation must be invisible to intra-chain verification (tamper_signatures 0), got ${truncated.details.tamper_signatures}`,
+    );
+  if (Number(truncated.details.anchor_history_truncated) <= 0)
+    fail(
+      `expected anchor_history_truncated > 0, got ${truncated.details.anchor_history_truncated}`,
+    );
+
   process.stdout.write(
-    'ci-provenance-integrity OK — forks pass (disclosed), tamper fails closed\n',
+    'ci-provenance-integrity OK — forks pass (disclosed), tamper fails closed, anchor truncation fails closed\n',
   );
   // Success falls through: no `process.exit(0)` here (it would bypass the
   // finally and leak the temp dir). The process exits 0 naturally once the
@@ -181,8 +244,9 @@ try {
   process.exitCode = 1;
 } finally {
   // Runs on every path (success, assertion failure, unexpected throw): close the
-  // DB handle if it was opened, then remove the temp dir. `db?.close()` is safe
-  // even if createDatabase threw before assignment.
+  // DB handles if opened, then remove the temp dir. `db?.close()` is safe even
+  // if createDatabase threw before assignment.
   db?.close();
+  db2?.close();
   rmSync(dir, { recursive: true, force: true });
 }
