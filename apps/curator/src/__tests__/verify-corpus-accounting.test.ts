@@ -107,6 +107,12 @@ describe('dispatch verify-corpus-accounting — argument errors', () => {
     expect(stderrText()).toMatch(/unknown flag: --bogus/);
   });
 
+  it('exits 2 when --db is omitted (refuses the implicit in-memory store)', async () => {
+    const rc = await dispatch(['verify-corpus-accounting'], testDeps);
+    expect(rc).toBe(2);
+    expect(stderrText()).toMatch(/missing required --db/);
+  });
+
   it('lists the subcommand in help text', async () => {
     const rc = await dispatch(['help'], testDeps);
     expect(rc).toBe(0);
@@ -135,7 +141,7 @@ describe('dispatch verify-corpus-accounting — clean store', () => {
   });
 
   it('exits 0 with an ok JSON envelope on an empty store', async () => {
-    const rc = await dispatch(['verify-corpus-accounting', '--json'], testDeps);
+    const rc = await dispatch(['verify-corpus-accounting', '--db', '/ignored', '--json'], testDeps);
     expect(rc).toBe(0);
     const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
     expect(parsed['ok']).toBe(true);

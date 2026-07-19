@@ -678,6 +678,17 @@ function parseCorpusAccountingArgs(
     }
   }
 
+  // --db is mandatory: without it deps.createDb falls back to an empty
+  // in-memory store, which would report a trivially clean corpus — a passing
+  // verdict about nothing. The verifier refuses instead (review finding on
+  // #289; the test harness injects its own createDb and bypasses argv).
+  if (dbPath === undefined) {
+    return {
+      ok: false,
+      message: 'missing required --db <path> (refusing to verify an implicit in-memory store)',
+    };
+  }
+
   return { ok: true, opts: { dbPath, json } };
 }
 
