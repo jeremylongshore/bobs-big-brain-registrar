@@ -40,6 +40,21 @@ module.exports = {
     },
 
     {
+      name: 'no-govern-imports-retrieval',
+      severity: 'error',
+      comment:
+        'Seam firewall (blueprint 019-PP-PLAN bead B2; Hickey constraint in 016-AT-PLAN): govern-side ' +
+        'code (packages/policy-engine) must never import the retrieval adapter (packages/qmd-adapter). ' +
+        'A retrieval / rerank / embedding score lives above the spool and must not be able to reach a ' +
+        'durable-state decision. This import barrier pairs with the DeterministicScore branded type ' +
+        '(packages/policy-engine/src/deterministic-score.ts): a raw number (a rerank score) is not ' +
+        'assignable to a govern score, and the retrieval module that could produce one cannot be ' +
+        'imported into govern at all. The model proposes; deterministic code owns durable state.',
+      from: { path: '^packages/policy-engine/' },
+      to: { path: '^packages/qmd-adapter/' },
+    },
+
+    {
       name: 'no-cross-app-import-except-curator',
       severity: 'error',
       comment:

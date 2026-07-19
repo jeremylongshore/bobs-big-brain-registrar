@@ -1,5 +1,6 @@
 import type { MemoryCandidate, PolicyRule } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, RuleResult } from '../types.js';
+import { deterministicScore } from '../deterministic-score.js';
 
 const DEFAULT_MINIMUM_SCORE = 0.3;
 
@@ -94,7 +95,7 @@ export function evaluateRelevanceScore(
       ruleType: rule.type,
       outcome: 'pass',
       reason: `Relevance score ${score.toFixed(2)} meets minimum ${minimumScore.toFixed(2)}`,
-      score,
+      score: deterministicScore(score),
     };
   }
 
@@ -103,6 +104,6 @@ export function evaluateRelevanceScore(
     ruleType: rule.type,
     outcome: 'flag',
     reason: `Relevance score ${score.toFixed(2)} is below minimum ${minimumScore.toFixed(2)}`,
-    score,
+    score: deterministicScore(score),
   };
 }
