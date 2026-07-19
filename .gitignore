@@ -70,5 +70,9 @@ secrets/*.private.hex
 !keys/*.pub
 .worktrees/
 
-# Retrieval eval JSON artifacts (vps.3) — emitted per run, uploaded by CI, never committed
-packages/qmd-adapter/eval-results/
+# Retrieval eval JSON artifacts (vps.3) — emitted per run, uploaded by CI, never committed.
+# The governed-anchor snapshot LOCK and FLOOR files (C1) are committed configuration,
+# not run artifacts, so they are explicitly un-ignored below.
+packages/qmd-adapter/eval-results/*
+!packages/qmd-adapter/eval-results/governed-brain-v1-snapshot.lock.json
+!packages/qmd-adapter/eval-results/governed-brain-v1-floor.json
