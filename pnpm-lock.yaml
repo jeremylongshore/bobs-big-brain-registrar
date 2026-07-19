@@ -326,6 +326,9 @@ importers:
         specifier: ^12.11.1
         version: 12.11.1
     devDependencies:
+      '@qmd-team-intent-kb/policy-engine':
+        specifier: workspace:*
+        version: link:../policy-engine
       '@types/better-sqlite3':
         specifier: ^7.6.11
         version: 7.6.13
