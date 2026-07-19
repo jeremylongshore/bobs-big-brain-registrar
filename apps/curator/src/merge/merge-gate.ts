@@ -344,6 +344,14 @@ export function mergeGovern(
     //     rule. Either way: quarantine, never write.
     let pipelineResult: PipelineResult | undefined;
     if (pipeline !== undefined) {
+      // NOTE (E1): `getActiveMemoriesInCategory` is deliberately NOT injected
+      // here, so `contradiction_check` passes vacuously in the merge path. The
+      // merge re-governs rows a clone ALREADY promoted; any non-approved outcome
+      // quarantines, so a contradiction flag here would silently drop
+      // near-similar-but-distinct rows at merge time — a semantic change to the
+      // fold, and a determinism hazard (the lookup would observe rows written
+      // earlier in this same pass). Contradiction review belongs to first
+      // promotion (curator / promotion service), not the re-govern fold.
       pipelineResult = pipeline.evaluate(candidate, {
         existingHashes,
         tenantId: options.tenantId,
