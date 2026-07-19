@@ -102,7 +102,7 @@ jobs:
           node apps/curator/dist/main.js verify-corpus-accounting --db "$STORE/teamkb.db" --json | tee /tmp/accounting.json
           jq -e '.totalRows >= 1 and .orphanCount == 0' /tmp/accounting.json >/dev/null
           echo "--- planting a raw INSERT behind the promoter (substrate bypass) ---"
-          sqlite3 "$STORE/teamkb.db" "INSERT INTO curated_memories (id, candidate_id, source, content, title, category, trust_level, author_json, tenant_id, content_hash, promoted_at, promoted_by_json, updated_at) VALUES ('00000000-0000-4000-8000-00000000beef', '00000000-0000-4000-8000-00000000cafe', 'manual', 'bypass row', 'Bypass row', 'reference', 'medium', '{\"type\":\"human\",\"id\":\"rogue\"}', 'ci-accounting', 'deadbeef', '2026-07-19T00:00:00.000Z', '{\"type\":\"human\",\"id\":\"rogue\"}', '2026-07-19T00:00:00.000Z');"
+          sqlite3 "$STORE/teamkb.db" "INSERT INTO curated_memories (id, candidate_id, source, content, title, category, trust_level, author_json, tenant_id, content_hash, promoted_at, promoted_by_json, updated_at) VALUES ('00000000-0000-4000-8000-00000000beef', '00000000-0000-4000-8000-00000000cafe', 'manual', 'bypass row', 'Bypass row', 'reference', 'medium', '{\"type\":\"human\",\"id\":\"rogue\"}', 'ci-accounting', 'd6afac65ebb13db65da74c57ea61bb19ab78bb219afe321d460b81118d23187c', '2026-07-19T00:00:00.000Z', '{\"type\":\"human\",\"id\":\"rogue\"}', '2026-07-19T00:00:00.000Z');"
           echo "--- bypass must be detected (nonzero exit) ---"
           if node apps/curator/dist/main.js verify-corpus-accounting --db "$STORE/teamkb.db"; then
             echo "FAIL: verify-corpus-accounting did not detect the bypass row"
