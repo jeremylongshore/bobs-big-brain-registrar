@@ -97,12 +97,18 @@ to the given log:
   after ~10 s (exit 1, no anchor written — the merge itself has already
   committed, so re-run the anchor step or investigate the holder); a lock older
   than 60 s is presumed a crashed holder and stolen. Same-host serialization
-  only, matching the anchor log's single-host posture;
-- **commit-pinned (optional)**: `--commit` accepts ONLY a 7–40 char lowercase
-  hex commit SHA. A movable ref (`main`, `HEAD`, a branch name) is refused at
-  parse time (exit 2) — a durable anchor must carry the immutable object id,
-  never something that resolves differently later. Resolve first:
-  `git rev-parse HEAD`.
+  only, matching the anchor log's single-host posture. Staleness keys on the
+  lock file's creation mtime (no heartbeat); this is sound because the locked
+  section — one JSONL read, one chain scan, one sign, one append, one
+  re-verify — is sub-second in practice, two orders of magnitude below the
+  60 s threshold, so a live holder cannot be mistaken for crashed. If the
+  section ever grows stall-capable work (e.g. remote anchoring), add an mtime
+  heartbeat alongside that change;
+- **commit-pinned (optional)**: `--commit` accepts ONLY a 7–40 char hex commit
+  SHA (case-insensitive; stored normalized to lowercase). A movable ref
+  (`main`, `HEAD`, a branch name) is refused at parse time (exit 2) — a
+  durable anchor must carry the immutable object id, never something that
+  resolves differently later. Resolve first: `git rev-parse HEAD`.
 
 Verify any time with `verifySignedMergeAnchors` (the CLI also self-verifies immediately
 after appending and fails loud if the fresh anchor does not verify).
@@ -132,6 +138,14 @@ the public half from it at sign time, so a mismatched pub/priv pair is structura
 impossible. Auditors compare each anchor's embedded `signerPublicKey` against the
 committed `keys/merge-anchor-signer.pub`.
 
+**Two-recipient minimum (RULE):** before any real secret lands under `secrets/`, it
+must be encrypted to at least TWO age recipients — the operator dev key (`age1me3v…`)
+and an escrow key held elsewhere (here: the VPS host key `age1csyj…`,
+`/etc/intentsolutions/age.key`). One recipient is a single point of loss: if that one
+private key is destroyed, every committed secret is orphaned ciphertext. `.sops.yaml`
+carries both recipients in every creation rule; verify a new/rotated secret decrypts
+with the LOCAL key before committing (`sops -d … | head -c0 && echo OK`).
+
 ### Key rotation
 
 Old anchors stay verifiable forever under their own embedded public key — rotation only
@@ -150,11 +164,12 @@ changes which key signs FUTURE anchors.
    "
    ```
 
-2. Encrypt and replace the committed key file, then destroy the plaintext:
+2. Encrypt to BOTH recipients (operator + escrow — the two-recipient rule above),
+   replace the committed key file, then destroy the plaintext:
 
    ```bash
    sops -e --input-type dotenv --output-type dotenv \
-     --age age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8 \
+     --age age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8,age1csyjrdez6fhe97zsu3zden8j7x7xes6zm3yzce5fzz524wmqav4sc0vgz3 \
      /dev/shm/mas.private.env > secrets/merge-anchor-signer.sops.env
    shred -u /dev/shm/mas.private.env
    ```

@@ -308,15 +308,17 @@ describe('merge-govern — signed merge anchor (F3)', () => {
         fileDeps,
       );
       expect(code).toBe(2);
-      expect(stderrText()).toContain('--commit must be a 7-40 character lowercase hex commit SHA');
+      expect(stderrText()).toContain('--commit must be a 7-40 character hex commit SHA');
     }
     expect(existsSync(anchorPath)).toBe(false); // nothing anchored by refusals
 
-    // A real 40-hex SHA is accepted and lands verbatim in the anchor record.
+    // A real 40-hex SHA is accepted — passed UPPERCASE here (case-insensitive
+    // per the #299 re-review) — and lands in the anchor record normalized to
+    // lowercase, the durable canonical casing.
     const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
     const code = await dispatch(
       // prettier-ignore
-      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath, '--commit', sha],
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath, '--commit', sha.toUpperCase()],
       fileDeps,
     );
     expect(code).toBe(0);
@@ -347,6 +349,14 @@ describe('merge-govern — signed merge anchor (F3)', () => {
     expect(code).toBe(1);
     expect(stderrText()).toContain('anchor lock');
     expect(existsSync(anchorPath)).toBe(false);
+
+    // The runbook's load-bearing claim ("the MERGE already committed — only
+    // the anchor is deferred"): the governed rows are DURABLE in the target
+    // and its audit chain verifies clean; the timeout lost only the receipt.
+    const targetDb = createDatabase({ path: targetPath, readonly: true });
+    expect(new MemoryRepository(targetDb).count()).toBe(2);
+    expect(verifyAuditChain(new AuditRepository(targetDb)).breaks).toHaveLength(0);
+    targetDb.close();
   });
 
   it('steals a STALE anchor lock (crashed holder) and completes the anchor', async () => {
@@ -373,6 +383,79 @@ describe('merge-govern — signed merge anchor (F3)', () => {
     expect(code).toBe(0);
     expect(readSignedMergeAnchors(anchorPath)).toHaveLength(1);
     expect(existsSync(lockPath)).toBe(false); // released after the run
+  });
+
+  /**
+   * A pre-existing anchor record whose anchorHash/signature are garbage: the
+   * CLI's post-append verification walks the WHOLE log, so the corrupt
+   * predecessor guarantees breaks (hash mismatch + invalid signature) and
+   * anchorVerifyOk === false — the verify-fail branch under test.
+   */
+  function seedCorruptAnchorLog(anchorPath: string): void {
+    writeFileSync(
+      anchorPath,
+      JSON.stringify({
+        schemaVersion: 2,
+        anchoredAt: '2026-01-01T00:00:00.000Z',
+        tenantId: TENANT,
+        chainedRows: 1,
+        chainHead: 'f'.repeat(64),
+        parents: ['', ''],
+        commitHash: null,
+        lamportClock: 1,
+        prevAnchorHash: null,
+        signerPublicKey: 'de'.repeat(22),
+        signature: 'ad'.repeat(32),
+        anchorHash: 'be'.repeat(32),
+      }) + '\n',
+    );
+  }
+
+  it('--json: a failing post-append verification yields ok:false + exit 1, never a success envelope (#299 re-review finding 1)', async () => {
+    const aPath = join(workDir, 'clone-a.db');
+    const bPath = join(workDir, 'clone-b.db');
+    const targetPath = join(workDir, 'merged.db');
+    const anchorPath = join(workDir, 'signed-merge-anchors.jsonl');
+    buildClone(aPath, [cand('Clone A note for the json verify-fail case.')]);
+    buildClone(bPath, [cand('Clone B note for the json verify-fail case.')]);
+    process.env[KEY_ENV] = generateActorKeypair().privateKeyHex;
+    seedCorruptAnchorLog(anchorPath);
+
+    const code = await dispatch(
+      // prettier-ignore
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath, '--json'],
+      fileDeps,
+    );
+    expect(code).toBe(1);
+    const out = JSON.parse(stdoutText()) as {
+      ok: boolean;
+      code?: string;
+      anchor: { verified: boolean };
+    };
+    expect(out.ok).toBe(false);
+    expect(out.code).toBe('ANCHOR_VERIFY_FAILED');
+    expect(out.anchor.verified).toBe(false);
+    expect(stderrText()).toContain('verification FAILED');
+  });
+
+  it('non-JSON: a failing post-append verification exits 1 with the FAILED report', async () => {
+    const aPath = join(workDir, 'clone-a.db');
+    const bPath = join(workDir, 'clone-b.db');
+    const targetPath = join(workDir, 'merged.db');
+    const anchorPath = join(workDir, 'signed-merge-anchors.jsonl');
+    buildClone(aPath, [cand('Clone A note for the human verify-fail case.')]);
+    buildClone(bPath, [cand('Clone B note for the human verify-fail case.')]);
+    process.env[KEY_ENV] = generateActorKeypair().privateKeyHex;
+    seedCorruptAnchorLog(anchorPath);
+
+    const code = await dispatch(
+      // prettier-ignore
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath],
+      fileDeps,
+    );
+    expect(code).toBe(1);
+    expect(stdoutText()).toContain('verified:    FAILED');
+    expect(stderrText()).toContain('verification FAILED');
   });
 });
 
