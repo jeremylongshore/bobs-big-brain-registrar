@@ -21,6 +21,32 @@ export type { PromotionInput } from './promotion/promoter.js';
 export { reject } from './rejection/rejector.js';
 export { checkOriginAttestation, ORIGIN_ATTESTATION_RULE_TYPE } from './origin/origin-gate.js';
 export type { OriginGateResult, OriginRejectCode } from './origin/origin-gate.js';
+export {
+  checkImportExclusion,
+  IMPORT_EXCLUSION_RULE_TYPE,
+} from './import-exclusion/import-exclusion-gate.js';
+export type { ImportExclusionResult } from './import-exclusion/import-exclusion-gate.js';
+export {
+  DEFAULT_BRAINIGNORE_PATTERNS,
+  DEFAULT_BRAINIGNORE_RULESET,
+  compilePattern,
+  parseBrainignore,
+  matchPath,
+  analyzeContent,
+  evaluateBrainignore,
+  shannonEntropy,
+} from './import-exclusion/brainignore.js';
+export type {
+  BrainignorePattern,
+  BrainignoreRuleset,
+  BrainignoreMatch,
+} from './import-exclusion/brainignore.js';
+export {
+  loadBrainignoreRuleset,
+  defaultBrainignorePath,
+  BRAINIGNORE_PATH_ENV,
+} from './import-exclusion/load-brainignore.js';
+export type { LoadBrainignoreOptions } from './import-exclusion/load-brainignore.js';
 export { mergeGovern, MergeIdInvariantError } from './merge/merge-gate.js';
 export type {
   MergeGovernResult,

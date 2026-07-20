@@ -194,3 +194,72 @@ describe('evaluateRelevanceScore', () => {
     expect(result.reason).toContain('below minimum');
   });
 });
+
+describe('evaluateRelevanceScore — source-keyed hard reject (5kw.3)', () => {
+  /** Junk-shaped overrides: title + category only → score 0.25 (+0.10 when
+   *  source is manual/import). Below the 0.8 threshold used here either way. */
+  const junk = {
+    title: 'minimal',
+    content: 'Short.', // <=50 chars
+    category: 'reference',
+    trustLevel: 'low',
+    metadata: { filePaths: [], tags: [] },
+  } as const;
+
+  it("returns 'fail' (rejectable) for a below-threshold import-source candidate by default", () => {
+    const candidate = makeCandidate({ ...junk, source: 'import' });
+    const rule = makeRule({ minimumScore: 0.8 });
+    const result = evaluateRelevanceScore(candidate, rule, makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+    expect(result.reason).toContain("import-class source 'import'");
+  });
+
+  it("returns 'fail' for a below-threshold bulk_import candidate by default", () => {
+    const candidate = makeCandidate({ ...junk, source: 'bulk_import' });
+    const rule = makeRule({ minimumScore: 0.8 });
+    const result = evaluateRelevanceScore(candidate, rule, makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+  });
+
+  it('still only flags an identical below-threshold candidate from an interactive source', () => {
+    for (const source of ['mcp', 'claude_session', 'manual'] as const) {
+      const candidate = makeCandidate({ ...junk, source });
+      const rule = makeRule({ minimumScore: 0.8 });
+      const result = evaluateRelevanceScore(candidate, rule, makeContext(candidate));
+      expect(result.outcome).toBe('flag');
+    }
+  });
+
+  it('an empty rejectSources parameter restores flag-only behavior for imports', () => {
+    const candidate = makeCandidate({ ...junk, source: 'import' });
+    const rule = makeRule({ minimumScore: 0.8, rejectSources: [] });
+    const result = evaluateRelevanceScore(candidate, rule, makeContext(candidate));
+    expect(result.outcome).toBe('flag');
+  });
+
+  it('ignores rejectSources entries that are not valid MemorySource values', () => {
+    const candidate = makeCandidate({ ...junk, source: 'import' });
+    // A typo can only make the rule SOFTER: 'improt' is dropped, so nothing fails…
+    const softened = evaluateRelevanceScore(
+      candidate,
+      makeRule({ minimumScore: 0.8, rejectSources: ['improt'] }),
+      makeContext(candidate),
+    );
+    expect(softened.outcome).toBe('flag');
+    // …while valid entries alongside garbage still apply.
+    const mixed = evaluateRelevanceScore(
+      candidate,
+      makeRule({ minimumScore: 0.8, rejectSources: ['improt', 'import'] }),
+      makeContext(candidate),
+    );
+    expect(mixed.outcome).toBe('fail');
+  });
+
+  it('an above-threshold import candidate passes untouched', () => {
+    const candidate = makeCandidate({ ...junk, source: 'import' });
+    // import source: title 0.20 + category 0.05 + source 0.10 = 0.35 ≥ 0.3
+    const rule = makeRule({ minimumScore: 0.3 });
+    const result = evaluateRelevanceScore(candidate, rule, makeContext(candidate));
+    expect(result.outcome).toBe('pass');
+  });
+});

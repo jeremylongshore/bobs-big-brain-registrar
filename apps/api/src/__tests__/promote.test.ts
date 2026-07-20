@@ -279,3 +279,91 @@ describe('POST /api/candidates/:id/reject', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+/**
+ * Import exclusion gate on the single-candidate admin path (bead 5kw.1) —
+ * the same structural brainignore check the curator batch pipeline runs, so
+ * both paths agree (the H1 invariant). Committed defaults only; the per-brain
+ * override file is wired where the service is constructed.
+ */
+describe('POST /api/candidates/:id/promote — import exclusion gate (5kw.1)', () => {
+  let db: Database.Database;
+  let app: FastifyInstance;
+  let candidateRepo: CandidateRepository;
+  let memoryRepo: MemoryRepository;
+
+  beforeEach(async () => {
+    db = createTestDatabase();
+    candidateRepo = new CandidateRepository(db);
+    memoryRepo = new MemoryRepository(db);
+    app = buildApp({ db, silent: true });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    db.close();
+  });
+
+  function promote(id: string, tenantId: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/candidates/${id}/promote?tenantId=${tenantId}`,
+    });
+  }
+
+  it('refuses an import-source candidate on a vendored path (422, left in inbox)', async () => {
+    const candidate = makeCandidate({
+      tenantId: 'team-alpha',
+      source: 'import',
+      metadata: { filePaths: ['node_modules/@google-cloud/storage/README.md'], tags: [] },
+    });
+    candidateRepo.insert(candidate, computeContentHash(candidate.content));
+
+    const res = await promote(candidate.id, 'team-alpha');
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { error: string; code?: string };
+    expect(body.error).toContain('import exclusion gate');
+    expect(body.error).toContain('node_modules');
+    expect(body.code).toBe('brainignore_path');
+    // Left in the inbox for review — never silently retired.
+    expect(candidateRepo.findById(candidate.id)?.status).toBe('inbox');
+    expect(memoryRepo.findByTenant('team-alpha')).toEqual([]);
+
+    // RECEIPT PARITY (PR #309 finding 1): the rejection is on the append-only
+    // audit chain, exactly as the curator batch path receipts via reject().
+    // Without this assertion the earlier version threw a 422 with NO audit row,
+    // and the inbox-retention + no-memory checks alone let that asymmetry pass.
+    const rejectRow = db
+      .prepare(
+        `SELECT action, reason, details_json FROM audit_events
+         WHERE action='deleted' AND memory_id=@id`,
+      )
+      .get({ id: candidate.id }) as
+      { action: string; reason: string; details_json: string } | undefined;
+    expect(rejectRow).toBeDefined();
+    expect(rejectRow!.reason).toContain('brainignore_path');
+    const details = JSON.parse(rejectRow!.details_json) as {
+      candidateId: string;
+      outcome: string;
+      evaluations: Array<{ ruleId: string; ruleType: string; reason: string }>;
+    };
+    expect(details.candidateId).toBe(candidate.id);
+    expect(details.outcome).toBe('rejected');
+    expect(details.evaluations[0]?.ruleId).toBe('brainignore_path');
+    expect(details.evaluations[0]?.ruleType).toBe('import_exclusion');
+    expect(details.evaluations[0]?.reason).toContain('node_modules');
+  });
+
+  it('promotes an identical candidate from an interactive source (gate not applicable)', async () => {
+    const candidate = makeCandidate({
+      tenantId: 'team-alpha',
+      source: 'mcp',
+      metadata: { filePaths: ['node_modules/@google-cloud/storage/README.md'], tags: [] },
+    });
+    candidateRepo.insert(candidate, computeContentHash(candidate.content));
+
+    const res = await promote(candidate.id, 'team-alpha');
+    expect(res.statusCode).toBe(200);
+  });
+});

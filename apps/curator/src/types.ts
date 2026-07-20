@@ -1,4 +1,5 @@
 import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
+import type { BrainignoreRuleset } from './import-exclusion/brainignore.js';
 
 /** Result of curating a single candidate */
 export interface CurationResult {
@@ -59,4 +60,12 @@ export interface CuratorConfig {
    * a brain base dir should resolve it via `loadOrCreateOriginSecret()`.
    */
   originSecret?: string;
+  /**
+   * Brainignore ruleset for the import exclusion gate (bead 5kw.1 — see
+   * `import-exclusion/`). When unset, the COMMITTED DEFAULT ruleset applies —
+   * the gate is always on for import-source candidates; wiring is only needed
+   * to honor the per-brain override file (`loadBrainignoreRuleset()`), never
+   * to enable the protection.
+   */
+  importExclusions?: BrainignoreRuleset;
 }

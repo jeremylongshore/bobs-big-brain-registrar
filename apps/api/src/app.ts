@@ -9,6 +9,7 @@ import {
   ImportBatchRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
+import type { BrainignoreRuleset } from '@qmd-team-intent-kb/curator';
 import { CandidateService } from './services/candidate-service.js';
 import { PromotionService } from './services/promotion-service.js';
 import { MemoryService } from './services/memory-service.js';
@@ -111,6 +112,15 @@ export interface AppDependencies {
    * the D2 staleness gauge reports the accumulating drift.
    */
   indexRefresher?: IndexRefresher;
+  /**
+   * Brainignore ruleset for the import exclusion gate (5kw.1) applied on the
+   * single-candidate promote path. main.ts resolves it via
+   * `loadBrainignoreRuleset()` so the API honors the per-brain override file
+   * (`~/.teamkb/brainignore`); left unset in tests → the committed defaults.
+   * The gate is on for import-source candidates regardless — this only wires
+   * the operator override.
+   */
+  importExclusions?: BrainignoreRuleset;
 }
 
 /**
@@ -176,6 +186,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     auditRepo,
     linksRepo,
     deps.originSecret,
+    deps.importExclusions,
   );
 
   // Routes are wrapped in an inner register() so they load AFTER the

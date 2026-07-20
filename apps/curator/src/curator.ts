@@ -18,6 +18,7 @@ import {
 import { promote } from './promotion/promoter.js';
 import { reject } from './rejection/rejector.js';
 import { checkOriginAttestation } from './origin/origin-gate.js';
+import { checkImportExclusion } from './import-exclusion/import-exclusion-gate.js';
 
 /** Repository dependencies required by the Curator */
 export interface CuratorDependencies {
@@ -106,6 +107,29 @@ export class Curator {
         candidateId: candidate.id,
         outcome: 'rejected',
         pipelineResult: originGate.pipelineResult,
+        reason,
+      };
+    }
+
+    // Import exclusion gate (bead 5kw.1) — STRUCTURAL, like the origin gate
+    // above: import-source candidates matching the brainignore ruleset
+    // (vendored paths, lockfiles, boilerplate names, minified/generated/
+    // license-boilerplate content) are rejected deterministically at intake,
+    // with the matched pattern/heuristic on the receipted rejection. Non-import
+    // sources are never checked. Defaults apply when no ruleset is configured,
+    // so no govern path can leave the gate dormant.
+    const importGate = checkImportExclusion(candidate, this.config.importExclusions);
+    if (importGate.verdict === 'rejected') {
+      const reason = reject(
+        candidate,
+        importGate.pipelineResult,
+        this.deps.auditRepo,
+        suppressReject,
+      );
+      return {
+        candidateId: candidate.id,
+        outcome: 'rejected',
+        pipelineResult: importGate.pipelineResult,
         reason,
       };
     }
