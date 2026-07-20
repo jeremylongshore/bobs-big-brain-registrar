@@ -323,6 +323,53 @@ describe('promote', () => {
     expect(memoryRepo.count()).toBe(1);
   });
 
+  it('atomicity: a crash ON the promotion insert (after the supersession record) leaves NEITHER the supersession outcome NOR the memory', () => {
+    // E2 exact-window probe: the supersession outcome (old-memory lifecycle
+    // flip + 'superseded' receipt) is written BEFORE the new memory row inside
+    // the same BEGIN IMMEDIATE transaction. Crash the transaction at the
+    // promotion insert itself — the window BETWEEN the supersession record and
+    // the promotion insert — and assert the store shows neither half: the old
+    // memory is still 'active' with no supersession link, no 'superseded'
+    // receipt exists, and the new memory never landed. This is the atomicity
+    // pairing the supersession receipt relies on: the receipt can never exist
+    // without the promotion that caused it.
+    const old = makeCuratedMemory({ title: 'Deploy checklist guide', category: 'convention' });
+    memoryRepo.insert(old);
+
+    const candidate = makeCandidate({ title: 'Deploy checklist guide v2', category: 'convention' });
+    const contentHash = computeContentHash(candidate.content);
+    const memoryId = deriveMemoryId(candidate.id, contentHash);
+    const supersession = {
+      supersededMemoryId: old.id,
+      supersededTitle: old.title,
+      similarity: 0.85,
+    };
+
+    vi.spyOn(memoryRepo, 'insert').mockImplementation(() => {
+      throw new Error('simulated crash on the promotion insert');
+    });
+
+    expect(() =>
+      promote(
+        { candidate, contentHash, pipelineResult: makePipelineResult(), supersession },
+        memoryRepo,
+        auditRepo,
+      ),
+    ).toThrow(/simulated crash on the promotion insert/);
+
+    // The supersession record — written EARLIER in the same transaction — is
+    // fully undone: the old memory is still active, unlinked.
+    const oldAfter = memoryRepo.findById(old.id);
+    expect(oldAfter?.lifecycle).toBe('active');
+    expect(oldAfter?.supersession).toBeUndefined();
+    // No 'superseded' receipt survives the rollback.
+    expect(auditRepo.findByMemory(old.id).some((e) => e.action === 'superseded')).toBe(false);
+    // The new memory never landed, and it has no receipts.
+    expect(memoryRepo.findById(memoryId)).toBeNull();
+    expect(auditRepo.findByMemory(memoryId)).toHaveLength(0);
+    expect(memoryRepo.count()).toBe(1);
+  });
+
   it('dry run does not insert memory into store', () => {
     const candidate = makeCandidate();
     const contentHash = computeContentHash(candidate.content);
