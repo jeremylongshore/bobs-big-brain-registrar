@@ -25,7 +25,11 @@
  */
 
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { detectSupersession, PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
+import {
+  DEFAULT_SUPERSESSION_THRESHOLD,
+  detectSupersession,
+  PolicyPipeline,
+} from '@qmd-team-intent-kb/policy-engine';
 import {
   CuratedMemory,
   GovernancePolicy,
@@ -62,8 +66,9 @@ const POSITIVE_CLASSES: ReadonlyArray<Exclude<DecisionClass, 'clean'>> = [
   'supersession',
 ];
 
-/** Title-similarity threshold — the production default used by curator + api. */
-const SUPERSESSION_THRESHOLD = 0.6;
+// Supersession threshold: consumed from the policy-engine single source
+// (DEFAULT_SUPERSESSION_THRESHOLD) — the exact constant curator + api use, so
+// the eval can never measure a different threshold than production runs.
 
 /**
  * The policy the decision cases run under: the two state-dependent rules with
@@ -179,7 +184,7 @@ function firedChecks(def: DecisionCase): ReadonlySet<DecisionCheck> {
     ) {
       fired.add('contradiction-rule');
     }
-    if (detectSupersession(candidate, repo, SUPERSESSION_THRESHOLD) !== null) {
+    if (detectSupersession(candidate, repo, DEFAULT_SUPERSESSION_THRESHOLD) !== null) {
       fired.add('supersession-detector');
     }
     return fired;

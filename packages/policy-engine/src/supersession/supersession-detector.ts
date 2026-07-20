@@ -1,5 +1,13 @@
 import type { MemoryCandidate, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
 
+/**
+ * The production default title-similarity threshold for supersession
+ * detection. Single source of truth — the curator, the API promotion service,
+ * and the govern-decision eval all consume THIS constant, so the eval can
+ * never silently measure a different threshold than production runs.
+ */
+export const DEFAULT_SUPERSESSION_THRESHOLD = 0.6;
+
 /** A curated memory that may be superseded by the incoming candidate */
 export interface SupersessionMatch {
   supersededMemoryId: string;
@@ -38,13 +46,13 @@ export interface SupersessionMemorySource {
  * function.
  *
  * @param threshold - Minimum Jaccard similarity (0.0–1.0) to consider a match.
- *                   Defaults to 0.6.
+ *                   Defaults to {@link DEFAULT_SUPERSESSION_THRESHOLD}.
  * @returns The best-matching memory above the threshold, or null if none found.
  */
 export function detectSupersession(
   candidate: MemoryCandidate,
   memorySource: SupersessionMemorySource,
-  threshold: number = 0.6,
+  threshold: number = DEFAULT_SUPERSESSION_THRESHOLD,
 ): SupersessionMatch | null {
   const existingMemories = memorySource
     .findByTenantAndLifecycle(candidate.tenantId, 'active')

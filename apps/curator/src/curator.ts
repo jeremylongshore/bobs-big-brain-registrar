@@ -11,7 +11,10 @@ import type {
 } from '@qmd-team-intent-kb/store';
 import type { CuratorConfig, CurationResult, CurationBatchResult } from './types.js';
 import { checkDuplicate } from './dedup/dedup-checker.js';
-import { detectSupersession } from './supersession/supersession-detector.js';
+import {
+  detectSupersession,
+  DEFAULT_SUPERSESSION_THRESHOLD,
+} from './supersession/supersession-detector.js';
 import { promote } from './promotion/promoter.js';
 import { reject } from './rejection/rejector.js';
 
@@ -208,7 +211,7 @@ export class Curator {
     const supersession = detectSupersession(
       candidate,
       this.deps.memoryRepo,
-      this.config.supersessionThreshold ?? 0.6,
+      this.config.supersessionThreshold ?? DEFAULT_SUPERSESSION_THRESHOLD,
     );
 
     const memory = promote(

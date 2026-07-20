@@ -7,7 +7,11 @@
  * implementation is byte-for-byte the same function, now owned by the govern
  * package layer.
  */
-export { detectSupersession, computeTitleSimilarity } from '@qmd-team-intent-kb/policy-engine';
+export {
+  detectSupersession,
+  computeTitleSimilarity,
+  DEFAULT_SUPERSESSION_THRESHOLD,
+} from '@qmd-team-intent-kb/policy-engine';
 export type {
   SupersessionMatch,
   SupersessionMemorySource,

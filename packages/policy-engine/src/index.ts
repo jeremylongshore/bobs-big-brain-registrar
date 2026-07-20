@@ -19,6 +19,7 @@ export { PolicyPipeline } from './pipeline.js';
 export {
   detectSupersession,
   computeTitleSimilarity,
+  DEFAULT_SUPERSESSION_THRESHOLD,
 } from './supersession/supersession-detector.js';
 export type {
   SupersessionMatch,
