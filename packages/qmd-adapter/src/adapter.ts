@@ -191,7 +191,7 @@ export class QmdAdapter {
  * score cache is keyed on the PINNED reranker weights (file + sha256 from the
  * weights manifest), so a model bump invalidates prior scores automatically.
  * Returns null instead of throwing when construction fails (e.g. the cache
- * path is unwritable AND in-memory fallback fails) — rerank is never allowed
+ * path is unwritable — the stage then simply runs uncached) — rerank is never allowed
  * to take the serving path down.
  */
 function buildRerankStage(config: QmdAdapterConfig): RerankStage | null {

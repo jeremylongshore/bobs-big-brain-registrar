@@ -152,9 +152,12 @@ warm dev box (A/B arm of `eval:governed:local`, candidateWindow 50, topN 10,
    gold documents. Moving the semantic stratum requires a dense retrieval
    arm (the Wave-3 B4 bead's gate condition is hereby met with evidence),
    not a better ranker.
-2. **CPU latency.** ~2.5 s/doc at 600 chars on this 8-core shared-vCPU box
-   even after thread tuning (`-t 6 -tb 6 -ub 1024`): a 20-doc window costs
-   ~50 s/query — unusable interactively.
+2. **CPU latency** (measured 2026-07-19 on this 8-core shared-vCPU box,
+   direct `/v1/rerank` wall-clock): 50 docs x 1500 chars = 230.2 s
+   (~4.6 s/doc, pre-tuning `-t 4`); after tuning (`-t 6 -tb 6 -ub 1024`):
+   20 docs x 600 chars = 52.8/46.4 s steady-state (~2.4 s/doc) and
+   50 docs x 600 chars = 105.7 s (~2.1 s/doc) — a 20-doc window costs
+   ~50 s/query, unusable interactively.
 
 **Posture:** the adapter stage stays behind the explicit `rerank` config
 (fail-open, read-path-only), the plugin does NOT wire it, and the
