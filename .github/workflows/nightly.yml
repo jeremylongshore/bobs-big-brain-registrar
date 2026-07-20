@@ -80,6 +80,41 @@ jobs:
           # which runs this same CLI against the real ~/.teamkb.
           node packages/qmd-adapter/dist/cli.js canary --max-staleness-seconds 86400
 
+      - name: Corpus-accounting guard (every curated row must carry its promoted receipt)
+        # Track G2 substrate guard (GSB blueprint): the governed corpus and the
+        # audit log must agree — every curated_memories row carries a
+        # row-creating 'promoted' receipt written by the curator promoter in the
+        # same transaction as the insert. This job proves the MECHANISM against
+        # a synthetic store built by the real curator CLI: (1) `curator ingest`
+        # sweeps the fixture through the full pipeline (its Promoted counter is
+        # real promotion via the production promoter, receipt included) and the
+        # jq assertion REQUIRES >=1 accounted row — an empty or silently
+        # rejected store can no longer pass this leg trivially; (2) a raw SQL
+        # INSERT planted behind the promoter (the substrate bypass) is detected
+        # and exits nonzero.
+        # The daily run against the LIVE ~/.teamkb store is an ops concern on
+        # the box that hosts the real brain (the local nightly compile host,
+        # runbook 000-docs/027-OD-OPSM) — CI never sees that store.
+        run: |
+          set -euo pipefail
+          STORE="$RUNNER_TEMP/teamkb-accounting"
+          mkdir -p "$STORE/spool"
+          cat > "$STORE/spool/spool-ci-accounting.jsonl" <<'JSONL'
+          {"schemaVersion":"1","id":"7f0a90a4-bd63-5c1e-9a10-3d2f6f1c2ab1","status":"inbox","source":"import","content":"Corpus-accounting CI fixture: this candidate is promoted through the real curator pipeline.","title":"Corpus accounting fixture","category":"reference","trustLevel":"medium","author":{"type":"system","id":"nightly-ci"},"tenantId":"ci-accounting","metadata":{"filePaths":["ci/fixture.md"],"tags":["ci"]},"prePolicyFlags":{"potentialSecret":false,"lowConfidence":false,"duplicateSuspect":false},"capturedAt":"2026-07-19T00:00:00.000Z"}
+          JSONL
+          node apps/curator/dist/main.js ingest "$STORE/spool" --tenant ci-accounting --db "$STORE/teamkb.db"
+          echo "--- properly-promoted store must pass with >=1 accounted row ---"
+          node apps/curator/dist/main.js verify-corpus-accounting --db "$STORE/teamkb.db" --json | tee /tmp/accounting.json
+          jq -e '.totalRows >= 1 and .orphanCount == 0' /tmp/accounting.json >/dev/null
+          echo "--- planting a raw INSERT behind the promoter (substrate bypass) ---"
+          sqlite3 "$STORE/teamkb.db" "INSERT INTO curated_memories (id, candidate_id, source, content, title, category, trust_level, author_json, tenant_id, content_hash, promoted_at, promoted_by_json, updated_at) VALUES ('00000000-0000-4000-8000-00000000beef', '00000000-0000-4000-8000-00000000cafe', 'manual', 'bypass row', 'Bypass row', 'reference', 'medium', '{\"type\":\"human\",\"id\":\"rogue\"}', 'ci-accounting', 'd6afac65ebb13db65da74c57ea61bb19ab78bb219afe321d460b81118d23187c', '2026-07-19T00:00:00.000Z', '{\"type\":\"human\",\"id\":\"rogue\"}', '2026-07-19T00:00:00.000Z');"
+          echo "--- bypass must be detected (nonzero exit) ---"
+          if node apps/curator/dist/main.js verify-corpus-accounting --db "$STORE/teamkb.db"; then
+            echo "FAIL: verify-corpus-accounting did not detect the bypass row"
+            exit 1
+          fi
+          echo "OK: substrate bypass detected"
+
       - name: Dependency audit
         run: pnpm audit --audit-level=moderate
         continue-on-error: true

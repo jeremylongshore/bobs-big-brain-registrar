@@ -93,9 +93,20 @@ describe('PolicyRuleType', () => {
     'tenant_match',
     'sensitivity_gate',
     'content_sanitization',
+    'contradiction_check',
   ];
   it.each(types)('accepts "%s"', (val) => {
     expect(PolicyRuleType.parse(val)).toBe(val);
+  });
+
+  // Membership lock-step guard: the accept-list above IS the full enum. If a
+  // member is added to the Zod enum without extending this list (or vice versa)
+  // this fails, forcing the same-PR update discipline the 5bm.1 DDL lock-step
+  // test enforces for the curated_memories column enums. (PolicyRuleType itself
+  // has NO DDL CHECK — rules live in governance_policies.rules_json — so this
+  // test is its only membership gate.)
+  it('the accept-list covers the entire enum (no untested members)', () => {
+    expect([...types].sort()).toEqual([...PolicyRuleType.options].sort());
   });
   it('rejects invalid value', () => {
     expect(() => PolicyRuleType.parse('custom')).toThrow();
@@ -107,6 +118,10 @@ describe('PolicyRuleType', () => {
 
   it('accepts content_sanitization as PolicyRuleType', () => {
     expect(PolicyRuleType.parse('content_sanitization')).toBe('content_sanitization');
+  });
+
+  it('accepts contradiction_check as PolicyRuleType (E1)', () => {
+    expect(PolicyRuleType.parse('contradiction_check')).toBe('contradiction_check');
   });
 });
 

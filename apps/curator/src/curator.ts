@@ -111,6 +111,14 @@ export class Curator {
     const pipelineResult = pipeline.evaluate(candidate, {
       existingHashes: hashSet,
       tenantId: this.config.tenantId,
+      // contradiction_check lookup (E1): tenant-scoped ACTIVE memories filtered
+      // to the requested category. Queried lazily — the store is only hit when
+      // a contradiction rule actually runs.
+      getActiveMemoriesInCategory: (category) =>
+        this.deps.memoryRepo
+          .findByTenantAndLifecycle(this.config.tenantId, 'active')
+          .filter((m) => m.category === category)
+          .map((m) => ({ id: m.id, content: m.content })),
     });
 
     // Suppress the per-candidate reject receipt when configured (B1 sweep) — the

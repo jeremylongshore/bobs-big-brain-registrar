@@ -67,6 +67,14 @@ export type CandidateStatus = z.infer<typeof CandidateStatus>;
 export const SearchScope = z.enum(['curated', 'all', 'inbox', 'archived']).default('curated');
 export type SearchScope = z.infer<typeof SearchScope>;
 
+// `contradiction_check` (GSB blueprint Track E1) surfaces candidates whose
+// content overlaps heavily with an existing ACTIVE memory in the same category
+// WITHOUT being byte-identical (identical content is `dedup_check`'s job) —
+// same-topic-different-content is the shape a contradiction takes before a human
+// reads it. v1 is a deterministic token-overlap heuristic, action=flag only; it
+// never rejects. Rule values live in `governance_policies.rules_json` (validated
+// by this Zod enum) — there is no per-rule-type DB column or CHECK constraint,
+// so adding a member here needs no store migration.
 export const PolicyRuleType = z.enum([
   'secret_detection',
   'dedup_check',
@@ -76,6 +84,7 @@ export const PolicyRuleType = z.enum([
   'tenant_match',
   'sensitivity_gate',
   'content_sanitization',
+  'contradiction_check',
 ]);
 export type PolicyRuleType = z.infer<typeof PolicyRuleType>;
 

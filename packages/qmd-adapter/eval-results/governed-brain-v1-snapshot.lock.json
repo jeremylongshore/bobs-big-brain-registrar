@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "tarballPath": "~/.teamkb/eval-anchor/kb-export-frozen-20260719T230939Z.tar.zst",
+  "sha256": "0a0bf76963fd114c1c5b92f3ec6cdd8a6a91708df669cd5e35ea1c6047c7366b",
+  "createdAtUtc": "2026-07-19T23:09:49Z",
+  "fileCount": 17295,
+  "corpusNote": "Frozen tar.zst of the private ~/.teamkb/kb-export tree (17295 files, ~80 MB uncompressed) taken 2026-07-19 on the dev box. The tarball itself is NEVER committed \u2014 only this SHA-256 pin is. Override the path with GOVERNED_EVAL_SNAPSHOT; a hash mismatch makes the anchor refuse to run (exit 2). Refreezing requires updating this lock AND re-measuring governed-brain-v1-floor.json in the same change."
+}

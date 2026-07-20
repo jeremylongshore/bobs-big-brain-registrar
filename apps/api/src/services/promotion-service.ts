@@ -111,6 +111,12 @@ export class PromotionService {
       pipelineResult = pipeline.evaluate(candidate, {
         existingHashes: new Set(tenantMemories.map((m) => m.contentHash)),
         tenantId,
+        // contradiction_check lookup (E1): reuse the tenant-scoped memory load
+        // above — ACTIVE lifecycle only, filtered to the requested category.
+        getActiveMemoriesInCategory: (category) =>
+          tenantMemories
+            .filter((m) => m.lifecycle === 'active' && m.category === category)
+            .map((m) => ({ id: m.id, content: m.content })),
       });
     }
 

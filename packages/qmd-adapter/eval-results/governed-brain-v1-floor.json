@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "dataset": "governed-brain-v1",
+  "k": 10,
+  "epsilon": 0.001,
+  "floors": {
+    "overall": 0.5595,
+    "lexical": 1,
+    "semantic": 0.3393
+  },
+  "measuredAtUtc": "2026-07-19T23:16:40.218Z",
+  "snapshotSha256": "0a0bf76963fd114c1c5b92f3ec6cdd8a6a91708df669cd5e35ea1c6047c7366b",
+  "note": "Per-stratum mean Recall@10 floors measured against the frozen governed-brain-v1 snapshot. Update ONLY alongside a deliberate re-measure (and lock update on refreeze)."
+}
