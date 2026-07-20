@@ -39,4 +39,18 @@ export type {
   FalseNegative,
   GovernDecisionReport,
 } from './govern-decision/types.js';
+export { evaluateDecisionCases } from './govern-decision/decision-eval.js';
+export {
+  DECISION_CASES,
+  DECISION_DATASET_VERSION,
+} from './govern-decision/decision-dataset/v1/index.js';
+export type {
+  DecisionCase,
+  DecisionCheck,
+  DecisionClass,
+  DecisionCheckMetrics,
+  DecisionClassMetrics,
+  DecisionFalseNegative,
+  DecisionCasesReport,
+} from './govern-decision/decision-types.js';
 export type { EvaluatorResult, RetrievalProbe, DedupProbe } from './types.js';

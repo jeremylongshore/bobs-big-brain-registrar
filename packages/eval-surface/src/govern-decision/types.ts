@@ -21,6 +21,8 @@
 
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 
+import type { DecisionCasesReport } from './decision-types.js';
+
 /**
  * The independent "checks" whose efficacy we score. Each is one detection
  * surface in the govern decision, scored separately so a gap in one (e.g. the
@@ -131,4 +133,10 @@ export interface GovernDecisionReport {
   readonly falseNegatives: readonly FalseNegative[];
   /** Subset of `falseNegatives` NOT covered by a case's `knownFalseNegativeOf`. */
   readonly undocumentedFalseNegatives: readonly FalseNegative[];
+  /**
+   * Wave-2 C3: the state-dependent decision section — dedup / contradiction /
+   * supersession over the labeled decision set, broken out per check AND per
+   * relationship class. Its undocumented false-negatives join the gate.
+   */
+  readonly decisionCases: DecisionCasesReport;
 }
