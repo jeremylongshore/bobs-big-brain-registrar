@@ -158,13 +158,19 @@ export class SearchService {
     // Read-time sensitivity enforcement (5bm.11): the SQLite path returns rows
     // directly, so drop confidential/restricted here — the leak the audit found.
     // Bulk-digestion scoping (5bm.8): the qmd path excludes the kb-bulk
-    // collection from the default scope at the collection level; this path has
-    // no collections, so mirror the contract on the row's source — bulk_import
-    // rows only surface when the caller deliberately asks ('bulk' or 'all').
+    // collection from the DEFAULT (curated) scope at the collection level; this
+    // path has no collections, so mirror that contract on the row's source.
+    // Only two scopes constrain bulk membership here: `curated` (the default)
+    // excludes bulk; `bulk` returns ONLY bulk. Every other scope is left to its
+    // own semantics and must NOT bulk-filter — notably `archived`, where a bulk
+    // memory exports to kb-archive (lifecycle wins in getDirectory), so on the
+    // qmd path an archived bulk hit IS returned under `archived`; excluding it
+    // here would diverge. (Moot in practice — searchByText is active-only — but
+    // kept correct so the two paths never disagree.)
     const bulkVisible = (m: { source: string }): boolean => {
-      if (query.scope === 'all') return true;
+      if (query.scope === 'curated') return m.source !== 'bulk_import';
       if (query.scope === 'bulk') return m.source === 'bulk_import';
-      return m.source !== 'bulk_import';
+      return true;
     };
     const memories = allMemories.filter(
       (m) => isSearchVisibleSensitivity(m.sensitivity) && bulkVisible(m),
