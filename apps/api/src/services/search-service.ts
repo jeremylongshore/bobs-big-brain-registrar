@@ -157,7 +157,18 @@ export class SearchService {
     const allMemories = this.memoryRepo.searchByText(query.query, query.tenantId, query.categories);
     // Read-time sensitivity enforcement (5bm.11): the SQLite path returns rows
     // directly, so drop confidential/restricted here — the leak the audit found.
-    const memories = allMemories.filter((m) => isSearchVisibleSensitivity(m.sensitivity));
+    // Bulk-digestion scoping (5bm.8): the qmd path excludes the kb-bulk
+    // collection from the default scope at the collection level; this path has
+    // no collections, so mirror the contract on the row's source — bulk_import
+    // rows only surface when the caller deliberately asks ('bulk' or 'all').
+    const bulkVisible = (m: { source: string }): boolean => {
+      if (query.scope === 'all') return true;
+      if (query.scope === 'bulk') return m.source === 'bulk_import';
+      return m.source !== 'bulk_import';
+    };
+    const memories = allMemories.filter(
+      (m) => isSearchVisibleSensitivity(m.sensitivity) && bulkVisible(m),
+    );
 
     const nowIso = new Date().toISOString();
     const queryLower = query.query.toLowerCase();

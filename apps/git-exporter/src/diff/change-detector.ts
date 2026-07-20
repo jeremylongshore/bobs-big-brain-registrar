@@ -1,7 +1,7 @@
 import type { MemoryRepository, ExportStateRepository } from '@qmd-team-intent-kb/store';
 import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
 import type { ExportChangeset, ExportConfig } from '../types.js';
-import { getRelativePath, getCategoryDirectory } from '../formatter/directory-mapper.js';
+import { getRelativePath, getActiveDirectory } from '../formatter/directory-mapper.js';
 import { join } from 'node:path';
 
 /**
@@ -60,9 +60,10 @@ export function detectChanges(
     // curated/; the operator fixes it at source (recategorize, 5bm.7).
     try {
       if (memory.lifecycle === 'archived' || memory.lifecycle === 'superseded') {
-        // File may currently live in its category directory (from when it was active).
-        const categoryDir = getCategoryDirectory(memory.category);
-        const fromPath = join(config.outputDir, categoryDir, `${memory.id}.md`);
+        // File may currently live in its active-time directory (category dir,
+        // or bulk/ for a bulk_import memory — 5bm.8).
+        const activeDir = getActiveDirectory(memory);
+        const fromPath = join(config.outputDir, activeDir, `${memory.id}.md`);
         const toPath = join(config.outputDir, getRelativePath(memory));
         toArchive.push({ memory, fromPath, toPath });
       } else {

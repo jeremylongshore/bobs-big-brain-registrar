@@ -82,9 +82,11 @@ server.tool(
   {
     query: z.string().min(1).describe('Natural-language search query'),
     scope: z
-      .enum(['curated', 'all', 'inbox', 'archived'])
+      .enum(['curated', 'all', 'inbox', 'archived', 'bulk'])
       .optional()
-      .describe('Search scope: curated (default), all, inbox, or archived'),
+      .describe(
+        'Search scope: curated (default), all, inbox, archived, or bulk (bulk-digestion corpus)',
+      ),
     limit: z
       .number()
       .int()

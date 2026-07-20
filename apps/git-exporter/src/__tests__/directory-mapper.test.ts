@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getDirectory,
+  getActiveDirectory,
   getCategoryDirectory,
   getRelativePath,
   UnknownCategoryError,
@@ -81,6 +82,43 @@ describe('getDirectory', () => {
   it('active reference → guides', () => {
     const memory = makeCuratedMemory({ category: 'reference', lifecycle: 'active' });
     expect(getDirectory(memory)).toBe('guides');
+  });
+});
+
+describe('bulk_import routing (5bm.8)', () => {
+  it('active bulk_import → bulk/ regardless of category', () => {
+    // A whole-machine digestion routes to the non-default kb-bulk collection —
+    // even a 'reference' category (the 07-16 flood shape) stays out of guides/.
+    const memory = makeCuratedMemory({ source: 'bulk_import', category: 'reference' });
+    expect(getDirectory(memory)).toBe('bulk');
+  });
+
+  it('deprecated bulk_import → bulk/', () => {
+    const memory = makeCuratedMemory({
+      source: 'bulk_import',
+      category: 'decision',
+      lifecycle: 'deprecated',
+    });
+    expect(getDirectory(memory)).toBe('bulk');
+  });
+
+  it('archived bulk_import → archive/ (lifecycle still wins)', () => {
+    const memory = makeCuratedMemory({
+      source: 'bulk_import',
+      category: 'reference',
+      lifecycle: 'archived',
+    });
+    expect(getDirectory(memory)).toBe('archive');
+  });
+
+  it('getActiveDirectory: bulk_import → bulk, others → category dir', () => {
+    expect(getActiveDirectory({ source: 'bulk_import', category: 'reference' })).toBe('bulk');
+    expect(getActiveDirectory({ source: 'import', category: 'reference' })).toBe('guides');
+  });
+
+  it('bulk memory relative path is bulk/{id}.md', () => {
+    const memory = makeCuratedMemory({ source: 'bulk_import', category: 'reference' });
+    expect(getRelativePath(memory)).toBe(`bulk/${memory.id}.md`);
   });
 });
 

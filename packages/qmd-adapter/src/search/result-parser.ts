@@ -56,7 +56,14 @@ export function parseQueryOutput(stdout: string): QmdSearchResult[] {
 
 /** Derive collection name from a file path (qmd:// URI or filesystem path) */
 export function deriveCollectionFromPath(filePath: string): string {
-  const knownCollections = ['kb-curated', 'kb-decisions', 'kb-guides', 'kb-inbox', 'kb-archive'];
+  const knownCollections = [
+    'kb-curated',
+    'kb-decisions',
+    'kb-guides',
+    'kb-inbox',
+    'kb-archive',
+    'kb-bulk',
+  ];
   for (const name of knownCollections) {
     if (filePath.includes(name)) return name;
   }

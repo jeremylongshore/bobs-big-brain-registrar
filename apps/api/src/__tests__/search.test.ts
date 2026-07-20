@@ -207,4 +207,55 @@ describe('POST /api/search', () => {
         expect(ids).not.toContain(restricted.id);
       });
   });
+
+  it('excludes bulk_import memories from the default curated scope (5bm.8)', async () => {
+    const curatedRow = makeMemory({ title: 'Indexing strategy curated', source: 'import' });
+    const bulkRow = makeMemory({
+      title: 'Indexing strategy bulk',
+      source: 'bulk_import',
+      trustLevel: 'low',
+      contentHash: 'e'.repeat(64),
+    });
+    memoryRepo.insert(curatedRow);
+    memoryRepo.insert(bulkRow);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'indexing', scope: 'curated' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.totalCount).toBe(1);
+    expect(body.hits[0].memoryId).toBe(curatedRow.id);
+  });
+
+  it("scope 'bulk' returns only bulk_import memories; 'all' returns both (5bm.8)", async () => {
+    const curatedRow = makeMemory({ title: 'Indexing strategy curated', source: 'import' });
+    const bulkRow = makeMemory({
+      title: 'Indexing strategy bulk',
+      source: 'bulk_import',
+      trustLevel: 'low',
+      contentHash: 'e'.repeat(64),
+    });
+    memoryRepo.insert(curatedRow);
+    memoryRepo.insert(bulkRow);
+
+    const bulkRes = await app.inject({
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'indexing', scope: 'bulk' },
+    });
+    expect(bulkRes.statusCode).toBe(200);
+    expect(bulkRes.json().totalCount).toBe(1);
+    expect(bulkRes.json().hits[0].memoryId).toBe(bulkRow.id);
+
+    const allRes = await app.inject({
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'indexing', scope: 'all' },
+    });
+    expect(allRes.statusCode).toBe(200);
+    expect(allRes.json().totalCount).toBe(2);
+  });
 });

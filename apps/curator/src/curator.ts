@@ -144,12 +144,13 @@ export class Curator {
       existingHashes: hashSet,
       tenantId: this.config.tenantId,
       // contradiction_check lookup (E1): tenant-scoped ACTIVE memories filtered
-      // to the requested category. Queried lazily — the store is only hit when
-      // a contradiction rule actually runs.
+      // to the requested category AT THE STORE QUERY — loading the whole active
+      // set and filtering in JS deserialized a 17k-row corpus per candidate to
+      // keep ~6%. Queried lazily — the store is only hit when a contradiction
+      // rule actually runs.
       getActiveMemoriesInCategory: (category) =>
         this.deps.memoryRepo
-          .findByTenantAndLifecycle(this.config.tenantId, 'active')
-          .filter((m) => m.category === category)
+          .findByTenantAndLifecycleAndCategory(this.config.tenantId, 'active', category)
           .map((m) => ({ id: m.id, content: m.content })),
     });
 

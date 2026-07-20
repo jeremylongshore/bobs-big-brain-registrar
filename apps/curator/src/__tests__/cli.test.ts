@@ -14,7 +14,17 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { AuditRepository, createTestDatabase } from '@qmd-team-intent-kb/store';
+import {
+  AuditRepository,
+  PolicyRepository,
+  createDatabase,
+  createTestDatabase,
+} from '@qmd-team-intent-kb/store';
+import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
+import {
+  RECOMMENDED_POLICY_RULES,
+  findUncoveredRuleTypes,
+} from '@qmd-team-intent-kb/policy-engine';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch, type CuratorCliDeps } from '../cli.js';
@@ -506,5 +516,229 @@ describe('dispatch generate-exception-manifest', () => {
     expect(parsed['ok']).toBe(true);
     expect(parsed['entryCount']).toBe(1);
     db.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// upgrade-policy (5bm.2 — receipted migration to the recommended policy)
+// ---------------------------------------------------------------------------
+
+describe('dispatch upgrade-policy', () => {
+  const TENANT = 'demo-e2e';
+
+  /** The audited 2-rule live shape (secret_detection + content_length only). */
+  function seedTwoRulePolicy(db: ReturnType<typeof createTestDatabase>): GovernancePolicy {
+    const policy = GovernancePolicy.parse({
+      id: '22222222-2222-4222-8222-222222222222',
+      name: 'local-default',
+      tenantId: TENANT,
+      rules: [
+        {
+          id: 'r-secret',
+          type: 'secret_detection',
+          action: 'reject',
+          enabled: true,
+          priority: 0,
+          parameters: {},
+        },
+        {
+          id: 'r-length',
+          type: 'content_length',
+          action: 'reject',
+          enabled: true,
+          priority: 1,
+          parameters: { min: 25 },
+        },
+      ],
+      enabled: true,
+      version: 1,
+      createdAt: '2026-05-29T08:00:00.000Z',
+      updatedAt: '2026-05-29T08:00:00.000Z',
+    });
+    new PolicyRepository(db).insert(policy);
+    return policy;
+  }
+
+  /** File-backed db so state survives dispatch's connection close. */
+  let dbDir: string;
+  let dbPath: string;
+  const fileDeps: CuratorCliDeps = {
+    createDb: ({ dbPath: p, readonly }) =>
+      p !== undefined
+        ? createDatabase({ path: p, readonly: readonly ?? false })
+        : createTestDatabase(),
+  };
+
+  beforeEach(async () => {
+    dbDir = await mkdtemp(join(tmpdir(), 'curator-upgrade-policy-'));
+    dbPath = join(dbDir, 'teamkb.db');
+  });
+
+  afterEach(async () => {
+    await rm(dbDir, { recursive: true, force: true });
+  });
+
+  it('exits 2 without --tenant', async () => {
+    const rc = await dispatch(['upgrade-policy'], testDeps);
+    expect(rc).toBe(2);
+    expect(stderrText()).toMatch(/missing required flag: --tenant/);
+  });
+
+  it('exits 2 on an unknown flag', async () => {
+    const rc = await dispatch(['upgrade-policy', '--tenant', TENANT, '--bogus'], testDeps);
+    expect(rc).toBe(2);
+    expect(stderrText()).toMatch(/unknown argument: --bogus/);
+  });
+
+  it('upgrades a dormant 2-rule policy to the recommended set with a policy_upgraded receipt', async () => {
+    {
+      const seedDb = createDatabase({ path: dbPath });
+      seedTwoRulePolicy(seedDb);
+      seedDb.close();
+    }
+
+    const rc = await dispatch(
+      ['upgrade-policy', '--tenant', TENANT, '--db', dbPath, '--json'],
+      fileDeps,
+    );
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(true);
+    expect(parsed['outcome']).toBe('upgraded');
+    expect(parsed['written']).toBe(true);
+    // The 7 previously-dormant registered rules are named.
+    expect(parsed['dormantRules']).toEqual([
+      'content_sanitization',
+      'contradiction_check',
+      'dedup_check',
+      'relevance_score',
+      'sensitivity_gate',
+      'source_trust',
+      'tenant_match',
+    ]);
+
+    // Durable state: rules replaced, version bumped, nothing dormant anymore.
+    const verifyDb = createDatabase({ path: dbPath });
+    try {
+      const upgraded = new PolicyRepository(verifyDb).findByTenant(TENANT).find((p) => p.enabled)!;
+      expect(upgraded.rules).toHaveLength(RECOMMENDED_POLICY_RULES.length);
+      expect(upgraded.version).toBe(2);
+      expect(findUncoveredRuleTypes(upgraded)).toEqual([]);
+
+      // The receipt: policy_upgraded, anchored to the policy id, carrying the
+      // previous rules verbatim (the rollback), on an intact hash chain.
+      const events = new AuditRepository(verifyDb).findByMemory(upgraded.id);
+      expect(events).toHaveLength(1);
+      const receipt = events[0]!;
+      expect(receipt.action).toBe('policy_upgraded');
+      expect(receipt.tenantId).toBe(TENANT);
+      const details = receipt.details as {
+        previousRules: Array<{ type: string }>;
+        previouslyDormant: string[];
+        fromVersion: number;
+        toVersion: number;
+      };
+      expect(details.previousRules.map((r) => r.type).sort()).toEqual([
+        'content_length',
+        'secret_detection',
+      ]);
+      expect(details.previouslyDormant).toHaveLength(7);
+      expect(details.fromVersion).toBe(1);
+      expect(details.toVersion).toBe(2);
+    } finally {
+      verifyDb.close();
+    }
+
+    // The chain still verifies after the receipt append.
+    stdoutSpy.mockClear();
+    const verifyRc = await dispatch(['verify-audit-chain', '--db', dbPath, '--json'], fileDeps);
+    expect(verifyRc).toBe(0);
+  });
+
+  it('creates the recommended policy when the tenant has no enabled policy', async () => {
+    const rc = await dispatch(
+      ['upgrade-policy', '--tenant', TENANT, '--db', dbPath, '--json'],
+      fileDeps,
+    );
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['outcome']).toBe('created');
+    expect(parsed['written']).toBe(true);
+
+    const verifyDb = createDatabase({ path: dbPath });
+    try {
+      const created = new PolicyRepository(verifyDb).findByTenant(TENANT).find((p) => p.enabled)!;
+      expect(created.rules).toHaveLength(RECOMMENDED_POLICY_RULES.length);
+      expect(findUncoveredRuleTypes(created)).toEqual([]);
+      const events = new AuditRepository(verifyDb).findByMemory(created.id);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.action).toBe('policy_upgraded');
+    } finally {
+      verifyDb.close();
+    }
+  });
+
+  it('is a no-op on a policy that already enables every registered rule', async () => {
+    // First run creates the complete policy; second run must write nothing.
+    await dispatch(['upgrade-policy', '--tenant', TENANT, '--db', dbPath], fileDeps);
+    stdoutSpy.mockClear();
+
+    const rc = await dispatch(
+      ['upgrade-policy', '--tenant', TENANT, '--db', dbPath, '--json'],
+      fileDeps,
+    );
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['outcome']).toBe('already-complete');
+    expect(parsed['written']).toBe(false);
+
+    // Still exactly ONE receipt (from the create) — the no-op left no row.
+    const verifyDb = createDatabase({ path: dbPath });
+    try {
+      const rows = verifyDb
+        .prepare(`SELECT COUNT(*) AS cnt FROM audit_events WHERE action = 'policy_upgraded'`)
+        .get() as { cnt: number };
+      expect(rows.cnt).toBe(1);
+    } finally {
+      verifyDb.close();
+    }
+  });
+
+  it('--dry-run reports the dormant rules without writing anything', async () => {
+    {
+      const seedDb = createDatabase({ path: dbPath });
+      seedTwoRulePolicy(seedDb);
+      seedDb.close();
+    }
+
+    const rc = await dispatch(
+      ['upgrade-policy', '--tenant', TENANT, '--db', dbPath, '--dry-run', '--json'],
+      fileDeps,
+    );
+    expect(rc).toBe(0);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['dry_run']).toBe(true);
+    expect(parsed['outcome']).toBe('upgraded');
+    expect(parsed['written']).toBe(false);
+    expect((parsed['dormantRules'] as string[]).length).toBe(7);
+
+    const verifyDb = createDatabase({ path: dbPath });
+    try {
+      const policy = new PolicyRepository(verifyDb).findByTenant(TENANT).find((p) => p.enabled)!;
+      expect(policy.version).toBe(1);
+      expect(policy.rules).toHaveLength(2);
+      const rows = verifyDb.prepare('SELECT COUNT(*) AS cnt FROM audit_events').get() as {
+        cnt: number;
+      };
+      expect(rows.cnt).toBe(0);
+    } finally {
+      verifyDb.close();
+    }
+  });
+
+  it('lists the upgrade-policy subcommand in the help text', async () => {
+    const rc = await dispatch(['help'], testDeps);
+    expect(rc).toBe(0);
+    expect(stdoutText()).toMatch(/upgrade-policy --tenant <id>/);
   });
 });

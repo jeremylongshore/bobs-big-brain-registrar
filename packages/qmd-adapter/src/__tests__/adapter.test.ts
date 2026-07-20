@@ -49,13 +49,19 @@ describe('QmdAdapter', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('delegates ensureCollections to collection manager (4 exportable collections)', async () => {
+  it('delegates ensureCollections to collection manager (5 exportable collections)', async () => {
     mock.queueSuccess(''); // list
-    for (let i = 0; i < 4; i++) mock.queueSuccess(''); // adds
+    for (let i = 0; i < 5; i++) mock.queueSuccess(''); // adds
     const result = await adapter.ensureCollections();
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual(['kb-curated', 'kb-decisions', 'kb-guides', 'kb-archive']);
+      expect(result.value).toEqual([
+        'kb-curated',
+        'kb-decisions',
+        'kb-guides',
+        'kb-archive',
+        'kb-bulk',
+      ]);
     }
     // Sources point at the export tree, not a per-tenant index dir
     const firstAdd = mock.commands.find((c) => c[0] === 'collection' && c[1] === 'add');

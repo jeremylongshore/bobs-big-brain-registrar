@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { CuratedMemory, isTransitionAllowed } from '@qmd-team-intent-kb/schema';
-import type { MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
+import type { MemoryCategory, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
 import { assertMemoryEnumMembership } from './enum-membership.js';
 
 /**
@@ -229,6 +229,7 @@ export class MemoryRepository {
   private readonly stmtCountByTenant: Database.Statement;
   private readonly stmtFindStale: Database.Statement;
   private readonly stmtFindByTenantAndLifecycle: Database.Statement;
+  private readonly stmtFindByTenantAndLifecycleAndCategory: Database.Statement;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -345,6 +346,10 @@ export class MemoryRepository {
 
     this.stmtFindByTenantAndLifecycle = db.prepare(`
       SELECT * FROM curated_memories WHERE tenant_id = ? AND lifecycle = ?
+    `);
+
+    this.stmtFindByTenantAndLifecycleAndCategory = db.prepare(`
+      SELECT * FROM curated_memories WHERE tenant_id = ? AND lifecycle = ? AND category = ?
     `);
   }
 
@@ -564,6 +569,24 @@ export class MemoryRepository {
   /** Find memories by tenant and lifecycle state */
   findByTenantAndLifecycle(tenantId: string, lifecycle: MemoryLifecycleState): CuratedMemory[] {
     const rows = this.stmtFindByTenantAndLifecycle.all(tenantId, lifecycle);
+    return rows.map(rowToMemory);
+  }
+
+  /**
+   * Find memories by tenant, lifecycle state, AND category — the
+   * contradiction-check lookup (E1 review follow-up). The rule only ever
+   * compares against same-category actives, so filtering at the store keeps a
+   * 17k-row corpus from being loaded and deserialized per candidate just to
+   * discard the ~94% in other categories. Narrowed by
+   * `idx_memories_tenant_lifecycle`; the residual category filter runs in SQL,
+   * not on materialized domain objects.
+   */
+  findByTenantAndLifecycleAndCategory(
+    tenantId: string,
+    lifecycle: MemoryLifecycleState,
+    category: MemoryCategory,
+  ): CuratedMemory[] {
+    const rows = this.stmtFindByTenantAndLifecycleAndCategory.all(tenantId, lifecycle, category);
     return rows.map(rowToMemory);
   }
 

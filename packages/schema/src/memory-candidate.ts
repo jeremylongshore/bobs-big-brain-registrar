@@ -78,27 +78,46 @@ export const CandidateOrigin = z
 export type CandidateOrigin = z.infer<typeof CandidateOrigin>;
 
 /** A raw memory proposal captured from a Claude Code session, before governance */
-export const MemoryCandidate = z.object({
-  schemaVersion: z
-    .literal(MEMORY_CANDIDATE_SCHEMA_VERSION)
-    .default(MEMORY_CANDIDATE_SCHEMA_VERSION),
-  id: Uuid,
-  status: CandidateStatus,
-  source: MemorySource,
-  content: NonEmptyString,
-  title: NonEmptyString,
-  category: MemoryCategory,
-  trustLevel: TrustLevel.default('medium'),
-  author: Author,
-  tenantId: TenantId,
-  metadata: ContentMetadata.default({ filePaths: [], tags: [] }),
-  prePolicyFlags: PrePolicyFlags.default({
-    potentialSecret: false,
-    lowConfidence: false,
-    duplicateSuspect: false,
-  }),
-  capturedAt: IsoDatetime,
-  /** Optional write-time provenance attestation (H1) — verified before promotion when present. */
-  origin: CandidateOrigin.optional(),
-});
+export const MemoryCandidate = z
+  .object({
+    schemaVersion: z
+      .literal(MEMORY_CANDIDATE_SCHEMA_VERSION)
+      .default(MEMORY_CANDIDATE_SCHEMA_VERSION),
+    id: Uuid,
+    status: CandidateStatus,
+    source: MemorySource,
+    content: NonEmptyString,
+    title: NonEmptyString,
+    category: MemoryCategory,
+    trustLevel: TrustLevel.default('medium'),
+    author: Author,
+    tenantId: TenantId,
+    metadata: ContentMetadata.default({ filePaths: [], tags: [] }),
+    prePolicyFlags: PrePolicyFlags.default({
+      potentialSecret: false,
+      lowConfidence: false,
+      duplicateSuspect: false,
+    }),
+    capturedAt: IsoDatetime,
+    /** Optional write-time provenance attestation (H1) — verified before promotion when present. */
+    origin: CandidateOrigin.optional(),
+  })
+  // Enforced low-trust stamp for bulk digestions (5bm.8): `bulk_import` exists
+  // so a whole-machine digestion is distinguishable from a deliberate `import`
+  // and gateable by the source-trust rule. That only works if the stamp cannot
+  // be inflated — a bulk_import candidate CLAIMING medium/high trust would walk
+  // straight past a `minimumTrust: 'low'` gate, exactly the 2026-07-16 flood
+  // shape. Enforcing `low`/`untrusted` at the schema boundary (not by emitter
+  // convention) means no client, spool line, or API caller can mint a trusted
+  // bulk candidate. NOTE: `trustLevel` defaults to 'medium', so a bulk_import
+  // line MUST stamp its trust explicitly — an unstamped one is refused, which
+  // is the fail-closed reading of "ICO stamps it with low trust".
+  .refine(
+    (c) => c.source !== 'bulk_import' || c.trustLevel === 'low' || c.trustLevel === 'untrusted',
+    {
+      message:
+        "source 'bulk_import' requires trustLevel 'low' or 'untrusted' — a bulk digestion cannot claim curated-grade trust",
+      path: ['trustLevel'],
+    },
+  );
 export type MemoryCandidate = z.infer<typeof MemoryCandidate>;

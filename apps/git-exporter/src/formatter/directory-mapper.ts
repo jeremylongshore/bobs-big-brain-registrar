@@ -17,10 +17,15 @@ export class UnknownCategoryError extends Error {
 /**
  * Resolve the export subdirectory for a memory.
  *
- * Lifecycle takes precedence over category:
+ * Lifecycle takes precedence over everything:
  * - `archived` or `superseded` → `archive/`
  *
- * Category mapping (active / deprecated):
+ * Source takes precedence over category (active / deprecated):
+ * - `bulk_import` → `bulk/` (5bm.8 — a whole-machine digestion routes to the
+ *   non-default `kb-bulk` collection so it cannot flood the default search
+ *   surface, regardless of what category the compiler assigned it)
+ *
+ * Category mapping (active / deprecated, non-bulk):
  * - `decision`                                → `decisions/`
  * - `pattern`, `convention`, `architecture`  → `curated/`
  * - `troubleshooting`, `reference`, `onboarding` → `guides/`
@@ -29,6 +34,20 @@ export class UnknownCategoryError extends Error {
 export function getDirectory(memory: CuratedMemory): string {
   if (memory.lifecycle === 'archived' || memory.lifecycle === 'superseded') {
     return 'archive';
+  }
+  return getActiveDirectory(memory);
+}
+
+/**
+ * The directory a memory occupies while active/deprecated — i.e. ignoring the
+ * lifecycle→archive override. Bulk-imported memories live in `bulk/` (5bm.8);
+ * everything else lives in its category directory. The change-detector also
+ * uses this to compute the FROM path when archiving, so a bulk memory is moved
+ * out of `bulk/`, not looked for in its category directory.
+ */
+export function getActiveDirectory(memory: Pick<CuratedMemory, 'source' | 'category'>): string {
+  if (memory.source === 'bulk_import') {
+    return 'bulk';
   }
   return getCategoryDirectory(memory.category);
 }

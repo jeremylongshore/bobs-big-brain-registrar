@@ -21,9 +21,16 @@ function parseThreshold(params: Record<string, unknown> | undefined): number {
   return Math.min(1, Math.max(0, raw));
 }
 
-/** Lowercased alphanumeric token set of a text. */
+/**
+ * Lowercased token set of a text — Unicode letters and digits (E1 review
+ * follow-up). The prior ASCII-only `[a-z0-9]+` collapsed any non-Latin text
+ * (Cyrillic, CJK, accented words) to an empty/tiny token set, making two
+ * unrelated non-English memories look either identical-topic or invisible to
+ * the overlap heuristic. `\p{L}\p{N}` with the `u` flag tokenizes every script
+ * the same way.
+ */
 function tokenSet(text: string): Set<string> {
-  return new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+  return new Set(text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
 }
 
 /** Jaccard similarity of two token sets: |A ∩ B| / |A ∪ B| (0 when both empty). */
@@ -44,7 +51,7 @@ function jaccard(a: Set<string>, b: Set<string>): number {
  *
  * ## v1 heuristic — token overlap, honestly stated
  *
- * Detection is Jaccard similarity over lowercased alphanumeric token sets.
+ * Detection is Jaccard similarity over lowercased Unicode letter/digit token sets.
  * Token overlap is NOT semantic contradiction — "deploy on Fridays" and "never
  * deploy on Fridays" score high, but so do two compatible restatements of the
  * same convention. What high overlap reliably means is *same topic, different

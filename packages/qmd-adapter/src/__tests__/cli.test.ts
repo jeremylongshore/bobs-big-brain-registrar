@@ -65,7 +65,7 @@ describe('run', () => {
   it('reindex returns 0 and reports created collections', async () => {
     const { mock, makeAdapter } = makeInjected();
     mock.queueSuccess(''); // list
-    for (let i = 0; i < 4; i++) mock.queueSuccess(''); // adds
+    for (let i = 0; i < 5; i++) mock.queueSuccess(''); // adds
     mock.queueSuccess('Updated'); // update
     const logs: string[] = [];
 
@@ -120,9 +120,9 @@ describe('run', () => {
     for (let i = 0; i < DEFAULT_CANARY_CONTROLS.length; i++) {
       mock.queueSuccess(hitsJson(i === 0 ? 0 : 2));
     }
-    // heal reindex: list + 4 adds + update
+    // heal reindex: list + 5 adds + update
     mock.queueSuccess('');
-    for (let i = 0; i < 4; i++) mock.queueSuccess('');
+    for (let i = 0; i < 5; i++) mock.queueSuccess('');
     mock.queueSuccess('Updated');
     // Pass 2: all healthy
     for (const _ of DEFAULT_CANARY_CONTROLS) mock.queueSuccess(hitsJson(4));

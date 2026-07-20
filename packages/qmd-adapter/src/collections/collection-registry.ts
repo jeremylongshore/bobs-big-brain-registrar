@@ -19,7 +19,7 @@ export interface CollectionDef {
   sourceSubdir: string | null;
 }
 
-/** The 5 known collections with their default search inclusion */
+/** The 6 known collections with their default search inclusion */
 export const KNOWN_COLLECTIONS: CollectionDef[] = [
   {
     name: 'kb-curated',
@@ -50,6 +50,20 @@ export const KNOWN_COLLECTIONS: CollectionDef[] = [
     description: 'Deprecated, superseded, or archived memories',
     includeInDefaultSearch: false,
     sourceSubdir: 'archive',
+  },
+  {
+    // 5bm.8 — bulk-digestion quarantine collection. Memories whose source is
+    // `bulk_import` (whole-machine digestions, stamped low-trust at the schema
+    // boundary) export to `bulk/` instead of their category directory, so a
+    // 10k-file digestion can never flood the default `curated` search scope
+    // again (the 2026-07-16 flood put ~9.7k bulk reference files in kb-guides).
+    // Deliberately searchable via scope `bulk` or `all` — quarantined from the
+    // DEFAULT surface, not hidden.
+    name: 'kb-bulk',
+    description:
+      'Bulk-imported low-trust memories (whole-machine digestions), excluded from default search',
+    includeInDefaultSearch: false,
+    sourceSubdir: 'bulk',
   },
 ];
 

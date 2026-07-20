@@ -21,7 +21,7 @@
  * @module cli
  */
 
-import { createPublicKey, createPrivateKey } from 'node:crypto';
+import { createPublicKey, createPrivateKey, randomUUID } from 'node:crypto';
 import {
   closeSync,
   existsSync,
@@ -56,6 +56,13 @@ import {
   loadOrCreateOriginSecret,
   ORIGIN_SECRET_UNAVAILABLE_WARNING,
 } from '@qmd-team-intent-kb/common';
+
+import {
+  buildRecommendedPolicy,
+  findUncoveredRuleTypes,
+  RECOMMENDED_POLICY_RULES,
+} from '@qmd-team-intent-kb/policy-engine';
+import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
 
 import { Curator } from './curator.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
@@ -121,6 +128,14 @@ Subcommands:
     two pre-merge clone heads (requires MERGE_ANCHOR_PRIVATE_KEY_HEX in the
     environment, sourced from the SOPS-encrypted key file — never plaintext).
 
+  upgrade-policy --tenant <id> [--db <path>] [--dry-run] [--json]
+    Upgrade the tenant's enabled governance policy to the RECOMMENDED rule set
+    (every registered rule enabled — the anti-dormancy shape, 5bm.2). Writes a
+    'policy_upgraded' audit receipt carrying the PREVIOUS rules, so the change
+    is reversible from the receipt alone. No enabled policy → creates the
+    recommended policy. Policy already complete → no-op, nothing written.
+    --dry-run reports the dormant rules and the planned change without writing.
+
   help | --help | -h
     Print this message.
 
@@ -168,6 +183,13 @@ Options for 'merge-govern':
                   merge. Signing key comes from MERGE_ANCHOR_PRIVATE_KEY_HEX.
   --commit <sha>  Optional Dolt/git commit SHA recorded in the anchor.
   --json          Emit a structured JSON envelope in place of the summary.
+
+Options for 'upgrade-policy':
+  --tenant <id>   Tenant whose enabled policy is upgraded (required).
+  --db <path>     Persistent SQLite path. Default: in-memory (tests only —
+                  a real upgrade needs the store on disk).
+  --dry-run       Report the dormant rules + planned change, write nothing.
+  --json          Emit a structured JSON envelope in place of the summary.
 `;
 
 // ---------------------------------------------------------------------------
@@ -193,6 +215,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdProvenanceWalk(argv.slice(1), deps);
     case 'merge-govern':
       return cmdMergeGovern(argv.slice(1), deps);
+    case 'upgrade-policy':
+      return cmdUpgradePolicy(argv.slice(1), deps);
     case 'help':
     case '--help':
     case '-h':
@@ -1425,5 +1449,264 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
         // non-fatal
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// upgrade-policy
+// ---------------------------------------------------------------------------
+
+interface UpgradePolicyOpts {
+  tenantId: string;
+  dbPath?: string;
+  dryRun: boolean;
+  json: boolean;
+}
+
+function parseUpgradePolicyArgs(
+  args: string[],
+): { ok: true; opts: UpgradePolicyOpts } | { ok: false; message: string } {
+  let tenantId: string | undefined;
+  let dbPath: string | undefined;
+  let dryRun = false;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    switch (arg) {
+      case '--tenant':
+        tenantId = args[i + 1];
+        i += 2;
+        break;
+      case '--db':
+        dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--dry-run':
+        dryRun = true;
+        i += 1;
+        break;
+      case '--json':
+        json = true;
+        i += 1;
+        break;
+      default:
+        return { ok: false, message: `unknown argument: ${arg}` };
+    }
+  }
+
+  if (tenantId === undefined || tenantId.trim() === '') {
+    return { ok: false, message: 'missing required flag: --tenant <id>' };
+  }
+
+  return { ok: true, opts: { tenantId, dbPath, dryRun, json } };
+}
+
+/**
+ * The receipted migration path for 5bm.2: bring a store's LIVE governance
+ * policy up to the recommended anti-dormancy shape ({@link RECOMMENDED_POLICY_RULES}
+ * — every registered rule enabled; secret/length/tenant reject, the rest flag).
+ *
+ * Three outcomes, all explicit:
+ *   - `upgraded`         — the tenant's enabled policy left rules dormant; its
+ *                          rules are replaced with the recommended set (version
+ *                          bumped) and a `policy_upgraded` audit receipt is
+ *                          appended IN THE SAME SQLite transaction. The receipt's
+ *                          details carry the PREVIOUS rules verbatim, so the
+ *                          change is reversible from the chain alone.
+ *   - `created`          — no enabled policy existed; the recommended policy is
+ *                          inserted (same transactional receipt).
+ *   - `already-complete` — no registered rule is dormant; nothing is written.
+ *
+ * `--dry-run` reports which outcome WOULD apply (and the dormant rules) without
+ * touching the store — the operator preview 5bm.10 did by hand.
+ */
+async function cmdUpgradePolicy(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseUpgradePolicyArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli upgrade-policy: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const opts = parsed.opts;
+
+  const db = deps.createDb(opts.dbPath !== undefined ? { dbPath: opts.dbPath } : {});
+  try {
+    const policyRepo = new PolicyRepository(db);
+    const auditRepo = new AuditRepository(db);
+    const now = new Date().toISOString();
+
+    const enabled = policyRepo.findByTenant(opts.tenantId).find((p) => p.enabled);
+    const dormant = enabled !== undefined ? findUncoveredRuleTypes(enabled) : [];
+
+    // Outcome: already-complete — nothing to do, nothing written.
+    if (enabled !== undefined && dormant.length === 0) {
+      emitUpgradePolicyReport(opts, {
+        outcome: 'already-complete',
+        policyId: enabled.id,
+        policyName: enabled.name,
+        dormantRules: [],
+        written: false,
+      });
+      return 0;
+    }
+
+    const outcome = enabled === undefined ? 'created' : 'upgraded';
+
+    if (opts.dryRun) {
+      emitUpgradePolicyReport(opts, {
+        outcome,
+        policyId: enabled?.id ?? null,
+        policyName: enabled?.name ?? null,
+        dormantRules: dormant,
+        written: false,
+      });
+      return 0;
+    }
+
+    if (enabled === undefined) {
+      // No enabled policy: create the recommended one, with a receipt.
+      const policy = buildRecommendedPolicy(opts.tenantId, now);
+      const applyFn = (db as unknown as BetterSqliteLike).transaction(() => {
+        policyRepo.insert(policy);
+        auditRepo.insert({
+          id: randomUUID(),
+          action: 'policy_upgraded',
+          memoryId: policy.id,
+          tenantId: opts.tenantId,
+          actor: { type: 'system', id: 'curator-cli' },
+          reason:
+            'Created the recommended governance policy (no enabled policy existed for this tenant)',
+          details: {
+            outcome: 'created',
+            policyName: policy.name,
+            toRuleCount: policy.rules.length,
+            previousRules: null,
+          },
+          timestamp: now,
+        });
+      });
+      applyFn();
+      emitUpgradePolicyReport(opts, {
+        outcome: 'created',
+        policyId: policy.id,
+        policyName: policy.name,
+        dormantRules: [],
+        written: true,
+      });
+      return 0;
+    }
+
+    // Enabled policy with dormant rules: replace its rule set, with a receipt
+    // carrying the previous rules (reversibility) in ONE transaction.
+    const previousRules = enabled.rules;
+    const upgraded = GovernancePolicy.parse({
+      ...enabled,
+      rules: RECOMMENDED_POLICY_RULES,
+      version: enabled.version + 1,
+      updatedAt: now,
+    });
+    const applyFn = (db as unknown as BetterSqliteLike).transaction(() => {
+      policyRepo.update(upgraded);
+      auditRepo.insert({
+        id: randomUUID(),
+        action: 'policy_upgraded',
+        memoryId: enabled.id,
+        tenantId: opts.tenantId,
+        actor: { type: 'system', id: 'curator-cli' },
+        reason:
+          `Upgraded policy "${enabled.name}" to the recommended rule set — ` +
+          `${dormant.length} dormant rule(s) activated: ${dormant.join(', ')}`,
+        details: {
+          outcome: 'upgraded',
+          policyName: enabled.name,
+          fromVersion: enabled.version,
+          toVersion: upgraded.version,
+          fromRuleCount: previousRules.length,
+          toRuleCount: upgraded.rules.length,
+          previouslyDormant: dormant,
+          // The full previous rule set — restoring it is the rollback.
+          previousRules,
+        },
+        timestamp: now,
+      });
+    });
+    applyFn();
+    emitUpgradePolicyReport(opts, {
+      outcome: 'upgraded',
+      policyId: enabled.id,
+      policyName: enabled.name,
+      dormantRules: dormant,
+      written: true,
+    });
+    return 0;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify({ ok: false, error: msg, code: 'UPGRADE_POLICY_FAILED' }) + '\n',
+      );
+    } else {
+      process.stderr.write(`upgrade-policy failed: ${msg}\n`);
+    }
+    return 1;
+  } finally {
+    try {
+      (db as unknown as { close?: () => void }).close?.();
+    } catch {
+      // non-fatal
+    }
+  }
+}
+
+/** Minimal structural view of better-sqlite3's transaction API (test doubles included). */
+interface BetterSqliteLike {
+  transaction(fn: () => void): () => void;
+}
+
+interface UpgradePolicyReport {
+  outcome: 'upgraded' | 'created' | 'already-complete';
+  policyId: string | null;
+  policyName: string | null;
+  dormantRules: string[];
+  written: boolean;
+}
+
+function emitUpgradePolicyReport(opts: UpgradePolicyOpts, report: UpgradePolicyReport): void {
+  if (opts.json) {
+    process.stdout.write(
+      JSON.stringify({
+        ok: true,
+        dry_run: opts.dryRun,
+        tenant_id: opts.tenantId,
+        ...report,
+      }) + '\n',
+    );
+    return;
+  }
+  const header = opts.dryRun ? '[dry-run] ' : '';
+  switch (report.outcome) {
+    case 'already-complete':
+      process.stdout.write(
+        `${header}Policy "${report.policyName}" already enables every registered rule — nothing to do.\n`,
+      );
+      break;
+    case 'created':
+      process.stdout.write(
+        `${header}No enabled policy for tenant ${opts.tenantId} — ` +
+          (report.written
+            ? `created "Recommended Governance Policy" (${RECOMMENDED_POLICY_RULES.length} rules) with a policy_upgraded receipt.\n`
+            : `would create the recommended policy (${RECOMMENDED_POLICY_RULES.length} rules).\n`),
+      );
+      break;
+    case 'upgraded':
+      process.stdout.write(
+        `${header}Policy "${report.policyName}" leaves ${report.dormantRules.length} rule(s) dormant: ` +
+          `${report.dormantRules.join(', ')}\n` +
+          (report.written
+            ? `Upgraded to the recommended rule set (${RECOMMENDED_POLICY_RULES.length} rules) with a policy_upgraded receipt (previous rules preserved in the receipt).\n`
+            : `Would upgrade to the recommended rule set (${RECOMMENDED_POLICY_RULES.length} rules).\n`),
+      );
+      break;
   }
 }
