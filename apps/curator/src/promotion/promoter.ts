@@ -3,6 +3,9 @@ import {
   deriveAuditEventId,
   derivePolicyEvaluationId,
   deriveLinkId,
+  hashOriginToken,
+  ORIGIN_TOKEN_HASH_SURFACE_LEN,
+  UNATTESTED_CHANNEL,
 } from '@qmd-team-intent-kb/common';
 import {
   CuratedMemory as CuratedMemorySchema,
@@ -288,7 +291,25 @@ export function promote(
               input.promotionReason !== undefined && input.promotionReason.trim().length > 0
                 ? `${input.promotionReason} (passed all governance rules)`
                 : 'Passed all governance rules',
-            details: { candidateId: input.candidate.id },
+            // Write-time provenance on the receipt (GSB Wave-2 H2): the origin
+            // CHANNEL plus a TRUNCATED SHA-256 of the token HMAC — never the
+            // token itself, so surfaced audit details can identify an
+            // attestation without enabling replay-minting (no oracle). An
+            // origin-less candidate is receipted honestly as `unattested`.
+            // Deterministic (a pure function of candidate fields), so
+            // cross-clone entry_hash reproducibility (8da.5/8da.6) holds.
+            details: {
+              candidateId: input.candidate.id,
+              originChannel: input.candidate.origin?.channel ?? UNATTESTED_CHANNEL,
+              ...(input.candidate.origin !== undefined
+                ? {
+                    originTokenHash: hashOriginToken(input.candidate.origin.tokenHmac).slice(
+                      0,
+                      ORIGIN_TOKEN_HASH_SURFACE_LEN,
+                    ),
+                  }
+                : {}),
+            },
             timestamp: now,
           }),
         );

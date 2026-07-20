@@ -19,6 +19,8 @@ export type { SupersessionMatch } from './supersession/supersession-detector.js'
 export { promote } from './promotion/promoter.js';
 export type { PromotionInput } from './promotion/promoter.js';
 export { reject } from './rejection/rejector.js';
+export { checkOriginAttestation, ORIGIN_ATTESTATION_RULE_TYPE } from './origin/origin-gate.js';
+export type { OriginGateResult, OriginRejectCode } from './origin/origin-gate.js';
 export { mergeGovern, MergeIdInvariantError } from './merge/merge-gate.js';
 export type {
   MergeGovernResult,

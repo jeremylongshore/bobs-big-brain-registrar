@@ -49,4 +49,14 @@ export interface CuratorConfig {
    * receipts).
    */
   suppressRejectionReceipts?: boolean;
+  /**
+   * Per-installation origin secret used to verify candidate `origin`
+   * attestations before promotion (GSB Wave-2 H1 — see `origin/origin-gate.ts`).
+   * When unset, UNATTESTED candidates still govern normally (backward
+   * compatibility), but a candidate that CLAIMS an origin is rejected as
+   * `origin_token_unverifiable` (fail-closed: a claimed attestation we cannot
+   * check must not promote as if it verified). Callers on an installation with
+   * a brain base dir should resolve it via `loadOrCreateOriginSecret()`.
+   */
+  originSecret?: string;
 }

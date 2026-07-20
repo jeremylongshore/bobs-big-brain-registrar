@@ -17,6 +17,7 @@ import {
 } from './supersession/supersession-detector.js';
 import { promote } from './promotion/promoter.js';
 import { reject } from './rejection/rejector.js';
+import { checkOriginAttestation } from './origin/origin-gate.js';
 
 /** Repository dependencies required by the Curator */
 export interface CuratorDependencies {
@@ -81,6 +82,34 @@ export class Curator {
       };
     }
 
+    // Suppress the per-candidate reject receipt when configured (B1 sweep) — the
+    // outcome still returns, only the audit write is skipped (see
+    // CuratorConfig.suppressRejectionReceipts). `dryRun` also suppresses it.
+    const suppressReject =
+      this.config.dryRun === true || this.config.suppressRejectionReceipts === true;
+
+    // Write-time provenance gate (GSB Wave-2 H1) — STRUCTURAL, before the
+    // configurable policy pipeline, so a candidate claiming an origin that does
+    // not verify against this installation's secret can never reach promotion
+    // regardless of tenant policy. Unattested candidates (no `origin`) pass
+    // through for backward compatibility; their promotion receipt records
+    // channel `unattested` (H2). Rejections reuse the receipted rejection path.
+    const originGate = checkOriginAttestation(candidate, this.config.originSecret);
+    if (originGate.verdict === 'rejected') {
+      const reason = reject(
+        candidate,
+        originGate.pipelineResult,
+        this.deps.auditRepo,
+        suppressReject,
+      );
+      return {
+        candidateId: candidate.id,
+        outcome: 'rejected',
+        pipelineResult: originGate.pipelineResult,
+        reason,
+      };
+    }
+
     const policies = this.deps.policyRepo.findByTenant(this.config.tenantId);
     const policy = policies.find((p) => p.enabled);
 
@@ -123,12 +152,6 @@ export class Curator {
           .filter((m) => m.category === category)
           .map((m) => ({ id: m.id, content: m.content })),
     });
-
-    // Suppress the per-candidate reject receipt when configured (B1 sweep) — the
-    // outcome still returns, only the audit write is skipped (see
-    // CuratorConfig.suppressRejectionReceipts). `dryRun` also suppresses it.
-    const suppressReject =
-      this.config.dryRun === true || this.config.suppressRejectionReceipts === true;
 
     if (pipelineResult.outcome === 'rejected') {
       const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);

@@ -11,6 +11,21 @@ export {
   deriveLinkId,
 } from './uuid-v5.js';
 export { DEFAULT_TEAMKB_BASE, getTeamKbBasePath, resolveTeamKbPath } from './paths.js';
+export {
+  ORIGIN_SECRET_FILENAME,
+  ORIGIN_SECRET_ENV,
+  ORIGIN_SECRET_UNAVAILABLE_WARNING,
+  UNATTESTED_CHANNEL,
+  ORIGIN_TOKEN_HASH_SURFACE_LEN,
+  buildOriginTokenPayload,
+  mintOriginToken,
+  verifyOriginToken,
+  hashOriginToken,
+  loadOriginSecret,
+  loadOrCreateOriginSecret,
+  originSecretPath,
+} from './origin-token.js';
+export type { OriginTokenIdentity } from './origin-token.js';
 export { isPathSafe } from './path-safety.js';
 export type { PathSafetyResult } from './path-safety.js';
 export {

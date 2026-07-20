@@ -1,11 +1,14 @@
 /**
- * Typed API error carrying an HTTP status code.
- * Routes catch these and convert them to JSON responses.
+ * Typed API error carrying an HTTP status code, plus an optional STABLE
+ * machine-readable `code` (e.g. `unrecognized_channel`, `origin_token_invalid`)
+ * for clients that must branch on the rejection class without parsing prose.
+ * Routes catch these and convert them to JSON responses (`{ error, code? }`).
  */
 export class ApiError extends Error {
   constructor(
     public readonly statusCode: number,
     message: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -23,8 +26,8 @@ export function badRequest(message: string): ApiError {
 }
 
 /** Produce a 422 Unprocessable Content error (well-formed but disallowed). */
-export function unprocessable(message: string): ApiError {
-  return new ApiError(422, message);
+export function unprocessable(message: string, code?: string): ApiError {
+  return new ApiError(422, message, code);
 }
 
 /** Produce a 500 Internal Server Error. */

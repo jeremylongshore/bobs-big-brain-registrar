@@ -9,6 +9,7 @@ import {
   promote,
   detectSupersession,
   DEFAULT_SUPERSESSION_THRESHOLD,
+  checkOriginAttestation,
 } from '@qmd-team-intent-kb/curator';
 import { AuditEvent as AuditEventSchema } from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, Author } from '@qmd-team-intent-kb/schema';
@@ -43,12 +44,21 @@ const SUPERSESSION_THRESHOLD = DEFAULT_SUPERSESSION_THRESHOLD;
  * rejected the way the batch path does.
  */
 export class PromotionService {
+  /**
+   * @param originSecret  Per-installation origin secret for verifying candidate
+   *                      `origin` attestations before promotion (GSB Wave-2 H1).
+   *                      Resolved in main.ts via `loadOrCreateOriginSecret()`.
+   *                      When unset, unattested candidates promote normally but
+   *                      an origin-CLAIMING candidate is refused fail-closed
+   *                      (`origin_token_unverifiable`).
+   */
   constructor(
     private readonly candidateRepo: CandidateRepository,
     private readonly memoryRepo: MemoryRepository,
     private readonly policyRepo: PolicyRepository,
     private readonly auditRepo: AuditRepository,
     private readonly linksRepo?: MemoryLinksRepository,
+    private readonly originSecret?: string,
   ) {}
 
   /**
@@ -93,6 +103,23 @@ export class PromotionService {
         );
       }
       throw err;
+    }
+
+    // Write-time provenance gate (GSB Wave-2 H1): a candidate CLAIMING an
+    // origin must verify its HMAC against this installation's secret BEFORE any
+    // promotion work. Runs the same structural gate as the curator sweep, so
+    // the single-candidate admin path and the batch path agree. Unattested
+    // candidates (no `origin`) pass through — their promotion receipt records
+    // channel `unattested` (H2). The candidate is left in the inbox (a 422),
+    // consistent with policy rejects on this path.
+    const originGate = checkOriginAttestation(candidate, this.originSecret);
+    if (originGate.verdict === 'rejected') {
+      throw unprocessable(
+        originGate.code === 'origin_token_invalid'
+          ? 'Candidate rejected: origin token does not verify against the installation secret — claimed provenance is invalid. Left in the inbox for review.'
+          : 'Candidate rejected: it claims an origin attestation but no origin secret is configured on this server — cannot verify. Left in the inbox for review.',
+        originGate.code,
+      );
     }
 
     const contentHash = computeContentHash(candidate.content);

@@ -19,10 +19,18 @@
  *   TEAMKB_TENANT_ID    — tenant scope for qmd isolation (default intent-solutions)
  *   TEAMKB_EXPORT_DIR   — git-exporter output dir qmd indexes (default ~/.teamkb/kb-export)
  *   TEAMKB_REVOKED_FILE — durable revoke-by-actor list (default ~/.teamkb/revoked-actors.json)
+ *   TEAMKB_ALLOWED_CHANNELS — comma-separated origin channels captures may claim
+ *                         (H3; default: team-mcp,local-mcp)
+ *   TEAMKB_ORIGIN_SECRET — per-installation origin-token secret override (H1;
+ *                         default: auto-generated ~/.teamkb/origin-secret, 0600)
  */
 import { resolve } from 'node:path';
 import { createDatabase, IndexStateRepository } from '@qmd-team-intent-kb/store';
-import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
+import {
+  loadOrCreateOriginSecret,
+  ORIGIN_SECRET_UNAVAILABLE_WARNING,
+  resolveTeamKbPath,
+} from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
@@ -84,6 +92,28 @@ async function main(): Promise<void> {
   const revokedFile =
     process.env['TEAMKB_REVOKED_FILE'] ?? resolveTeamKbPath('revoked-actors.json');
 
+  // Write-time provenance wiring (GSB Wave-2 H1/H3). The origin secret is the
+  // brain installation's — auto-created 0600 under ~/.teamkb on first boot (env
+  // TEAMKB_ORIGIN_SECRET overrides; never logged). Best-effort: a read-only
+  // base dir degrades to "unattested candidates only" rather than refusing to
+  // boot (origin-claiming candidates then reject fail-closed at promotion).
+  let originSecret: string | undefined;
+  try {
+    originSecret = loadOrCreateOriginSecret();
+  } catch (e) {
+    process.stderr.write(
+      `[teamkb-api] ${ORIGIN_SECRET_UNAVAILABLE_WARNING} (${e instanceof Error ? e.message : String(e)})\n`,
+    );
+  }
+  const allowedChannelsRaw = process.env['TEAMKB_ALLOWED_CHANNELS'];
+  const allowedChannels =
+    allowedChannelsRaw !== undefined && allowedChannelsRaw.trim() !== ''
+      ? allowedChannelsRaw
+          .split(',')
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0)
+      : undefined;
+
   // Pass the real bind host so the no-auth dev path is refused off-loopback:
   // an empty registry on a tailnet/0.0.0.0 bind throws at boot rather than
   // serving every request as role=admin. Loopback stays the default.
@@ -94,6 +124,8 @@ async function main(): Promise<void> {
     indexRefresher,
     bindHost: config.host,
     revokedFile,
+    allowedChannels,
+    originSecret,
   });
   await app.ready();
 
