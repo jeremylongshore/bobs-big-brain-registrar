@@ -17,6 +17,14 @@ export { evaluateContentSanitization } from './rules/content-sanitization-rule.j
 export { evaluateContradictionCheck } from './rules/contradiction-check-rule.js';
 export { PolicyPipeline } from './pipeline.js';
 export {
+  detectSupersession,
+  computeTitleSimilarity,
+} from './supersession/supersession-detector.js';
+export type {
+  SupersessionMatch,
+  SupersessionMemorySource,
+} from './supersession/supersession-detector.js';
+export {
   RECOMMENDED_POLICY_RULES,
   buildRecommendedPolicy,
   findUncoveredRuleTypes,
