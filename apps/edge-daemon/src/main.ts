@@ -7,6 +7,7 @@ import {
   PolicyRepository,
   AuditRepository,
   ExportStateRepository,
+  IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
 import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
@@ -44,6 +45,9 @@ async function main(): Promise<void> {
     policyRepo: new PolicyRepository(db),
     auditRepo: new AuditRepository(db),
     exportStateRepo: new ExportStateRepository(db),
+    // Freshness consumption (D1/D2): a successful cycle index-update records
+    // last_indexed_at, clearing the derived index-dirty state for the tenant.
+    indexStateRepo: new IndexStateRepository(db),
     // Point the adapter at the SAME dir the exporter writes to (resolved to
     // absolute so qmd's collection sources match git-exporter's output
     // regardless of cwd). git-exporter's file-writer resolves the same

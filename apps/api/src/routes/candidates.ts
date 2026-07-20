@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ApiError, badRequest } from '../errors.js';
 import type { CandidateService } from '../services/candidate-service.js';
 import type { PromotionService } from '../services/promotion-service.js';
+import type { IndexRefresher } from '../services/index-refresher.js';
 
 /**
  * Register candidate intake, retrieval, and promotion routes.
@@ -16,6 +17,7 @@ export function registerCandidateRoutes(
   app: FastifyInstance,
   service: CandidateService,
   promotionService: PromotionService,
+  indexRefresher?: IndexRefresher,
 ): void {
   app.post(
     '/api/candidates',
@@ -86,6 +88,31 @@ export function registerCandidateRoutes(
           { type: actorType, id: request.actor ?? 'admin' },
           typeof body.reason === 'string' ? body.reason : undefined,
         );
+
+        // D1: the promotion transaction has COMMITTED (promote() is atomic —
+        // R9), so trigger the export→reindex chain now, making the memory
+        // searchable without waiting for the next daemon cycle. Awaited so the
+        // 200 means "promoted AND absorbed" on the happy path; best-effort
+        // because the memory is already durable — a failed refresh degrades to
+        // "stale but promoted", which the D2 staleness gauge reports, and must
+        // never turn a successful promotion into an error response.
+        if (indexRefresher !== undefined) {
+          try {
+            const refreshed = await indexRefresher.refreshAfterPromotion(tenantId);
+            if (!refreshed.ok) {
+              request.log.warn(
+                { tenantId, skipped: refreshed.skipped, error: refreshed.error },
+                'post-promotion index refresh did not complete; memory searchable after next cycle',
+              );
+            }
+          } catch (refreshErr) {
+            request.log.warn(
+              { tenantId, err: refreshErr },
+              'post-promotion index refresh threw; memory searchable after next cycle',
+            );
+          }
+        }
+
         return reply.status(200).send(memory);
       } catch (err) {
         if (err instanceof ApiError) {

@@ -58,6 +58,13 @@ export interface QmdAdapterConfig {
   nativeIndexPath?: string;
   /** Kill switch: serve qmd-only results with no native FTS5 fusion. */
   disableNativeFusion?: boolean;
+  /**
+   * Optional index-freshness probe (D2). Supplied by callers that own the
+   * governed store (API / edge-daemon / CLI); when set, `adapter.health()`
+   * reports `stalenessSeconds` from it. Absent → staleness is `null`
+   * (unmeasured). See `StalenessProbe` in types.ts for the contract.
+   */
+  stalenessProbe?: () => number | null;
 }
 
 /** Default configuration values */

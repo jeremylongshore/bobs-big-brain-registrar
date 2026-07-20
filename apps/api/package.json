@@ -29,7 +29,8 @@
     "@qmd-team-intent-kb/store": "workspace:*",
     "@qmd-team-intent-kb/curator": "workspace:*",
     "@qmd-team-intent-kb/policy-engine": "workspace:*",
-    "@qmd-team-intent-kb/qmd-adapter": "workspace:*"
+    "@qmd-team-intent-kb/qmd-adapter": "workspace:*",
+    "@qmd-team-intent-kb/git-exporter": "workspace:*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

@@ -428,4 +428,27 @@ CREATE INDEX IF NOT EXISTS idx_candidates_status_tenant ON candidates(status, te
     apply: applyCheckConstraintBackfill,
     rebuildsTable: true,
   },
+  {
+    // Index-freshness tracking (D1/D2 — promote→search latency observability).
+    //
+    // One row per tenant recording when the derived search index (kb-export
+    // markdown tree + qmd/FTS5 index) last COMPLETED its export→reindex chain.
+    // The "index dirty" signal is DERIVED, not stored: a tenant is dirty when
+    // any curated_memories.promoted_at is newer than last_indexed_at — see
+    // IndexStateRepository for the rationale (atomic-by-construction with the
+    // promotion transaction; no caller can forget to set it).
+    //
+    // last_indexed_at is an ISO-8601 UTC string written by app code (NOT
+    // datetime('now'), whose 'YYYY-MM-DD HH:MM:SS' shape would break the
+    // lexicographic comparison against promoted_at's toISOString format).
+    version: 10,
+    name: 'add_index_state',
+    sql: `
+CREATE TABLE IF NOT EXISTS index_state (
+  tenant_id TEXT PRIMARY KEY,
+  last_indexed_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+    `.trim(),
+  },
 ];

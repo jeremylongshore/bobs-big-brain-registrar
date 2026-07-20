@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { PolicyRepository } from '@qmd-team-intent-kb/store';
+import { PolicyRepository, IndexStateRepository } from '@qmd-team-intent-kb/store';
 import { findUncoveredRuleTypes } from '@qmd-team-intent-kb/policy-engine';
 
 /** One active policy that leaves registered rules unenforced (5bm.10). */
@@ -24,6 +24,15 @@ interface HealthStatus {
    * config signal an operator should act on, not a process outage.
    */
   policyDormancy: PolicyDormancy[];
+  /**
+   * Index freshness (D2): worst-case seconds since a promotion that is NOT yet
+   * reflected in the search index, across every tenant that has begun
+   * measurement. `null` = unmeasured (no export→reindex chain has recorded
+   * completion yet), `0` = fresh, `> 0` = promote→search latency in seconds.
+   * Like dormancy, this never affects liveness — a stale index is an operator
+   * signal (the nightly canary enforces the threshold), not a process outage.
+   */
+  indexStalenessSeconds: number | null;
 }
 
 /**
@@ -51,7 +60,21 @@ export class HealthService {
       dbConnected,
       version: '0.4.0',
       policyDormancy: dbConnected ? this.checkPolicyDormancy() : [],
+      indexStalenessSeconds: dbConnected ? this.checkIndexStaleness() : null,
     };
+  }
+
+  /**
+   * Worst-case index staleness across tenants (D2). Read-only; any failure
+   * (e.g. a pre-migration DB without the index_state table) degrades to null
+   * (unmeasured) rather than failing the health probe.
+   */
+  private checkIndexStaleness(): number | null {
+    try {
+      return new IndexStateRepository(this.db).worstStalenessSeconds();
+    } catch {
+      return null;
+    }
   }
 
   /**

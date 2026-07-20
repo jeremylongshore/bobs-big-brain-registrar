@@ -212,6 +212,43 @@ describe('runCycle', () => {
     expect(result.indexUpdate).toBeNull();
   });
 
+  it('records last_indexed_at (freshness consumption, D1/D2) on a successful index update', async () => {
+    const mockAdapter = {
+      ensureCollections: async () => ({ ok: true as const, value: [] }),
+      update: async () => ({ ok: true as const, value: undefined }),
+    };
+    const indexConfig = makeConfig({ spoolDir, enableExport: false, enableIndexUpdate: true });
+
+    const result = await runCycle(
+      indexConfig,
+      { ...deps, qmdAdapter: mockAdapter as never },
+      logger,
+    );
+
+    expect(result.indexUpdate!.ok).toBe(true);
+    const state = deps.indexStateRepo!.get(TENANT);
+    expect(state).not.toBeNull();
+    // The fixture nowFn is frozen — the watermark is the (pre-update) cycle clock.
+    expect(state!.lastIndexedAt).toBe(NOW);
+  });
+
+  it('does NOT record last_indexed_at when the index update fails (gauge must stay stale)', async () => {
+    const mockAdapter = {
+      ensureCollections: async () => ({ ok: true as const, value: [] }),
+      update: async () => ({ ok: false as const, error: { message: 'qmd unreachable' } }),
+    };
+    const indexConfig = makeConfig({ spoolDir, enableExport: false, enableIndexUpdate: true });
+
+    const result = await runCycle(
+      indexConfig,
+      { ...deps, qmdAdapter: mockAdapter as never },
+      logger,
+    );
+
+    expect(result.indexUpdate!.ok).toBe(false);
+    expect(deps.indexStateRepo!.get(TENANT)).toBeNull();
+  });
+
   it('records timestamps correctly', async () => {
     let callCount = 0;
     const timedConfig = makeConfig({

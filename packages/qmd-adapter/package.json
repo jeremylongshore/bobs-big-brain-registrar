@@ -26,8 +26,9 @@
     "eval:governed:local": "node dist/eval/governed-eval-anchor.js"
   },
   "dependencies": {
-    "@qmd-team-intent-kb/schema": "workspace:*",
     "@qmd-team-intent-kb/common": "workspace:*",
+    "@qmd-team-intent-kb/schema": "workspace:*",
+    "@qmd-team-intent-kb/store": "workspace:*",
     "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {

@@ -30,6 +30,8 @@ export class QmdAdapter {
   private readonly exportDir: string;
   /** The single tenant this adapter's qmd registry + index are bound to. */
   private readonly tenantId: string;
+  /** Optional index-freshness probe (D2) — see QmdAdapterConfig.stalenessProbe. */
+  private readonly stalenessProbe?: () => number | null;
 
   /** The tenant this adapter serves (read-only; used by the search canary's fail-closed guard). */
   get boundTenantId(): string {
@@ -39,6 +41,7 @@ export class QmdAdapter {
   constructor(config: QmdAdapterConfig, executor?: QmdExecutor) {
     this.exportDir = config.exportDir;
     this.tenantId = config.tenantId;
+    this.stalenessProbe = config.stalenessProbe;
     this.executor =
       executor ??
       new RealQmdExecutor({
@@ -130,9 +133,9 @@ export class QmdAdapter {
     }
   }
 
-  /** Check health of qmd and index state */
+  /** Check health of qmd and index state (incl. stalenessSeconds when a probe is wired). */
   async health(): Promise<QmdHealthStatus> {
-    return checkHealth(this.executor);
+    return checkHealth(this.executor, this.stalenessProbe);
   }
 
   /** Update the index */

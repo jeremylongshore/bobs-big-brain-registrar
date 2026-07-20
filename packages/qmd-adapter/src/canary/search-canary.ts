@@ -1,5 +1,5 @@
 import type { SearchScope } from '@qmd-team-intent-kb/schema';
-import type { QmdError } from '../types.js';
+import type { QmdError, StalenessProbe } from '../types.js';
 import type { QmdAdapter } from '../adapter.js';
 import { reindex } from '../reindex/reindex.js';
 
@@ -52,13 +52,34 @@ export interface CanaryControlResult {
   error?: QmdError;
 }
 
+/** Index-staleness gate outcome (D2). */
+export interface CanaryStalenessResult {
+  /**
+   * Measured staleness in seconds — `null` means unmeasured (no probe data /
+   * measurement not started), which PASSES: the gate asserts on measured
+   * staleness only, never on the absence of measurement.
+   */
+  stalenessSeconds: number | null;
+  /** The threshold the gate enforced. */
+  maxStalenessSeconds: number;
+  /** `stalenessSeconds === null || stalenessSeconds <= maxStalenessSeconds`. */
+  passed: boolean;
+}
+
 /** Aggregate canary outcome. */
 export interface SearchCanaryReport {
-  /** True only when EVERY control passed. */
+  /** True only when EVERY control passed (and the staleness gate, when enabled). */
   healthy: boolean;
   /** The tenant the canary ran against, for diagnosis. */
   tenantId: string;
   controls: CanaryControlResult[];
+  /**
+   * Set when a staleness gate was requested (`maxStalenessSeconds` +
+   * `stalenessProbe`). A failed gate makes the whole canary unhealthy: promoted
+   * memories older than the threshold that search cannot see yet is the same
+   * "retrievability degraded" class as a 0-hit control.
+   */
+  staleness?: CanaryStalenessResult;
   /** Set when `heal` was requested and a self-heal reindex was attempted. */
   healed?: {
     attempted: boolean;
@@ -111,6 +132,37 @@ export interface SearchCanaryOptions {
    * degradation is never silent even when auto-repaired).
    */
   heal?: boolean;
+  /**
+   * Index-staleness gate (D2): fail the canary when the measured
+   * `stalenessSeconds` exceeds this threshold. Requires `stalenessProbe`; when
+   * either is absent the gate is skipped (no `staleness` block in the report).
+   */
+  maxStalenessSeconds?: number;
+  /**
+   * Freshness probe supplying the measured staleness — the adapter layer is
+   * store-free, so the caller that owns the governed store injects it (the CLI
+   * wires `IndexStateRepository.stalenessSeconds`). `null` = unmeasured, which
+   * PASSES the gate (fail-open on fresh deploys; see IndexStateRepository).
+   */
+  stalenessProbe?: StalenessProbe;
+}
+
+/** Evaluate the staleness gate; a throwing probe degrades to unmeasured (null). */
+function runStalenessGate(
+  maxStalenessSeconds: number,
+  probe: StalenessProbe,
+): CanaryStalenessResult {
+  let stalenessSeconds: number | null;
+  try {
+    stalenessSeconds = probe();
+  } catch {
+    stalenessSeconds = null;
+  }
+  return {
+    stalenessSeconds,
+    maxStalenessSeconds,
+    passed: stalenessSeconds === null || stalenessSeconds <= maxStalenessSeconds,
+  };
 }
 
 /**
@@ -136,6 +188,15 @@ export async function runSearchCanary(
 ): Promise<SearchCanaryReport> {
   const controls = options.controls ?? DEFAULT_CANARY_CONTROLS;
 
+  // Staleness gate (D2), evaluated ONCE up front: it reads the governed store,
+  // not the index, so a heal's reindex cannot change the measured value — only
+  // the chain owner's `markIndexed` (export→reindex completion) clears it.
+  const staleness =
+    options.maxStalenessSeconds !== undefined && options.stalenessProbe !== undefined
+      ? runStalenessGate(options.maxStalenessSeconds, options.stalenessProbe)
+      : undefined;
+  const stalenessPassed = staleness?.passed ?? true;
+
   // Fail-closed tenant guard, preserved from when the canary probed the fused
   // query() surface (which refuses mismatched tenants): a canary pointed at
   // the wrong tenant reports degraded without touching the executor at all.
@@ -149,6 +210,7 @@ export async function runSearchCanary(
         hits: 0,
         passed: false,
       })),
+      staleness,
     };
   }
 
@@ -156,7 +218,7 @@ export async function runSearchCanary(
   const firstHealthy = firstPass.every((c) => c.passed);
 
   if (firstHealthy || !options.heal) {
-    return { healthy: firstHealthy, tenantId, controls: firstPass };
+    return { healthy: firstHealthy && stalenessPassed, tenantId, controls: firstPass, staleness };
   }
 
   // Unhealthy + heal requested: attempt an idempotent reindex, then re-check.
@@ -165,9 +227,10 @@ export async function runSearchCanary(
   const recheckHealthy = secondPass.every((c) => c.passed);
 
   return {
-    healthy: recheckHealthy,
+    healthy: recheckHealthy && stalenessPassed,
     tenantId,
     controls: secondPass,
+    staleness,
     healed: { attempted: true, reindexOk: reindexResult.ok, recheckHealthy },
   };
 }
@@ -182,6 +245,12 @@ export function formatCanaryReport(report: SearchCanaryReport): string {
     const err = c.error ? ` [${c.error.code}: ${c.error.message}]` : '';
     return `  [${status}] "${c.query}" -> ${c.hits} hits (min ${c.minHits})${err}`;
   });
+  if (report.staleness) {
+    const s = report.staleness;
+    const status = s.passed ? 'OK ' : 'FAIL';
+    const value = s.stalenessSeconds === null ? 'unmeasured' : `${s.stalenessSeconds}s`;
+    lines.push(`  [${status}] index staleness -> ${value} (max ${s.maxStalenessSeconds}s)`);
+  }
   if (report.healed) {
     lines.push(
       `  heal: attempted, reindexOk=${report.healed.reindexOk}, recheckHealthy=${report.healed.recheckHealthy}`,

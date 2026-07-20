@@ -21,13 +21,15 @@
  *   TEAMKB_REVOKED_FILE — durable revoke-by-actor list (default ~/.teamkb/revoked-actors.json)
  */
 import { resolve } from 'node:path';
-import { createDatabase } from '@qmd-team-intent-kb/store';
+import { createDatabase, IndexStateRepository } from '@qmd-team-intent-kb/store';
 import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { loadTokenRecords } from './auth/token-registry.js';
 import type { QmdQueryPort } from './services/search-service.js';
+import { buildIndexRefresher } from './services/index-refresher.js';
+import type { IndexRefresher } from './services/index-refresher.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -37,12 +39,24 @@ async function main(): Promise<void> {
   // index is unavailable, run SQLite-only so the surface still answers.
   const tenantId = process.env['TEAMKB_TENANT_ID']?.trim() || 'intent-solutions';
   const exportDir = resolve(process.env['TEAMKB_EXPORT_DIR'] ?? resolveTeamKbPath('kb-export'));
-  const adapter = new QmdAdapter({ tenantId, exportDir });
+  // Freshness probe (D2): adapter.health() reports stalenessSeconds from the
+  // governed store — seconds since the oldest promotion the index has not
+  // absorbed (null = measurement not started; see IndexStateRepository).
+  const indexStateRepo = new IndexStateRepository(db);
+  const adapter = new QmdAdapter({
+    tenantId,
+    exportDir,
+    stalenessProbe: () => indexStateRepo.stalenessSeconds(tenantId),
+  });
 
   let qmdAdapter: QmdQueryPort | undefined;
+  let indexRefresher: IndexRefresher | undefined;
   const health = await adapter.health();
   if (health.available) {
     qmdAdapter = adapter;
+    // D1: a promote through this API triggers export→reindex after the
+    // promotion commits, so the memory is searchable immediately.
+    indexRefresher = buildIndexRefresher({ db, adapter, exportDir });
     process.stderr.write(
       `[teamkb-api] qmd wired — cited search enabled (tenant=${tenantId}, qmd=${health.version ?? '?'})\n`,
     );
@@ -73,7 +87,14 @@ async function main(): Promise<void> {
   // Pass the real bind host so the no-auth dev path is refused off-loopback:
   // an empty registry on a tailnet/0.0.0.0 bind throws at boot rather than
   // serving every request as role=admin. Loopback stays the default.
-  const app = buildApp({ db, tokens, qmdAdapter, bindHost: config.host, revokedFile });
+  const app = buildApp({
+    db,
+    tokens,
+    qmdAdapter,
+    indexRefresher,
+    bindHost: config.host,
+    revokedFile,
+  });
   await app.ready();
 
   const shutdown = async (signal: string): Promise<void> => {

@@ -1,5 +1,11 @@
 // Types
-export type { QmdError, CommandResult, QmdHealthStatus, QmdSearchResult } from './types.js';
+export type {
+  QmdError,
+  CommandResult,
+  QmdHealthStatus,
+  QmdSearchResult,
+  StalenessProbe,
+} from './types.js';
 
 // Config
 export type { QmdAdapterConfig } from './config.js';
@@ -104,6 +110,7 @@ export {
 export type {
   CanaryControl,
   CanaryControlResult,
+  CanaryStalenessResult,
   SearchCanaryReport,
   SearchCanaryOptions,
 } from './canary/search-canary.js';

@@ -137,6 +137,79 @@ describe('runSearchCanary', () => {
       expect(report.healed?.recheckHealthy).toBe(false);
     });
   });
+
+  describe('staleness gate (D2)', () => {
+    const controls = [{ query: 'audit chain receipts' }];
+
+    it('fails the canary when measured staleness exceeds the threshold', async () => {
+      mock.queueSuccess(hitsJson(3)); // controls pass — staleness alone fails the run
+
+      const report = await runSearchCanary(adapter, TENANT, {
+        controls,
+        maxStalenessSeconds: 86_400,
+        stalenessProbe: () => 90_000,
+      });
+
+      expect(report.healthy).toBe(false);
+      expect(report.staleness).toEqual({
+        stalenessSeconds: 90_000,
+        maxStalenessSeconds: 86_400,
+        passed: false,
+      });
+      expect(report.controls[0]?.passed).toBe(true);
+    });
+
+    it('passes when staleness is within the threshold', async () => {
+      mock.queueSuccess(hitsJson(3));
+
+      const report = await runSearchCanary(adapter, TENANT, {
+        controls,
+        maxStalenessSeconds: 86_400,
+        stalenessProbe: () => 120,
+      });
+
+      expect(report.healthy).toBe(true);
+      expect(report.staleness?.passed).toBe(true);
+    });
+
+    it('passes on unmeasured (null) staleness — fail-open before measurement starts', async () => {
+      mock.queueSuccess(hitsJson(3));
+
+      const report = await runSearchCanary(adapter, TENANT, {
+        controls,
+        maxStalenessSeconds: 86_400,
+        stalenessProbe: () => null,
+      });
+
+      expect(report.healthy).toBe(true);
+      expect(report.staleness).toEqual({
+        stalenessSeconds: null,
+        maxStalenessSeconds: 86_400,
+        passed: true,
+      });
+    });
+
+    it('degrades a throwing probe to unmeasured instead of crashing the canary', async () => {
+      mock.queueSuccess(hitsJson(3));
+
+      const report = await runSearchCanary(adapter, TENANT, {
+        controls,
+        maxStalenessSeconds: 86_400,
+        stalenessProbe: () => {
+          throw new Error('store locked');
+        },
+      });
+
+      expect(report.healthy).toBe(true);
+      expect(report.staleness?.stalenessSeconds).toBeNull();
+    });
+
+    it('emits no staleness block when the gate is not requested', async () => {
+      mock.queueSuccess(hitsJson(3));
+      const report = await runSearchCanary(adapter, TENANT, { controls });
+      expect(report.staleness).toBeUndefined();
+    });
+  });
 });
 
 describe('formatCanaryReport', () => {
@@ -160,5 +233,28 @@ describe('formatCanaryReport', () => {
     expect(out).toContain('SEARCH DEGRADED');
     expect(out).toContain('[FAIL]');
     expect(out).toContain('0 hits');
+  });
+
+  it('renders a failed staleness gate', () => {
+    const out = formatCanaryReport({
+      healthy: false,
+      tenantId: 'local',
+      controls: [{ query: 'audit chain receipts', minHits: 1, hits: 3, passed: true }],
+      staleness: { stalenessSeconds: 90_000, maxStalenessSeconds: 86_400, passed: false },
+    });
+    expect(out).toContain('SEARCH DEGRADED');
+    expect(out).toContain('index staleness -> 90000s (max 86400s)');
+    expect(out).toContain('[FAIL] index staleness');
+  });
+
+  it('renders an unmeasured staleness gate as passing', () => {
+    const out = formatCanaryReport({
+      healthy: true,
+      tenantId: 'local',
+      controls: [{ query: 'audit chain receipts', minHits: 1, hits: 3, passed: true }],
+      staleness: { stalenessSeconds: null, maxStalenessSeconds: 86_400, passed: true },
+    });
+    expect(out).toContain('SEARCH HEALTHY');
+    expect(out).toContain('index staleness -> unmeasured');
   });
 });
