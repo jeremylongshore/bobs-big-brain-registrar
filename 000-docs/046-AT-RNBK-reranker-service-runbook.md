@@ -128,3 +128,36 @@ service stops — no config change is required to keep search up.
 - **Weight bump:** update the `reranker` entry in `weights-manifest.ts` AND the
   pin file `~/.local/lib/bbb/reranker-weights.sha256` (same value, two gates),
   restart. The score cache self-invalidates via the model_version column.
+
+## 9. Measured verdict (2026-07-19, KR1.3 ship gate) — OPT-IN ONLY, service disabled by default
+
+The 044-AT-DECR ship order required the reranker to be judged on the
+`governed-brain-v1` frozen anchor BEFORE any default wiring. Measured on the
+warm dev box (A/B arm of `eval:governed:local`, candidateWindow 50, topN 10,
+600-char docs, artifact `eval-results/governed-brain-v1-rerank.json`):
+
+| stratum         | ΔRecall@10 | ΔnDCG@10 | ΔMRR    |
+| --------------- | ---------- | -------- | ------- |
+| lexical (n=14)  | +0.0000    | −0.0259  | −0.0357 |
+| semantic (n=28) | +0.0000    | +0.0000  | +0.0000 |
+| overall (n=42)  | +0.0000    | −0.0086  | −0.0119 |
+
+**Gate verdict: MISS** (the gate asked for +3–8 nDCG on the semantic slice at
+~0 lexical regression). Two structural reasons, both measured:
+
+1. **The semantic wall is candidate generation, not ranking.** 20 of the 28
+   semantic queries retrieve ≤1 fused candidate (10 retrieve zero; max 3).
+   A reranker can only reorder what fusion retrieved — with lists this short
+   there is nothing to reorder, and no reranker can inject the un-retrieved
+   gold documents. Moving the semantic stratum requires a dense retrieval
+   arm (the Wave-3 B4 bead's gate condition is hereby met with evidence),
+   not a better ranker.
+2. **CPU latency.** ~2.5 s/doc at 600 chars on this 8-core shared-vCPU box
+   even after thread tuning (`-t 6 -tb 6 -ub 1024`): a 20-doc window costs
+   ~50 s/query — unusable interactively.
+
+**Posture:** the adapter stage stays behind the explicit `rerank` config
+(fail-open, read-path-only), the plugin does NOT wire it, and the
+`bbb-reranker` service is left installed but **stopped + disabled** —
+re-enable with `systemctl --user enable --now bbb-reranker.service` for
+offline experiments only.
