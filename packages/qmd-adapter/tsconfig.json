@@ -8,5 +8,5 @@
     "declarationMap": true
   },
   "include": ["src"],
-  "references": [{ "path": "../schema" }, { "path": "../common" }]
+  "references": [{ "path": "../schema" }, { "path": "../common" }, { "path": "../policy-engine" }]
 }
