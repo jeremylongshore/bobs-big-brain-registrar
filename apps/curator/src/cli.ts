@@ -1074,14 +1074,16 @@ function parseMergeGovernArgs(
     return { ok: false, message: '--anchor cannot be combined with --dry-run (nothing to anchor)' };
   }
   // --commit must be an actual commit SHA (7-40 hex chars, git's abbreviated
-  // to full range). A branch name or 'HEAD' is a MOVABLE ref that resolves
-  // differently over time — a durable anchor record must carry the immutable
-  // object id, never something that drifts after the fact.
-  if (commitHash !== undefined && !/^[0-9a-f]{7,40}$/.test(commitHash)) {
+  // to full range; case-insensitive — some tools print uppercase hex). A
+  // branch name or 'HEAD' is a MOVABLE ref that resolves differently over
+  // time — a durable anchor record must carry the immutable object id, never
+  // something that drifts after the fact. Accepted SHAs are normalized to
+  // lowercase before storage so the durable record has one canonical casing.
+  if (commitHash !== undefined && !/^[0-9a-fA-F]{7,40}$/.test(commitHash)) {
     return {
       ok: false,
       message:
-        `--commit must be a 7-40 character lowercase hex commit SHA (got "${commitHash}"); ` +
+        `--commit must be a 7-40 character hex commit SHA (got "${commitHash}"); ` +
         `resolve refs first, e.g. git rev-parse HEAD`,
     };
   }
@@ -1095,7 +1097,7 @@ function parseMergeGovernArgs(
       tenantId,
       dryRun,
       anchorPath,
-      commitHash,
+      commitHash: commitHash?.toLowerCase(),
       json,
     },
   };
@@ -1157,6 +1159,21 @@ const ANCHOR_LOCK_POLL_MS = 100;
  * A lock older than {@link ANCHOR_LOCK_STALE_MS} is presumed abandoned (a
  * crashed holder) and stolen. Returns a release function; throws after
  * `timeoutMs` (env-overridable via MERGE_ANCHOR_LOCK_TIMEOUT_MS for tests).
+ *
+ * ## Stale-steal soundness bound (PR #299 re-review finding 4)
+ *
+ * Stealing keys on the lock file's mtime, which is stamped ONCE at creation —
+ * so a live holder whose critical section outlived the 60s threshold could in
+ * principle be mistaken for crashed. That misidentification is prevented by a
+ * BOUND, not a heartbeat: the locked section is one small JSONL read, one
+ * SQLite chain scan, one Ed25519 sign, one appendFileSync, and one re-verify —
+ * sub-second in practice even at a ~25k-row audit chain, i.e. two orders of
+ * magnitude below the 60s threshold. Chose documenting this bound over
+ * heartbeating the mtime from inside the section because a heartbeat adds
+ * real concurrency machinery (an interval, cleanup on every throw path, its
+ * own failure modes) to defend a window that cannot be reached; if the
+ * section ever grows work that can stall (e.g. remote anchoring), add the
+ * mtime heartbeat THEN, alongside that change.
  */
 async function acquireAnchorLock(anchorPath: string): Promise<() => void> {
   const lockPath = `${anchorPath}.lock`;
@@ -1293,10 +1310,17 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
       }
     }
 
+    // The overall verdict is gated on the anchor verification when an anchor
+    // was requested: a merge whose just-appended anchor does NOT verify must
+    // never report success in EITHER output mode (PR #299 re-review finding 1
+    // — the JSON branch used to hardcode ok:true / exit 0 while the
+    // human-readable branch correctly failed).
+    const anchorFailed = anchor !== undefined && anchorVerifyOk !== true;
+
     if (opts.json) {
       process.stdout.write(
         JSON.stringify({
-          ok: true,
+          ok: !anchorFailed,
           dry_run: opts.dryRun,
           tenant_id: opts.tenantId,
           clone_a: { path: opts.cloneAPath, rows: cloneAMemories.length, chain_head: parentA },
@@ -1306,6 +1330,7 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
           promoted_count: result.promoted.length,
           quarantined_count: result.quarantined.length,
           quarantined: result.quarantined,
+          ...(anchorFailed ? { code: 'ANCHOR_VERIFY_FAILED' } : {}),
           ...(anchor !== undefined
             ? {
                 anchor: {
@@ -1321,6 +1346,12 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
             : {}),
         }) + '\n',
       );
+      if (anchorFailed) {
+        process.stderr.write(
+          `merge-govern: signed-anchor verification FAILED after append — inspect the anchor log\n`,
+        );
+        return 1;
+      }
       return 0;
     }
 
@@ -1346,7 +1377,7 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
           `  lamport:     ${anchor.lamportClock}\n` +
           `  verified:    ${anchorVerifyOk === true ? 'ok' : 'FAILED'}\n`,
       );
-      if (anchorVerifyOk !== true) {
+      if (anchorFailed) {
         process.stderr.write(
           `merge-govern: signed-anchor verification FAILED after append — inspect the anchor log\n`,
         );

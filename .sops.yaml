@@ -8,20 +8,29 @@
 #   5. Commit. Old recipients stay valid until their line is removed + updatekeys re-run.
 #
 # CI uses SOPS_AGE_KEY env var (single GitHub Actions secret).
+#
+# Recipient policy (two-recipient minimum, PR #299 re-review finding 5):
+# every encrypted secret in this repo must name at least TWO age recipients —
+# the operator dev key (age1me3v…) and the VPS host escrow key (age1csyj…,
+# /etc/intentsolutions/age.key) — so the loss of any single private key never
+# orphans a committed secret.
 
 creation_rules:
   # Plaintext .env -> .env.sops:  sops -e .env > .env.sops
   - path_regex: \.env$
     age: >-
-      age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8
+      age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8,
+      age1csyjrdez6fhe97zsu3zden8j7x7xes6zm3yzce5fzz524wmqav4sc0vgz3
   # secrets.<env>.yaml -> secrets.<env>.sops.yaml
   - path_regex: secrets\.[a-z]+\.yaml$
     age: >-
-      age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8
+      age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8,
+      age1csyjrdez6fhe97zsu3zden8j7x7xes6zm3yzce5fzz524wmqav4sc0vgz3
   # Merge-anchor signing-key custody (F3): dotenv files under secrets/.
   # The PRIVATE Ed25519 key is committed ONLY as secrets/*.sops.env; its
   # plaintext form (secrets/*.private.env) is git-ignored and lives in
   # /dev/shm during generation/rotation only.
   - path_regex: secrets/.*\.env$
     age: >-
-      age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8
+      age1me3vkelljqe2u4zcagja9ru5fdpfpw72xmch39fwle2cr0yfr4cs8vr5d8,
+      age1csyjrdez6fhe97zsu3zden8j7x7xes6zm3yzce5fzz524wmqav4sc0vgz3
