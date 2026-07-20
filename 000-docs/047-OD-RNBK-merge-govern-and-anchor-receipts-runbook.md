@@ -90,7 +90,19 @@ to the given log:
   embedded in the record so any auditor verifies with no out-of-band key distribution;
 - **hash-chained**: each record links to the previous by `prevAnchorHash`;
 - **Lamport-clocked**: the CLI derives the clock as last-record + 1 for the log —
-  monotonic per anchor log.
+  monotonic per anchor log. The read→compute→append→verify section runs under an
+  exclusive-create lockfile (`<anchor-path>.lock`), so two concurrent
+  merge-govern invocations cannot read the same log tail and mint duplicate
+  clocks (or fork the log's `prevAnchorHash` chain). A waiter times out loud
+  after ~10 s (exit 1, no anchor written — the merge itself has already
+  committed, so re-run the anchor step or investigate the holder); a lock older
+  than 60 s is presumed a crashed holder and stolen. Same-host serialization
+  only, matching the anchor log's single-host posture;
+- **commit-pinned (optional)**: `--commit` accepts ONLY a 7–40 char lowercase
+  hex commit SHA. A movable ref (`main`, `HEAD`, a branch name) is refused at
+  parse time (exit 2) — a durable anchor must carry the immutable object id,
+  never something that resolves differently later. Resolve first:
+  `git rev-parse HEAD`.
 
 Verify any time with `verifySignedMergeAnchors` (the CLI also self-verifies immediately
 after appending and fails loud if the fresh anchor does not verify).
@@ -207,10 +219,11 @@ ots.btc.catallaxy.com); proof at
 
 ## 4. Failure modes
 
-| Symptom                                          | Meaning                                                                      | Action                                                                      |
-| ------------------------------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| exit 2, usage message                            | bad flags / missing `--db` / `--tenant`, or `--anchor` without the key env   | fix invocation; decrypt the signing key first                               |
-| `MergeIdInvariantError`                          | a clone row's id is not content-derived — it bypassed the canonical promoter | investigate the clone; do not merge until its provenance is explained       |
-| quarantined rows in output                       | disclosure or policy refusal on re-govern                                    | expected behavior; review by id in the source clone                         |
-| `signed-anchor verification FAILED after append` | the just-written anchor does not verify                                      | stop; inspect the anchor log for tampering/corruption before further merges |
-| `ots verify` reports pending only                | Bitcoin confirmation not yet complete                                        | re-run `upgrade` after a few hours                                          |
+| Symptom                                            | Meaning                                                                                                    | Action                                                                                                             |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| exit 2, usage message                              | bad flags / missing `--db` / `--tenant`, `--anchor` without the key env, or `--commit` given a non-SHA ref | fix invocation; decrypt the signing key first; `git rev-parse` the ref                                             |
+| `timed out … waiting for the anchor lock` (exit 1) | another merge-govern is anchoring, or a fresh lock was left behind                                         | the MERGE already committed — retry to append the anchor once the holder finishes; a lock >60 s old is auto-stolen |
+| `MergeIdInvariantError`                            | a clone row's id is not content-derived — it bypassed the canonical promoter                               | investigate the clone; do not merge until its provenance is explained                                              |
+| quarantined rows in output                         | disclosure or policy refusal on re-govern                                                                  | expected behavior; review by id in the source clone                                                                |
+| `signed-anchor verification FAILED after append`   | the just-written anchor does not verify                                                                    | stop; inspect the anchor log for tampering/corruption before further merges                                        |
+| `ots verify` reports pending only                  | Bitcoin confirmation not yet complete                                                                      | re-run `upgrade` after a few hours                                                                                 |

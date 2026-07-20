@@ -15,7 +15,7 @@
  */
 
 import { mkdtemp, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,7 +33,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dispatch, type CuratorCliDeps } from '../cli.js';
 import { promote } from '../promotion/promoter.js';
-import { makeCandidate, TENANT } from './fixtures.js';
+import { makeCandidate, makeCuratedMemory, TENANT } from './fixtures.js';
 
 const KEY_ENV = 'MERGE_ANCHOR_PRIVATE_KEY_HEX';
 
@@ -52,6 +52,7 @@ afterEach(async () => {
   stdoutSpy.mockRestore();
   stderrSpy.mockRestore();
   delete process.env[KEY_ENV];
+  delete process.env['MERGE_ANCHOR_LOCK_TIMEOUT_MS'];
 });
 
 function stdoutText(): string {
@@ -284,5 +285,140 @@ describe('merge-govern — signed merge anchor (F3)', () => {
       anchor: { verified: boolean; lamport_clock: number };
     };
     expect(out.anchor.verified).toBe(true);
+    // The critical-section lock is released after a successful run.
+    expect(existsSync(`${anchorPath}.lock`)).toBe(false);
+  });
+
+  it('records a valid --commit SHA in the anchor, and refuses non-SHA refs at parse time', async () => {
+    const aPath = join(workDir, 'clone-a.db');
+    const bPath = join(workDir, 'clone-b.db');
+    const targetPath = join(workDir, 'merged.db');
+    const anchorPath = join(workDir, 'signed-merge-anchors.jsonl');
+    buildClone(aPath, [cand('Clone A note for the commit-pinning case.')]);
+    buildClone(bPath, [cand('Clone B note for the commit-pinning case.')]);
+    process.env[KEY_ENV] = generateActorKeypair().privateKeyHex;
+
+    // Movable refs must be refused (exit 2, usage error) BEFORE any database
+    // is opened — a branch name or HEAD would resolve differently over time,
+    // poisoning the durable anchor record.
+    for (const badRef of ['main', 'HEAD', 'feat/branch-name', 'v1.2.3']) {
+      const code = await dispatch(
+        // prettier-ignore
+        ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath, '--commit', badRef],
+        fileDeps,
+      );
+      expect(code).toBe(2);
+      expect(stderrText()).toContain('--commit must be a 7-40 character lowercase hex commit SHA');
+    }
+    expect(existsSync(anchorPath)).toBe(false); // nothing anchored by refusals
+
+    // A real 40-hex SHA is accepted and lands verbatim in the anchor record.
+    const sha = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+    const code = await dispatch(
+      // prettier-ignore
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath, '--commit', sha],
+      fileDeps,
+    );
+    expect(code).toBe(0);
+    const anchors = readSignedMergeAnchors(anchorPath);
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0]!.commitHash).toBe(sha);
+  });
+
+  it('waits on a held anchor lock and fails loud on timeout instead of minting a duplicate clock', async () => {
+    const aPath = join(workDir, 'clone-a.db');
+    const bPath = join(workDir, 'clone-b.db');
+    const targetPath = join(workDir, 'merged.db');
+    const anchorPath = join(workDir, 'signed-merge-anchors.jsonl');
+    buildClone(aPath, [cand('Clone A note for the held-lock case.')]);
+    buildClone(bPath, [cand('Clone B note for the held-lock case.')]);
+    process.env[KEY_ENV] = generateActorKeypair().privateKeyHex;
+    process.env['MERGE_ANCHOR_LOCK_TIMEOUT_MS'] = '300';
+
+    // A FRESH lock (another invocation mid-anchor) blocks this one: rather
+    // than reading the same log tail and minting a duplicate Lamport clock,
+    // the command waits, then fails loud with exit 1 and no anchor written.
+    writeFileSync(`${anchorPath}.lock`, '99999\n');
+    const code = await dispatch(
+      // prettier-ignore
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath],
+      fileDeps,
+    );
+    expect(code).toBe(1);
+    expect(stderrText()).toContain('anchor lock');
+    expect(existsSync(anchorPath)).toBe(false);
+  });
+
+  it('steals a STALE anchor lock (crashed holder) and completes the anchor', async () => {
+    const aPath = join(workDir, 'clone-a.db');
+    const bPath = join(workDir, 'clone-b.db');
+    const targetPath = join(workDir, 'merged.db');
+    const anchorPath = join(workDir, 'signed-merge-anchors.jsonl');
+    buildClone(aPath, [cand('Clone A note for the stale-lock case.')]);
+    buildClone(bPath, [cand('Clone B note for the stale-lock case.')]);
+    process.env[KEY_ENV] = generateActorKeypair().privateKeyHex;
+
+    // A lock whose mtime is far past the staleness threshold belongs to a
+    // crashed holder — it is stolen and the anchor proceeds.
+    const lockPath = `${anchorPath}.lock`;
+    writeFileSync(lockPath, '99999\n');
+    const old = (Date.now() - 10 * 60_000) / 1000; // 10 minutes ago
+    utimesSync(lockPath, old, old);
+
+    const code = await dispatch(
+      // prettier-ignore
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT, '--anchor', anchorPath],
+      fileDeps,
+    );
+    expect(code).toBe(0);
+    expect(readSignedMergeAnchors(anchorPath)).toHaveLength(1);
+    expect(existsSync(lockPath)).toBe(false); // released after the run
+  });
+});
+
+describe('merge-govern — id-invariant abort path (MergeIdInvariantError)', () => {
+  it('aborts the whole merge on a non-content-derived clone id: exit 1, EMPTY target, clones untouched', async () => {
+    const aPath = join(workDir, 'clone-a.db');
+    const bPath = join(workDir, 'clone-b.db');
+    const targetPath = join(workDir, 'merged.db');
+
+    // Clone A is clean (canonical promotion). Clone B holds one canonical row
+    // PLUS one row inserted via a raw store write with a random (v4) id — the
+    // signature of a row that bypassed the promoter. Its id cannot reproduce
+    // under deriveMemoryId(candidateId, contentHash).
+    buildClone(aPath, [cand('Clean clone A row for the abort-path case.')]);
+    buildClone(bPath, [cand('Clean clone B row for the abort-path case.')]);
+    const bDb = createDatabase({ path: bPath });
+    new MemoryRepository(bDb).insert(
+      makeCuratedMemory({ content: 'Row smuggled in with a random id.', tenantId: TENANT }),
+    );
+    bDb.close();
+
+    const code = await dispatch(
+      ['merge-govern', aPath, bPath, '--db', targetPath, '--tenant', TENANT],
+      fileDeps,
+    );
+
+    // The gate validates the ENTIRE union before any promotion, so a single
+    // bad row aborts the merge with nothing written — the runbook's
+    // load-bearing safety property.
+    expect(code).toBe(1);
+    expect(stderrText()).toContain('not content-derived');
+
+    // Target store is EMPTY: no memories, no audit events.
+    const targetDb = createDatabase({ path: targetPath, readonly: true });
+    expect(new MemoryRepository(targetDb).count()).toBe(0);
+    expect(new AuditRepository(targetDb).findAllChronological()).toHaveLength(0);
+    targetDb.close();
+
+    // Clone stores are untouched evidence: A keeps 1 row, B keeps 2.
+    for (const [clonePath, expected] of [
+      [aPath, 1],
+      [bPath, 2],
+    ] as const) {
+      const db = createDatabase({ path: clonePath, readonly: true });
+      expect(new MemoryRepository(db).count()).toBe(expected);
+      db.close();
+    }
   });
 });

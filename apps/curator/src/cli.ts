@@ -22,7 +22,15 @@
  */
 
 import { createPublicKey, createPrivateKey } from 'node:crypto';
-import { existsSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 
 import {
@@ -1065,6 +1073,18 @@ function parseMergeGovernArgs(
   if (anchorPath !== undefined && dryRun) {
     return { ok: false, message: '--anchor cannot be combined with --dry-run (nothing to anchor)' };
   }
+  // --commit must be an actual commit SHA (7-40 hex chars, git's abbreviated
+  // to full range). A branch name or 'HEAD' is a MOVABLE ref that resolves
+  // differently over time — a durable anchor record must carry the immutable
+  // object id, never something that drifts after the fact.
+  if (commitHash !== undefined && !/^[0-9a-f]{7,40}$/.test(commitHash)) {
+    return {
+      ok: false,
+      message:
+        `--commit must be a 7-40 character lowercase hex commit SHA (got "${commitHash}"); ` +
+        `resolve refs first, e.g. git rev-parse HEAD`,
+    };
+  }
 
   return {
     ok: true,
@@ -1109,6 +1129,76 @@ function derivePublicKeyHex(privateKeyHex: string): string {
   return createPublicKey({ key: publicJwk, format: 'jwk' })
     .export({ type: 'spki', format: 'der' })
     .toString('hex');
+}
+
+/** How long a stale anchor lock may sit before being stolen (a crashed holder). */
+const ANCHOR_LOCK_STALE_MS = 60_000;
+/** Poll interval while waiting for the anchor lock. */
+const ANCHOR_LOCK_POLL_MS = 100;
+
+/**
+ * Serialize the anchor read→compute→append→verify critical section across
+ * concurrent merge-govern invocations via an exclusive-create lockfile at
+ * `<anchorPath>.lock` (O_EXCL — atomic on a local filesystem).
+ *
+ * Why this exists (review finding, PR #299): the Lamport clock is derived by
+ * READING the log's last record and appending last+1. Unserialized, two
+ * concurrent invocations both read the same tail and mint DUPLICATE clocks
+ * (and the same prevAnchorHash — a log fork). Chose a CLI-side lockfile over
+ * deriving the clock inside appendSignedMergeAnchor because (a) the store API
+ * documents lamportClock as a caller-owned counter — moving derivation into
+ * the signing primitive conflates process mutual exclusion with cryptography
+ * and ripples through every existing caller; and (b) in-append derivation
+ * would NOT fix the race anyway: the read and the appendFileSync would still
+ * be two unserialized steps. Only mutual exclusion serializes them. Same
+ * pattern as the ecosystem's flock-on-the-brain write lock; same-host
+ * serialization only, matching the anchor log's single-host posture.
+ *
+ * A lock older than {@link ANCHOR_LOCK_STALE_MS} is presumed abandoned (a
+ * crashed holder) and stolen. Returns a release function; throws after
+ * `timeoutMs` (env-overridable via MERGE_ANCHOR_LOCK_TIMEOUT_MS for tests).
+ */
+async function acquireAnchorLock(anchorPath: string): Promise<() => void> {
+  const lockPath = `${anchorPath}.lock`;
+  const timeoutMs = Number(process.env['MERGE_ANCHOR_LOCK_TIMEOUT_MS'] ?? 10_000);
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const fd = openSync(lockPath, 'wx');
+      writeSync(fd, `${process.pid}\n`);
+      closeSync(fd);
+      return () => {
+        try {
+          unlinkSync(lockPath);
+        } catch {
+          // already gone — nothing to release.
+        }
+      };
+    } catch {
+      // Lock held. Steal it only if stale (holder presumed crashed).
+      try {
+        const st = statSync(lockPath);
+        if (Date.now() - st.mtimeMs > ANCHOR_LOCK_STALE_MS) {
+          try {
+            unlinkSync(lockPath);
+          } catch {
+            // another waiter stole it first — loop and retry.
+          }
+          continue;
+        }
+      } catch {
+        continue; // lock vanished between open and stat — retry immediately.
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `timed out after ${timeoutMs}ms waiting for the anchor lock ${lockPath} — ` +
+            `another merge-govern appears to be anchoring; retry, or remove the lock ` +
+            `if its holder is dead`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, ANCHOR_LOCK_POLL_MS));
+    }
+  }
 }
 
 async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<number> {
@@ -1174,22 +1264,33 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
     );
 
     // F3: signed merge anchor over the merged head (non-dry-run only; enforced
-    // at parse time). Lamport clock: monotonic per anchor log — last + 1.
+    // at parse time). Lamport clock: monotonic per anchor log — last + 1. The
+    // whole read→compute→append→verify section runs under the anchor lock so
+    // concurrent invocations cannot mint duplicate clocks or fork the log
+    // (see acquireAnchorLock for the race and the chose-X-over-Y rationale).
     let anchor: ReturnType<typeof appendSignedMergeAnchor> | undefined;
     let anchorVerifyOk: boolean | undefined;
     if (opts.anchorPath !== undefined && privateKeyHex !== undefined) {
-      const existing = readSignedMergeAnchors(opts.anchorPath);
-      const lamportClock =
-        existing.length > 0 ? existing[existing.length - 1]!.lamportClock + 1 : 1;
-      anchor = appendSignedMergeAnchor(auditRepo, opts.anchorPath, {
-        tenantId: opts.tenantId,
-        parents: [parentA, parentB],
-        lamportClock,
-        privateKeyHex,
-        publicKeyHex: derivePublicKeyHex(privateKeyHex),
-        commitHash: opts.commitHash ?? null,
-      });
-      anchorVerifyOk = verifySignedMergeAnchors(auditRepo, opts.anchorPath, [parentA, parentB]).ok;
+      const releaseLock = await acquireAnchorLock(opts.anchorPath);
+      try {
+        const existing = readSignedMergeAnchors(opts.anchorPath);
+        const lamportClock =
+          existing.length > 0 ? existing[existing.length - 1]!.lamportClock + 1 : 1;
+        anchor = appendSignedMergeAnchor(auditRepo, opts.anchorPath, {
+          tenantId: opts.tenantId,
+          parents: [parentA, parentB],
+          lamportClock,
+          privateKeyHex,
+          publicKeyHex: derivePublicKeyHex(privateKeyHex),
+          commitHash: opts.commitHash ?? null,
+        });
+        anchorVerifyOk = verifySignedMergeAnchors(auditRepo, opts.anchorPath, [
+          parentA,
+          parentB,
+        ]).ok;
+      } finally {
+        releaseLock();
+      }
     }
 
     if (opts.json) {
