@@ -36,6 +36,50 @@
  * (integrity + ordering intact) with N disclosed forks", never as a silent
  * green nor a false red.
  *
+ * ## The external-anchor cross-check (Track F2)
+ *
+ * `verifyAuditChain` re-anchors on each row's STORED `entry_hash`, so a local
+ * writer who edits history AND re-hashes every later row forward still verifies
+ * clean — and a wholesale truncation of the newest rows leaves a shorter but
+ * internally-consistent chain. The anchor log (`audit-anchor.ts`, committed to
+ * a force-push-protected git remote by the govern path) is the witness that
+ * makes those rewrites DETECTABLE — not impossible. This evaluator therefore
+ * ALSO cross-checks the chain against the anchor log via `verifyAnchors`, but
+ * it does NOT use `verifyAnchors(...).ok`: that raw boolean is
+ * `chain.breaks.length === 0 && …`, which is red-by-construction on the live
+ * brain (the ~155 carried forks above). Instead the verdict is composed:
+ *
+ *   - chain breaks    → the 3-state classifier (forks + byte-pinned documented
+ *                       exceptions disclosed-not-failed; tamper signatures fail)
+ *   - anchor breaks   → ALWAYS fail closed, partitioned for the report into
+ *                       `HISTORY_TRUNCATED` (chain now shorter than an anchored
+ *                       snapshot), `HISTORY_REWRITTEN` (the head at an anchored
+ *                       position changed — the rewrite `verifyAuditChain` alone
+ *                       cannot see), and anchor-LOG integrity breaks
+ *                       (`ANCHOR_HASH_MISMATCH` / `ANCHOR_LINK_MISMATCH`: the
+ *                       witness log itself was edited or spliced).
+ *
+ * There is no benign anchor break: benign forks live on the CHAIN side (they
+ * are write-time ordering artifacts, anchored as-is), so any live-chain vs
+ * anchor divergence is treated as evidence of a post-anchor rewrite. Bootstrap
+ * is graceful: a missing or empty anchor log reports
+ * `anchor_status: 'no_anchors_yet'` and does NOT fail — a brain that has never
+ * anchored has nothing to diverge from.
+ *
+ * ## What this evaluator does NOT do (runbook 045 carries the same bullets)
+ *
+ *   - It cannot tell a bootstrap brain from one whose LOCAL anchor log was
+ *     deleted: both collapse to `no_anchors_yet` and pass vacuously. The gap
+ *     is closed OUTSIDE this evaluator by the off-box witness — the runbook's
+ *     `git -C ~/.teamkb/audit fetch origin && git status` divergence check
+ *     against the force-push-protected remote — not by this code.
+ *   - It does not identify WHO rewrote history (no actor attribution; local
+ *     mode has no cross-actor non-repudiation).
+ *   - It does not make rewrites impossible — only detectable once anchored,
+ *     within one govern-cycle's anchoring window. The anchor-log path is configurable
+ * (`options.anchorLogPath` or `$TEAMKB_ANCHOR_LOG`, default
+ * `~/.teamkb/audit/anchors.jsonl`).
+ *
  * ## The manifest (optional)
  *
  * If an exception manifest exists, documented (byte-pinned known-migration)
@@ -60,13 +104,14 @@ import { join } from 'node:path';
 
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import type {
+  AnchorBreak,
   AuditChainRow,
   AuditRepository,
   ExceptionManifest,
   MemoryRepository,
   StoredRowTuple,
 } from '@qmd-team-intent-kb/store';
-import { classifyChainBreaks, readManifest, verifyAuditChain } from '@qmd-team-intent-kb/store';
+import { classifyChainBreaks, readManifest, verifyAnchors } from '@qmd-team-intent-kb/store';
 
 import type { EvaluatorResult } from './types.js';
 
@@ -80,6 +125,9 @@ const DEFAULT_EXCEPTION_MANIFEST_PATH = join(
   'exceptions.manifest.json',
 );
 
+/** Default on-disk location of a brain's external anchor log. */
+const DEFAULT_ANCHOR_LOG_PATH = join(homedir(), '.teamkb', 'audit', 'anchors.jsonl');
+
 export interface ProvenanceIntegrityOptions {
   /** Tenant to scope the per-memory content-integrity walk. Omit = all tenants. */
   readonly tenantId?: string;
@@ -90,6 +138,14 @@ export interface ProvenanceIntegrityOptions {
    * (no amnesty → every tamper-reason break is a tamper signature).
    */
   readonly exceptionManifestPath?: string;
+  /**
+   * Path to the external anchor log (JSONL of `AnchorRecord`s appended by the
+   * govern path). When omitted, falls back to `$TEAMKB_ANCHOR_LOG` then to
+   * `~/.teamkb/audit/anchors.jsonl`. A missing or empty log is the graceful
+   * bootstrap case (`anchor_status: 'no_anchors_yet'`), NOT a failure; any
+   * live-chain vs anchor divergence fails closed.
+   */
+  readonly anchorLogPath?: string;
 }
 
 /**
@@ -112,6 +168,45 @@ function loadManifest(explicitPath: string | undefined): ExceptionManifest | nul
   // readManifest throws on a corrupt/edited manifest — let it propagate: a
   // present manifest that fails its own integrity gates must not be ignored.
   return readManifest(path);
+}
+
+/**
+ * The fail-closed partition of anchor breaks for the report. Every anchor
+ * break gates the verdict (there is no benign anchor divergence — see the
+ * module doc); the partition exists so the report says WHICH rewrite class
+ * was detected, matching the 3-state discipline used for chain breaks.
+ */
+interface AnchorBreakCounts {
+  historyTruncated: number;
+  historyRewritten: number;
+  /** ANCHOR_HASH_MISMATCH + ANCHOR_LINK_MISMATCH — the witness log itself edited/spliced. */
+  logIntegrity: number;
+}
+
+function countAnchorBreaks(breaks: readonly AnchorBreak[]): AnchorBreakCounts {
+  const counts: AnchorBreakCounts = { historyTruncated: 0, historyRewritten: 0, logIntegrity: 0 };
+  for (const b of breaks) {
+    // Exhaustive over the AnchorBreak reason union: a future variant fails
+    // compilation here instead of being silently laundered into one of the
+    // existing buckets. Every branch still counts toward a fail-closed verdict.
+    switch (b.reason) {
+      case 'HISTORY_TRUNCATED':
+        counts.historyTruncated += 1;
+        break;
+      case 'HISTORY_REWRITTEN':
+        counts.historyRewritten += 1;
+        break;
+      case 'ANCHOR_HASH_MISMATCH':
+      case 'ANCHOR_LINK_MISMATCH':
+        counts.logIntegrity += 1;
+        break;
+      default: {
+        const unhandled: never = b.reason;
+        throw new Error(`unhandled anchor break reason: ${String(unhandled)}`);
+      }
+    }
+  }
+  return counts;
 }
 
 /** Build the classifier's id → current-stored-tuple map from the live audit rows. */
@@ -145,7 +240,20 @@ export function evaluateProvenanceIntegrity(
     if (!VALID_SOURCES.has(m.source)) invalidSources += 1;
   }
 
-  const chain = verifyAuditChain(auditRepo);
+  // Cross-check the chain against the external anchor log. We deliberately do
+  // NOT consume `anchorResult.ok` — it folds in `chain.breaks.length === 0`,
+  // which is red-by-construction on the live brain's carried forks. The chain
+  // breaks go through the 3-state classifier below; only the ANCHOR breaks
+  // (all fail-closed) are taken from this result.
+  const anchorLogPath =
+    options.anchorLogPath ?? process.env.TEAMKB_ANCHOR_LOG ?? DEFAULT_ANCHOR_LOG_PATH;
+  const anchorResult = verifyAnchors(auditRepo, anchorLogPath);
+  const chain = anchorResult.chain;
+  const anchorCounts = countAnchorBreaks(anchorResult.anchorBreaks);
+  const anchorDiverged = anchorResult.anchorBreaks.length > 0;
+  // Bootstrap: a brain that has never anchored has nothing to diverge from.
+  const anchorStatus =
+    anchorResult.anchorCount === 0 ? 'no_anchors_yet' : anchorDiverged ? 'divergent' : 'consistent';
 
   // Partition the breaks the walker found into tamper signatures, documented
   // (byte-pinned) exceptions, and benign CHAIN_FORKs, using the merged 3-state
@@ -161,17 +269,30 @@ export function evaluateProvenanceIntegrity(
 
   // Pass on the SECURITY property: genuine tampering only. Benign CHAIN_FORKs
   // and byte-pinned documented exceptions do NOT fail the verdict; they are
-  // disclosed in `details` for honest reporting (010-AT-RISK R5).
-  const passed = contentHashMismatches === 0 && invalidSources === 0 && tamperSignatures === 0;
+  // disclosed in `details` for honest reporting (010-AT-RISK R5). ANY anchor
+  // divergence fails closed: the chain may verify internally clean after a
+  // full re-hash or a truncation — the anchor cross-check is exactly the
+  // witness that catches those (F2). Bootstrap (no anchors yet) is vacuously
+  // consistent, so `anchorDiverged` is false and does not fail.
+  const passed =
+    contentHashMismatches === 0 &&
+    invalidSources === 0 &&
+    tamperSignatures === 0 &&
+    !anchorDiverged;
 
   // Score: fraction of integrity checks that held. Only the GATING checks count
   // as failures (content-hash mismatch, invalid source, presence of tamper
-  // signatures); benign forks / documented exceptions are NOT failures, so they
-  // do not drag the score below the 1.0 threshold on an untampered-but-forked
-  // brain. The chain contributes exactly one gating check (tamper-free or not),
-  // matching the pre-fix denominator so a clean brain still scores 1.0.
-  const totalChecks = memories.length * 2 + 1;
-  const failedChecks = contentHashMismatches + invalidSources + (tamperSignatures > 0 ? 1 : 0);
+  // signatures, anchor divergence); benign forks / documented exceptions are
+  // NOT failures, so they do not drag the score below the 1.0 threshold on an
+  // untampered-but-forked brain. The chain contributes one gating check
+  // (tamper-free or not) and the anchor cross-check one more (consistent — or
+  // vacuously so at bootstrap — or not), so a clean brain still scores 1.0.
+  const totalChecks = memories.length * 2 + 2;
+  const failedChecks =
+    contentHashMismatches +
+    invalidSources +
+    (tamperSignatures > 0 ? 1 : 0) +
+    (anchorDiverged ? 1 : 0);
   const score = totalChecks === 0 ? 1 : (totalChecks - failedChecks) / totalChecks;
 
   return {
@@ -193,6 +314,18 @@ export function evaluateProvenanceIntegrity(
       documented_exceptions: documentedExceptions,
       // Whether a byte-pinned exception manifest was loaded for this run.
       exception_manifest_loaded: manifest !== null,
+      // ---- external-anchor cross-check (F2) — every break below GATES ----
+      // Snapshots in the anchor log this chain was cross-checked against.
+      anchor_count: anchorResult.anchorCount,
+      // 'no_anchors_yet' (bootstrap, vacuous pass) | 'consistent' | 'divergent'.
+      anchor_status: anchorStatus,
+      // Chain now has FEWER rows than an anchored snapshot recorded.
+      anchor_history_truncated: anchorCounts.historyTruncated,
+      // The head at an anchored position changed — the re-hash-forward rewrite
+      // that intra-chain verification alone cannot see.
+      anchor_history_rewritten: anchorCounts.historyRewritten,
+      // The witness log itself was edited or spliced (hash/link mismatch).
+      anchor_log_integrity_breaks: anchorCounts.logIntegrity,
     },
   };
 }

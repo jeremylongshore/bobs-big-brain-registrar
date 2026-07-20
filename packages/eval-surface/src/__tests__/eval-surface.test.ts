@@ -7,6 +7,7 @@ import {
   AuditRepository,
   CURRENT_AUDIT_HASH_VERSION,
   MemoryRepository,
+  appendAnchor,
   computeEntryHash,
   computeManifestHash,
   createTestDatabase,
@@ -136,6 +137,10 @@ describe('evaluateProvenanceIntegrity', () => {
   // "no amnesty" branch deterministically, regardless of the host filesystem
   // (never reads a real ~/.teamkb manifest during unit tests).
   const NO_MANIFEST = join(tmpdir(), 'gsb-eval-no-such-manifest-should-not-exist.json');
+  // Same discipline for the anchor log: a never-existing path forces the F2
+  // cross-check down its graceful bootstrap branch ('no_anchors_yet') so tests
+  // not ABOUT anchoring never read a real ~/.teamkb/audit/anchors.jsonl.
+  const NO_ANCHORS = join(tmpdir(), 'gsb-eval-no-such-anchors-should-not-exist.jsonl');
 
   // ---- audit-row helpers (real repo, real chain) ------------------------
   // Mirrors packages/store/src/__tests__/audit-verify.test.ts idioms: insert
@@ -219,6 +224,7 @@ describe('evaluateProvenanceIntegrity', () => {
     const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
       tenantId: DEFAULT_TENANT,
       exceptionManifestPath: NO_MANIFEST,
+      anchorLogPath: NO_ANCHORS,
     });
     expect(r.name).toBe('provenance-integrity');
     expect(r.details.content_hash_mismatches).toBe(0);
@@ -237,6 +243,7 @@ describe('evaluateProvenanceIntegrity', () => {
     const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
       tenantId: DEFAULT_TENANT,
       exceptionManifestPath: NO_MANIFEST,
+      anchorLogPath: NO_ANCHORS,
     });
     expect(r.details.content_hash_mismatches).toBe(1);
     expect(r.passed).toBe(false);
@@ -246,6 +253,7 @@ describe('evaluateProvenanceIntegrity', () => {
     const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
       tenantId: DEFAULT_TENANT,
       exceptionManifestPath: NO_MANIFEST,
+      anchorLogPath: NO_ANCHORS,
     });
     expect(r.passed).toBe(true);
     expect(r.score).toBe(1);
@@ -260,6 +268,7 @@ describe('evaluateProvenanceIntegrity', () => {
     const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
       tenantId: DEFAULT_TENANT,
       exceptionManifestPath: NO_MANIFEST,
+      anchorLogPath: NO_ANCHORS,
     });
 
     // A benign fork is NOT tampering → the eval must pass (the whole R5 fix).
@@ -283,6 +292,7 @@ describe('evaluateProvenanceIntegrity', () => {
     const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
       tenantId: DEFAULT_TENANT,
       exceptionManifestPath: NO_MANIFEST,
+      anchorLogPath: NO_ANCHORS,
     });
 
     expect(Number(r.details.tamper_signatures)).toBeGreaterThan(0);
@@ -302,6 +312,7 @@ describe('evaluateProvenanceIntegrity', () => {
     const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
       tenantId: DEFAULT_TENANT,
       exceptionManifestPath: NO_MANIFEST,
+      anchorLogPath: NO_ANCHORS,
     });
     expect(r.details.content_hash_mismatches).toBe(1);
     expect(r.details.tamper_signatures).toBe(0);
@@ -353,6 +364,7 @@ describe('evaluateProvenanceIntegrity', () => {
       const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
         tenantId: DEFAULT_TENANT,
         exceptionManifestPath: manifestPath,
+        anchorLogPath: NO_ANCHORS,
       });
       // The break is DOCUMENTED (byte-pinned) → not a tamper signature → passes,
       // but is disclosed as a documented exception.
@@ -363,5 +375,158 @@ describe('evaluateProvenanceIntegrity', () => {
     } finally {
       if (existsSync(manifestPath)) rmSync(manifestPath);
     }
+  });
+
+  // -----------------------------------------------------------------------
+  // External-anchor cross-check (Track F2). The anchor log is the witness
+  // that makes a post-anchor rewrite/truncation DETECTABLE (not impossible);
+  // these tests pin the composed verdict: bootstrap is graceful, benign forks
+  // still pass with anchors present, truncation/rewrite fail closed.
+  // -----------------------------------------------------------------------
+  describe('anchor cross-check (F2)', () => {
+    let anchorPath: string;
+    beforeEach(() => {
+      anchorPath = join(
+        tmpdir(),
+        `gsb-eval-anchors-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`,
+      );
+    });
+    afterEach(() => {
+      if (existsSync(anchorPath)) rmSync(anchorPath);
+    });
+
+    it('bootstrap: a missing anchor log reports no_anchors_yet and does NOT fail', () => {
+      memRepo.insert(makeMemory({ content: 'unanchored brain memory' }));
+      seedChain(3);
+      const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
+        tenantId: DEFAULT_TENANT,
+        exceptionManifestPath: NO_MANIFEST,
+        anchorLogPath: anchorPath, // never written → absent
+      });
+      expect(r.details.anchor_status).toBe('no_anchors_yet');
+      expect(r.details.anchor_count).toBe(0);
+      expect(r.passed).toBe(true);
+      expect(r.score).toBe(1);
+    });
+
+    it('an anchored, untouched chain reads consistent and passes', () => {
+      memRepo.insert(makeMemory({ content: 'anchored brain memory' }));
+      seedChain(3);
+      appendAnchor(auditRepo, anchorPath, { tenantId: DEFAULT_TENANT });
+
+      const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
+        tenantId: DEFAULT_TENANT,
+        exceptionManifestPath: NO_MANIFEST,
+        anchorLogPath: anchorPath,
+      });
+      expect(r.details.anchor_count).toBe(1);
+      expect(r.details.anchor_status).toBe('consistent');
+      expect(r.passed).toBe(true);
+      expect(r.score).toBe(1);
+    });
+
+    it('FAILS CLOSED on an anchored-then-truncated chain even though the chain verifies internally clean', () => {
+      memRepo.insert(makeMemory({ content: 'soon-to-be-truncated brain' }));
+      const ids = seedChain(3);
+      appendAnchor(auditRepo, anchorPath, { tenantId: DEFAULT_TENANT });
+
+      // Truncate AFTER anchoring: drop the newest row out-of-band. The
+      // remaining 2-row chain still verifies internally clean (no tamper
+      // signatures) — ONLY the anchor cross-check can catch this.
+      db.prepare('DELETE FROM audit_events WHERE id = ?').run(ids[2]);
+
+      const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
+        tenantId: DEFAULT_TENANT,
+        exceptionManifestPath: NO_MANIFEST,
+        anchorLogPath: anchorPath,
+      });
+      expect(r.details.tamper_signatures).toBe(0); // intra-chain sees nothing
+      expect(Number(r.details.anchor_history_truncated)).toBeGreaterThan(0);
+      expect(r.details.anchor_status).toBe('divergent');
+      expect(r.passed).toBe(false);
+      expect(r.score).toBeLessThan(1);
+    });
+
+    it('FAILS CLOSED on a full re-hash-forward rewrite that intra-chain verification cannot see', () => {
+      memRepo.insert(makeMemory({ content: 'soon-to-be-rewritten brain' }));
+      const ids = seedChain(3);
+      appendAnchor(auditRepo, anchorPath, { tenantId: DEFAULT_TENANT });
+
+      // TRUE re-hash-forward (the attack the anchor witness exists for): edit
+      // the MIDDLE row's payload, recompute its entry_hash under its stored
+      // hash version, then recompute every downstream row's prev_entry_hash +
+      // entry_hash — the chain now verifies CLEAN internally, and only the
+      // anchored snapshot betrays the rewrite.
+      interface RawRow {
+        id: string;
+        action: string;
+        memory_id: string;
+        tenant_id: string;
+        actor_json: string;
+        reason: string | null;
+        details_json: string;
+        timestamp: string;
+        prev_entry_hash: string | null;
+        hash_version: 1 | 2;
+      }
+      const rowOf = (id: string): RawRow =>
+        db
+          .prepare(
+            `SELECT id, action, memory_id, tenant_id, actor_json, reason, details_json,
+                    timestamp, prev_entry_hash, hash_version
+             FROM audit_events WHERE id = ?`,
+          )
+          .get(id) as RawRow;
+
+      const mid = rowOf(ids[1]!);
+      mid.reason = 'laundered by a local writer';
+      const midHash = computeEntryHash(mid, mid.hash_version);
+      db.prepare(`UPDATE audit_events SET reason = ?, entry_hash = ? WHERE id = ?`).run(
+        mid.reason,
+        midHash,
+        mid.id,
+      );
+      const head = rowOf(ids[2]!);
+      head.prev_entry_hash = midHash;
+      const headHash = computeEntryHash(head, head.hash_version);
+      db.prepare(`UPDATE audit_events SET prev_entry_hash = ?, entry_hash = ? WHERE id = ?`).run(
+        midHash,
+        headHash,
+        head.id,
+      );
+
+      const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
+        tenantId: DEFAULT_TENANT,
+        exceptionManifestPath: NO_MANIFEST,
+        anchorLogPath: anchorPath,
+      });
+      // The headline claim, both halves: intra-chain verification sees NOTHING
+      // (the rewrite re-hashed forward cleanly) …
+      expect(r.details.tamper_signatures).toBe(0);
+      // … and the anchor cross-check still fails it closed.
+      expect(Number(r.details.anchor_history_rewritten)).toBeGreaterThan(0);
+      expect(r.details.anchor_status).toBe('divergent');
+      expect(r.passed).toBe(false);
+    });
+
+    it('a benign CHAIN_FORK anchored as-is still PASSES with anchors present (the live-brain shape)', () => {
+      memRepo.insert(makeMemory({ content: 'forked-then-anchored brain' }));
+      const ids = seedChain(3);
+      // The fork exists at anchor time (write-time ordering artifact) — the
+      // anchor witnesses the forked chain as-is, so nothing diverges.
+      forkLastRowBackToFirst(ids);
+      appendAnchor(auditRepo, anchorPath, { tenantId: DEFAULT_TENANT });
+
+      const r = evaluateProvenanceIntegrity(memRepo, auditRepo, {
+        tenantId: DEFAULT_TENANT,
+        exceptionManifestPath: NO_MANIFEST,
+        anchorLogPath: anchorPath,
+      });
+      expect(Number(r.details.chain_forks)).toBeGreaterThan(0); // disclosed
+      expect(r.details.tamper_signatures).toBe(0);
+      expect(r.details.anchor_status).toBe('consistent');
+      expect(r.passed).toBe(true);
+      expect(r.score).toBe(1);
+    });
   });
 });
