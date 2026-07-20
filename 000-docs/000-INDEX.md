@@ -25,7 +25,7 @@
 
 - `005-TQ-TEST-testing-ci-strategy.md` — Testing philosophy, CI pipeline, quality gates
 - `006-TQ-SECU-security-governance.md` — Threat model and security controls
-- `046-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor.md` — Grounding audit: every improvement loop (retrieval ratchet, governed-brain anchor, provenance-integrity, govern-decision, groundedness, corpus accounting, staleness canary, mutation/coverage) with its anchor, its gate, and the DEFECT list for loops without one
+- `047-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor.md` — Grounding audit: every improvement loop (retrieval ratchet, governed-brain anchor, provenance-integrity, govern-decision, groundedness, corpus accounting, staleness canary, mutation/coverage) with its anchor, its gate, and the DEFECT list for loops without one
 
 ### OD — Operations & Deployment
 
@@ -121,6 +121,6 @@
 | 038 | AT-DECR | retrieval-backend-decision                            | Retrieval backend decision       |
 | 039 | RL-REPT | qmd-team-intent-kb-release-v0.7.0                     | v0.7.0 release report            |
 | 040 | OD-OPSM | brain-api-tailnet-deploy                              | Brain API tailnet deploy runbook |
-| 046 | TQ-AUDT | grounding-audit-every-improvement-loop-and-its-anchor | Improvement-loop grounding audit |
+| 047 | TQ-AUDT | grounding-audit-every-improvement-loop-and-its-anchor | Improvement-loop grounding audit |
 
 ## Next Available Sequence: 048

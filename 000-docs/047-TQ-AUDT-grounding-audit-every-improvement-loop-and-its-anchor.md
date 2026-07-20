@@ -1,6 +1,6 @@
 # Grounding audit: every improvement loop and its anchor
 
-**Doc:** 046-TQ-AUDT · **Date:** 2026-07-19 · **Scope:** qmd-team-intent-kb (the Bob's Big Brain Registrar)
+**Doc:** 047-TQ-AUDT · **Date:** 2026-07-19 · **Scope:** qmd-team-intent-kb (the Bob's Big Brain Registrar)
 **Companion work:** Wave-2 C2 (groundedness eval) + C3 (govern-decision decision cases), shipped in the same PR as this doc.
 
 ## Why this audit exists
