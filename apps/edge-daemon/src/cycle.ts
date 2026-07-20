@@ -2,7 +2,10 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ingestFromSpool, Curator } from '@qmd-team-intent-kb/curator';
-import { loadOrCreateOriginSecret } from '@qmd-team-intent-kb/common';
+import {
+  loadOrCreateOriginSecret,
+  ORIGIN_SECRET_UNAVAILABLE_WARNING,
+} from '@qmd-team-intent-kb/common';
 import { runExport } from '@qmd-team-intent-kb/git-exporter';
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import { resolveRepoContext } from '@qmd-team-intent-kb/repo-resolver';
@@ -171,7 +174,7 @@ function curateStep(
         // Write-time provenance (H1): resolve the installation origin secret so
         // origin-claiming candidates verify; absent/unreadable → they reject
         // fail-closed as unverifiable while unattested candidates flow as before.
-        originSecret: resolveOriginSecretSafe(),
+        originSecret: resolveOriginSecretSafe(logger),
       },
     );
 
@@ -391,12 +394,17 @@ export async function runCycle(
 /**
  * Resolve the installation origin secret (H1) without letting a filesystem
  * fault abort the curation cycle. Returns undefined on failure, which the
- * origin gate treats fail-closed for origin-CLAIMING candidates only.
+ * origin gate treats fail-closed for origin-CLAIMING candidates only. The
+ * degradation is WARNED with the same shared message the API boot and
+ * curator CLI emit, so operators can grep one phrase across all surfaces.
  */
-function resolveOriginSecretSafe(): string | undefined {
+function resolveOriginSecretSafe(logger: DaemonLogger): string | undefined {
   try {
     return loadOrCreateOriginSecret();
-  } catch {
+  } catch (e) {
+    logger.warn(
+      `${ORIGIN_SECRET_UNAVAILABLE_WARNING} (${e instanceof Error ? e.message : String(e)})`,
+    );
     return undefined;
   }
 }

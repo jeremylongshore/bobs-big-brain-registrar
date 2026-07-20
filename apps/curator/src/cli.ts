@@ -52,7 +52,10 @@ import type {
   AuditChainRow,
 } from '@qmd-team-intent-kb/store';
 
-import { loadOrCreateOriginSecret } from '@qmd-team-intent-kb/common';
+import {
+  loadOrCreateOriginSecret,
+  ORIGIN_SECRET_UNAVAILABLE_WARNING,
+} from '@qmd-team-intent-kb/common';
 
 import { Curator } from './curator.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
@@ -310,11 +313,16 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     // Write-time provenance (H1): resolve the installation origin secret so
     // origin-claiming candidates verify; unreadable → undefined, and only
     // origin-CLAIMING candidates then reject (fail-closed) as unverifiable.
+    // The degradation is WARNED, not silent — same shared message as the API
+    // boot + edge-daemon, so operators can grep one phrase across surfaces.
     let originSecret: string | undefined;
     try {
       originSecret = loadOrCreateOriginSecret();
-    } catch {
+    } catch (e) {
       originSecret = undefined;
+      process.stderr.write(
+        `[curator-cli] ${ORIGIN_SECRET_UNAVAILABLE_WARNING} (${e instanceof Error ? e.message : String(e)})\n`,
+      );
     }
     const curator = new Curator(
       { candidateRepo, memoryRepo, policyRepo, auditRepo, linksRepo },

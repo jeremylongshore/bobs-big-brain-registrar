@@ -7,7 +7,8 @@
  */
 import type Database from 'better-sqlite3';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { hashOriginToken, mintOriginToken } from '@qmd-team-intent-kb/common';
+import { deriveCandidateId, hashOriginToken, mintOriginToken } from '@qmd-team-intent-kb/common';
+import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import {
   createTestDatabase,
   CandidateRepository,
@@ -152,5 +153,52 @@ describe('Curator integration — origin gate on the promotion path', () => {
         capturedAt: attested.capturedAt,
       }),
     );
+  });
+});
+
+describe('spool id derivation is independent of origin (the id-stability contract, load-bearing)', () => {
+  it('deriveCandidateId over the same (workspaceId, relPath, bodySha256) yields the same id with and without origin attached', () => {
+    const workspaceId = 'my-workspace';
+    const relPath = 'wiki/concepts/provenance.md';
+    const bodySha256 = 'ab'.repeat(32);
+
+    // The derivation's ONLY inputs are the three content fields — derive once,
+    // then build two full candidates around that id, one attested, one not.
+    const id = deriveCandidateId(workspaceId, relPath, bodySha256);
+    expect(id).toBe(deriveCandidateId(workspaceId, relPath, bodySha256));
+
+    const baseFields = {
+      id,
+      status: 'inbox',
+      source: 'import',
+      content: 'A compiled page body about provenance.',
+      title: 'Provenance',
+      category: 'reference',
+      trustLevel: 'medium',
+      author: { type: 'system', id: 'ico-compiler' },
+      tenantId: TENANT,
+      metadata: { filePaths: [relPath], tags: [] },
+      prePolicyFlags: { potentialSecret: false, lowConfidence: false, duplicateSuspect: false },
+      capturedAt: '2026-07-19T00:00:00.000Z',
+    };
+    const without = MemoryCandidate.parse(baseFields);
+    const withOrigin = MemoryCandidate.parse({
+      ...baseFields,
+      origin: {
+        tokenHmac: mintOriginToken(SECRET, {
+          candidateId: id,
+          tenantId: TENANT,
+          capturedAt: '2026-07-19T00:00:00.000Z',
+        }),
+        channel: 'local-mcp',
+        mintedAt: '2026-07-19T00:00:00.000Z',
+      },
+    });
+
+    // Same content fields → same id, origin present or not: attaching an
+    // attestation can never re-identify (and thus never un-dedupe) a candidate.
+    expect(without.id).toBe(id);
+    expect(withOrigin.id).toBe(id);
+    expect(withOrigin.id).toBe(without.id);
   });
 });

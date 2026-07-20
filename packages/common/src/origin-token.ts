@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getTeamKbBasePath } from './paths.js';
 
@@ -53,10 +53,25 @@ export const ORIGIN_SECRET_ENV = 'TEAMKB_ORIGIN_SECRET';
  * The receipt channel recorded for a candidate that carries NO origin
  * attestation (pre-H1 spools, legacy captures, team clients without the
  * distributed secret). Reserved: it is a RECEIPT vocabulary word, never a
- * client-claimable `origin.channel` value (the schema's tag shape allows it,
- * but intake allowlists must not include it).
+ * client-claimable `origin.channel` value — enforced IN THE SCHEMA by the
+ * `CandidateOrigin` refine in `@qmd-team-intent-kb/schema` (which repeats this
+ * literal because schema is the base package and cannot import common; keep
+ * the two in sync), so a claim of `unattested` fails parse before any
+ * allowlist logic runs.
  */
 export const UNATTESTED_CHANNEL = 'unattested';
+
+/**
+ * The one operator-visible degradation warning for a govern/promotion
+ * entrypoint that cannot resolve the installation origin secret. Every caller
+ * (API boot, curator CLI, edge-daemon cycle) emits THIS string (plus its own
+ * prefix/detail) so operators can grep one phrase across all surfaces. The
+ * degradation it names: unattested candidates still govern normally, but any
+ * candidate CLAIMING an origin is refused fail-closed as
+ * `origin_token_unverifiable`.
+ */
+export const ORIGIN_SECRET_UNAVAILABLE_WARNING =
+  'origin secret unavailable — origin-claiming candidates will be refused as unverifiable';
 
 /** NUL field separator — injective over ids/tenants/timestamps (mirrors uuid-v5.ts). */
 const FIELD_SEPARATOR = String.fromCharCode(0);
@@ -126,9 +141,22 @@ export const ORIGIN_TOKEN_HASH_SURFACE_LEN = 16;
 export function loadOriginSecret(basePath?: string): string | undefined {
   const env = process.env[ORIGIN_SECRET_ENV]?.trim();
   if (env !== undefined && env.length > 0) return env;
+  const path = originSecretPath(basePath);
   try {
-    const secret = readFileSync(originSecretPath(basePath), 'utf8').trim();
-    return secret.length > 0 ? secret : undefined;
+    const secret = readFileSync(path, 'utf8').trim();
+    if (secret.length === 0) return undefined;
+    // Defensive re-assert on READ (not only at creation): a secret file that
+    // pre-dates this code, or whose mode was widened out-of-band, is clamped
+    // back to owner-only the next time any component touches it — the
+    // never-group/world-readable claim holds for the whole lifecycle, not
+    // just the creation instant. Best-effort: a chmod failure (e.g. not the
+    // owner) must not turn a readable secret into a resolution failure.
+    try {
+      if ((statSync(path).mode & 0o777) !== 0o600) chmodSync(path, 0o600);
+    } catch {
+      /* best-effort */
+    }
+    return secret;
   } catch {
     return undefined;
   }
@@ -139,18 +167,34 @@ export function loadOriginSecret(basePath?: string): string | undefined {
  * mode / the brain's own box): 32 random bytes, lowercase hex, written 0600.
  * The env override still wins. Throws only if the file can neither be read nor
  * created — callers on best-effort paths should contain that.
+ *
+ * TOCTOU-safe: creation uses the ATOMIC `wx` open flag (exclusive create with
+ * mode 0600) instead of a check-then-write, so two processes racing first-use
+ * (e.g. a capture and the nightly govern) cannot clobber each other — exactly
+ * one writer wins the create; the loser takes `EEXIST` and re-reads the
+ * winner's secret. The winner returns the bytes it wrote (no read-back race).
  */
 export function loadOrCreateOriginSecret(basePath?: string): string {
-  const existing = loadOriginSecret(basePath);
-  if (existing !== undefined) return existing;
+  const env = process.env[ORIGIN_SECRET_ENV]?.trim();
+  if (env !== undefined && env.length > 0) return env;
   const path = originSecretPath(basePath);
-  const secret = randomBytes(32).toString('hex');
+  const minted = randomBytes(32).toString('hex');
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${secret}\n`, { encoding: 'utf8', mode: 0o600 });
-  // writeFileSync's mode only applies at creation; re-assert for pre-existing
-  // empty files so the secret is never group/world readable.
-  chmodSync(path, 0o600);
-  return secret;
+  try {
+    writeFileSync(path, `${minted}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    return minted;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+  }
+  // EEXIST: another process (or an earlier run) already created the file —
+  // the normal idempotent path. Read the winner's secret.
+  const existing = loadOriginSecret(basePath);
+  if (existing === undefined) {
+    throw new Error(
+      `origin secret file exists but is empty or unreadable: ${path} — refusing to overwrite a concurrent writer; inspect/remove it and retry`,
+    );
+  }
+  return existing;
 }
 
 /** Absolute path of the origin-secret file for a given (or default) base dir. */

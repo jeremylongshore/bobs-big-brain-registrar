@@ -158,3 +158,25 @@ describe('CandidateOrigin (GSB Wave-2 H1 — write-time provenance)', () => {
     expect(() => CandidateOrigin.parse({ ...validOrigin, mintedAt: 'yesterday' })).toThrow();
   });
 });
+
+describe("CandidateOrigin — 'unattested' is reserved receipt vocabulary (schema-enforced)", () => {
+  const origin = {
+    tokenHmac: 'ab'.repeat(32),
+    channel: 'unattested',
+    mintedAt: '2026-01-15T10:00:00.000Z',
+  };
+
+  it("rejects a client-claimed channel 'unattested' at parse time", () => {
+    const res = CandidateOrigin.safeParse(origin);
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0]?.message).toMatch(/reserved receipt vocabulary/);
+      expect(res.error.issues[0]?.path).toEqual(['channel']);
+    }
+  });
+
+  it("rejects a full MemoryCandidate claiming channel 'unattested'", () => {
+    const input = makeMemoryCandidate({ origin });
+    expect(MemoryCandidate.safeParse(input).success).toBe(false);
+  });
+});

@@ -26,7 +26,11 @@
  */
 import { resolve } from 'node:path';
 import { createDatabase, IndexStateRepository } from '@qmd-team-intent-kb/store';
-import { loadOrCreateOriginSecret, resolveTeamKbPath } from '@qmd-team-intent-kb/common';
+import {
+  loadOrCreateOriginSecret,
+  ORIGIN_SECRET_UNAVAILABLE_WARNING,
+  resolveTeamKbPath,
+} from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
@@ -98,7 +102,7 @@ async function main(): Promise<void> {
     originSecret = loadOrCreateOriginSecret();
   } catch (e) {
     process.stderr.write(
-      `[teamkb-api] origin secret unavailable (${e instanceof Error ? e.message : String(e)}) — origin-claiming candidates will be refused as unverifiable\n`,
+      `[teamkb-api] ${ORIGIN_SECRET_UNAVAILABLE_WARNING} (${e instanceof Error ? e.message : String(e)})\n`,
     );
   }
   const allowedChannelsRaw = process.env['TEAMKB_ALLOWED_CHANNELS'];

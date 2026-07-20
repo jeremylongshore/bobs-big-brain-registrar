@@ -99,6 +99,35 @@ describe('origin provenance over the API', () => {
       }
     });
 
+    it("a claimed channel 'unattested' is refused at the SCHEMA boundary even when an operator mistakenly allowlists it", async () => {
+      // `unattested` is receipt vocabulary, reserved by a CandidateOrigin
+      // schema refine — so the refusal happens at parse (400 invalid
+      // candidate), BEFORE allowlist logic, and a misconfigured allowlist
+      // containing 'unattested' cannot make the claim land.
+      const misconfigured = buildApp({
+        db,
+        silent: true,
+        originSecret: SECRET,
+        allowedChannels: ['unattested', 'team-mcp'],
+      });
+      await misconfigured.ready();
+      try {
+        const base = makeAttestedCandidate(SECRET, {}, 'team-mcp');
+        const payload = JSON.parse(JSON.stringify(base)) as Record<string, unknown>;
+        (payload['origin'] as Record<string, unknown>)['channel'] = 'unattested';
+        const res = await misconfigured.inject({
+          method: 'POST',
+          url: '/api/candidates',
+          payload,
+        });
+        expect(res.statusCode).toBe(400);
+        expect((res.json() as { error: string }).error).toMatch(/Invalid candidate/);
+        expect(candidateRepo.findById(base.id)).toBeNull();
+      } finally {
+        await misconfigured.close();
+      }
+    });
+
     it('a legacy origin-less capture skips the channel check entirely', async () => {
       const legacy = makeCandidate();
       const res = await intake(legacy);

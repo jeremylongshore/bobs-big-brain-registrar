@@ -53,14 +53,28 @@ export type OriginChannel = z.infer<typeof OriginChannel>;
  * so adding/removing `origin` never changes `id` and content-stable dedupe is
  * preserved.
  */
-export const CandidateOrigin = z.object({
-  /** HMAC-SHA256 of (id, tenantId, capturedAt) under the installation secret — lowercase hex. */
-  tokenHmac: z.string().regex(/^[0-9a-f]{64}$/),
-  /** Which capture surface minted this (e.g. `local-mcp`, `team-mcp`). Self-asserted in local mode (H4). */
-  channel: OriginChannel,
-  /** When the token was minted (ISO-8601). Informational; the HMAC binds `capturedAt`, not this. */
-  mintedAt: IsoDatetime,
-});
+export const CandidateOrigin = z
+  .object({
+    /** HMAC-SHA256 of (id, tenantId, capturedAt) under the installation secret — lowercase hex. */
+    tokenHmac: z.string().regex(/^[0-9a-f]{64}$/),
+    /** Which capture surface minted this (e.g. `local-mcp`, `team-mcp`). Self-asserted in local mode (H4). */
+    channel: OriginChannel,
+    /** When the token was minted (ISO-8601). Informational; the HMAC binds `capturedAt`, not this. */
+    mintedAt: IsoDatetime,
+  })
+  // `unattested` is RECEIPT vocabulary — the promotion receipt's marker for a
+  // candidate that carries NO origin at all. Enforcing the reservation here in
+  // the schema (not just by allowlist convention) means a client can never
+  // CLAIM it, and even an operator who mistakenly adds `unattested` to the
+  // intake allowlist cannot make such a claim parse: the candidate is refused
+  // at the schema boundary before any allowlist logic runs. Keep the literal
+  // in sync with `UNATTESTED_CHANNEL` in `@qmd-team-intent-kb/common`
+  // (schema is the base package and cannot import common).
+  .refine((o) => o.channel !== 'unattested', {
+    message:
+      "origin.channel 'unattested' is reserved receipt vocabulary for candidates without an origin — a client cannot claim it",
+    path: ['channel'],
+  });
 export type CandidateOrigin = z.infer<typeof CandidateOrigin>;
 
 /** A raw memory proposal captured from a Claude Code session, before governance */

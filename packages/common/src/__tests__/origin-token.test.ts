@@ -3,7 +3,16 @@
  * forgery/tamper negatives, receipt-hash truncation (H2), and the on-disk
  * per-installation secret lifecycle (0600, idempotent, env override).
  */
-import { mkdtempSync, rmSync, statSync, readFileSync, existsSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -119,5 +128,35 @@ describe('per-installation secret file', () => {
     expect(loadOriginSecret(base)).toBe('e'.repeat(64));
     expect(loadOrCreateOriginSecret(base)).toBe('e'.repeat(64));
     expect(existsSync(originSecretPath(base))).toBe(false);
+  });
+
+  it('TOCTOU: a file created by another process is adopted via the EEXIST re-read path, never clobbered', () => {
+    // Simulate losing the create race: the file appears (another process won)
+    // before this process's exclusive-create attempt. loadOrCreateOriginSecret
+    // opens with flag 'wx', takes EEXIST, and re-reads the winner's secret —
+    // this pre-created file exercises exactly that branch (the 'wx' write is
+    // unconditional; there is no separate pre-check to interleave with).
+    const winner = 'c3'.repeat(32);
+    mkdirSync(base, { recursive: true });
+    writeFileSync(originSecretPath(base), `${winner}\n`, { encoding: 'utf8', mode: 0o600 });
+    expect(loadOrCreateOriginSecret(base)).toBe(winner);
+    // The winner's bytes were never overwritten by the loser's minted secret.
+    expect(readFileSync(originSecretPath(base), 'utf8').trim()).toBe(winner);
+  });
+
+  it('TOCTOU: an existing-but-empty secret file throws instead of being silently overwritten', () => {
+    mkdirSync(base, { recursive: true });
+    writeFileSync(originSecretPath(base), '', { encoding: 'utf8', mode: 0o600 });
+    expect(() => loadOrCreateOriginSecret(base)).toThrow(/exists but is empty or unreadable/);
+    // Still empty — no blind overwrite of a file another writer may own.
+    expect(readFileSync(originSecretPath(base), 'utf8')).toBe('');
+  });
+
+  it('defensively clamps a widened file mode back to 0600 on read', () => {
+    const secret = loadOrCreateOriginSecret(base);
+    chmodSync(originSecretPath(base), 0o644);
+    // Any read path (loadOriginSecret or the create wrapper) re-asserts 0600.
+    expect(loadOriginSecret(base)).toBe(secret);
+    expect(statSync(originSecretPath(base)).mode & 0o777).toBe(0o600);
   });
 });
