@@ -97,6 +97,25 @@ export { fuseReciprocalRank, RRF_K } from './search/rrf-fusion.js';
 export { resolveScopeCollections } from './search/search-client.js';
 export type { IndexedDoc, Fts5SearchHit } from './native/index.js';
 
+// Rerank — opt-in local cross-encoder stage, fail-open to the fused order (B1, 044-AT-DECR)
+export {
+  RerankClient,
+  RerankCache,
+  RerankStage,
+  rerankScore,
+  resolveCitationPath,
+  DEFAULT_RERANK_TIMEOUT_MS,
+  DEFAULT_CANDIDATE_WINDOW,
+  DEFAULT_RERANK_TOP_N,
+  DEFAULT_MAX_DOC_CHARS,
+} from './rerank/index.js';
+export type {
+  RerankScore,
+  RerankScoredDoc,
+  RerankClientOptions,
+  RerankStageOptions,
+} from './rerank/index.js';
+
 // Reindex — idempotent rebuild of the derived qmd-index from kb-export (e06.13)
 export { reindex } from './reindex/reindex.js';
 export type { ReindexReport } from './reindex/reindex.js';

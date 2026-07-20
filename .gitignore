@@ -76,3 +76,4 @@ secrets/*.private.hex
 packages/qmd-adapter/eval-results/*
 !packages/qmd-adapter/eval-results/governed-brain-v1-snapshot.lock.json
 !packages/qmd-adapter/eval-results/governed-brain-v1-floor.json
+!packages/qmd-adapter/eval-results/governed-brain-v1-rerank.json

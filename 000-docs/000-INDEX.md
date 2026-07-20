@@ -124,5 +124,6 @@
 | 040 | OD-OPSM | brain-api-tailnet-deploy                              | Brain API tailnet deploy runbook |
 | 048 | TQ-AUDT | grounding-audit-every-improvement-loop-and-its-anchor | Improvement-loop grounding audit |
 | 049 | AT-DECR | write-time-provenance-origin-tokens                   | Origin-token decision record     |
+| 050 | AT-RNBK | reranker-service-runbook                              | bbb-reranker service runbook     |
 
 ## Next Available Sequence: 051

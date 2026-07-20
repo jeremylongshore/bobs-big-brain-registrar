@@ -65,6 +65,35 @@ export interface QmdAdapterConfig {
    * (unmeasured). See `StalenessProbe` in types.ts for the contract.
    */
   stalenessProbe?: () => number | null;
+  /**
+   * OPT-IN cross-encoder rerank stage (blueprint bead B1, 044-AT-DECR).
+   * Explicit options only — no env magic. When omitted or `enabled: false`,
+   * the query path is byte-identical to the pre-rerank deterministic fusion.
+   * When enabled, the stage FAILS OPEN: any reranker failure serves the fused
+   * order unchanged.
+   */
+  rerank?: {
+    enabled: boolean;
+    /** Reranker service base URL, e.g. `http://127.0.0.1:8097` (loopback only). */
+    url: string;
+    /** Hard per-request timeout (default 3000 ms). */
+    timeoutMs?: number;
+    /** Fused hits fed to the reranker (default 50). */
+    candidateWindow?: number;
+    /** Rerank-ordered hits returned (default 8). */
+    topN?: number;
+    /**
+     * Truncate each document body sent to the model (default 1500 chars).
+     * CPU cross-encoder latency scales ~linearly with total characters, so
+     * this knob × candidateWindow IS the latency budget.
+     */
+    maxDocChars?: number;
+    /**
+     * Override for the sidecar score cache (tests use `:memory:`). Defaults to
+     * `<qmd-index>/<tenantId>/rerank-cache.sqlite` — derived, deletable data.
+     */
+    cachePath?: string;
+  };
 }
 
 /** Default configuration values */

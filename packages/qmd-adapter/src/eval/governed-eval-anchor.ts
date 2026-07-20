@@ -61,6 +61,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { QmdAdapter } from '../adapter.js';
+import type { QmdAdapterConfig } from '../config.js';
 import { reindex } from '../reindex/reindex.js';
 import { runEval } from './run-eval.js';
 import { stratify, formatStratifiedReport } from './stratified-report.js';
@@ -251,6 +252,12 @@ function extractSnapshot(tarballPath: string, tmpBase: string): string {
 async function evalCorpus(
   exportDir: string,
   backendLabel: string,
+  opts: {
+    /** Opt-in rerank arm for the A/B comparison (044-AT-DECR ship order). */
+    rerank?: QmdAdapterConfig['rerank'];
+    /** Reuse the index a prior evalCorpus call already built for this tenant. */
+    skipIndexBuild?: boolean;
+  } = {},
 ): Promise<
   { ok: true; sr: StratifiedReport; perQuery: EvalPerQuery[] } | { ok: false; reason: string }
 > {
@@ -258,10 +265,16 @@ async function evalCorpus(
     tenantId: ANCHOR_TENANT,
     exportDir,
     timeout: ANCHOR_QMD_TIMEOUT_MS,
+    ...(opts.rerank ? { rerank: opts.rerank } : {}),
   });
-  const built = await reindex(adapter);
-  if (!built.ok) {
-    return { ok: false, reason: `index build failed: ${built.error.code}: ${built.error.message}` };
+  if (!opts.skipIndexBuild) {
+    const built = await reindex(adapter);
+    if (!built.ok) {
+      return {
+        ok: false,
+        reason: `index build failed: ${built.error.code}: ${built.error.message}`,
+      };
+    }
   }
   const retrieve = qmdRetrievalFn(adapter, ANCHOR_TENANT, 'curated');
   const report = await runEval(GOVERNED_BRAIN_V1_DATASET, retrieve, {
@@ -390,6 +403,12 @@ export async function runGovernedEvalAnchor(): Promise<number> {
       );
     }
 
+    // Informational rerank A/B arm (044-AT-DECR ship order: the reranker is
+    // judged on this harness BEFORE any default wiring). Same snapshot, same
+    // already-built index, second adapter with the opt-in rerank stage. NEVER
+    // part of the verdict — the floors gate the fused arm only.
+    await maybeRunRerankArm(exportDir, frozen.sr, resultsDir, verified.sha256);
+
     // Informational live run — never part of the verdict, off by default so the
     // frozen anchor stays the deterministic path.
     await maybeRunLiveInformational();
@@ -415,6 +434,86 @@ export async function runGovernedEvalAnchor(): Promise<number> {
     return 0;
   } finally {
     rmSync(tmpBase, { recursive: true, force: true });
+  }
+}
+
+/**
+ * GOVERNED_EVAL_RERANK=1: the A/B arm for the reranker verdict (KR1.3). Runs
+ * the identical frozen query set through the SAME temp index with the opt-in
+ * cross-encoder rerank stage enabled (candidateWindow 50 → topN 10, so both
+ * arms are compared at the eval's k=10). Reranker URL override:
+ * GOVERNED_EVAL_RERANK_URL (default the bbb-reranker loopback service).
+ * Informational only — prints the side-by-side per-stratum deltas and writes
+ * `governed-brain-v1-rerank.json`; the exit code never depends on this arm.
+ */
+async function maybeRunRerankArm(
+  exportDir: string,
+  fusedSr: StratifiedReport,
+  resultsDir: string,
+  snapshotSha256: string,
+): Promise<void> {
+  if (process.env['GOVERNED_EVAL_RERANK'] !== '1') return;
+  const url = process.env['GOVERNED_EVAL_RERANK_URL'] ?? 'http://127.0.0.1:8097';
+  // CPU-latency reality (measured 2026-07-19 on the 8-core dev box): the
+  // Qwen3-0.6B cross-encoder scores ~2.5 s/doc at 600 chars, so a 50-doc
+  // window runs ~2 min per query. The A/B arm is an OFFLINE measurement and
+  // takes the hit (300 s timeout); docs are truncated to 600 chars to keep
+  // the full-window run under ~2 h for the 42-query set.
+  const reranked = await evalCorpus(exportDir, 'qmd-bm25+fts5-rrf+qwen3-rerank (frozen snapshot)', {
+    skipIndexBuild: true,
+    rerank: {
+      enabled: true,
+      url,
+      candidateWindow: 50,
+      topN: 10,
+      maxDocChars: 600,
+      timeoutMs: 300_000,
+    },
+  });
+  if (!reranked.ok) {
+    console.error(`\nrerank arm FAILED (informational, verdict unaffected): ${reranked.reason}`);
+    return;
+  }
+  console.log('\n=== rerank A/B arm (informational — 044-AT-DECR ship-gate evidence) ===');
+  console.log(formatStratifiedReport(reranked.sr));
+  console.log('\n=== per-stratum delta (reranked − fused) ===');
+  const fusedBy = new Map(fusedSr.byKind.map((s) => [s.stratum, s]));
+  const rows = [
+    ...reranked.sr.byKind.map((s) => ({ s, f: fusedBy.get(s.stratum) })),
+    { s: reranked.sr.overall, f: fusedSr.overall },
+  ];
+  for (const { s, f } of rows) {
+    if (!f) continue;
+    const d = (a: number, b: number): string => {
+      const delta = a - b;
+      return `${delta >= 0 ? '+' : ''}${delta.toFixed(4)}`;
+    };
+    console.log(
+      `  ${s.stratum.padEnd(9)} ΔRecall@10=${d(s.meanRecallAtK, f.meanRecallAtK)}  ` +
+        `ΔnDCG@10=${d(s.meanNdcgAtK, f.meanNdcgAtK)}  ΔMRR=${d(s.mrr, f.mrr)}`,
+    );
+  }
+  try {
+    const outPath = join(resultsDir, 'governed-brain-v1-rerank.json');
+    writeFileSync(
+      outPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          dataset: reranked.sr.dataset,
+          snapshotSha256,
+          rerankerUrl: url,
+          fused: { overall: fusedSr.overall, byKind: fusedSr.byKind },
+          reranked: { overall: reranked.sr.overall, byKind: reranked.sr.byKind },
+          perQuery: reranked.perQuery,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    console.log(`rerank A/B artifact written: ${outPath}`);
+  } catch (err: unknown) {
+    console.error('WARN could not write the rerank A/B artifact:', err);
   }
 }
 

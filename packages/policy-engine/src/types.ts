@@ -4,6 +4,7 @@ import type {
   PolicyRule,
   MemoryCategory,
 } from '@qmd-team-intent-kb/schema';
+import type { DeterministicScore } from './deterministic-score.js';
 
 /** Result of evaluating a single rule against a candidate */
 export interface RuleResult {
@@ -11,7 +12,10 @@ export interface RuleResult {
   ruleType: string;
   outcome: 'pass' | 'fail' | 'flag';
   reason: string;
-  score?: number; // for scoring rules (relevance, trust)
+  // Seam firewall (B2): a govern score is a DeterministicScore, never a raw number.
+  // A retrieval/rerank/embedding score (a plain number) cannot be assigned here; the
+  // compiler rejects it. Mint one only via deterministicScore() from a deterministic rule.
+  score?: DeterministicScore; // for scoring rules (relevance, trust)
 }
 
 /**
