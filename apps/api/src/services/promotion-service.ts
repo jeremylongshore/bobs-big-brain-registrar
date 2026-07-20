@@ -10,6 +10,8 @@ import {
   detectSupersession,
   DEFAULT_SUPERSESSION_THRESHOLD,
   checkOriginAttestation,
+  checkImportExclusion,
+  type BrainignoreRuleset,
 } from '@qmd-team-intent-kb/curator';
 import { AuditEvent as AuditEventSchema } from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, Author } from '@qmd-team-intent-kb/schema';
@@ -59,6 +61,12 @@ export class PromotionService {
     private readonly auditRepo: AuditRepository,
     private readonly linksRepo?: MemoryLinksRepository,
     private readonly originSecret?: string,
+    /**
+     * Brainignore ruleset for the import exclusion gate (5kw.1). Omitted →
+     * the committed defaults; pass `loadBrainignoreRuleset()` to honor the
+     * per-brain override file. Only import-source candidates are checked.
+     */
+    private readonly importExclusions?: BrainignoreRuleset,
   ) {}
 
   /**
@@ -119,6 +127,22 @@ export class PromotionService {
           ? 'Candidate rejected: origin token does not verify against the installation secret — claimed provenance is invalid. Left in the inbox for review.'
           : 'Candidate rejected: it claims an origin attestation but no origin secret is configured on this server — cannot verify. Left in the inbox for review.',
         originGate.code,
+      );
+    }
+
+    // Import exclusion gate (5kw.1): the same structural brainignore check the
+    // curator batch pipeline runs, so the single-candidate admin path and the
+    // batch path agree (the H1 invariant). Import-source candidates matching a
+    // vendored-path pattern or a content heuristic are refused with the
+    // deterministic evidence; the candidate stays in the inbox, consistent
+    // with policy rejects on this path. An operator who genuinely wants such a
+    // doc re-admits it with a `!pattern` line in the brainignore override file.
+    const importGate = checkImportExclusion(candidate, this.importExclusions);
+    if (importGate.verdict === 'rejected') {
+      throw unprocessable(
+        `Candidate rejected by the import exclusion gate (${importGate.match.code}): ` +
+          `${importGate.match.evidence}. Left in the inbox for review.`,
+        importGate.match.code,
       );
     }
 

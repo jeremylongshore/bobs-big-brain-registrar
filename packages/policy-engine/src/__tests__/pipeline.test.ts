@@ -352,3 +352,49 @@ describe('PolicyPipeline contradiction_check pre-phase (E1)', () => {
     expect(result.outcome).toBe('approved');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Source-keyed relevance hard reject at the pipeline level (5kw.3)
+// ---------------------------------------------------------------------------
+
+describe('PolicyPipeline — relevance_score source-keyed reject (5kw.3)', () => {
+  /** Junk-shaped: title + category (+0.10 source bonus for import) → far
+   *  below the 0.8 threshold used here. */
+  const junk = {
+    title: 'minimal',
+    content: 'Short.',
+    category: 'reference',
+    trustLevel: 'low',
+    metadata: { filePaths: [], tags: [] },
+  } as const;
+
+  const relevanceReject = () =>
+    makePolicy([
+      makeRule('relevance_score', { action: 'reject', parameters: { minimumScore: 0.8 } }),
+    ]);
+
+  it('REJECTS an import-source junk candidate', () => {
+    const pipeline = new PolicyPipeline(relevanceReject());
+    const result = pipeline.evaluate(makeCandidate({ ...junk, source: 'import' }));
+    expect(result.outcome).toBe('rejected');
+    expect(result.rejectedBy).toBe('rule-relevance_score');
+  });
+
+  it('only FLAGS an identical junk candidate captured over team MCP', () => {
+    const pipeline = new PolicyPipeline(relevanceReject());
+    const result = pipeline.evaluate(makeCandidate({ ...junk, source: 'mcp' }));
+    expect(result.outcome).toBe('flagged');
+    expect(result.rejectedBy).toBeUndefined();
+    expect(result.flaggedBy).toContain('rule-relevance_score');
+  });
+
+  it("keeps flag-only behavior for imports on a pre-5kw policy whose action is 'flag'", () => {
+    const policy = makePolicy([
+      makeRule('relevance_score', { action: 'flag', parameters: { minimumScore: 0.8 } }),
+    ]);
+    const pipeline = new PolicyPipeline(policy);
+    const result = pipeline.evaluate(makeCandidate({ ...junk, source: 'import' }));
+    expect(result.outcome).toBe('flagged');
+    expect(result.rejectedBy).toBeUndefined();
+  });
+});

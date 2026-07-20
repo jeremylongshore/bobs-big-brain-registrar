@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { ingestFromSpool, Curator } from '@qmd-team-intent-kb/curator';
+import { ingestFromSpool, Curator, loadBrainignoreRuleset } from '@qmd-team-intent-kb/curator';
 import {
   loadOrCreateOriginSecret,
   ORIGIN_SECRET_UNAVAILABLE_WARNING,
@@ -175,6 +175,11 @@ function curateStep(
         // origin-claiming candidates verify; absent/unreadable → they reject
         // fail-closed as unverifiable while unattested candidates flow as before.
         originSecret: resolveOriginSecretSafe(logger),
+        // Import exclusion (5kw.1): merge the per-brain brainignore override
+        // file (~/.teamkb/brainignore or $TEAMKB_BRAINIGNORE) on top of the
+        // committed defaults. An unreadable override warns and degrades to
+        // defaults — the gate itself is always on for import sources.
+        importExclusions: loadBrainignoreRuleset({ onWarn: (m) => logger.warn(m) }),
       },
     );
 

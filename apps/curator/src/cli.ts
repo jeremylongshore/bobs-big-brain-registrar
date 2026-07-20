@@ -21,17 +21,26 @@
  * @module cli
  */
 
-import { createPublicKey, createPrivateKey } from 'node:crypto';
+import { createPublicKey, createPrivateKey, randomUUID } from 'node:crypto';
 import {
   closeSync,
   existsSync,
   openSync,
+  readFileSync,
   statSync,
   unlinkSync,
   writeFileSync,
   writeSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
+
+import {
+  AuditEvent as AuditEventSchema,
+  MemoryCategory,
+  MemorySource,
+  isTransitionAllowed,
+} from '@qmd-team-intent-kb/schema';
+import type { CuratedMemory, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
 
 import {
   CandidateRepository,
@@ -59,6 +68,7 @@ import {
 
 import { Curator } from './curator.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
+import { loadBrainignoreRuleset } from './import-exclusion/load-brainignore.js';
 import { mergeGovern } from './merge/merge-gate.js';
 import { walkProvenance } from './provenance/provenance-walk.js';
 
@@ -83,8 +93,20 @@ export interface CuratorCliDeps {
 const USAGE = `Usage: curator-cli <subcommand> [options]
 
 Subcommands:
-  ingest <spool-dir> --tenant <id> [--db <path>] [--json]
+  ingest <spool-dir> --tenant <id> [--db <path>] [--brainignore <path>] [--json]
     Drive ingest → policy → promote pipeline against a spool directory.
+    Import-source candidates run the brainignore import exclusion gate
+    (committed defaults + the per-brain override file).
+
+  batch-transition --db <path> --tenant <id> --to <state> --reason <text>
+                   --actor <id> [--source <src>] [--category <cat>]
+                   [--imported-before <ISO>] [--ids-file <path>]
+                   [--dry-run] [--json]
+    Apply one lifecycle transition to every curated memory matching the
+    given criteria (AND-combined; at least one required). Each transition
+    writes its own hash-chained audit receipt in its own per-memory
+    transaction — never one giant receipt. --dry-run opens the DB
+    READ-ONLY and reports what would transition without writing.
 
   verify-audit-chain [--db <path>] [--json]
     Walk the audit_events hash chain and exit 2 if AUDIT_TAMPERED.
@@ -127,8 +149,33 @@ Subcommands:
 Options for 'ingest':
   --tenant <id>   Tenant id used by the policy pipeline (required).
   --db <path>     Persistent SQLite path. Default: in-memory.
+  --brainignore <path>
+                  Per-brain brainignore override file merged on top of the
+                  committed default exclusion ruleset. Default:
+                  $TEAMKB_BRAINIGNORE, else ~/.teamkb/brainignore. A missing
+                  file is normal (defaults-only).
   --json          Emit machine-readable JSON envelope to stdout in place
                   of human-readable summary.
+
+Options for 'batch-transition':
+  --db <path>     SQLite path (required — refuses an implicit in-memory store).
+  --tenant <id>   Tenant scope (required).
+  --to <state>    Target lifecycle state: deprecated | archived | active.
+                  'superseded' is refused — it requires a per-memory
+                  supersededBy id, which a batch cannot supply honestly.
+  --reason <text> Reason recorded verbatim on every per-memory receipt (required).
+  --actor <id>    Human actor recorded on every receipt (required).
+  --source <src>          Match memories with this source (e.g. import, bulk_import).
+  --category <cat>        Match memories with this category.
+  --imported-before <ISO> Match memories whose promoted_at is strictly before
+                          this instant (for import-source rows, promoted_at is
+                          the import time).
+  --ids-file <path>       File of memory UUIDs, one per line ('#' comments and
+                          blank lines allowed). AND-combined with the other
+                          criteria; ids absent from the tenant's corpus are
+                          reported as not-found, never silently dropped.
+  --dry-run       Open the DB READ-ONLY and report what would transition.
+  --json          Emit a structured JSON envelope in place of the summary.
 
 Options for 'verify-audit-chain':
   --db <path>     SQLite path (required for any meaningful verify run;
@@ -183,6 +230,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
   switch (subcommand) {
     case 'ingest':
       return cmdIngest(argv.slice(1), deps);
+    case 'batch-transition':
+      return cmdBatchTransition(argv.slice(1), deps);
     case 'verify-audit-chain':
       return cmdVerifyAuditChain(argv.slice(1), deps);
     case 'generate-exception-manifest':
@@ -215,6 +264,7 @@ interface IngestOpts {
   spoolDir: string;
   tenantId: string;
   dbPath?: string;
+  brainignorePath?: string;
   json: boolean;
 }
 
@@ -231,6 +281,7 @@ function parseIngestArgs(args: string[]): IngestArgParseOk | IngestArgParseErr {
   let spoolDir: string | undefined;
   let tenantId: string | undefined;
   let dbPath: string | undefined;
+  let brainignorePath: string | undefined;
   let json = false;
 
   let i = 0;
@@ -243,6 +294,10 @@ function parseIngestArgs(args: string[]): IngestArgParseOk | IngestArgParseErr {
         break;
       case '--db':
         dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--brainignore':
+        brainignorePath = args[i + 1];
         i += 2;
         break;
       case '--json':
@@ -268,7 +323,7 @@ function parseIngestArgs(args: string[]): IngestArgParseOk | IngestArgParseErr {
     return { ok: false, message: 'missing required flag: --tenant <id>' };
   }
 
-  return { ok: true, opts: { spoolDir, tenantId, dbPath, json } };
+  return { ok: true, opts: { spoolDir, tenantId, dbPath, brainignorePath, json } };
 }
 
 async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> {
@@ -277,7 +332,7 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     process.stderr.write(`curator-cli ingest: ${parsed.message}\n\n${USAGE}`);
     return 2;
   }
-  const { spoolDir, tenantId, dbPath, json } = parsed.opts;
+  const { spoolDir, tenantId, dbPath, brainignorePath, json } = parsed.opts;
 
   const db = deps.createDb(dbPath !== undefined ? { dbPath } : {});
   try {
@@ -324,9 +379,17 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
         `[curator-cli] ${ORIGIN_SECRET_UNAVAILABLE_WARNING} (${e instanceof Error ? e.message : String(e)})\n`,
       );
     }
+    // Import exclusion (5kw.1): committed defaults + the per-brain override
+    // file (--brainignore > $TEAMKB_BRAINIGNORE > ~/.teamkb/brainignore). An
+    // unreadable override warns and degrades to defaults-only — the gate
+    // itself always runs for import-source candidates.
+    const importExclusions = loadBrainignoreRuleset({
+      ...(brainignorePath !== undefined ? { path: brainignorePath } : {}),
+      onWarn: (m) => process.stderr.write(`[curator-cli] ${m}\n`),
+    });
     const curator = new Curator(
       { candidateRepo, memoryRepo, policyRepo, auditRepo, linksRepo },
-      { tenantId, originSecret },
+      { tenantId, originSecret, importExclusions },
     );
     const batch = curator.processBatch(candidates);
 
@@ -382,6 +445,455 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
       (db as unknown as { close?: () => void }).close?.();
     } catch {
       // closing twice or on a torn-down db is a non-fatal cleanup error.
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// batch-transition (5kw.2)
+//
+// Receipted batch lifecycle transitions so a hygiene sweep does not need one
+// MCP call per memory (the 2026-07-17 cleanup drove brain_transition 11 times
+// by hand plus a 681-target one-off stdio script). Contract:
+//
+//   - Criteria (--source / --category / --imported-before / --ids-file) are
+//     AND-combined and AT LEAST ONE is required — a criterion-less invocation
+//     would be a tenant-wide mass transition and is refused at parse time.
+//   - Each eligible memory transitions in ITS OWN SQLite transaction that
+//     writes the lifecycle update AND that memory's hash-chained audit receipt
+//     together — one receipt per transition, never one giant batch receipt, so
+//     a kill mid-sweep leaves every completed transition fully receipted and
+//     no half-written one.
+//   - --to superseded is refused: a legal superseded transition carries a
+//     per-memory supersededBy id (schema TransitionRequest), which a batch
+//     criterion cannot supply honestly.
+//   - Rows whose CURRENT lifecycle cannot legally reach the target (schema
+//     ALLOWED_TRANSITIONS) are skipped and reported, never fatal — a sweep
+//     over a mixed corpus must not abort at the first archived row.
+//   - --dry-run opens the DB READ-ONLY (structurally cannot write) and
+//     reports what would transition.
+//   - --db is mandatory: an implicit in-memory store would "transition"
+//     nothing durable and report success about nothing (same refusal as
+//     verify-corpus-accounting).
+// ---------------------------------------------------------------------------
+
+/** Batch targets. 'superseded' is deliberately absent (needs per-memory supersededBy). */
+const BATCH_TRANSITION_TARGETS = ['deprecated', 'archived', 'active'] as const;
+type BatchTransitionTarget = (typeof BATCH_TRANSITION_TARGETS)[number];
+
+/** Map a target lifecycle state to the audit action verb (house mapping —
+ *  same table as the API MemoryService.lifecycleToAction). */
+function batchLifecycleToAction(to: BatchTransitionTarget): 'demoted' | 'archived' | 'promoted' {
+  switch (to) {
+    case 'deprecated':
+      return 'demoted';
+    case 'archived':
+      return 'archived';
+    case 'active':
+      return 'promoted';
+  }
+}
+
+/** Generic UUID shape (any version — curated memory ids are content-derived UUIDv5). */
+const MEMORY_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface BatchTransitionOpts {
+  dbPath: string;
+  tenantId: string;
+  to: BatchTransitionTarget;
+  reason: string;
+  actor: string;
+  source?: string;
+  category?: string;
+  importedBefore?: string;
+  idsFile?: string;
+  dryRun: boolean;
+  json: boolean;
+}
+
+/** Value-taking (`--flag value`) and boolean (`--flag`) flag names for
+ *  batch-transition. Kept as data so the tokenizer stays a simple loop. */
+const BATCH_VALUE_FLAGS = new Set([
+  '--db',
+  '--tenant',
+  '--to',
+  '--reason',
+  '--actor',
+  '--source',
+  '--category',
+  '--imported-before',
+  '--ids-file',
+]);
+const BATCH_BOOL_FLAGS = new Set(['--dry-run', '--json']);
+
+/** Tokenize argv into a flag→value map + a boolean-flag set. Deliberately
+ *  dumb (no per-flag validation) so its complexity stays flat; the semantic
+ *  checks live in {@link validateBatchTransition}. */
+function tokenizeBatchArgs(
+  args: string[],
+):
+  | { ok: true; values: Map<string, string | undefined>; bools: Set<string> }
+  | { ok: false; message: string } {
+  const values = new Map<string, string | undefined>();
+  const bools = new Set<string>();
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    if (BATCH_VALUE_FLAGS.has(arg)) {
+      values.set(arg, args[i + 1]);
+      i += 2;
+    } else if (BATCH_BOOL_FLAGS.has(arg)) {
+      bools.add(arg);
+      i += 1;
+    } else {
+      return { ok: false, message: `unknown flag: ${arg}` };
+    }
+  }
+  return { ok: true, values, bools };
+}
+
+/** Validate a required non-empty string flag, returning its trimmed-nonempty
+ *  value or a usage error. */
+function requireFlag(
+  value: string | undefined,
+  message: string,
+): { ok: true; value: string } | { ok: false; message: string } {
+  if (value === undefined || value.trim() === '') return { ok: false, message };
+  return { ok: true, value };
+}
+
+function parseBatchTransitionArgs(
+  args: string[],
+): { ok: true; opts: BatchTransitionOpts } | { ok: false; message: string } {
+  const tokens = tokenizeBatchArgs(args);
+  if (!tokens.ok) return tokens;
+  const { values, bools } = tokens;
+
+  const db = requireFlag(
+    values.get('--db'),
+    'missing required flag: --db <path> (refusing to transition an implicit in-memory store)',
+  );
+  if (!db.ok) return db;
+  const tenant = requireFlag(values.get('--tenant'), 'missing required flag: --tenant <id>');
+  if (!tenant.ok) return tenant;
+
+  const to = values.get('--to');
+  if (to === undefined) return { ok: false, message: 'missing required flag: --to <state>' };
+  if (!(BATCH_TRANSITION_TARGETS as readonly string[]).includes(to)) {
+    return {
+      ok: false,
+      message:
+        to === 'superseded'
+          ? `--to superseded is not batchable: a superseded transition requires a per-memory supersededBy id`
+          : `invalid --to "${to}" (expected one of: ${BATCH_TRANSITION_TARGETS.join(', ')})`,
+    };
+  }
+
+  const reason = requireFlag(values.get('--reason'), 'missing required flag: --reason <text>');
+  if (!reason.ok) return reason;
+  const actor = requireFlag(values.get('--actor'), 'missing required flag: --actor <id>');
+  if (!actor.ok) return actor;
+
+  const source = values.get('--source');
+  const category = values.get('--category');
+  const importedBefore = values.get('--imported-before');
+  const idsFile = values.get('--ids-file');
+
+  const criteria = validateBatchCriteria({ source, category, importedBefore, idsFile });
+  if (!criteria.ok) return criteria;
+
+  return {
+    ok: true,
+    opts: {
+      dbPath: db.value,
+      tenantId: tenant.value,
+      to: to as BatchTransitionTarget,
+      reason: reason.value,
+      actor: actor.value,
+      source,
+      category,
+      importedBefore,
+      idsFile,
+      dryRun: bools.has('--dry-run'),
+      json: bools.has('--json'),
+    },
+  };
+}
+
+/** Validate the four batch-selection criteria: at least one present, and each
+ *  present one well-formed. Split out of the arg parser to keep both functions
+ *  under the complexity gate. */
+function validateBatchCriteria(c: {
+  source?: string;
+  category?: string;
+  importedBefore?: string;
+  idsFile?: string;
+}): { ok: true } | { ok: false; message: string } {
+  if (
+    c.source === undefined &&
+    c.category === undefined &&
+    c.importedBefore === undefined &&
+    c.idsFile === undefined
+  ) {
+    return {
+      ok: false,
+      message:
+        'at least one criterion is required (--source, --category, --imported-before, --ids-file) — ' +
+        'a criterion-less batch would be a tenant-wide mass transition; refusing',
+    };
+  }
+  if (c.source !== undefined && !MemorySource.safeParse(c.source).success) {
+    return {
+      ok: false,
+      message: `invalid --source "${c.source}" (expected one of: ${MemorySource.options.join(', ')})`,
+    };
+  }
+  if (c.category !== undefined && !MemoryCategory.safeParse(c.category).success) {
+    return {
+      ok: false,
+      message: `invalid --category "${c.category}" (expected one of: ${MemoryCategory.options.join(', ')})`,
+    };
+  }
+  if (c.importedBefore !== undefined && Number.isNaN(Date.parse(c.importedBefore))) {
+    return {
+      ok: false,
+      message: `invalid --imported-before "${c.importedBefore}" (expected an ISO-8601 datetime)`,
+    };
+  }
+  return { ok: true };
+}
+
+/** Parse an ids file: one UUID per line, '#' comments and blank lines allowed.
+ *  A malformed line is a hard usage error — silently dropping it could turn a
+ *  targeted sweep into a differently-scoped one. */
+function parseIdsFile(path: string): { ok: true; ids: string[] } | { ok: false; message: string } {
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (e) {
+    return {
+      ok: false,
+      message: `cannot read --ids-file ${path}: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+  const ids: string[] = [];
+  const lines = text.split('\n');
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n]!.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    if (!MEMORY_ID_PATTERN.test(line)) {
+      return {
+        ok: false,
+        message: `--ids-file ${path} line ${n + 1} is not a UUID: "${line}"`,
+      };
+    }
+    ids.push(line.toLowerCase());
+  }
+  if (ids.length === 0) {
+    return { ok: false, message: `--ids-file ${path} contains no memory ids` };
+  }
+  return { ok: true, ids };
+}
+
+/** One skipped row in the batch report — id + why, never content. */
+interface BatchSkip {
+  memoryId: string;
+  from: string;
+  why: string;
+}
+
+/** One applied (or would-apply) transition in the batch report. */
+interface BatchApplied {
+  memoryId: string;
+  from: string;
+  to: string;
+  auditEventId: string | null; // null in dry-run (no receipt was written)
+}
+
+async function cmdBatchTransition(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseBatchTransitionArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli batch-transition: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const opts = parsed.opts;
+
+  let idsFilter: Set<string> | null = null;
+  if (opts.idsFile !== undefined) {
+    const idsParsed = parseIdsFile(opts.idsFile);
+    if (!idsParsed.ok) {
+      process.stderr.write(`curator-cli batch-transition: ${idsParsed.message}\n\n${USAGE}`);
+      return 2;
+    }
+    idsFilter = new Set(idsParsed.ids);
+  }
+
+  // Dry-run opens READ-ONLY: the preview structurally cannot write.
+  const db = deps.createDb({ dbPath: opts.dbPath, readonly: opts.dryRun });
+  try {
+    const memoryRepo = new MemoryRepository(db);
+    const auditRepo = new AuditRepository(db);
+
+    const tenantRows = memoryRepo.findByTenant(opts.tenantId);
+    const importedBeforeMs =
+      opts.importedBefore !== undefined ? Date.parse(opts.importedBefore) : null;
+
+    const matched: CuratedMemory[] = tenantRows.filter((m) => {
+      if (opts.source !== undefined && m.source !== opts.source) return false;
+      if (opts.category !== undefined && m.category !== opts.category) return false;
+      if (importedBeforeMs !== null && Date.parse(m.promotedAt) >= importedBeforeMs) return false;
+      if (idsFilter !== null && !idsFilter.has(m.id.toLowerCase())) return false;
+      return true;
+    });
+
+    // ids named in the file but absent from the matched tenant rows: reported,
+    // never silently dropped (the id may be another tenant's, already deleted,
+    // or excluded by an AND-criterion).
+    const notFoundIds: string[] =
+      idsFilter !== null
+        ? [...idsFilter].filter((id) => !matched.some((m) => m.id.toLowerCase() === id))
+        : [];
+
+    const applied: BatchApplied[] = [];
+    const skipped: BatchSkip[] = [];
+
+    for (const memory of matched) {
+      if (memory.lifecycle === opts.to) {
+        skipped.push({
+          memoryId: memory.id,
+          from: memory.lifecycle,
+          why: 'already in target state',
+        });
+        continue;
+      }
+      if (!isTransitionAllowed(memory.lifecycle, opts.to as MemoryLifecycleState)) {
+        skipped.push({
+          memoryId: memory.id,
+          from: memory.lifecycle,
+          why: `"${memory.lifecycle}" -> "${opts.to}" is not a legal lifecycle transition`,
+        });
+        continue;
+      }
+
+      if (opts.dryRun) {
+        applied.push({
+          memoryId: memory.id,
+          from: memory.lifecycle,
+          to: opts.to,
+          auditEventId: null,
+        });
+        continue;
+      }
+
+      // ONE transaction per memory: the lifecycle update and THIS memory's
+      // audit receipt commit together (mirrors the single-memory
+      // brain_transition path in apps/mcp-server/src/tools/transition.ts).
+      const now = new Date().toISOString();
+      const auditEventId = randomUUID();
+      const applyOne = db.transaction(() => {
+        memoryRepo.updateLifecycle(memory.id, opts.to as MemoryLifecycleState, now);
+        auditRepo.insert(
+          AuditEventSchema.parse({
+            id: auditEventId,
+            action: batchLifecycleToAction(opts.to),
+            memoryId: memory.id,
+            tenantId: memory.tenantId,
+            actor: { type: 'human', id: opts.actor },
+            reason: opts.reason,
+            details: {
+              from: memory.lifecycle,
+              to: opts.to,
+              batch: true,
+              criteria: {
+                ...(opts.source !== undefined ? { source: opts.source } : {}),
+                ...(opts.category !== undefined ? { category: opts.category } : {}),
+                ...(opts.importedBefore !== undefined
+                  ? { importedBefore: opts.importedBefore }
+                  : {}),
+                ...(opts.idsFile !== undefined ? { idsFile: opts.idsFile } : {}),
+              },
+            },
+            timestamp: now,
+          }),
+        );
+      });
+      applyOne();
+      applied.push({ memoryId: memory.id, from: memory.lifecycle, to: opts.to, auditEventId });
+    }
+
+    const criteria = {
+      ...(opts.source !== undefined ? { source: opts.source } : {}),
+      ...(opts.category !== undefined ? { category: opts.category } : {}),
+      ...(opts.importedBefore !== undefined ? { imported_before: opts.importedBefore } : {}),
+      ...(opts.idsFile !== undefined ? { ids_file: opts.idsFile } : {}),
+    };
+
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify({
+          ok: true,
+          dry_run: opts.dryRun,
+          tenant_id: opts.tenantId,
+          to: opts.to,
+          criteria,
+          tenant_rows: tenantRows.length,
+          matched: matched.length,
+          transitioned: applied.length,
+          transitions: applied.map((a) => ({
+            memory_id: a.memoryId,
+            from: a.from,
+            to: a.to,
+            audit_event_id: a.auditEventId,
+          })),
+          skipped: skipped.map((s) => ({ memory_id: s.memoryId, from: s.from, why: s.why })),
+          not_found_ids: notFoundIds,
+        }) + '\n',
+      );
+      return 0;
+    }
+
+    process.stdout.write(
+      `batch-transition ${opts.dryRun ? '(dry-run — nothing written) ' : ''}complete\n` +
+        `Tenant:       ${opts.tenantId}\n` +
+        `Target state: ${opts.to}\n` +
+        `Criteria:     ${JSON.stringify(criteria)}\n` +
+        `Matched:      ${matched.length} of ${tenantRows.length} tenant row(s)\n` +
+        `${opts.dryRun ? 'Would transition' : 'Transitioned'}: ${applied.length}\n` +
+        `Skipped:      ${skipped.length}\n`,
+    );
+    for (const a of applied) {
+      process.stdout.write(
+        `  ${a.memoryId}  ${a.from} -> ${a.to}` +
+          (a.auditEventId !== null ? `  receipt=${a.auditEventId}` : '') +
+          `\n`,
+      );
+    }
+    for (const s of skipped) {
+      process.stdout.write(`  skipped ${s.memoryId} (${s.from}): ${s.why}\n`);
+    }
+    if (notFoundIds.length > 0) {
+      process.stderr.write(
+        `\nNOT_FOUND: ${notFoundIds.length} id(s) from --ids-file matched no tenant row ` +
+          `(other tenant, deleted, or excluded by another criterion):\n`,
+      );
+      for (const id of notFoundIds) process.stderr.write(`  ${id}\n`);
+    }
+    return 0;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify({ ok: false, error: msg, code: 'BATCH_TRANSITION_FAILED' }) + '\n',
+      );
+    } else {
+      process.stderr.write(`batch-transition failed: ${msg}\n`);
+    }
+    return 1;
+  } finally {
+    try {
+      (db as unknown as { close?: () => void }).close?.();
+    } catch {
+      // non-fatal
     }
   }
 }

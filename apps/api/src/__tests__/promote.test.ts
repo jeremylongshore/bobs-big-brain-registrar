@@ -279,3 +279,67 @@ describe('POST /api/candidates/:id/reject', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+/**
+ * Import exclusion gate on the single-candidate admin path (bead 5kw.1) —
+ * the same structural brainignore check the curator batch pipeline runs, so
+ * both paths agree (the H1 invariant). Committed defaults only; the per-brain
+ * override file is wired where the service is constructed.
+ */
+describe('POST /api/candidates/:id/promote — import exclusion gate (5kw.1)', () => {
+  let db: Database.Database;
+  let app: FastifyInstance;
+  let candidateRepo: CandidateRepository;
+  let memoryRepo: MemoryRepository;
+
+  beforeEach(async () => {
+    db = createTestDatabase();
+    candidateRepo = new CandidateRepository(db);
+    memoryRepo = new MemoryRepository(db);
+    app = buildApp({ db, silent: true });
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    db.close();
+  });
+
+  function promote(id: string, tenantId: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/api/candidates/${id}/promote?tenantId=${tenantId}`,
+    });
+  }
+
+  it('refuses an import-source candidate on a vendored path (422, left in inbox)', async () => {
+    const candidate = makeCandidate({
+      tenantId: 'team-alpha',
+      source: 'import',
+      metadata: { filePaths: ['node_modules/@google-cloud/storage/README.md'], tags: [] },
+    });
+    candidateRepo.insert(candidate, computeContentHash(candidate.content));
+
+    const res = await promote(candidate.id, 'team-alpha');
+    expect(res.statusCode).toBe(422);
+    const body = res.json() as { error: string; code?: string };
+    expect(body.error).toContain('import exclusion gate');
+    expect(body.error).toContain('node_modules');
+    expect(body.code).toBe('brainignore_path');
+    // Left in the inbox for review — never silently retired.
+    expect(candidateRepo.findById(candidate.id)?.status).toBe('inbox');
+    expect(memoryRepo.findByTenant('team-alpha')).toEqual([]);
+  });
+
+  it('promotes an identical candidate from an interactive source (gate not applicable)', async () => {
+    const candidate = makeCandidate({
+      tenantId: 'team-alpha',
+      source: 'mcp',
+      metadata: { filePaths: ['node_modules/@google-cloud/storage/README.md'], tags: [] },
+    });
+    candidateRepo.insert(candidate, computeContentHash(candidate.content));
+
+    const res = await promote(candidate.id, 'team-alpha');
+    expect(res.statusCode).toBe(200);
+  });
+});

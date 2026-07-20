@@ -40,6 +40,11 @@ FILES=(
   "packages/policy-engine/src/rules/contradiction-check-rule.ts"
   "packages/policy-engine/src/rules/index.ts"
   "packages/policy-engine/src/policy-engine.ts"
+  # 5kw.1: the import exclusion gate is a structural deterministic reject
+  # surface (brainignore) — same trust-anchor class as the policy rules, so
+  # its ruleset + gate are pinned too.
+  "apps/curator/src/import-exclusion/brainignore.ts"
+  "apps/curator/src/import-exclusion/import-exclusion-gate.ts"
 )
 
 collect_present_files() {

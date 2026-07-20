@@ -33,14 +33,20 @@ describe('RECOMMENDED_POLICY_RULES', () => {
     for (const r of RECOMMENDED_POLICY_RULES) expect(registeredSet.has(r.type)).toBe(true);
   });
 
-  it('keeps the three hard boundaries as reject and the rest as flag', () => {
+  it('keeps the hard boundaries as reject and the rest as flag', () => {
     const byType = new Map(RECOMMENDED_POLICY_RULES.map((r) => [r.type, r.action]));
     expect(byType.get('secret_detection')).toBe('reject');
     expect(byType.get('content_length')).toBe('reject');
     expect(byType.get('tenant_match')).toBe('reject');
+    // 5kw.3: relevance_score carries action 'reject' but its evaluator is
+    // SOURCE-KEYED — only the sources in rejectSources can return a rejectable
+    // 'fail'; every other source flags at most. The reject surface must stay
+    // scoped to import-class sources.
+    expect(byType.get('relevance_score')).toBe('reject');
+    const relevance = RECOMMENDED_POLICY_RULES.find((r) => r.type === 'relevance_score');
+    expect(relevance?.parameters['rejectSources']).toEqual(['import', 'bulk_import']);
     for (const t of [
       'source_trust',
-      'relevance_score',
       'sensitivity_gate',
       'dedup_check',
       'content_sanitization',

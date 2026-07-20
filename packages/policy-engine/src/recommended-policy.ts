@@ -19,10 +19,12 @@
  *     added to the registry with no entry here fails {@link findUncoveredRuleTypes}
  *     (asserted in CI), so the author must make a deliberate enable/waive choice.
  *   - Actions are conservative: the three hard boundaries — `secret_detection`,
- *     `content_length`, `tenant_match` — `reject`; everything else `flag` (records
- *     signal and continues, never blocks a legitimate promotion). This is the
- *     "flag at minimum" the audit recommended; an operator can tighten a flag to a
- *     reject deliberately.
+ *     `content_length`, `tenant_match` — `reject`; `relevance_score` is `reject`
+ *     but SOURCE-KEYED (5kw.3 — its evaluator only returns a rejectable 'fail'
+ *     for import-class sources, so interactive captures still flag at most);
+ *     everything else `flag` (records signal and continues, never blocks a
+ *     legitimate promotion). This is the "flag at minimum" the audit
+ *     recommended; an operator can tighten a flag to a reject deliberately.
  *
  * Applying this to the LIVE brain is a separate, reversible operational step
  * (it changes what gets flagged/rejected on the running store) — this module only
@@ -80,13 +82,21 @@ export const RECOMMENDED_POLICY_RULES: readonly PolicyRule[] = [
     description: 'Flag candidates below the minimum source trust level.',
   },
   {
+    // 5kw.3: action 'reject' + source-keyed evaluator severity. The evaluator
+    // only returns 'fail' (rejectable) for the sources listed in
+    // `rejectSources`; every other source flags at most — so this reject
+    // action hard-rejects below-threshold IMPORT-class candidates while an
+    // identical interactive capture (claude_session / manual / mcp) is only
+    // flagged for review. Both keys (source-keyed 'fail' + action 'reject')
+    // must agree before anything is turned away.
     id: 'rec-relevance-score',
     type: 'relevance_score',
-    action: 'flag',
+    action: 'reject',
     enabled: true,
     priority: 4,
-    parameters: {},
-    description: 'Flag low-relevance candidates for review.',
+    parameters: { rejectSources: ['import', 'bulk_import'] },
+    description:
+      'Reject below-threshold import-source candidates at intake; flag low-relevance interactive captures for review.',
   },
   {
     id: 'rec-sensitivity-gate',
