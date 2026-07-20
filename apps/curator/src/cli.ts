@@ -21,6 +21,7 @@
  * @module cli
  */
 
+import { createPublicKey, createPrivateKey } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 
@@ -32,6 +33,9 @@ import {
   MemoryLinksRepository,
   verifyAuditChain,
   computeManifestHash,
+  appendSignedMergeAnchor,
+  readSignedMergeAnchors,
+  verifySignedMergeAnchors,
 } from '@qmd-team-intent-kb/store';
 import type {
   createDatabase as CreateDatabase,
@@ -42,6 +46,7 @@ import type {
 
 import { Curator } from './curator.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
+import { mergeGovern } from './merge/merge-gate.js';
 import { walkProvenance } from './provenance/provenance-walk.js';
 
 // ---------------------------------------------------------------------------
@@ -92,6 +97,17 @@ Subcommands:
     Exit: 0 all PASS · 1 any FAIL (broken chain) · 3 no FAIL but >=1
     UNVERIFIABLE (artifact absent, e.g. no brain dir on CI) · 2 usage error.
 
+  merge-govern <cloneA-db> <cloneB-db> --db <target> --tenant <id>
+               [--dry-run] [--json] [--anchor <path>] [--commit <sha>]
+    Re-govern the UNION of two clones' promoted rows into the target store
+    (govern-at-merge gate). Clone DBs are opened READ-ONLY and never written;
+    the target DB is the ONLY write surface. Every union row is re-governed as
+    UNTRUSTED (disclosure choke point + full enabled policy from the TARGET
+    db); failures are quarantined, never admitted. With --anchor, appends a
+    per-actor Ed25519-SIGNED merge anchor binding the merged chain head to the
+    two pre-merge clone heads (requires MERGE_ANCHOR_PRIVATE_KEY_HEX in the
+    environment, sourced from the SOPS-encrypted key file — never plaintext).
+
   help | --help | -h
     Print this message.
 
@@ -130,6 +146,15 @@ Options for 'provenance-walk':
                     sidecars. Repeatable. Default: <db-dir>/spool and
                     <db-dir>/brain/spool.
   --json            Emit a structured JSON envelope in place of the summary.
+
+Options for 'merge-govern':
+  --db <path>     Target (merged) SQLite path — the ONLY db written (required).
+  --tenant <id>   Tenant scope for policy + audit events (required).
+  --dry-run       Run the full gate but write nothing (merge preview).
+  --anchor <path> Append a signed merge anchor to this log after a non-dry-run
+                  merge. Signing key comes from MERGE_ANCHOR_PRIVATE_KEY_HEX.
+  --commit <sha>  Optional Dolt/git commit SHA recorded in the anchor.
+  --json          Emit a structured JSON envelope in place of the summary.
 `;
 
 // ---------------------------------------------------------------------------
@@ -153,6 +178,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdVerifyCorpusAccounting(argv.slice(1), deps);
     case 'provenance-walk':
       return cmdProvenanceWalk(argv.slice(1), deps);
+    case 'merge-govern':
+      return cmdMergeGovern(argv.slice(1), deps);
     case 'help':
     case '--help':
     case '-h':
@@ -930,6 +957,322 @@ async function cmdProvenanceWalk(args: string[], deps: CuratorCliDeps): Promise<
       (db as unknown as { close?: () => void }).close?.();
     } catch {
       // non-fatal
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// merge-govern (Wave-2 E3/F3)
+//
+// CLI wiring for the govern-at-merge gate (merge/merge-gate.ts). Read/write
+// posture is the contract: the two clone DBs are opened READ-ONLY and are
+// never written; the target DB (--db) is the ONLY write surface. Every union
+// row is re-governed as UNTRUSTED against the TARGET db's enabled policy —
+// survivors promote through the canonical path, failures quarantine.
+//
+// With --anchor, a per-actor Ed25519-SIGNED merge anchor (store
+// signed-merge-anchor.ts) is appended after a successful non-dry-run merge,
+// binding the merged chain head to the two PRE-merge clone chain heads.
+//
+// Trust-model honesty (do not overstate): the per-actor signature gives
+// cross-actor ATTRIBUTION of merge events on the MERGE path only — a signed
+// anchor proves which key-holder anchored which merged head. Local
+// single-writer mode still has NO non-repudiation: a single local actor with
+// write access and the key can rewrite and re-sign. Cross-actor guarantees
+// additionally require the anchor log to be committed somewhere the writer
+// cannot quietly rewrite (git push / OpenTimestamps).
+// ---------------------------------------------------------------------------
+
+/** Environment variable carrying the hex PKCS8 DER Ed25519 private key.
+ *  Sourced at runtime from the SOPS-encrypted key file (see the merge-govern
+ *  runbook) — never committed plaintext, never printed. */
+const MERGE_ANCHOR_KEY_ENV = 'MERGE_ANCHOR_PRIVATE_KEY_HEX';
+
+interface MergeGovernOpts {
+  cloneAPath: string;
+  cloneBPath: string;
+  dbPath: string;
+  tenantId: string;
+  dryRun: boolean;
+  anchorPath?: string;
+  commitHash?: string;
+  json: boolean;
+}
+
+function parseMergeGovernArgs(
+  args: string[],
+): { ok: true; opts: MergeGovernOpts } | { ok: false; message: string } {
+  const positionals: string[] = [];
+  let dbPath: string | undefined;
+  let tenantId: string | undefined;
+  let dryRun = false;
+  let anchorPath: string | undefined;
+  let commitHash: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    switch (arg) {
+      case '--db':
+        dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--tenant':
+        tenantId = args[i + 1];
+        i += 2;
+        break;
+      case '--dry-run':
+        dryRun = true;
+        i += 1;
+        break;
+      case '--anchor':
+        anchorPath = args[i + 1];
+        i += 2;
+        break;
+      case '--commit':
+        commitHash = args[i + 1];
+        i += 2;
+        break;
+      case '--json':
+        json = true;
+        i += 1;
+        break;
+      default:
+        if (arg.startsWith('--')) {
+          return { ok: false, message: `unknown flag: ${arg}` };
+        }
+        positionals.push(arg);
+        i += 1;
+    }
+  }
+
+  if (positionals.length !== 2) {
+    return {
+      ok: false,
+      message: `expected exactly two positional arguments <cloneA-db> <cloneB-db>, got ${positionals.length}`,
+    };
+  }
+  // --db is mandatory: without it the merge would write into an implicit
+  // in-memory store and the whole governed result would be silently discarded
+  // on exit (same refusal rationale as verify-corpus-accounting).
+  if (dbPath === undefined || dbPath.trim() === '') {
+    return { ok: false, message: 'missing required flag: --db <target-path>' };
+  }
+  if (tenantId === undefined || tenantId.trim() === '') {
+    return { ok: false, message: 'missing required flag: --tenant <id>' };
+  }
+  if (anchorPath !== undefined && dryRun) {
+    return { ok: false, message: '--anchor cannot be combined with --dry-run (nothing to anchor)' };
+  }
+
+  return {
+    ok: true,
+    opts: {
+      cloneAPath: positionals[0]!,
+      cloneBPath: positionals[1]!,
+      dbPath,
+      tenantId,
+      dryRun,
+      anchorPath,
+      commitHash,
+      json,
+    },
+  };
+}
+
+/** The last chained entry_hash of a store's audit chain ('' when empty) —
+ *  captured from each clone BEFORE the merge, these are the anchor `parents`. */
+function chainHeadOf(repo: AuditRepository): string {
+  const rows = repo.findAllChronological().filter((r) => r.entry_hash !== null);
+  return rows.length > 0 ? (rows[rows.length - 1]!.entry_hash ?? '') : '';
+}
+
+/**
+ * Derive the hex SPKI DER public key from a hex PKCS8 DER Ed25519 private key.
+ * Deriving (rather than accepting a second env var) makes a mismatched
+ * pub/priv pair impossible — the signature always verifies against the
+ * embedded signerPublicKey. Auditors compare that embedded key against the
+ * COMMITTED public key (keys/merge-anchor-signer.pub).
+ */
+function derivePublicKeyHex(privateKeyHex: string): string {
+  const privateKey = createPrivateKey({
+    key: Buffer.from(privateKeyHex, 'hex'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  // Round-trip via JWK: an Ed25519 private JWK carries the public point in
+  // `x`; dropping `d` yields the public JWK. (The @types/node overloads for
+  // createPublicKey(KeyObject) lag the runtime, so JWK is the typed path.)
+  const jwk = privateKey.export({ format: 'jwk' });
+  const publicJwk = { kty: jwk.kty, crv: jwk.crv, x: jwk.x };
+  return createPublicKey({ key: publicJwk, format: 'jwk' })
+    .export({ type: 'spki', format: 'der' })
+    .toString('hex');
+}
+
+async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseMergeGovernArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli merge-govern: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const opts = parsed.opts;
+
+  // Fail BEFORE opening any database when signing was requested but the key is
+  // absent — a merge that succeeds and then cannot anchor would leave the
+  // operator with a written merge and no receipt for it.
+  let privateKeyHex: string | undefined;
+  if (opts.anchorPath !== undefined) {
+    privateKeyHex = process.env[MERGE_ANCHOR_KEY_ENV];
+    if (privateKeyHex === undefined || privateKeyHex.trim() === '') {
+      process.stderr.write(
+        `curator-cli merge-govern: --anchor requires ${MERGE_ANCHOR_KEY_ENV} in the environment ` +
+          `(decrypt the SOPS-encrypted signing key at runtime; see the merge-govern runbook). ` +
+          `The key value is never a flag so it cannot land in shell history or process listings.\n`,
+      );
+      return 2;
+    }
+  }
+
+  // Clone DBs: READ-ONLY. They are evidence, never a write surface.
+  const cloneADb = deps.createDb({ dbPath: opts.cloneAPath, readonly: true });
+  const cloneBDb = deps.createDb({ dbPath: opts.cloneBPath, readonly: true });
+  // Target DB: the one write surface.
+  const targetDb = deps.createDb({ dbPath: opts.dbPath });
+  try {
+    const cloneAMemories = new MemoryRepository(cloneADb).findByTenantAndLifecycle(
+      opts.tenantId,
+      'active',
+    );
+    const cloneBMemories = new MemoryRepository(cloneBDb).findByTenantAndLifecycle(
+      opts.tenantId,
+      'active',
+    );
+    // Pre-merge clone chain heads — the DAG `parents` of the signed anchor.
+    const parentA = chainHeadOf(new AuditRepository(cloneADb));
+    const parentB = chainHeadOf(new AuditRepository(cloneBDb));
+
+    const memoryRepo = new MemoryRepository(targetDb);
+    const auditRepo = new AuditRepository(targetDb);
+    const linksRepo = new MemoryLinksRepository(targetDb);
+    // Policy comes from the TARGET store (the same lookup the curator uses):
+    // the merged brain's own governance re-judges every row. No enabled policy
+    // → mergeGovern's no-policy branch (disclosure choke point + dedupe only).
+    const policies = new PolicyRepository(targetDb).findByTenant(opts.tenantId);
+    const policy = policies.find((p) => p.enabled);
+
+    const result = mergeGovern(
+      cloneAMemories,
+      cloneBMemories,
+      { memoryRepo, auditRepo, linksRepo },
+      {
+        ...(policy !== undefined ? { policy } : {}),
+        tenantId: opts.tenantId,
+        dryRun: opts.dryRun,
+      },
+    );
+
+    // F3: signed merge anchor over the merged head (non-dry-run only; enforced
+    // at parse time). Lamport clock: monotonic per anchor log — last + 1.
+    let anchor: ReturnType<typeof appendSignedMergeAnchor> | undefined;
+    let anchorVerifyOk: boolean | undefined;
+    if (opts.anchorPath !== undefined && privateKeyHex !== undefined) {
+      const existing = readSignedMergeAnchors(opts.anchorPath);
+      const lamportClock =
+        existing.length > 0 ? existing[existing.length - 1]!.lamportClock + 1 : 1;
+      anchor = appendSignedMergeAnchor(auditRepo, opts.anchorPath, {
+        tenantId: opts.tenantId,
+        parents: [parentA, parentB],
+        lamportClock,
+        privateKeyHex,
+        publicKeyHex: derivePublicKeyHex(privateKeyHex),
+        commitHash: opts.commitHash ?? null,
+      });
+      anchorVerifyOk = verifySignedMergeAnchors(auditRepo, opts.anchorPath, [parentA, parentB]).ok;
+    }
+
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify({
+          ok: true,
+          dry_run: opts.dryRun,
+          tenant_id: opts.tenantId,
+          clone_a: { path: opts.cloneAPath, rows: cloneAMemories.length, chain_head: parentA },
+          clone_b: { path: opts.cloneBPath, rows: cloneBMemories.length, chain_head: parentB },
+          policy: policy?.name ?? null,
+          union_size: result.unionSize,
+          promoted_count: result.promoted.length,
+          quarantined_count: result.quarantined.length,
+          quarantined: result.quarantined,
+          ...(anchor !== undefined
+            ? {
+                anchor: {
+                  path: opts.anchorPath,
+                  anchor_hash: anchor.anchorHash,
+                  chain_head: anchor.chainHead,
+                  parents: anchor.parents,
+                  lamport_clock: anchor.lamportClock,
+                  signer_public_key: anchor.signerPublicKey,
+                  verified: anchorVerifyOk,
+                },
+              }
+            : {}),
+        }) + '\n',
+      );
+      return 0;
+    }
+
+    process.stdout.write(
+      `merge-govern ${opts.dryRun ? '(dry-run) ' : ''}complete\n` +
+        `Clone A:      ${cloneAMemories.length} active row(s) from ${opts.cloneAPath}\n` +
+        `Clone B:      ${cloneBMemories.length} active row(s) from ${opts.cloneBPath}\n` +
+        `Policy:       ${policy?.name ?? '(none enabled — disclosure + dedupe only)'}\n` +
+        `Union:        ${result.unionSize}\n` +
+        `Promoted:     ${result.promoted.length}\n` +
+        `Quarantined:  ${result.quarantined.length}\n`,
+    );
+    for (const q of result.quarantined) {
+      // Ids + category + rule only — never content (non-leak contract).
+      process.stdout.write(`  quarantined ${q.memoryId} (${q.category}: ${q.reason})\n`);
+    }
+    if (anchor !== undefined) {
+      process.stdout.write(
+        `Signed anchor: ${opts.anchorPath}\n` +
+          `  anchorHash:  ${anchor.anchorHash}\n` +
+          `  chainHead:   ${anchor.chainHead}\n` +
+          `  parents:     ${anchor.parents.join(', ')}\n` +
+          `  lamport:     ${anchor.lamportClock}\n` +
+          `  verified:    ${anchorVerifyOk === true ? 'ok' : 'FAILED'}\n`,
+      );
+      if (anchorVerifyOk !== true) {
+        process.stderr.write(
+          `merge-govern: signed-anchor verification FAILED after append — inspect the anchor log\n`,
+        );
+        return 1;
+      }
+    }
+    return 0;
+  } catch (err) {
+    // MergeIdInvariantError (a non-content-derived id crossed the clone
+    // boundary) and any store failure land here: report, never half-write —
+    // mergeGovern validates the whole union before any promotion.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify({ ok: false, error: msg, code: 'MERGE_GOVERN_FAILED' }) + '\n',
+      );
+    } else {
+      process.stderr.write(`merge-govern failed: ${msg}\n`);
+    }
+    return 1;
+  } finally {
+    for (const db of [cloneADb, cloneBDb, targetDb]) {
+      try {
+        (db as unknown as { close?: () => void }).close?.();
+      } catch {
+        // non-fatal
+      }
     }
   }
 }
