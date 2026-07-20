@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createTestDatabase } from '@qmd-team-intent-kb/store';
+import { makeMemory } from '@qmd-team-intent-kb/test-fixtures';
 import type Database from 'better-sqlite3';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
@@ -249,6 +250,56 @@ describe('runCycle', () => {
     expect(deps.indexStateRepo!.get(TENANT)).toBeNull();
   });
 
+  it('watermark race (#293 review): a promotion landing after the export read measures STALE, never false-fresh', async () => {
+    // Ticking clock: every nowFn call advances 1s, so the step ordering is
+    // visible in the recorded timestamps — the seam that makes the race
+    // deterministic without physical interleaving.
+    let tMs = Date.parse('2026-07-01T00:00:00.000Z');
+    const tickingNow = (): string => new Date((tMs += 1000)).toISOString();
+
+    const mockAdapter = {
+      ensureCollections: async () => ({ ok: true as const, value: [] }),
+      update: async () => ({ ok: true as const, value: undefined }),
+    };
+    const raceConfig = makeConfig({
+      spoolDir,
+      exportOutputDir: exportDir,
+      enableExport: true, // the export step is where curated_memories is read
+      enableIndexUpdate: true,
+      nowFn: tickingNow,
+    });
+
+    const result = await runCycle(
+      raceConfig,
+      { ...deps, qmdAdapter: mockAdapter as never },
+      logger,
+    );
+    expect(result.export).not.toBeNull();
+    expect(result.indexUpdate!.ok).toBe(true);
+
+    const lastIndexedAt = deps.indexStateRepo!.get(TENANT)!.lastIndexedAt;
+    const lastExportedAt = deps.exportStateRepo.get('kb-export-default')!.lastExportedAt;
+
+    // The hoist itself: the freshness watermark must NOT post-date the export
+    // step — the export read is the moment the set of promotions this cycle
+    // can absorb was fixed. Pre-fix, the watermark was captured at
+    // indexUpdateStep start (AFTER the export), and this assertion fails.
+    expect(lastIndexedAt < lastExportedAt).toBe(true);
+
+    // The race: a promotion (e.g. the API promote path in another process)
+    // lands 1ms after the export recorded its clock — after the export read,
+    // before the pre-fix watermark instant one tick later. Its markdown was
+    // never exported or indexed this cycle, so it MUST measure stale.
+    const racePromotedAt = new Date(Date.parse(lastExportedAt) + 1).toISOString();
+    deps.memoryRepo.insert(makeMemory({ tenantId: TENANT, promotedAt: racePromotedAt }));
+
+    // Pre-fix: last_indexed_at (one tick AFTER lastExportedAt) covered the race
+    // promotion → stalenessSeconds 0, false-fresh, and the canary staleness
+    // gate passes over degraded retrieval. Post-fix: measured stale.
+    const nowMs = Date.parse(racePromotedAt) + 5_000;
+    expect(deps.indexStateRepo!.stalenessSeconds(TENANT, nowMs)).toBe(5);
+  });
+
   it('records timestamps correctly', async () => {
     let callCount = 0;
     const timedConfig = makeConfig({
@@ -263,7 +314,9 @@ describe('runCycle', () => {
 
     const result = await runCycle(timedConfig, deps, logger);
     expect(result.startedAt).toBe('2026-01-15T10:00:01.000Z');
-    expect(result.completedAt).toBe('2026-01-15T10:00:02.000Z');
+    // Tick 2 is consumed by the freshness watermark hoisted to before the
+    // export step (#293 review fix) — completedAt is the 3rd clock call.
+    expect(result.completedAt).toBe('2026-01-15T10:00:03.000Z');
   });
 
   it('staleness sweep deprecates stale memories when enabled', async () => {
