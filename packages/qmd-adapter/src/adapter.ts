@@ -16,6 +16,10 @@ import { checkHealth } from './health/health-check.js';
 import { getQmdTenantEnv, getQmdTenantIndexPath } from './config.js';
 import { getNativeIndexManager, type NativeIndexManager } from './native/native-index-manager.js';
 import type { Fts5SearchHit } from './native/fts5-backend.js';
+import { RerankClient } from './rerank/rerank-client.js';
+import { RerankCache } from './rerank/rerank-cache.js';
+import { RerankStage } from './rerank/rerank-stage.js';
+import { QMD_WEIGHTS_MANIFEST } from './weights/weights-manifest.js';
 
 /** How many native FTS5 hits to feed the fusion (pre scope-filter). */
 const NATIVE_SEARCH_K = 50;
@@ -27,6 +31,7 @@ export class QmdAdapter {
   readonly search: SearchClient;
   readonly indexLifecycle: IndexLifecycleManager;
   private readonly native: NativeIndexManager | null;
+  private readonly rerankStage: RerankStage | null;
   private readonly exportDir: string;
   /** The single tenant this adapter's qmd registry + index are bound to. */
   private readonly tenantId: string;
@@ -70,6 +75,12 @@ export class QmdAdapter {
         this.native = null;
       }
     }
+    // OPT-IN cross-encoder rerank stage (B1, 044-AT-DECR). Read-path only and
+    // fail-open by construction: a construction failure (e.g. the sidecar
+    // cache's dir is unwritable) or any runtime failure degrades to the
+    // deterministic fused order. With rerank absent/disabled this block is
+    // inert and the query path is unchanged.
+    this.rerankStage = config.rerank?.enabled === true ? buildRerankStage(config) : null;
   }
 
   /**
@@ -115,12 +126,33 @@ export class QmdAdapter {
       // qmd unavailable — native results alone still serve the query (this
       // also makes local search work when the qmd binary is not installed).
       if (nativeHits.length > 0) {
-        return { ok: true, value: fuseReciprocalRank([], nativeHits) };
+        return {
+          ok: true,
+          value: await this.maybeRerank(queryText, fuseReciprocalRank([], nativeHits)),
+        };
       }
       return qmdResult;
     }
-    if (nativeHits.length === 0) return qmdResult;
-    return { ok: true, value: fuseReciprocalRank(qmdResult.value, nativeHits) };
+    if (nativeHits.length === 0) {
+      return { ok: true, value: await this.maybeRerank(queryText, qmdResult.value) };
+    }
+    return {
+      ok: true,
+      value: await this.maybeRerank(queryText, fuseReciprocalRank(qmdResult.value, nativeHits)),
+    };
+  }
+
+  /**
+   * Opt-in rerank pass over the final fused list (B1). Identity when the stage
+   * is not configured; fail-open inside the stage otherwise, so the
+   * deterministic fused order is always the fallback the caller receives.
+   */
+  private async maybeRerank(
+    queryText: string,
+    fused: QmdSearchResult[],
+  ): Promise<QmdSearchResult[]> {
+    if (this.rerankStage === null) return fused;
+    return this.rerankStage.apply(queryText, fused);
   }
 
   /** Native FTS5 half of the fused query. Any failure degrades to []. */
@@ -154,5 +186,43 @@ export class QmdAdapter {
       mkdirSync(join(this.exportDir, def.sourceSubdir), { recursive: true });
     }
     return this.collections.ensureCollections(this.exportDir);
+  }
+}
+
+/**
+ * Construct the opt-in rerank stage from adapter config (B1). The sidecar
+ * score cache is keyed on the PINNED reranker weights (file + sha256 from the
+ * weights manifest), so a model bump invalidates prior scores automatically.
+ * Returns null instead of throwing when construction fails (e.g. the cache
+ * path is unwritable — the stage then simply runs uncached) — rerank is never allowed
+ * to take the serving path down.
+ */
+function buildRerankStage(config: QmdAdapterConfig): RerankStage | null {
+  const rerank = config.rerank;
+  if (rerank === undefined) return null;
+  try {
+    const client = new RerankClient({ url: rerank.url, timeoutMs: rerank.timeoutMs });
+    const pinned = QMD_WEIGHTS_MANIFEST.models.find((m) => m.id === 'reranker');
+    let cache: RerankCache | null = null;
+    try {
+      cache = new RerankCache({
+        path:
+          rerank.cachePath ?? join(getQmdTenantIndexPath(config.tenantId), 'rerank-cache.sqlite'),
+        modelId: pinned?.file ?? 'unknown-reranker',
+        modelVersion: pinned?.sha256 ?? 'unpinned',
+      });
+    } catch {
+      cache = null; // cache failure degrades to uncached calls, never to no service
+    }
+    return new RerankStage({
+      client,
+      cache,
+      exportDir: config.exportDir,
+      candidateWindow: rerank.candidateWindow,
+      topN: rerank.topN,
+      maxDocChars: rerank.maxDocChars,
+    });
+  } catch {
+    return null;
   }
 }

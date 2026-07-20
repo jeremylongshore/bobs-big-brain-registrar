@@ -9,16 +9,23 @@ import type { WeightsManifest } from './verify-weights.js';
  * Hashes were captured from the qmd model cache (`~/.cache/qmd/models`). Hugging
  * Face artifacts are immutable, so the SHA-256 is the canonical pin.
  *
- * CAVEAT: captured under qmd 2.0.1's downloads, while the canonical pin is
- * `@tobilu/qmd` 2.5.3 (see `gsb.lock.json` + this package). Re-confirm these
- * against 2.5.3's model set when the semantic backend (bead 0t9.3) ships, and
- * regenerate via a small hashing script. The verification primitive is correct
- * regardless of which values are pinned; only the pinned values need confirming.
+ * CAVEAT (embedding + query-expansion): captured under qmd 2.0.1's downloads,
+ * while the canonical pin is `@tobilu/qmd` 2.5.3 (see `gsb.lock.json` + this
+ * package). Re-confirm those two against 2.5.3's model set when the semantic
+ * backend (bead 0t9.3) ships — they remain UNSHIPPED and unexercised. The
+ * verification primitive is correct regardless of which values are pinned;
+ * only the pinned values need confirming.
+ *
+ * The 'reranker' entry does NOT carry that caveat: its on-disk GGUF was
+ * re-hashed on 2026-07-19 during the B1 build and matches this pin exactly
+ * (sha256 22c9979c…, 639153184 bytes). The same pin gates the serving path
+ * twice — `bbb-reranker.service` ExecStartPre (sha256sum -c before llama-server
+ * loads the model) and this manifest via assertWeightsVerified.
  */
 export const QMD_WEIGHTS_MANIFEST: WeightsManifest = {
   schemaVersion: 1,
   qmd: { npmPackage: '@tobilu/qmd', version: '2.5.3' },
-  note: 'Hashes captured under qmd 2.0.1; re-confirm against the canonical 2.5.3 model set before the semantic path ships (bead 0t9.3).',
+  note: 'Embedding + query-expansion hashes captured under qmd 2.0.1; re-confirm against the canonical 2.5.3 model set before the semantic path ships (bead 0t9.3). The reranker hash was re-verified against the on-disk GGUF on 2026-07-19 (B1) and is actively served by bbb-reranker.service.',
   models: [
     {
       id: 'embedding',

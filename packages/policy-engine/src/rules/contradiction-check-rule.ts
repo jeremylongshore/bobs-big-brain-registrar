@@ -1,5 +1,6 @@
 import type { MemoryCandidate, PolicyRule } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, RuleResult } from '../types.js';
+import { deterministicScore } from '../deterministic-score.js';
 
 /**
  * Default Jaccard token-overlap similarity at or above which a candidate is
@@ -120,6 +121,8 @@ export function evaluateContradictionCheck(
       `Potential contradiction: high token overlap with ${suspects.length} active ` +
       `'${candidate.category}' memor${suspects.length === 1 ? 'y' : 'ies'} — ${reported}. ` +
       'v1 heuristic (token overlap, not semantic) — human review required.',
-    score: suspects[0]?.similarity,
+    // Jaccard overlap is pure token arithmetic — a legitimate govern-side
+    // deterministic score, minted via the factory the seam firewall requires.
+    score: suspects[0] !== undefined ? deterministicScore(suspects[0].similarity) : undefined,
   };
 }

@@ -5,6 +5,11 @@ export type {
   PipelineResult,
   ActiveMemorySnapshot,
 } from './types.js';
+// Seam firewall (B2): the TYPE is exported so retrieval-side tests can prove a
+// rerank score is not assignable to it. The `deterministicScore()` FACTORY is
+// deliberately NOT exported from the package surface — only code inside this
+// govern package may mint a govern score.
+export type { DeterministicScore } from './deterministic-score.js';
 export { createRule, RULE_REGISTRY } from './rules/index.js';
 export { evaluateSecretDetection } from './rules/secret-detection-rule.js';
 export { evaluateContentLength } from './rules/content-length-rule.js';
