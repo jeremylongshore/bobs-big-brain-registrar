@@ -246,6 +246,15 @@ Incremental export of curated memories to `kb-export/` as Markdown with YAML fro
 - Every user-facing change needs a changelog entry (Added, Changed, Fixed, Security, Deprecated, Removed)
 - Use `/release` skill for release preparation
 
+### Bulk edits — governed state is write-protected by receipts
+
+- Read-only SQL against a store (`SELECT` over `teamkb.db`) is fine for inspection and reporting.
+- WRITES to governed state go through the MCP/curator promoter path only. A raw
+  `INSERT`/`UPDATE` to `curated_memories` bypasses the promoter's single-transaction
+  memory-row + `promoted`-receipt write, breaking corpus accounting — the
+  `curator-cli verify-corpus-accounting` guard (also run nightly in CI) will flag the
+  row as an orphan and exit nonzero.
+
 ### Enterprise Mode Standards
 
 - All code must pass lint, format, and type checks

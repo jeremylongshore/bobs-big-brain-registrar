@@ -75,6 +75,12 @@ Subcommands:
     manifest (010-AT-RISK R1/R2). Refuses to overwrite an existing manifest
     without --force. Prints the entryCount + manifestHash.
 
+  verify-corpus-accounting [--db <path>] [--json]
+    Prove the governed corpus and the audit log agree: every curated_memories
+    row must carry a row-creating audit receipt (action 'promoted'). A row
+    without one is an orphan — the signature of a raw SQL INSERT that bypassed
+    the curator promoter. Opens the db READ-ONLY; exits 2 when orphans exist.
+
   help | --help | -h
     Print this message.
 
@@ -97,6 +103,11 @@ Options for 'generate-exception-manifest':
                   regenerating silently would re-launder new breaks).
   --brain-id <id> Optional brain identifier stamped into the manifest.
   --json          Emit a structured JSON envelope in place of the summary.
+
+Options for 'verify-corpus-accounting':
+  --db <path>     SQLite path to read READ-ONLY (required for any meaningful
+                  run; an in-memory db is always empty). Never mutated.
+  --json          Emit a structured JSON envelope in place of the summary.
 `;
 
 // ---------------------------------------------------------------------------
@@ -116,6 +127,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdVerifyAuditChain(argv.slice(1), deps);
     case 'generate-exception-manifest':
       return cmdGenerateExceptionManifest(argv.slice(1), deps);
+    case 'verify-corpus-accounting':
+      return cmdVerifyCorpusAccounting(argv.slice(1), deps);
     case 'help':
     case '--help':
     case '-h':
@@ -600,6 +613,161 @@ async function cmdGenerateExceptionManifest(args: string[], deps: CuratorCliDeps
       process.stdout.write(`  ${reason}: ${count}\n`);
     }
     return 0;
+  } finally {
+    try {
+      (db as unknown as { close?: () => void }).close?.();
+    } catch {
+      // non-fatal
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// verify-corpus-accounting
+//
+// Substrate guard: prove the governed corpus (curated_memories) and the audit
+// log (audit_events) agree. Every production insert into curated_memories goes
+// through promote() (apps/curator/src/promotion/promoter.ts) — the ONLY
+// non-test call site of MemoryRepository.insert — which writes the memory row
+// and its 'promoted' receipt in one BEGIN IMMEDIATE transaction (R9, jfv.6.9).
+// The merge-gate, the API promotion-service, and the agent-review path all
+// route through promote(); the vault / bulk-import pipelines create CANDIDATES
+// only, so rows reach curated_memories exclusively via promotion. A
+// curated_memories row with no matching receipt is therefore the signature of
+// a raw SQL INSERT that bypassed the promoter (the substrate bypass).
+// ---------------------------------------------------------------------------
+
+/**
+ * Audit-event actions that legitimately CREATE a curated_memories row.
+ *
+ * Exactly one class today: 'promoted'. Lifecycle events ('superseded',
+ * 'demoted', 'recategorized', …) mutate or annotate EXISTING rows; 'proposed'
+ * receipts a candidate (pre-promotion, memoryId = candidate id); 'governed'
+ * receipts a batch sweep. None of them mints a corpus row. If a future write
+ * path legitimately creates rows under a new action, add it HERE (with the
+ * receipt emitted in the same transaction as the insert) — never widen the
+ * check ad hoc.
+ */
+const ROW_CREATING_ACTIONS: readonly string[] = ['promoted'];
+
+interface CorpusAccountingOpts {
+  dbPath?: string;
+  json: boolean;
+}
+
+function parseCorpusAccountingArgs(
+  args: string[],
+): { ok: true; opts: CorpusAccountingOpts } | { ok: false; message: string } {
+  let dbPath: string | undefined;
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    switch (arg) {
+      case '--db':
+        dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--json':
+        json = true;
+        i += 1;
+        break;
+      default:
+        return { ok: false, message: `unknown flag: ${arg}` };
+    }
+  }
+
+  // --db is mandatory: without it deps.createDb falls back to an empty
+  // in-memory store, which would report a trivially clean corpus — a passing
+  // verdict about nothing. The verifier refuses instead (review finding on
+  // #289; the test harness injects its own createDb and bypasses argv).
+  if (dbPath === undefined) {
+    return {
+      ok: false,
+      message: 'missing required --db <path> (refusing to verify an implicit in-memory store)',
+    };
+  }
+
+  return { ok: true, opts: { dbPath, json } };
+}
+
+/** Orphan row surfaced by the accounting query. Ids + row metadata only —
+ *  never title/content (same disclosure discipline as the ingest report). */
+interface OrphanRow {
+  id: string;
+  tenantId: string;
+  promotedAt: string;
+}
+
+async function cmdVerifyCorpusAccounting(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseCorpusAccountingArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli verify-corpus-accounting: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { dbPath, json } = parsed.opts;
+
+  // Open READ-ONLY when a real path is given — a verifier must never mutate a
+  // live brain (same posture as generate-exception-manifest).
+  const db = deps.createDb(dbPath !== undefined ? { dbPath, readonly: true } : {});
+  try {
+    const totalRow = db.prepare('SELECT COUNT(*) AS n FROM curated_memories').get() as {
+      n: number;
+    };
+    const totalRows = totalRow.n;
+
+    // Id-derived join: promote() stamps the receipt's memory_id with the
+    // curated memory's own id, so accounting is a NOT EXISTS over that column
+    // filtered to the row-creating action classes.
+    const placeholders = ROW_CREATING_ACTIONS.map(() => '?').join(', ');
+    const orphans = db
+      .prepare(
+        `SELECT m.id AS id, m.tenant_id AS tenantId, m.promoted_at AS promotedAt
+         FROM curated_memories m
+         WHERE NOT EXISTS (
+           SELECT 1 FROM audit_events e
+           WHERE e.memory_id = m.id AND e.action IN (${placeholders})
+         )
+         ORDER BY m.promoted_at, m.id`,
+      )
+      .all(...ROW_CREATING_ACTIONS) as OrphanRow[];
+
+    const accountedRows = totalRows - orphans.length;
+    const ok = orphans.length === 0;
+
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({
+          ok,
+          totalRows,
+          accountedRows,
+          orphanCount: orphans.length,
+          orphans,
+          acceptedActions: ROW_CREATING_ACTIONS,
+        }) + '\n',
+      );
+      return ok ? 0 : 2;
+    }
+
+    if (ok) {
+      process.stdout.write(`corpus accounting OK\n`);
+      process.stdout.write(`Total rows:     ${totalRows}\n`);
+      process.stdout.write(`Accounted rows: ${accountedRows}\n`);
+      process.stdout.write(`Accepted receipt classes: ${ROW_CREATING_ACTIONS.join(', ')}\n`);
+      return 0;
+    }
+
+    process.stderr.write(
+      `CORPUS_UNACCOUNTED: ${orphans.length} of ${totalRows} curated_memories row(s) have no ` +
+        `row-creating audit receipt (accepted classes: ${ROW_CREATING_ACTIONS.join(', ')}).\n` +
+        `A durable corpus row without its receipt is the signature of a raw SQL INSERT that ` +
+        `bypassed the curator promoter.\n\n`,
+    );
+    for (const o of orphans) {
+      process.stderr.write(`  ${o.id}  tenant=${o.tenantId}  promoted_at=${o.promotedAt}\n`);
+    }
+    return 2;
   } finally {
     try {
       (db as unknown as { close?: () => void }).close?.();
