@@ -32,6 +32,7 @@ import {
   resolveTeamKbPath,
 } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+import { loadBrainignoreRuleset } from '@qmd-team-intent-kb/curator';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { loadTokenRecords } from './auth/token-registry.js';
@@ -105,6 +106,13 @@ async function main(): Promise<void> {
       `[teamkb-api] ${ORIGIN_SECRET_UNAVAILABLE_WARNING} (${e instanceof Error ? e.message : String(e)})\n`,
     );
   }
+  // Import exclusion (5kw.1): committed defaults + the per-brain override file
+  // (~/.teamkb/brainignore or $TEAMKB_BRAINIGNORE). An unreadable override warns
+  // and degrades to defaults — the gate itself is always on for import sources.
+  const importExclusions = loadBrainignoreRuleset({
+    onWarn: (m) => process.stderr.write(`[teamkb-api] ${m}\n`),
+  });
+
   const allowedChannelsRaw = process.env['TEAMKB_ALLOWED_CHANNELS'];
   const allowedChannels =
     allowedChannelsRaw !== undefined && allowedChannelsRaw.trim() !== ''
@@ -126,6 +134,7 @@ async function main(): Promise<void> {
     revokedFile,
     allowedChannels,
     originSecret,
+    importExclusions,
   });
   await app.ready();
 

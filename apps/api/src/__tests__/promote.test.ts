@@ -329,6 +329,30 @@ describe('POST /api/candidates/:id/promote — import exclusion gate (5kw.1)', (
     // Left in the inbox for review — never silently retired.
     expect(candidateRepo.findById(candidate.id)?.status).toBe('inbox');
     expect(memoryRepo.findByTenant('team-alpha')).toEqual([]);
+
+    // RECEIPT PARITY (PR #309 finding 1): the rejection is on the append-only
+    // audit chain, exactly as the curator batch path receipts via reject().
+    // Without this assertion the earlier version threw a 422 with NO audit row,
+    // and the inbox-retention + no-memory checks alone let that asymmetry pass.
+    const rejectRow = db
+      .prepare(
+        `SELECT action, reason, details_json FROM audit_events
+         WHERE action='deleted' AND memory_id=@id`,
+      )
+      .get({ id: candidate.id }) as
+      { action: string; reason: string; details_json: string } | undefined;
+    expect(rejectRow).toBeDefined();
+    expect(rejectRow!.reason).toContain('brainignore_path');
+    const details = JSON.parse(rejectRow!.details_json) as {
+      candidateId: string;
+      outcome: string;
+      evaluations: Array<{ ruleId: string; ruleType: string; reason: string }>;
+    };
+    expect(details.candidateId).toBe(candidate.id);
+    expect(details.outcome).toBe('rejected');
+    expect(details.evaluations[0]?.ruleId).toBe('brainignore_path');
+    expect(details.evaluations[0]?.ruleType).toBe('import_exclusion');
+    expect(details.evaluations[0]?.reason).toContain('node_modules');
   });
 
   it('promotes an identical candidate from an interactive source (gate not applicable)', async () => {

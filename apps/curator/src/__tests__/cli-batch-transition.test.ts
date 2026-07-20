@@ -358,7 +358,7 @@ describe('batch-transition — receipted transitions', () => {
     });
   });
 
-  it('AND-combines an ids file with other criteria and reports not-found ids', async () => {
+  it('AND-combines an ids file with other criteria, separating not-found from criteria-excluded', async () => {
     const [imported] = seed({ source: 'import', lifecycle: 'active' });
     const [session] = seed({ source: 'claude_session', lifecycle: 'active' });
     const unknownId = '00000000-0000-4000-8000-000000000000';
@@ -390,10 +390,12 @@ describe('batch-transition — receipted transitions', () => {
     const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
     // Only the import-source id both appears in the file AND matches --source.
     expect(parsed['transitioned']).toBe(1);
-    const notFound = parsed['not_found_ids'] as string[];
-    // The session id (excluded by the AND-criterion) and the unknown id are
-    // both reported, never silently dropped.
-    expect(new Set(notFound)).toEqual(new Set([session!.id.toLowerCase(), unknownId]));
+    // The two buckets are distinct (PR #309 finding 2): the session id EXISTS in
+    // the tenant but was filtered by --source (criteria_excluded); the unknown id
+    // is genuinely not in the corpus (not_found). An operator can tell a
+    // correctly-filtered id from a typo.
+    expect(parsed['not_found_ids']).toEqual([unknownId]);
+    expect(parsed['criteria_excluded_ids']).toEqual([session!.id.toLowerCase()]);
 
     inspect(({ memoryRepo }) => {
       const rows = memoryRepo.findByTenant(DEFAULT_TENANT);

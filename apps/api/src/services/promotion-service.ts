@@ -134,11 +134,37 @@ export class PromotionService {
     // curator batch pipeline runs, so the single-candidate admin path and the
     // batch path agree (the H1 invariant). Import-source candidates matching a
     // vendored-path pattern or a content heuristic are refused with the
-    // deterministic evidence; the candidate stays in the inbox, consistent
-    // with policy rejects on this path. An operator who genuinely wants such a
-    // doc re-admits it with a `!pattern` line in the brainignore override file.
+    // deterministic evidence; the candidate stays in the inbox. An operator who
+    // genuinely wants such a doc re-admits it with a `!pattern` line in the
+    // brainignore override file.
+    //
+    // RECEIPT PARITY (PR #309 review finding 1): the curator batch path receipts
+    // every rejection via reject() → an on-chain audit event. This admin path
+    // must do the same or the determinism+receipt contract holds on one surface
+    // but not the other. So we write the rejection receipt BEFORE throwing,
+    // mirroring the curator reject() shape exactly: action 'deleted' (the schema
+    // has no 'rejected' AuditAction — 'deleted' IS the curator's rejection
+    // semantics: no curated memory was created), the gate's pipelineResult in
+    // details, and the acting reviewer as actor (promotedBy when named, else the
+    // curator system identity — same default reject() uses).
     const importGate = checkImportExclusion(candidate, this.importExclusions);
     if (importGate.verdict === 'rejected') {
+      this.auditRepo.insert(
+        AuditEventSchema.parse({
+          id: randomUUID(),
+          action: 'deleted',
+          memoryId: candidate.id,
+          tenantId,
+          actor: promotedBy ?? { type: 'system', id: 'curator' },
+          reason: `Rejected by rule: ${importGate.match.code}`,
+          details: {
+            candidateId: candidate.id,
+            outcome: importGate.pipelineResult.outcome,
+            evaluations: importGate.pipelineResult.evaluations,
+          },
+          timestamp: new Date().toISOString(),
+        }),
+      );
       throw unprocessable(
         `Candidate rejected by the import exclusion gate (${importGate.match.code}): ` +
           `${importGate.match.evidence}. Left in the inbox for review.`,

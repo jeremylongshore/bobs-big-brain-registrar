@@ -710,6 +710,35 @@ interface BatchApplied {
   auditEventId: string | null; // null in dry-run (no receipt was written)
 }
 
+/**
+ * Partition the --ids-file ids that were NOT transitioned into two buckets so
+ * an operator can tell a typo from a correctly-filtered id (PR #309 finding 2):
+ *   - notFound         — no such memory in THIS tenant's corpus at all (typo,
+ *                        wrong tenant, or already hard-deleted).
+ *   - criteriaExcluded — the memory EXISTS in the tenant but another
+ *                        AND-criterion (--source / --category /
+ *                        --imported-before) filtered it out. Working as
+ *                        intended, surfaced so the exclusion is visible.
+ * Returns empty buckets when no ids file was given.
+ */
+function bucketUnmatchedIds(
+  idsFilter: Set<string> | null,
+  tenantRows: readonly CuratedMemory[],
+  matched: readonly CuratedMemory[],
+): { notFoundIds: string[]; criteriaExcludedIds: string[] } {
+  const notFoundIds: string[] = [];
+  const criteriaExcludedIds: string[] = [];
+  if (idsFilter === null) return { notFoundIds, criteriaExcludedIds };
+  const tenantIdSet = new Set(tenantRows.map((m) => m.id.toLowerCase()));
+  const matchedIdSet = new Set(matched.map((m) => m.id.toLowerCase()));
+  for (const id of idsFilter) {
+    if (matchedIdSet.has(id)) continue;
+    if (tenantIdSet.has(id)) criteriaExcludedIds.push(id);
+    else notFoundIds.push(id);
+  }
+  return { notFoundIds, criteriaExcludedIds };
+}
+
 async function cmdBatchTransition(args: string[], deps: CuratorCliDeps): Promise<number> {
   const parsed = parseBatchTransitionArgs(args);
   if (!parsed.ok) {
@@ -746,13 +775,9 @@ async function cmdBatchTransition(args: string[], deps: CuratorCliDeps): Promise
       return true;
     });
 
-    // ids named in the file but absent from the matched tenant rows: reported,
-    // never silently dropped (the id may be another tenant's, already deleted,
-    // or excluded by an AND-criterion).
-    const notFoundIds: string[] =
-      idsFilter !== null
-        ? [...idsFilter].filter((id) => !matched.some((m) => m.id.toLowerCase() === id))
-        : [];
+    // ids named in the file but not transitioned, split into two buckets (see
+    // bucketUnmatchedIds / PR #309 review finding 2).
+    const { notFoundIds, criteriaExcludedIds } = bucketUnmatchedIds(idsFilter, tenantRows, matched);
 
     const applied: BatchApplied[] = [];
     const skipped: BatchSkip[] = [];
@@ -847,6 +872,7 @@ async function cmdBatchTransition(args: string[], deps: CuratorCliDeps): Promise
           })),
           skipped: skipped.map((s) => ({ memory_id: s.memoryId, from: s.from, why: s.why })),
           not_found_ids: notFoundIds,
+          criteria_excluded_ids: criteriaExcludedIds,
         }) + '\n',
       );
       return 0;
@@ -873,10 +899,18 @@ async function cmdBatchTransition(args: string[], deps: CuratorCliDeps): Promise
     }
     if (notFoundIds.length > 0) {
       process.stderr.write(
-        `\nNOT_FOUND: ${notFoundIds.length} id(s) from --ids-file matched no tenant row ` +
-          `(other tenant, deleted, or excluded by another criterion):\n`,
+        `\nNOT_FOUND: ${notFoundIds.length} id(s) from --ids-file are not in this tenant's corpus ` +
+          `(typo, wrong tenant, or already deleted):\n`,
       );
       for (const id of notFoundIds) process.stderr.write(`  ${id}\n`);
+    }
+    if (criteriaExcludedIds.length > 0) {
+      process.stdout.write(
+        `\nCRITERIA_EXCLUDED: ${criteriaExcludedIds.length} id(s) from --ids-file exist in this ` +
+          `tenant but were filtered out by another criterion (--source / --category / ` +
+          `--imported-before) — working as intended:\n`,
+      );
+      for (const id of criteriaExcludedIds) process.stdout.write(`  ${id}\n`);
     }
     return 0;
   } catch (err) {
