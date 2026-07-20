@@ -70,13 +70,17 @@ and every fixture's provenance and blind spots are stated where it is defined.
 - **Anchor:** two versioned labeled sets, both in-repo and empirically labeled:
   - `govern-decision/dataset/v1` (v1.2.0) — 33 adversarial secret/PII/path cases with
     per-check `expectCaughtBy` / `knownFalseNegativeOf` ground truth;
-  - `govern-decision/decision-dataset/v1` (v1.0.0, new in Wave-2 C3) — 14 dedup /
+  - `govern-decision/decision-dataset/v1` (v1.1.0, new in Wave-2 C3) — 14 dedup /
     contradiction / supersession / clean cases wired through the real store, the real
     `PolicyPipeline` (`dedup_check` + `contradiction_check`), and the real
-    `detectSupersession`, reported per check AND per relationship class.
+    `detectSupersession` (at the single-sourced `DEFAULT_SUPERSESSION_THRESHOLD`),
+    reported per check AND per relationship class.
 - **Gate:** `ci-govern-decision.ts` fails closed on ANY undocumented false-negative in either
-  section. Documented gaps (split-key/boundary blind spots; re-cased dup, low-overlap and
-  cross-category contradictions, reworded-title supersession) are reported, never hidden.
+  section AND on any decision check dropping below its measured-then-committed precision
+  floor (`DECISION_PRECISION_FLOORS`). Documented gaps (split-key/boundary blind spots;
+  re-cased dup, low-overlap and cross-category contradictions, reworded-title supersession)
+  and the one KNOWN false positive (the contradiction heuristic firing on a compatible
+  restatement — a clean case, counted honestly against precision) are reported, never hidden.
 - **Anchor lives:** in-repo; required per-PR via `moat-evals` in `ci.yml`, re-run in `nightly.yml`.
 
 ### 5. Groundedness eval (new — Wave-2 C2)

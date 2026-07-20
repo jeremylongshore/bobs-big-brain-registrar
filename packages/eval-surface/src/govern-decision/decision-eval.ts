@@ -20,8 +20,11 @@
  * Scoring semantics mirror the main govern-decision eval: a positive case is
  * in scope for a check only when it names it in `expectFiredBy` or
  * `knownFalseNegativeOf`; every `clean` case is in scope for every check
- * (a firing check there is a false positive). The gating property is ZERO
- * UNDOCUMENTED false-negatives; documented gaps are reported, never hidden.
+ * (a firing check there is a false positive — counted against precision even
+ * when `knownFalsePositiveOf` documents it, so the numbers stay honest).
+ * The gating properties are ZERO UNDOCUMENTED false-negatives AND the
+ * per-check precision floors ({@link DECISION_PRECISION_FLOORS}, measured
+ * then committed); documented gaps and known FPs are reported, never hidden.
  */
 
 import { computeContentHash } from '@qmd-team-intent-kb/common';
@@ -47,6 +50,7 @@ import type {
   DecisionClass,
   DecisionClassMetrics,
   DecisionFalseNegative,
+  DecisionFalsePositive,
 } from './decision-types.js';
 import {
   DECISION_CASES,
@@ -69,6 +73,21 @@ const POSITIVE_CLASSES: ReadonlyArray<Exclude<DecisionClass, 'clean'>> = [
 // Supersession threshold: consumed from the policy-engine single source
 // (DEFAULT_SUPERSESSION_THRESHOLD) — the exact constant curator + api use, so
 // the eval can never measure a different threshold than production runs.
+
+/**
+ * Measured-then-committed per-check PRECISION floors (PR #301 review,
+ * finding 1). Known false positives (a clean case a check is documented to
+ * fire on, e.g. the contradiction heuristic on a compatible restatement)
+ * count honestly against precision; these floors — taken from the real run
+ * over decision-dataset v1.1.0, never invented — are what the gate holds.
+ * A NEW (undocumented) firing on a clean case drops the check below its
+ * floor and fails the eval closed.
+ */
+export const DECISION_PRECISION_FLOORS: Record<DecisionCheck, number> = {
+  'dedup-rule': 1.0,
+  'contradiction-rule': 0.75,
+  'supersession-detector': 1.0,
+};
 
 /**
  * The policy the decision cases run under: the two state-dependent rules with
@@ -233,6 +252,7 @@ export function evaluateDecisionCases(
 
   const perCheck: DecisionCheckMetrics[] = [];
   const falseNegatives: DecisionFalseNegative[] = [];
+  const falsePositives: DecisionFalsePositive[] = [];
 
   for (const check of ALL_DECISION_CHECKS) {
     let tp = 0;
@@ -259,8 +279,20 @@ export function evaluateDecisionCases(
     }
 
     for (const def of negatives) {
-      if (fired.get(def.id)!.has(check)) fp += 1;
-      else tn += 1;
+      if (fired.get(def.id)!.has(check)) {
+        // Every firing on a clean case is a FALSE POSITIVE and counts against
+        // precision — including KNOWN FPs (documented via knownFalsePositiveOf).
+        // "Known" only means it is reported as documented rather than as a
+        // surprise; the committed precision floors are what hold the line.
+        fp += 1;
+        falsePositives.push({
+          caseId: def.id,
+          check,
+          documented: (def.knownFalsePositiveOf ?? []).includes(check),
+        });
+      } else {
+        tn += 1;
+      }
     }
 
     perCheck.push(metricsFor(check, tp, fp, fn, tn));
@@ -305,5 +337,7 @@ export function evaluateDecisionCases(
     perClass,
     falseNegatives,
     undocumentedFalseNegatives: falseNegatives.filter((f) => !f.documented),
+    falsePositives,
+    knownFalsePositives: falsePositives.filter((f) => f.documented),
   };
 }

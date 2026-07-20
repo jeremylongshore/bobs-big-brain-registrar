@@ -22,15 +22,28 @@
  *     contradiction phrased with different vocabulary (`contra-low-overlap-01`)
  *     and is blind across categories (`contra-cross-category-01`);
  *   - title-Jaccard supersession misses a fully reworded title
- *     (`sup-reworded-title-01`).
+ *     (`sup-reworded-title-01`);
+ *   - the token-overlap contradiction heuristic FIRES on a compatible
+ *     restatement (`contra-restated-01`) — a KNOWN false positive on a clean
+ *     case, counted against precision and held by the committed floors.
  *
  * DECISION_DATASET_VERSION is bumped on any case add/remove/relabel.
  */
 
 import type { DecisionCase } from '../../decision-types.js';
 
-/** Semantic version of THIS decision-case set. Bump on any change. */
-export const DECISION_DATASET_VERSION = '1.0.0';
+/**
+ * Semantic version of THIS decision-case set. Bump on any change.
+ *
+ * 1.1.0 (PR #301 review, finding 1) — `contra-restated-01` relabeled
+ * contradiction→clean with `knownFalsePositiveOf: ['contradiction-rule']`:
+ * a compatible restatement is ground-truth NON-contradiction, so the rule's
+ * firing is a documented false positive (counted against precision, gated by
+ * the measured precision floors), not a true positive inflating the
+ * contradiction catch-rate.
+ * 1.0.0 — initial decision set.
+ */
+export const DECISION_DATASET_VERSION = '1.1.0';
 
 /** Tenant every decision case runs under (the store is per-case and ephemeral). */
 export const DECISION_TENANT = 'govern-eval-tenant';
@@ -143,8 +156,15 @@ export const DECISION_CASES: readonly DecisionCase[] = [
   {
     id: 'contra-restated-01',
     description:
-      'Compatible restatement of the same convention — the v1 token heuristic fires (same-topic surface, not semantic contradiction; the flag routes it to review, honestly documented in the rule)',
-    decisionClass: 'contradiction',
+      'Compatible restatement of the same convention — NOT a contradiction. The v1 token heuristic still fires on it (same-topic surface, not semantics): a KNOWN false positive, kept as a clean case so the firing counts against precision instead of inflating contradiction recall',
+    // Relabeled contradiction→clean under DECISION_DATASET_VERSION 1.1.0
+    // (PR #301 review, finding 1): a restatement is ground-truth NON-
+    // contradiction, so treating the rule's firing as a TP both inflated the
+    // contradiction-class catch-rate and set a trap where FIXING the heuristic
+    // would look like a regression. The firing is now a documented false
+    // positive; the review-routing value of the flag is unchanged in
+    // production, but the eval scores it honestly.
+    decisionClass: 'clean',
     candidate: {
       title: 'Commit message rule restated',
       content:
@@ -158,7 +178,8 @@ export const DECISION_CASES: readonly DecisionCase[] = [
         category: 'convention',
       },
     ],
-    expectFiredBy: ['contradiction-rule'],
+    expectFiredBy: [],
+    knownFalsePositiveOf: ['contradiction-rule'],
   },
   {
     id: 'contra-low-overlap-01',

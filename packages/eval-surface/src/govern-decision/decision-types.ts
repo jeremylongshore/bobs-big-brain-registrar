@@ -76,6 +76,15 @@ export interface DecisionCase {
   readonly expectFiredBy: readonly DecisionCheck[];
   /** Checks EMPIRICALLY CONFIRMED to miss this case today (documented gaps). */
   readonly knownFalseNegativeOf?: readonly DecisionCheck[];
+  /**
+   * For a `clean` case: checks EMPIRICALLY CONFIRMED to FIRE on it today — a
+   * KNOWN false positive (e.g. the token-overlap contradiction heuristic
+   * firing on a compatible restatement). Known FPs still count as false
+   * positives in the confusion matrix (precision honestly drops), but they
+   * are reported as documented, never as a surprise; the gate holds them via
+   * the measured-then-committed per-check precision floors.
+   */
+  readonly knownFalsePositiveOf?: readonly DecisionCheck[];
 }
 
 /** Per-check confusion-matrix counts for the decision checks. */
@@ -111,6 +120,14 @@ export interface DecisionFalseNegative {
   readonly documented: boolean;
 }
 
+/** One decision-case false positive: a check that fired on a `clean` case. */
+export interface DecisionFalsePositive {
+  readonly caseId: string;
+  readonly check: DecisionCheck;
+  /** True when the case's `knownFalsePositiveOf` already documents this firing. */
+  readonly documented: boolean;
+}
+
 /** The decision-case section of the govern-decision report. */
 export interface DecisionCasesReport {
   readonly datasetVersion: string;
@@ -121,4 +138,8 @@ export interface DecisionCasesReport {
   readonly perClass: readonly DecisionClassMetrics[];
   readonly falseNegatives: readonly DecisionFalseNegative[];
   readonly undocumentedFalseNegatives: readonly DecisionFalseNegative[];
+  /** Every firing on a clean case — documented (known FP) or a surprise. */
+  readonly falsePositives: readonly DecisionFalsePositive[];
+  /** Subset of `falsePositives` covered by a case's `knownFalsePositiveOf`. */
+  readonly knownFalsePositives: readonly DecisionFalsePositive[];
 }

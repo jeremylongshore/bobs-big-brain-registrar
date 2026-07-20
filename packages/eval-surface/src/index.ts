@@ -39,7 +39,10 @@ export type {
   FalseNegative,
   GovernDecisionReport,
 } from './govern-decision/types.js';
-export { evaluateDecisionCases } from './govern-decision/decision-eval.js';
+export {
+  evaluateDecisionCases,
+  DECISION_PRECISION_FLOORS,
+} from './govern-decision/decision-eval.js';
 export {
   DECISION_CASES,
   DECISION_DATASET_VERSION,
@@ -51,6 +54,7 @@ export type {
   DecisionCheckMetrics,
   DecisionClassMetrics,
   DecisionFalseNegative,
+  DecisionFalsePositive,
   DecisionCasesReport,
 } from './govern-decision/decision-types.js';
 export {

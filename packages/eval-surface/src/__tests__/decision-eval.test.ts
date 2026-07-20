@@ -9,7 +9,9 @@
  *  - The shipped set has ZERO undocumented false-negatives (CI gate green)
  *    while the documented gaps (re-cased dup, low-overlap + cross-category
  *    contradiction, reworded-title supersession) ARE reported.
- *  - Precision is 1.0 on every decision check (no firings on clean cases).
+ *  - Every check holds its measured-then-committed precision floor; the
+ *    compatible-restatement firing is a KNOWN false positive (documented,
+ *    counted against precision, never a TP).
  *  - The report breaks out the duplicate / contradiction / supersession
  *    classes separately (the C3 requirement).
  *  - Fed a synthetic regression (an expected catch that cannot fire) the eval
@@ -22,6 +24,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DECISION_CASES,
   DECISION_DATASET_VERSION,
+  DECISION_PRECISION_FLOORS,
   evaluateDecisionCases,
   evaluateGovernDecision,
 } from '../index.js';
@@ -53,8 +56,29 @@ describe('evaluateDecisionCases — shipped decision set', () => {
     expect(byId.has('sup-reworded-title-01:supersession-detector')).toBe(true);
   });
 
-  it('has precision 1.0 on every decision check (clean cases never fire)', () => {
+  it('holds every measured-then-committed precision floor', () => {
     for (const m of report.perCheck) {
+      expect(m.precision).toBeGreaterThanOrEqual(DECISION_PRECISION_FLOORS[m.check]);
+    }
+  });
+
+  it('reports the compatible restatement as a KNOWN false positive — not a TP, not a surprise', () => {
+    // contra-restated-01 is ground-truth NON-contradiction (dataset v1.1.0):
+    // the token heuristic's firing counts against precision as a DOCUMENTED FP.
+    expect(report.knownFalsePositives).toEqual([
+      { caseId: 'contra-restated-01', check: 'contradiction-rule', documented: true },
+    ]);
+    // No undocumented firing on any clean case.
+    expect(report.falsePositives.filter((f) => !f.documented)).toHaveLength(0);
+    // The FP is priced into the matrix: contradiction precision is honestly <1.
+    const contradiction = report.perCheck.find((m) => m.check === 'contradiction-rule')!;
+    expect(contradiction.falsePositives).toBe(1);
+    expect(contradiction.precision).toBeLessThan(1);
+    // ...and it no longer inflates recall: only genuine contradictions count.
+    expect(contradiction.truePositives).toBe(3);
+    // The other checks stay FP-free.
+    for (const check of ['dedup-rule', 'supersession-detector'] as const) {
+      const m = report.perCheck.find((x) => x.check === check)!;
       expect(m.falsePositives).toBe(0);
       expect(m.precision).toBe(1);
     }
@@ -144,6 +168,14 @@ describe('evaluateDecisionCases — synthetic regressions', () => {
     const dedup = rep.perCheck.find((m) => m.check === 'dedup-rule');
     expect(dedup!.falsePositives).toBe(1);
     expect(dedup!.precision).toBeLessThan(1);
+    // An UNDOCUMENTED firing on a clean case is a surprise, not a known FP...
+    expect(rep.falsePositives).toEqual([
+      { caseId: 'syn-clean-fires-01', check: 'dedup-rule', documented: false },
+    ]);
+    expect(rep.knownFalsePositives).toHaveLength(0);
+    // ...and it breaches the dedup precision floor, flipping the whole eval red.
+    const result = evaluateGovernDecision({ decisionCases: [firingClean] });
+    expect(result.passed).toBe(false);
   });
 });
 
@@ -153,6 +185,9 @@ describe('evaluateGovernDecision — integrated decision section', () => {
     expect(r.details.decision_dataset_version).toBe(DECISION_DATASET_VERSION);
     expect(Number(r.details.decision_total_cases)).toBe(DECISION_CASES.length);
     expect(r.details.decision_undocumented_false_negatives).toBe(0);
+    expect(r.details.decision_known_false_positives).toBe(1);
+    expect(r.details.decision_undocumented_false_positives).toBe(0);
+    expect(r.details.decision_precision_floors_held).toBe(true);
     expect(r.details['decision.catchrate.duplicate']).toBeGreaterThan(0);
     expect(r.details['decision.catchrate.contradiction']).toBeGreaterThan(0);
     expect(r.details['decision.catchrate.supersession']).toBeGreaterThan(0);
