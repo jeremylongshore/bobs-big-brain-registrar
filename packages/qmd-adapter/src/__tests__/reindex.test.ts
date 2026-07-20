@@ -26,7 +26,7 @@ describe('reindex', () => {
 
   it('registers missing collections then updates the index', async () => {
     mock.queueSuccess(''); // collection list -> none registered
-    for (let i = 0; i < 4; i++) mock.queueSuccess(''); // 4 collection adds
+    for (let i = 0; i < 5; i++) mock.queueSuccess(''); // 5 collection adds
     mock.queueSuccess('Updated'); // qmd update
 
     const result = await reindex(adapter);
@@ -38,6 +38,7 @@ describe('reindex', () => {
         'kb-decisions',
         'kb-guides',
         'kb-archive',
+        'kb-bulk',
       ]);
       expect(result.value.indexUpdated).toBe(true);
     }
@@ -46,8 +47,8 @@ describe('reindex', () => {
   });
 
   it('is idempotent — a re-run against already-registered collections creates none', async () => {
-    // list returns all 4 already present → ensureCollections adds nothing
-    mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive');
+    // list returns all 5 already present → ensureCollections adds nothing
+    mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive\nkb-bulk');
     mock.queueSuccess('Updated'); // qmd update still runs (re-index)
 
     const result = await reindex(adapter);
@@ -74,7 +75,7 @@ describe('reindex', () => {
   });
 
   it('surfaces an update failure', async () => {
-    mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive'); // all present
+    mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive\nkb-bulk'); // all present
     mock.queueFailure('qmd update crashed');
 
     const result = await reindex(adapter);

@@ -45,7 +45,7 @@ export function createServer(
     {
       query: z.string().min(1).describe('Natural-language search query'),
       scope: SearchScope.optional().describe(
-        'Search scope: curated (default, governed memories), all, inbox, or archived',
+        'Search scope: curated (default, governed memories), all, inbox, archived, or bulk (bulk-digestion corpus)',
       ),
       limit: z
         .number()

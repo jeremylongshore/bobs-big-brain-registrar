@@ -88,7 +88,13 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
     expect(ensured.ok).toBe(true);
     if (ensured.ok) {
       // kb-inbox has no exported source, so it is NOT registered
-      expect(ensured.value).toEqual(['kb-curated', 'kb-decisions', 'kb-guides', 'kb-archive']);
+      expect(ensured.value).toEqual([
+        'kb-curated',
+        'kb-decisions',
+        'kb-guides',
+        'kb-archive',
+        'kb-bulk',
+      ]);
     }
 
     const updated = await adapter.update();

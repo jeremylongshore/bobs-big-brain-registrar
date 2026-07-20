@@ -65,17 +65,23 @@ describe('CollectionManager', () => {
   });
 
   describe('ensureCollections', () => {
-    it('creates the 4 exportable collections, sourced from export subdirs', async () => {
+    it('creates the 5 exportable collections, sourced from export subdirs', async () => {
       // listCollections returns empty
       mock.queueSuccess('');
-      // 4 addCollection calls (kb-inbox has no exported source)
-      for (let i = 0; i < 4; i++) {
+      // 5 addCollection calls (kb-inbox has no exported source)
+      for (let i = 0; i < 5; i++) {
         mock.queueSuccess('');
       }
       const result = await manager.ensureCollections('/exports');
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toEqual(['kb-curated', 'kb-decisions', 'kb-guides', 'kb-archive']);
+        expect(result.value).toEqual([
+          'kb-curated',
+          'kb-decisions',
+          'kb-guides',
+          'kb-archive',
+          'kb-bulk',
+        ]);
       }
       // Each collection sources from its git-exporter subdir, not <base>/<name>
       const addCommands = mock.commands.filter((c) => c[0] === 'collection' && c[1] === 'add');
@@ -97,7 +103,7 @@ describe('CollectionManager', () => {
 
     it('does not register kb-inbox (no exported source)', async () => {
       mock.queueSuccess(''); // list
-      for (let i = 0; i < 4; i++) mock.queueSuccess(''); // adds
+      for (let i = 0; i < 5; i++) mock.queueSuccess(''); // adds
       const result = await manager.ensureCollections('/exports');
       expect(result.ok).toBe(true);
       const addedNames = mock.commands
@@ -108,7 +114,7 @@ describe('CollectionManager', () => {
 
     it('skips existing collections', async () => {
       // listCollections returns all exportable collections already present
-      mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive');
+      mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive\nkb-bulk');
       const result = await manager.ensureCollections('/exports');
       expect(result.ok).toBe(true);
       if (result.ok) {

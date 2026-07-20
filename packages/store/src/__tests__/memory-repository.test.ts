@@ -305,6 +305,55 @@ describe('MemoryRepository — aggregation queries', () => {
     expect(results[0]?.lifecycle).toBe('active');
   });
 
+  // findByTenantAndLifecycleAndCategory (E1 contradiction-lookup follow-up)
+  it('findByTenantAndLifecycleAndCategory filters on tenant, lifecycle, AND category at the store', () => {
+    const fresh = () => randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
+    repo.insert(
+      makeMemory({
+        tenantId: 'team-alpha',
+        lifecycle: 'active',
+        category: 'convention',
+        contentHash: fresh(),
+      }),
+    );
+    repo.insert(
+      makeMemory({
+        tenantId: 'team-alpha',
+        lifecycle: 'active',
+        category: 'reference',
+        contentHash: fresh(),
+      }),
+    );
+    repo.insert(
+      makeMemory({
+        tenantId: 'team-alpha',
+        lifecycle: 'deprecated',
+        category: 'convention',
+        contentHash: fresh(),
+      }),
+    );
+    repo.insert(
+      makeMemory({
+        tenantId: 'team-beta',
+        lifecycle: 'active',
+        category: 'convention',
+        contentHash: fresh(),
+      }),
+    );
+    const results = repo.findByTenantAndLifecycleAndCategory('team-alpha', 'active', 'convention');
+    expect(results).toHaveLength(1);
+    expect(results[0]?.tenantId).toBe('team-alpha');
+    expect(results[0]?.lifecycle).toBe('active');
+    expect(results[0]?.category).toBe('convention');
+  });
+
+  it('findByTenantAndLifecycleAndCategory returns empty array when no category match', () => {
+    repo.insert(makeMemory({ tenantId: 'team-alpha', lifecycle: 'active', category: 'reference' }));
+    expect(repo.findByTenantAndLifecycleAndCategory('team-alpha', 'active', 'decision')).toEqual(
+      [],
+    );
+  });
+
   it('findByTenantAndLifecycle returns empty array when no match', () => {
     repo.insert(
       makeMemory({

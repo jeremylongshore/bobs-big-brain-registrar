@@ -92,6 +92,47 @@ describe('MemoryCandidate', () => {
     }
   });
 
+  // 5bm.8 — the low-trust stamp on bulk digestions is a schema-boundary
+  // invariant, not an emitter convention: a bulk_import candidate can never
+  // claim curated-grade trust past this parse.
+  describe('bulk_import low-trust stamp (5bm.8)', () => {
+    it("accepts bulk_import with trustLevel 'low'", () => {
+      const c = MemoryCandidate.parse(
+        makeMemoryCandidate({ source: 'bulk_import', trustLevel: 'low' }),
+      );
+      expect(c.source).toBe('bulk_import');
+      expect(c.trustLevel).toBe('low');
+    });
+
+    it("accepts bulk_import with trustLevel 'untrusted'", () => {
+      const c = MemoryCandidate.parse(
+        makeMemoryCandidate({ source: 'bulk_import', trustLevel: 'untrusted' }),
+      );
+      expect(c.trustLevel).toBe('untrusted');
+    });
+
+    it.each(['medium', 'high'] as const)('rejects bulk_import claiming trustLevel %s', (trust) => {
+      const result = MemoryCandidate.safeParse(
+        makeMemoryCandidate({ source: 'bulk_import', trustLevel: trust }),
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects a bulk_import line that omits trustLevel (default medium is not a valid stamp)', () => {
+      const input = makeMemoryCandidate({ source: 'bulk_import' }) as Record<string, unknown>;
+      delete input['trustLevel'];
+      const result = MemoryCandidate.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it('leaves non-bulk sources free to carry medium/high trust', () => {
+      const c = MemoryCandidate.parse(
+        makeMemoryCandidate({ source: 'import', trustLevel: 'high' }),
+      );
+      expect(c.trustLevel).toBe('high');
+    });
+  });
+
   it('accepts all valid categories', () => {
     const categories = [
       'decision',

@@ -21,9 +21,28 @@ function parseThreshold(params: Record<string, unknown> | undefined): number {
   return Math.min(1, Math.max(0, raw));
 }
 
-/** Lowercased alphanumeric token set of a text. */
+/**
+ * Word/character-segmenting Unicode token pattern (E1 review follow-up).
+ *
+ * The prior ASCII-only `[a-z0-9]+` collapsed any non-Latin text (Cyrillic, CJK,
+ * accented words) to an empty token set. The Unicode swap fixes space-delimited
+ * scripts (Cyrillic, Greek, accented Latin), but a run of CJK ideographs carries
+ * NO word spaces, so `[\p{L}\p{N}]+` alone would make one long sentence a single
+ * token — two near-identical CJK sentences would then share zero tokens and never
+ * flag. So CJK scripts (Han / Hiragana / Katakana / Hangul) are segmented per
+ * character (the standard unigram approximation for space-less scripts), while
+ * every other script keeps whole-word runs. Alternation order matters: a single
+ * CJK char is matched before the general letter/digit run so it is never glued
+ * into a longer token.
+ */
+const TOKEN_PATTERN = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]|[\p{L}\p{N}]+/gu;
+
+/**
+ * Lowercased token set of a text — whole words for space-delimited scripts,
+ * per-character tokens for space-less CJK. See {@link TOKEN_PATTERN}.
+ */
 function tokenSet(text: string): Set<string> {
-  return new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+  return new Set(text.toLowerCase().match(TOKEN_PATTERN) ?? []);
 }
 
 /** Jaccard similarity of two token sets: |A ∩ B| / |A ∪ B| (0 when both empty). */
@@ -44,7 +63,8 @@ function jaccard(a: Set<string>, b: Set<string>): number {
  *
  * ## v1 heuristic — token overlap, honestly stated
  *
- * Detection is Jaccard similarity over lowercased alphanumeric token sets.
+ * Detection is Jaccard similarity over lowercased Unicode token sets (whole words
+ * for space-delimited scripts, per-character for space-less CJK).
  * Token overlap is NOT semantic contradiction — "deploy on Fridays" and "never
  * deploy on Fridays" score high, but so do two compatible restatements of the
  * same convention. What high overlap reliably means is *same topic, different

@@ -3,6 +3,7 @@ export { extractFrontmatter, renderFrontmatter } from './formatter/frontmatter.j
 export { formatMemoryAsMarkdown, getFilename } from './formatter/markdown-formatter.js';
 export {
   getDirectory,
+  getActiveDirectory,
   getCategoryDirectory,
   UnknownCategoryError,
   getRelativePath,

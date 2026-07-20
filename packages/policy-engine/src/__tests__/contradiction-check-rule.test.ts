@@ -141,4 +141,64 @@ describe('evaluateContradictionCheck', () => {
     const result = evaluateContradictionCheck(candidate, makeRule(), context);
     expect(result.outcome).toBe('pass');
   });
+
+  // E1 review follow-up: the tokenizer is Unicode-aware. Under the old
+  // ASCII-only [a-z0-9]+ pattern, both of these texts tokenized to the empty
+  // set (Cyrillic has no ASCII letters), Jaccard returned 0 for BOTH empty
+  // sets, and heavy non-Latin overlap was invisible.
+  it('flags heavy overlap between non-Latin (Cyrillic) texts', () => {
+    const original =
+      'Всегда развертывайте сервисы через синие зеленые переключения на балансировщике нагрузки';
+    const contradicting =
+      'Никогда развертывайте сервисы через синие зеленые переключения на балансировщике нагрузки';
+    const candidate = makeCandidate({ content: original, category: 'convention' });
+    const context = withActiveMemories(makeContext(candidate), {
+      convention: [{ id: 'mem-cyr', content: contradicting }],
+    });
+    const result = evaluateContradictionCheck(candidate, makeRule(), context);
+    expect(result.outcome).toBe('flag');
+    expect(result.reason).toContain('mem-cyr');
+  });
+
+  it('does not flag disjoint non-Latin texts (no empty-token-set collapse)', () => {
+    const candidate = makeCandidate({
+      content: 'Всегда проверяйте целостность резервных копий после каждого запуска',
+      category: 'convention',
+    });
+    const context = withActiveMemories(makeContext(candidate), {
+      convention: [
+        { id: 'mem-other', content: '部署服務時必須先執行資料庫遷移然後重新啟動應用程式' },
+      ],
+    });
+    const result = evaluateContradictionCheck(candidate, makeRule(), context);
+    expect(result.outcome).toBe('pass');
+  });
+
+  // CJK carries no word spaces, so the whole-word Unicode pattern would make a
+  // sentence one token and never overlap. Per-character CJK segmentation
+  // (TOKEN_PATTERN) lets two near-identical Chinese sentences (one negated)
+  // share almost every character token and flag — the v1 target shape.
+  it('flags heavy overlap between near-identical CJK (Chinese) texts', () => {
+    const original = '部署服務時必須先執行資料庫遷移然後重新啟動應用程式並通知團隊成員';
+    const negated = '部署服務時禁止先執行資料庫遷移然後重新啟動應用程式並通知團隊成員';
+    const candidate = makeCandidate({ content: original, category: 'convention' });
+    const context = withActiveMemories(makeContext(candidate), {
+      convention: [{ id: 'mem-cjk', content: negated }],
+    });
+    const result = evaluateContradictionCheck(candidate, makeRule(), context);
+    expect(result.outcome).toBe('flag');
+    expect(result.reason).toContain('mem-cjk');
+  });
+
+  it('does not flag two unrelated CJK sentences (per-char tokens still discriminate)', () => {
+    const candidate = makeCandidate({
+      content: '每次啟動後務必檢查備份資料的完整性與雜湊值',
+      category: 'convention',
+    });
+    const context = withActiveMemories(makeContext(candidate), {
+      convention: [{ id: 'mem-unrelated', content: '前端元件應使用嚴格型別並避免任意字串輸入' }],
+    });
+    const result = evaluateContradictionCheck(candidate, makeRule(), context);
+    expect(result.outcome).toBe('pass');
+  });
 });

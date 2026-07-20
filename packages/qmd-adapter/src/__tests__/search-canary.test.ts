@@ -108,9 +108,9 @@ describe('runSearchCanary', () => {
 
       // Pass 1: empty index -> 0 hits (degraded).
       mock.queueSuccess(hitsJson(0));
-      // Heal: reindex = ensureCollections (list + 4 adds) + update.
+      // Heal: reindex = ensureCollections (list + 5 adds) + update.
       mock.queueSuccess(''); // collection list
-      for (let i = 0; i < 4; i++) mock.queueSuccess(''); // 4 adds
+      for (let i = 0; i < 5; i++) mock.queueSuccess(''); // 5 adds
       mock.queueSuccess('Updated'); // update
       // Pass 2 (re-check): now returns hits.
       mock.queueSuccess(hitsJson(5));
@@ -127,7 +127,7 @@ describe('runSearchCanary', () => {
 
       mock.queueSuccess(hitsJson(0)); // pass 1: degraded
       mock.queueSuccess(''); // heal: list
-      for (let i = 0; i < 4; i++) mock.queueSuccess(''); // adds
+      for (let i = 0; i < 5; i++) mock.queueSuccess(''); // adds
       mock.queueSuccess('Updated'); // update
       mock.queueSuccess(hitsJson(0)); // pass 2: STILL 0 hits (e.g. empty kb-export)
 

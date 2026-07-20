@@ -189,8 +189,7 @@ function firedChecks(def: DecisionCase): ReadonlySet<DecisionCheck> {
       tenantId: DECISION_TENANT,
       getActiveMemoriesInCategory: (category) =>
         repo
-          .findByTenantAndLifecycle(DECISION_TENANT, 'active')
-          .filter((m) => m.category === category)
+          .findByTenantAndLifecycleAndCategory(DECISION_TENANT, 'active', category)
           .map((m) => ({ id: m.id, content: m.content })),
     });
 

@@ -64,7 +64,13 @@ export const CandidateStatus = z.enum([
 ]);
 export type CandidateStatus = z.infer<typeof CandidateStatus>;
 
-export const SearchScope = z.enum(['curated', 'all', 'inbox', 'archived']).default('curated');
+// `bulk` (5bm.8) addresses the default-search flood: bulk-digestion reference
+// memories route to the non-default `kb-bulk` collection at export, so the
+// `curated` default scope no longer surfaces a whole-machine digestion. The
+// `bulk` scope is the deliberate way IN to that corpus ('all' also includes it).
+export const SearchScope = z
+  .enum(['curated', 'all', 'inbox', 'archived', 'bulk'])
+  .default('curated');
 export type SearchScope = z.infer<typeof SearchScope>;
 
 // `contradiction_check` (GSB blueprint Track E1) surfaces candidates whose
@@ -120,6 +126,13 @@ export const AuditAction = z.enum([
   // re-fire every night for a candidate left in the inbox → unbounded chain bloat).
   // `memoryId` is a fixed sweep sentinel UUID (the sweep is not tied to one memory).
   'governed',
+  // Receipt for a governed-policy upgrade (5bm.2's migration path): the curator
+  // `upgrade-policy` command replaces a store's dormant-rule policy shape with
+  // RECOMMENDED_POLICY_RULES. `memoryId` on this row is the POLICY's UUID (the
+  // policy row is the mutated durable state); `details` carries the previous
+  // rules so the change is reversible from the receipt alone. The audit_events
+  // `action` column has no CHECK constraint, so this member needs no migration.
+  'policy_upgraded',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 

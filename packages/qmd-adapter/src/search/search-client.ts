@@ -61,6 +61,10 @@ export function resolveScopeCollections(scope: SearchScope): string[] {
       return ['kb-inbox'];
     case 'archived':
       return ['kb-archive'];
+    case 'bulk':
+      // The deliberate way into the bulk-digestion corpus (5bm.8) — excluded
+      // from the default scope, reachable here or via 'all'.
+      return ['kb-bulk'];
     case 'all':
       return []; // No filtering
     default:

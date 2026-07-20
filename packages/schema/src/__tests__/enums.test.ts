@@ -72,7 +72,7 @@ describe('CandidateStatus', () => {
 });
 
 describe('SearchScope', () => {
-  it.each(['curated', 'all', 'inbox', 'archived'])('accepts "%s"', (val) => {
+  it.each(['curated', 'all', 'inbox', 'archived', 'bulk'])('accepts "%s"', (val) => {
     expect(SearchScope.parse(val)).toBe(val);
   });
   it('defaults to "curated"', () => {
@@ -145,6 +145,9 @@ describe('AuditAction', () => {
     'exported',
     'eval-result',
     'proposed',
+    'recategorized',
+    'governed',
+    'policy_upgraded',
   ];
   it.each(actions)('accepts "%s"', (val) => {
     expect(AuditAction.parse(val)).toBe(val);
