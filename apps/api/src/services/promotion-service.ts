@@ -5,7 +5,11 @@ import {
   DisclosureRejectedError,
 } from '@qmd-team-intent-kb/common';
 import { PolicyPipeline, type PipelineResult } from '@qmd-team-intent-kb/policy-engine';
-import { promote, detectSupersession } from '@qmd-team-intent-kb/curator';
+import {
+  promote,
+  detectSupersession,
+  DEFAULT_SUPERSESSION_THRESHOLD,
+} from '@qmd-team-intent-kb/curator';
 import { AuditEvent as AuditEventSchema } from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, Author } from '@qmd-team-intent-kb/schema';
 import type {
@@ -17,8 +21,12 @@ import type {
 } from '@qmd-team-intent-kb/store';
 import { badRequest, notFound, unprocessable } from '../errors.js';
 
-/** Title-similarity threshold for supersession, matching the curator default. */
-const SUPERSESSION_THRESHOLD = 0.6;
+/**
+ * Title-similarity threshold for supersession — the production default,
+ * consumed from the single source in policy-engine's supersession module (the
+ * same constant the curator and the govern-decision eval use).
+ */
+const SUPERSESSION_THRESHOLD = DEFAULT_SUPERSESSION_THRESHOLD;
 
 /**
  * Promotes an inbox candidate to a governed memory in one shot (bead `3iu.2`).

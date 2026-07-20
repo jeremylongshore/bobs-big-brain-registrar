@@ -48,6 +48,11 @@ import type {
   GovernCheck,
   GovernDecisionReport,
 } from './govern-decision/types.js';
+import type { DecisionCase } from './govern-decision/decision-types.js';
+import {
+  DECISION_PRECISION_FLOORS,
+  evaluateDecisionCases,
+} from './govern-decision/decision-eval.js';
 import { DATASET_VERSION } from './govern-decision/dataset/v1/index.js';
 import { loadDataset, type LoadedCase } from './govern-decision/dataset/v1/load.js';
 
@@ -158,6 +163,8 @@ function isDocumentedMiss(def: GovernCase, check: GovernCheck): boolean {
 export interface GovernDecisionOptions {
   /** Override the labeled set (defaults to dataset/v1). Used by tests. */
   readonly cases?: readonly GovernCase[];
+  /** Override the decision-case set (defaults to decision-dataset/v1). Used by tests. */
+  readonly decisionCases?: readonly DecisionCase[];
   /**
    * Pass threshold for the aggregate score. The GATING property, however, is
    * not the score — it is "zero UNDOCUMENTED false-negatives" (see below).
@@ -239,6 +246,10 @@ export function evaluateGovernDecision(options: GovernDecisionOptions = {}): Eva
 
   const undocumentedFalseNegatives = falseNegatives.filter((f) => !f.documented);
 
+  // Wave-2 C3: the state-dependent decision section (dedup / contradiction /
+  // supersession over real store + real pipeline + real detector).
+  const decisionCases = evaluateDecisionCases(options.decisionCases);
+
   const report: GovernDecisionReport = {
     totalCases: loaded.length,
     positives: positives.length,
@@ -246,13 +257,23 @@ export function evaluateGovernDecision(options: GovernDecisionOptions = {}): Eva
     perCheck,
     falseNegatives,
     undocumentedFalseNegatives,
+    decisionCases,
   };
 
   const meanF1 =
     perCheck.length === 0 ? 1 : perCheck.reduce((s, m) => s + m.f1, 0) / perCheck.length;
 
-  // GATING property: zero undocumented (surprise / regression) false-negatives.
-  const passed = undocumentedFalseNegatives.length === 0;
+  // GATING properties: zero undocumented (surprise / regression) false-
+  // negatives across BOTH sections, AND every decision check holding its
+  // measured-then-committed precision floor (known FPs are documented and
+  // priced into the floors; a NEW firing on a clean case breaches them).
+  const decisionPrecisionFloorsHeld = decisionCases.perCheck.every(
+    (m) => m.precision >= DECISION_PRECISION_FLOORS[m.check],
+  );
+  const passed =
+    undocumentedFalseNegatives.length === 0 &&
+    decisionCases.undocumentedFalseNegatives.length === 0 &&
+    decisionPrecisionFloorsHeld;
   const threshold = options.threshold ?? 0;
 
   return {
@@ -268,6 +289,25 @@ export function evaluateGovernDecision(options: GovernDecisionOptions = {}): Eva
       undocumented_false_negatives: undocumentedFalseNegatives.length,
       documented_false_negatives: falseNegatives.length - undocumentedFalseNegatives.length,
       mean_f1: Number(meanF1.toFixed(4)),
+      // C3 decision section — flat summary fields (full breakout in report_json).
+      decision_dataset_version: decisionCases.datasetVersion,
+      decision_total_cases: decisionCases.totalCases,
+      decision_undocumented_false_negatives: decisionCases.undocumentedFalseNegatives.length,
+      decision_documented_false_negatives:
+        decisionCases.falseNegatives.length - decisionCases.undocumentedFalseNegatives.length,
+      decision_known_false_positives: decisionCases.knownFalsePositives.length,
+      decision_undocumented_false_positives:
+        decisionCases.falsePositives.length - decisionCases.knownFalsePositives.length,
+      decision_precision_floors_held: decisionPrecisionFloorsHeld,
+      ...Object.fromEntries(
+        decisionCases.perCheck.flatMap((m) => [
+          [`decision.precision.${m.check}`, m.precision],
+          [`decision.recall.${m.check}`, m.recall],
+        ]),
+      ),
+      ...Object.fromEntries(
+        decisionCases.perClass.map((c) => [`decision.catchrate.${c.decisionClass}`, c.catchRate]),
+      ),
       // Per-check precision/recall as flat, JSON-serialisable fields (the
       // EvaluatorResult.details value type is number|string|boolean).
       ...flattenPerCheck(perCheck),

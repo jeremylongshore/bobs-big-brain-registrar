@@ -18,7 +18,9 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "provenance:ci": "tsx scripts/ci-provenance-integrity.ts",
-    "govern:ci": "tsx scripts/ci-govern-decision.ts"
+    "govern:ci": "tsx scripts/ci-govern-decision.ts",
+    "groundedness:ci": "tsx scripts/ci-groundedness.ts",
+    "groundedness:judge-compare": "tsx scripts/groundedness-judge-compare.ts"
   },
   "dependencies": {
     "@qmd-team-intent-kb/claude-runtime": "workspace:*",

@@ -13,6 +13,7 @@ export type { DedupResult } from './dedup/dedup-checker.js';
 export {
   detectSupersession,
   computeTitleSimilarity,
+  DEFAULT_SUPERSESSION_THRESHOLD,
 } from './supersession/supersession-detector.js';
 export type { SupersessionMatch } from './supersession/supersession-detector.js';
 export { promote } from './promotion/promoter.js';

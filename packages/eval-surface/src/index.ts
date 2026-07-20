@@ -39,4 +39,41 @@ export type {
   FalseNegative,
   GovernDecisionReport,
 } from './govern-decision/types.js';
+export {
+  evaluateDecisionCases,
+  DECISION_PRECISION_FLOORS,
+} from './govern-decision/decision-eval.js';
+export {
+  DECISION_CASES,
+  DECISION_DATASET_VERSION,
+} from './govern-decision/decision-dataset/v1/index.js';
+export type {
+  DecisionCase,
+  DecisionCheck,
+  DecisionClass,
+  DecisionCheckMetrics,
+  DecisionClassMetrics,
+  DecisionFalseNegative,
+  DecisionFalsePositive,
+  DecisionCasesReport,
+} from './govern-decision/decision-types.js';
+export {
+  evaluateGroundedness,
+  GROUNDEDNESS_FLOORS,
+  type GroundednessOptions,
+} from './groundedness.js';
+export { scoreGroundedness, DEFAULT_TOKEN_SUPPORT_THRESHOLD } from './groundedness/scorer.js';
+export {
+  FIXTURE_VERSION as GROUNDEDNESS_FIXTURE_VERSION,
+  GROUNDEDNESS_ITEMS,
+} from './groundedness/fixture/v1/index.js';
+export { judgeFromEnv, type GroundednessJudge } from './groundedness/llm-judge.js';
+export type {
+  GroundednessItem,
+  GroundednessLabel,
+  GroundednessPrediction,
+  GroundednessError,
+  GroundednessReport,
+  Perturbation,
+} from './groundedness/types.js';
 export type { EvaluatorResult, RetrievalProbe, DedupProbe } from './types.js';
