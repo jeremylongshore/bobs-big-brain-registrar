@@ -9,35 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Ontology axes carry signal — enforcement, persistence, and a receipted policy-migration path
-  (epic `qmd-team-intent-kb-5bm`).** Follow-through on the 2026-07-17 ontology audit, which found
-  three of four axes carrying zero bits in production.
-  - **Receipted policy upgrade (`5bm.2`).** New `curator-cli upgrade-policy --tenant <id>` brings a
-    store's live governance policy up to the recommended anti-dormancy shape
-    (`RECOMMENDED_POLICY_RULES` — every registered rule enabled) and writes a `policy_upgraded`
-    audit receipt carrying the previous rules verbatim, so the change is reversible from the chain
-    alone. Three explicit outcomes (`upgraded` / `created` / `already-complete`); `--dry-run` previews
-    without writing. This is the operator-safe migration path — it never edits the live brain
-    directly. (The recommended-policy + dormancy doctor tooling shipped earlier under `5bm.10`.)
-  - **Bulk-digestion scoping (`5bm.8`).** The `bulk_import` memory source is now stamped low-trust at
-    the schema boundary (a `bulk_import` candidate cannot claim curated-grade trust), and bulk memories
-    export to a new non-default `kb-bulk` collection (`bulk/` subdir) instead of flooding the
-    default-searched category collections. New `bulk` search scope is the deliberate way into that
-    corpus; the default `curated` scope excludes it on both the qmd and SQLite-fallback paths.
-  - **Category-scoped contradiction lookup (E1 review follow-up).** `MemoryRepository` gains
-    `findByTenantAndLifecycleAndCategory`, so the contradiction-check rule filters same-category
-    actives at the store query instead of loading and deserializing the whole active set per
-    candidate.
-  - **Unicode contradiction tokenizer (E1 review follow-up).** The token-overlap heuristic now
-    tokenizes on `\p{L}\p{N}` (Unicode letters/digits) instead of ASCII-only `[a-z0-9]`, so
-    non-Latin text (Cyrillic, CJK, accented) no longer collapses to empty token sets.
-  - Verified-only (already delivered on `main` by prior Wave-1/2 work, confirmed against current code
-    with tests cited in the PR): sensitivity persistence + read-time enforcement (`5bm.3`/`5bm.11`),
-    repository-layer lifecycle-transition guard + lifecycle `CHECK` constraint (`5bm.4`), fail-closed
-    export directory mapper (`5bm.5`), candidate `schemaVersion` v2-rejection (`5bm.6`), governed
-    recategorization tool (`5bm.7`).
+- **Receipted governance-policy upgrade (`curator-cli upgrade-policy`, epic
+  `qmd-team-intent-kb-5bm.2`).** New `curator-cli upgrade-policy --tenant <id> [--db] [--dry-run]
+  [--json]` brings a store's live governance policy up to the recommended anti-dormancy shape
+  (`RECOMMENDED_POLICY_RULES` — every registered rule enabled) and writes a `policy_upgraded` audit
+  receipt carrying the previous rules verbatim, so the change is reversible from the chain alone.
+  Three explicit outcomes (`upgraded` / `created` / `already-complete`); `--dry-run` previews without
+  writing. This is the operator-safe migration path — it never edits the live brain directly. (The
+  recommended-policy + dormancy doctor tooling itself shipped earlier under `5bm.10`; this is the
+  previously-missing command that applies it to a store.)
+- **Bulk-digestion scoping (`5bm.8`).** A new non-default `kb-bulk` collection (`bulk/` export
+  subdir): memories whose source is `bulk_import` (whole-machine digestions) now route there via
+  `getActiveDirectory` instead of flooding the default-searched category collections (the 2026-07-16
+  flood put ~9.7k bulk `reference` files in `kb-guides`). A new `bulk` search scope is the deliberate
+  way into that corpus; the default `curated` scope excludes it on both the qmd (collection-level)
+  and SQLite-fallback (source-level) paths.
 
 ### Changed
+
+- **`bulk_import` candidates are stamped low-trust at the schema boundary (`5bm.8`).** A
+  `bulk_import` candidate must now carry `trustLevel` `low` or `untrusted` (the default `medium` is
+  refused by `MemoryCandidate`), so a whole-machine digestion can never claim curated-grade trust and
+  the `source_trust` rule can gate it. **Migration note:** any pre-PR `bulk_import` candidate stamped
+  `medium` under the old emitter convention now **fails closed** at re-validation — this is intended
+  (it surfaces mis-stamped digestions rather than admitting them silently), and such a row is
+  corrected via the governed recategorization/curation tooling (or a one-shot re-stamp), not dropped.
+  Depends on the deferred coordination to have ICO's emitter stamp `bulk_import` low at capture time
+  (flagged in PR #310); until then, bulk digestions must carry an explicit low/untrusted stamp.
+- **Contradiction-check tokenizer is Unicode-aware (E1 review follow-up).** The token-overlap
+  heuristic now tokenizes whole words for space-delimited scripts and per-character for space-less
+  CJK (`\p{sc=Han|Hiragana|Katakana|Hangul}` unigrams), replacing the ASCII-only `[a-z0-9]` that
+  collapsed all non-Latin text to empty token sets.
+- **Contradiction-check lookup is category-scoped at the store (E1 review follow-up).**
+  `MemoryRepository.findByTenantAndLifecycleAndCategory` lets the rule filter same-category actives in
+  SQL instead of loading and deserializing the whole active set per candidate.
 
 - **Repository renamed** from `jeremylongshore/qmd-team-intent-kb` to
   `jeremylongshore/bobs-big-brain-registrar` on 2026-07-19 (public product name: **Bob's Big Brain

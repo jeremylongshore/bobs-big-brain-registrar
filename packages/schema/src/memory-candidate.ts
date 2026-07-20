@@ -112,6 +112,15 @@ export const MemoryCandidate = z
   // bulk candidate. NOTE: `trustLevel` defaults to 'medium', so a bulk_import
   // line MUST stamp its trust explicitly — an unstamped one is refused, which
   // is the fail-closed reading of "ICO stamps it with low trust".
+  //
+  // MIGRATION STORY: any pre-5bm.8 `bulk_import` candidate stamped `medium`
+  // under the old emitter convention FAILS this refine at re-validation. That is
+  // intended — it surfaces a mis-stamped digestion loudly instead of admitting
+  // it — and is NOT silent dropping: such a row is corrected via the governed
+  // recategorization/curation tooling (or a one-shot re-stamp to low), then
+  // re-ingested. The durable fix is the deferred coordination to have ICO's
+  // emitter stamp `bulk_import` low at capture time (flagged in PR #310); until
+  // then, callers of bulk digestions must supply an explicit low/untrusted stamp.
   .refine(
     (c) => c.source !== 'bulk_import' || c.trustLevel === 'low' || c.trustLevel === 'untrusted',
     {
