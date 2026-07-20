@@ -264,12 +264,27 @@ async function exportStep(
 /**
  * Step 4: qmd index update — offline resilient, retried on transient qmd
  * errors. Mutates `result.indexUpdate`. No-op when disabled or no adapter.
+ *
+ * `indexedAt` is the freshness watermark to record on success. It MUST be
+ * captured before the EXPORT step's curated_memories read (runCycle hoists it
+ * to just before `exportStep`), not here at the start of the index update:
+ * this step only re-indexes what the export already wrote, so the data this
+ * cycle can possibly absorb was fixed at the export read. Capturing the
+ * watermark here (as this step originally did) post-dated that read — a
+ * promotion landing between the export's read and a here-captured watermark
+ * got `last_indexed_at > promoted_at` and measured FRESH while its markdown
+ * was never exported or indexed: a false-fresh on the dangerous side, letting
+ * the canary staleness gate pass over degraded retrieval (PR #293 review
+ * finding, MiniMax defect lane). With the pre-export watermark the same race
+ * measures stale and is re-absorbed next cycle — under-claiming freshness is
+ * the only allowed error direction. Mirrors the API path
+ * (`apps/api` index-refresher, watermark before `runExport`).
  */
 async function indexUpdateStep(
   config: DaemonConfig,
   deps: DaemonDependencies,
   logger: DaemonLogger,
-  nowFn: () => string,
+  indexedAt: string,
   result: CycleResult,
 ): Promise<void> {
   if (!config.enableIndexUpdate || !deps.qmdAdapter) return;
@@ -280,11 +295,6 @@ async function indexUpdateStep(
     maxJitterMs: config.retryMaxJitterMs,
     sleepFn: config.sleepFn,
   };
-  // Capture the freshness watermark BEFORE the index update runs: a promotion
-  // landing mid-update may or may not be absorbed, so marking with the
-  // pre-update instant can only UNDER-claim freshness (it stays "dirty" and is
-  // re-absorbed next cycle) — never over-claim it.
-  const indexedAt = nowFn();
   try {
     await withRetry(async () => {
       const ensureResult = await adapter.ensureCollections();
@@ -359,8 +369,15 @@ export async function runCycle(
   }
 
   stalenessStep(config, deps, logger, nowFn, result);
+  // Freshness watermark (D2) — hoisted to BEFORE the export step reads
+  // curated_memories (#293 review finding). The export read is the moment the
+  // set of promotions this cycle can absorb is fixed, so the watermark must
+  // not post-date it: a promotion landing after this instant measures stale
+  // (correct — its markdown was not exported this cycle) and is absorbed next
+  // cycle. See indexUpdateStep's doc for the false-fresh race this prevents.
+  const indexedAt = nowFn();
   await exportStep(config, deps, logger, nowFn, result);
-  await indexUpdateStep(config, deps, logger, nowFn, result);
+  await indexUpdateStep(config, deps, logger, indexedAt, result);
 
   result.completedAt = nowFn();
   return result;
