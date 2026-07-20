@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MemoryCandidate, PrePolicyFlags } from '../memory-candidate.js';
+import { CandidateOrigin, MemoryCandidate, PrePolicyFlags } from '../memory-candidate.js';
 import { makeMemoryCandidate } from './fixtures.js';
 
 describe('PrePolicyFlags', () => {
@@ -119,5 +119,42 @@ describe('MemoryCandidate', () => {
     );
     expect(result.metadata.filePaths).toEqual(['src/main.ts']);
     expect(result.metadata.language).toBe('typescript');
+  });
+});
+
+describe('CandidateOrigin (GSB Wave-2 H1 — write-time provenance)', () => {
+  const validOrigin = {
+    tokenHmac: 'ab'.repeat(32),
+    channel: 'local-mcp',
+    mintedAt: '2026-01-15T10:00:00.000Z',
+  };
+
+  it('origin is OPTIONAL — a candidate without it parses (backward compatibility)', () => {
+    const result = MemoryCandidate.parse(makeMemoryCandidate());
+    expect(result.origin).toBeUndefined();
+  });
+
+  it('parses a candidate WITH a well-formed origin, without touching id derivation inputs', () => {
+    const input = makeMemoryCandidate({ origin: validOrigin });
+    const result = MemoryCandidate.parse(input);
+    expect(result.origin).toEqual(validOrigin);
+    // The identity fields the spool id derives from are unchanged by origin.
+    expect(result.id).toBe((input as { id: string }).id);
+  });
+
+  it('rejects a tokenHmac that is not 64 lowercase hex chars', () => {
+    for (const bad of ['AB'.repeat(32), 'ab'.repeat(31), 'zz'.repeat(32), '']) {
+      expect(() => CandidateOrigin.parse({ ...validOrigin, tokenHmac: bad })).toThrow();
+    }
+  });
+
+  it('rejects channels that are not bounded kebab tags', () => {
+    for (const bad of ['Team MCP', '-leading-dash', 'UPPER', 'a'.repeat(65), '']) {
+      expect(() => CandidateOrigin.parse({ ...validOrigin, channel: bad })).toThrow();
+    }
+  });
+
+  it('rejects a non-ISO mintedAt', () => {
+    expect(() => CandidateOrigin.parse({ ...validOrigin, mintedAt: 'yesterday' })).toThrow();
   });
 });

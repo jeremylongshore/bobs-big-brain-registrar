@@ -23,6 +23,8 @@ const CandidateRowSchema = z.object({
   content_hash: z.string(),
   captured_at: z.string(),
   created_at: z.string(),
+  /** Optional write-time provenance attestation (H1) — NULL on every pre-H1 row. */
+  origin_json: z.string().nullable(),
 });
 
 /**
@@ -44,6 +46,7 @@ function rowToCandidate(row: unknown): MemoryCandidate {
   let author: unknown;
   let metadata: unknown;
   let prePolicyFlags: unknown;
+  let origin: unknown;
 
   try {
     author = JSON.parse(flat.author_json);
@@ -62,6 +65,11 @@ function rowToCandidate(row: unknown): MemoryCandidate {
       `candidates row id=${flat.id}: pre_policy_flags_json is not valid JSON: ${String(e)}`,
     );
   }
+  try {
+    origin = flat.origin_json === null ? undefined : JSON.parse(flat.origin_json);
+  } catch (e) {
+    throw new Error(`candidates row id=${flat.id}: origin_json is not valid JSON: ${String(e)}`);
+  }
 
   const domainResult = MemoryCandidate.safeParse({
     id: flat.id,
@@ -76,6 +84,7 @@ function rowToCandidate(row: unknown): MemoryCandidate {
     metadata,
     prePolicyFlags,
     capturedAt: flat.captured_at,
+    origin,
   });
 
   if (!domainResult.success) {
@@ -136,12 +145,12 @@ export class CandidateRepository {
         id, status, source, content, title, category,
         trust_level, author_json, tenant_id,
         metadata_json, pre_policy_flags_json, content_hash, captured_at,
-        import_batch_id
+        import_batch_id, origin_json
       ) VALUES (
         @id, @status, @source, @content, @title, @category,
         @trust_level, @author_json, @tenant_id,
         @metadata_json, @pre_policy_flags_json, @content_hash, @captured_at,
-        @import_batch_id
+        @import_batch_id, @origin_json
       )
     `);
 
@@ -246,6 +255,7 @@ export class CandidateRepository {
       content_hash: contentHash,
       captured_at: candidate.capturedAt,
       import_batch_id: importBatchId ?? null,
+      origin_json: candidate.origin !== undefined ? JSON.stringify(candidate.origin) : null,
     });
   }
 

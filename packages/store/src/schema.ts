@@ -451,4 +451,20 @@ CREATE TABLE IF NOT EXISTS index_state (
 );
     `.trim(),
   },
+  {
+    // Write-time provenance (GSB Wave-2 H1). One nullable JSON column holding
+    // the candidate's optional `origin` attestation ({ tokenHmac, channel,
+    // mintedAt } — validated by the Zod `CandidateOrigin` schema, mirroring the
+    // other *_json columns; no CHECK constraint, so future origin fields need
+    // no further migration). NULL = unattested (every pre-H1 row), which the
+    // govern path accepts for backward compatibility — only a PRESENT-but-
+    // unverifiable origin rejects. Purely additive: no existing row changes, no
+    // index (origin is never a query key; verification reads the row it
+    // already has).
+    version: 11,
+    name: 'add_candidates_origin',
+    sql: `
+ALTER TABLE candidates ADD COLUMN origin_json TEXT;
+    `.trim(),
+  },
 ];

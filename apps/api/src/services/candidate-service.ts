@@ -105,6 +105,24 @@ export function applyIntakeOverrides(
   });
 }
 
+/**
+ * Channels a team-mode capture may CLAIM in `origin.channel` when no
+ * deployment-specific allowlist is configured (H3 — env `TEAMKB_ALLOWED_CHANNELS`,
+ * comma-separated, overrides). The shipped capture surfaces:
+ *
+ *  - `team-mcp`  — the plugin's team-mode `brain_capture` proxy.
+ *  - `local-mcp` — the plugin's local-mode capture (spool path; listed so a
+ *    locally-minted candidate replayed through the API is not misclassified as
+ *    unrecognized).
+ *
+ * `unattested` is deliberately ABSENT: it is receipt vocabulary for candidates
+ * carrying NO origin, never a claimable channel. A candidate with no `origin`
+ * object skips this check entirely (backward compatibility with pre-H1
+ * clients); only an EXPLICIT claim of an unknown channel is refused, with the
+ * stable 422 code `unrecognized_channel`.
+ */
+export const DEFAULT_ALLOWED_ORIGIN_CHANNELS: readonly string[] = ['team-mcp', 'local-mcp'];
+
 /** Outcome of {@link CandidateService.intake} — safety vs knowledge (created ≠ replay). */
 export type IntakeResult = {
   candidate: MemoryCandidate;
@@ -124,9 +142,16 @@ export class CandidateService {
    *                   so the direct-service unit tests can construct a service
    *                   without an audit sink; the HTTP app always wires it.
    */
+  /**
+   * @param allowedChannels  Origin channels a capture may claim (H3). Defaults
+   *                         to {@link DEFAULT_ALLOWED_ORIGIN_CHANNELS};
+   *                         deployments override via `TEAMKB_ALLOWED_CHANNELS`
+   *                         (wired in main.ts / buildApp).
+   */
   constructor(
     private readonly repo: CandidateRepository,
     private readonly auditRepo?: AuditRepository,
+    private readonly allowedChannels: readonly string[] = DEFAULT_ALLOWED_ORIGIN_CHANNELS,
   ) {}
 
   /**
@@ -157,6 +182,23 @@ export class CandidateService {
     const parsed = MemoryCandidate.safeParse(data);
     if (!parsed.success) {
       throw badRequest(`Invalid candidate: ${parsed.error.message}`);
+    }
+
+    // Authorized-channel gate (GSB Wave-2 H3): a capture that CLAIMS an origin
+    // channel this deployment does not recognize is refused with a distinct,
+    // stable 422 code before any override/scan/insert work. A candidate with NO
+    // `origin` skips this entirely (pre-H1 clients stay compatible; it governs
+    // later as `unattested`). Note this checks the channel CLAIM only — the
+    // token HMAC is verified at promotion time, where the govern path holds the
+    // installation secret.
+    if (
+      parsed.data.origin !== undefined &&
+      !this.allowedChannels.includes(parsed.data.origin.channel)
+    ) {
+      throw unprocessable(
+        `Candidate rejected: origin channel '${parsed.data.origin.channel}' is not an authorized capture channel on this deployment.`,
+        'unrecognized_channel',
+      );
     }
 
     // R8 (bead compile-then-govern-jfv.6.7): never trust the team-mode client for

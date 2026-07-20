@@ -52,6 +52,8 @@ import type {
   AuditChainRow,
 } from '@qmd-team-intent-kb/store';
 
+import { loadOrCreateOriginSecret } from '@qmd-team-intent-kb/common';
+
 import { Curator } from './curator.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
 import { mergeGovern } from './merge/merge-gate.js';
@@ -305,9 +307,18 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     const disclosureRejected = ingestResult.value.rejected;
 
     // Stage B: Curator.processBatch — dedup + policy + promote.
+    // Write-time provenance (H1): resolve the installation origin secret so
+    // origin-claiming candidates verify; unreadable → undefined, and only
+    // origin-CLAIMING candidates then reject (fail-closed) as unverifiable.
+    let originSecret: string | undefined;
+    try {
+      originSecret = loadOrCreateOriginSecret();
+    } catch {
+      originSecret = undefined;
+    }
     const curator = new Curator(
       { candidateRepo, memoryRepo, policyRepo, auditRepo, linksRepo },
-      { tenantId },
+      { tenantId, originSecret },
     );
     const batch = curator.processBatch(candidates);
 

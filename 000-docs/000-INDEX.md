@@ -55,6 +55,7 @@
 - `045-OD-RNBK-anchor-remote-divergence-recovery.md` — Anchor remote divergence recovery: the private anchor-witness remote (`bobs-big-brain-anchors`, force-push-blocked), the fetch/status divergence check, per-state recovery (ahead = plain push; behind/diverged = investigate with the HISTORY_REWRITTEN tooling before ANY reconciliation), honest trust framing (detectable, not impossible)
 - `046-AT-ARCH-what-each-chain-proves-compile-vs-govern-boundary.md` — Substrate-boundary doctrine: the ICO trace chain proves COMPILE, the INTKB audit chain proves GOVERN admission; neither proves the other's claims (nor content truth); the spool manifest SHA-256 + UUID-v5 id lineage are the bridge; walked end-to-end by `curator-cli provenance-walk`
 - `047-OD-RNBK-merge-govern-and-anchor-receipts-runbook.md` — merge-govern operator runbook (Wave-2 E3/F3/F4): when/how to run the govern-at-merge CLI, what it does NOT do, signed merge-anchor key custody + rotation (SOPS-encrypted private / committed public), and the opt-in OpenTimestamps receipt for anchor heads with its honest network/trust limits
+- `049-AT-DECR-write-time-provenance-origin-tokens.md` — Write-time provenance (GSB Wave-2 H1–H5): HMAC-SHA256 origin tokens over (id, tenantId, capturedAt) keyed by the 0600 `~/.teamkb/origin-secret`, verified structurally before promotion (`origin_token_invalid` receipted reject), accept-with-`unattested` backward compatibility, team-API channel allowlist (`unrecognized_channel` 422), local-mode channel attestation out of scope v1, honest insider-poisoning residual
 
 - `016-OD-OPSM-branch-protection-checklist.md` — GitHub branch protection configuration checklist
 - `027-OD-OPSM-edge-daemon-runbook.md` — edge-daemon operations runbook (install, config, health check, recovery, upgrade, rollback)
@@ -122,5 +123,6 @@
 | 039 | RL-REPT | qmd-team-intent-kb-release-v0.7.0                     | v0.7.0 release report            |
 | 040 | OD-OPSM | brain-api-tailnet-deploy                              | Brain API tailnet deploy runbook |
 | 048 | TQ-AUDT | grounding-audit-every-improvement-loop-and-its-anchor | Improvement-loop grounding audit |
+| 049 | AT-DECR | write-time-provenance-origin-tokens                   | Origin-token decision record     |
 
-## Next Available Sequence: 049
+## Next Available Sequence: 051

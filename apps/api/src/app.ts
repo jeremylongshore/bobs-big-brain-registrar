@@ -87,6 +87,22 @@ export interface AppDependencies {
    */
   qmdAdapter?: QmdQueryPort;
   /**
+   * Origin channels a capture may claim in `origin.channel` (GSB Wave-2 H3).
+   * Defaults to the shipped capture surfaces (see
+   * `DEFAULT_ALLOWED_ORIGIN_CHANNELS`); main.ts wires `TEAMKB_ALLOWED_CHANNELS`.
+   * A capture claiming a channel outside this list is refused with a stable
+   * 422 `unrecognized_channel`.
+   */
+  allowedChannels?: readonly string[];
+  /**
+   * Per-installation origin secret for verifying candidate `origin`
+   * attestations at promotion time (GSB Wave-2 H1). main.ts resolves it via
+   * `loadOrCreateOriginSecret()` (env `TEAMKB_ORIGIN_SECRET` overrides). Left
+   * unset in tests → unattested candidates promote; origin-claiming candidates
+   * are refused fail-closed.
+   */
+  originSecret?: string;
+  /**
    * Optional post-promotion index refresher (D1). When provided, a successful
    * `POST /api/candidates/:id/promote` triggers the export→reindex chain AFTER
    * the promotion transaction commits, so the new memory is searchable
@@ -147,7 +163,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
 
   // The candidate service takes the audit repo so every accepted intake writes a
   // `proposed` provenance receipt (R8, compile-then-govern-jfv.6.7).
-  const candidateService = new CandidateService(candidateRepo, auditRepo);
+  const candidateService = new CandidateService(candidateRepo, auditRepo, deps.allowedChannels);
   const memoryService = new MemoryService(memoryRepo, auditRepo);
   const policyService = new PolicyService(policyRepo);
   const healthService = new HealthService(deps.db);
@@ -159,6 +175,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     policyRepo,
     auditRepo,
     linksRepo,
+    deps.originSecret,
   );
 
   // Routes are wrapped in an inner register() so they load AFTER the

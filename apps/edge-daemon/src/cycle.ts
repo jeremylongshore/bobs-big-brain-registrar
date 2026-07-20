@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ingestFromSpool, Curator } from '@qmd-team-intent-kb/curator';
+import { loadOrCreateOriginSecret } from '@qmd-team-intent-kb/common';
 import { runExport } from '@qmd-team-intent-kb/git-exporter';
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import { resolveRepoContext } from '@qmd-team-intent-kb/repo-resolver';
@@ -167,6 +168,10 @@ function curateStep(
       {
         tenantId: config.tenantId,
         supersessionThreshold: config.supersessionThreshold,
+        // Write-time provenance (H1): resolve the installation origin secret so
+        // origin-claiming candidates verify; absent/unreadable → they reject
+        // fail-closed as unverifiable while unattested candidates flow as before.
+        originSecret: resolveOriginSecretSafe(),
       },
     );
 
@@ -381,4 +386,17 @@ export async function runCycle(
 
   result.completedAt = nowFn();
   return result;
+}
+
+/**
+ * Resolve the installation origin secret (H1) without letting a filesystem
+ * fault abort the curation cycle. Returns undefined on failure, which the
+ * origin gate treats fail-closed for origin-CLAIMING candidates only.
+ */
+function resolveOriginSecretSafe(): string | undefined {
+  try {
+    return loadOrCreateOriginSecret();
+  } catch {
+    return undefined;
+  }
 }

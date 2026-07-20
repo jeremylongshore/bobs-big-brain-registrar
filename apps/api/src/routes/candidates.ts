@@ -46,7 +46,11 @@ export function registerCandidateRoutes(
         return reply.status(status).send({ ...candidate, intake });
       } catch (err) {
         if (err instanceof ApiError) {
-          return reply.status(err.statusCode).send({ error: err.message });
+          // `code` is the stable machine-readable rejection class (H3 —
+          // e.g. `unrecognized_channel`) so clients can branch without prose.
+          return reply
+            .status(err.statusCode)
+            .send({ error: err.message, ...(err.code !== undefined ? { code: err.code } : {}) });
         }
         throw err;
       }
@@ -116,7 +120,11 @@ export function registerCandidateRoutes(
         return reply.status(200).send(memory);
       } catch (err) {
         if (err instanceof ApiError) {
-          return reply.status(err.statusCode).send({ error: err.message });
+          // `code` carries the stable rejection class (H1 — e.g.
+          // `origin_token_invalid` when the provenance HMAC fails to verify).
+          return reply
+            .status(err.statusCode)
+            .send({ error: err.message, ...(err.code !== undefined ? { code: err.code } : {}) });
         }
         throw err;
       }

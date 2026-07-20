@@ -7,6 +7,7 @@
  */
 export {
   makeCandidate,
+  makeAttestedCandidate,
   makeMemory,
   makeMemory as makeCuratedMemory,
   makePolicy,
