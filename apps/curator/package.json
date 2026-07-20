@@ -20,7 +20,8 @@
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seam:receipts-fixture": "tsx scripts/ci-seed-receipts-fixture.ts"
   },
   "dependencies": {
     "@intentsolutions/core": "^0.10.0",

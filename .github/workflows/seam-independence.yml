@@ -1,0 +1,186 @@
+name: Seam independence
+
+# GSB Wave-2 track B3 — three CI gates that prove the compile/govern seam
+# holds BY CONSTRUCTION, dynamically (the dependency-cruiser rule
+# `no-govern-imports-retrieval` is the static half; these jobs are the runtime
+# half — each FAILS when the property breaks, not just when a happy path runs):
+#
+#   delete-compile              deleting the Compile-side retrieval sources
+#                               (qmd executor, native FTS5 backend, rerank
+#                               client/stage — all of packages/qmd-adapter/src)
+#                               leaves the GOVERN core building and passing its
+#                               tests untouched.
+#   swap-model-zero-migration   changing the reranker model identity (file +
+#                               weights sha) is a cache-NAMESPACE change in the
+#                               derived sidecar — zero governed-state migration,
+#                               no governed table touched.
+#   verify-receipts-model-free  every receipt verifier reaches its verdict in
+#                               an environment where NO ML dependency is
+#                               loadable (no qmd binary on PATH, retrieval
+#                               sources deleted).
+#
+# Why a separate workflow instead of jobs in ci.yml: every ci.yml job is a
+# branch-protection-REQUIRED check. These three start as NON-required jobs
+# (marking them required is a later human/API step once they prove stable), and
+# they share one conceptual property, so they group under their own
+# individually-named workflow — the same pattern as the moat-evals /
+# retrieval-eval split (a property gate a ci.yml refactor cannot silently
+# absorb or weaken).
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 'seam-independence-${{ github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  delete-compile:
+    # Claim: deleting Compile-side retrieval does not break Govern.
+    #
+    # Mechanism — physical deletion, not a vitest alias/module-mock layer:
+    # after install, `packages/qmd-adapter/src` (executor + native FTS5 +
+    # rerank) is rm -rf'd, then the govern surface is built and tested through
+    # its normal package scripts. Deletion is the least-hacky stub because
+    # there is no indirection that could silently keep the real modules
+    # reachable (an alias map drifts; an empty src cannot). The failure paths
+    # are real compiler/loader failures (all locally rehearsed red):
+    #   - a govern package that DECLARES qmd-adapter as a dependency pulls it
+    #     into the `--filter ...` closure, whose `tsc` fails on the empty src;
+    #   - a govern BINDING import without the declared dep fails tsc module
+    #     resolution (TS2307, pnpm isolated node_modules) in the build step;
+    #   - a side-effect-only `import 'pkg'` (which tsc deliberately does not
+    #     type-resolve) is caught by the TEST step instead: node/vite module
+    #     resolution fails at runtime. The build+test pair is load-bearing —
+    #     do not drop either step.
+    # This is the dynamic twin of the static dependency-cruiser rule
+    # `no-govern-imports-retrieval`.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Delete the Compile-side retrieval sources (qmd executor, FTS5 backend, rerank)
+        run: |
+          rm -rf packages/qmd-adapter/src packages/qmd-adapter/dist
+          test ! -d packages/qmd-adapter/src
+
+      # Deliberately NOT putting workspace bins on PATH — the govern core must
+      # also build and test without the qmd binary being resolvable.
+
+      - name: Build the govern core (schema, policy-engine, store, curator promoter, audit chain)
+        # `--filter <pkg>...` = the package plus its full dependency closure,
+        # built in topological order. curator + eval-surface together close
+        # over every govern package (schema, common, claude-runtime,
+        # repo-resolver, policy-engine, store, test-fixtures). qmd-adapter is
+        # in NEITHER closure — and if a change ever adds it, this step builds
+        # the deleted package and fails.
+        run: >
+          pnpm --filter @qmd-team-intent-kb/curator...
+          --filter @qmd-team-intent-kb/eval-surface...
+          run build
+
+      - name: Test the govern core with retrieval deleted
+        run: >
+          pnpm exec vitest run
+          packages/schema packages/common packages/claude-runtime
+          packages/repo-resolver packages/store packages/policy-engine
+          packages/eval-surface apps/curator
+
+  swap-model-zero-migration:
+    # Claim: swapping the reranker model identity needs ZERO governed-state
+    # migration — the content-addressed sidecar cache keys on (model file,
+    # weights sha256), exactly what buildRerankStage reads from the weights
+    # manifest, so a model bump changes the cache NAMESPACE, never a schema,
+    # and never touches a governed table. The tsx script swaps in a fixture
+    # identity (different file + sha) and asserts: stale score MISSes, old and
+    # new rows coexist, sidecar schema byte-identical, governed DB file bytes
+    # untouched, re-open applies no new migration, governed schema hash
+    # unchanged. Any broken assertion exits non-zero.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Build workspace (the script imports @qmd-team-intent-kb/store via dist)
+        run: pnpm build
+      - name: Swap-model zero-migration proof
+        run: pnpm --filter @qmd-team-intent-kb/qmd-adapter seam:swap-model:ci
+
+  verify-receipts-model-free:
+    # Claim: receipts verify model-free. All four receipt verifiers —
+    # verify-audit-chain, verify-corpus-accounting, provenance-walk (on a
+    # seeded on-disk fixture), and the provenance-integrity eval — reach their
+    # verdicts in an environment with NO ML dependency loadable: the retrieval
+    # sources are deleted (same mechanism as delete-compile) and no qmd binary
+    # is on PATH (the workspace bin is removed and asserted absent). If a
+    # verifier ever grows an import of the rerank/executor modules, the
+    # filtered build fails on the deleted src; if one ever shells out to qmd,
+    # the missing binary fails it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Make ML dependencies unloadable (delete retrieval sources, drop the qmd binary)
+        run: |
+          rm -rf packages/qmd-adapter/src packages/qmd-adapter/dist
+          rm -f node_modules/.bin/qmd
+          rm -rf node_modules/.pnpm/@tobilu+qmd@*
+          if command -v qmd; then
+            echo "qmd binary still resolvable — environment is not model-free" >&2
+            exit 1
+          fi
+
+      - name: Build the verifier surface (govern core only)
+        run: >
+          pnpm --filter @qmd-team-intent-kb/curator...
+          --filter @qmd-team-intent-kb/eval-surface...
+          run build
+
+      - name: Provenance-integrity eval (forks pass / tamper fails), model-free
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface provenance:ci
+
+      - name: Seed the on-disk receipts fixture (real promoter path + spool manifest + trace)
+        run: >
+          pnpm --filter @qmd-team-intent-kb/curator seam:receipts-fixture
+          -- --out "$RUNNER_TEMP/receipts-fixture"
+
+      - name: verify-audit-chain, model-free
+        run: node apps/curator/dist/main.js verify-audit-chain --db "$RUNNER_TEMP/receipts-fixture/teamkb.db" --json
+
+      - name: verify-corpus-accounting, model-free
+        run: node apps/curator/dist/main.js verify-corpus-accounting --db "$RUNNER_TEMP/receipts-fixture/teamkb.db" --json
+
+      - name: provenance-walk over the fixture (all 7 links PASS), model-free
+        run: |
+          MEMORY_ID="$(node -p "require('$RUNNER_TEMP/receipts-fixture/fixture.json').memoryId")"
+          node apps/curator/dist/main.js provenance-walk \
+            --memory-id "$MEMORY_ID" \
+            --db "$RUNNER_TEMP/receipts-fixture/teamkb.db" \
+            --brain "$RUNNER_TEMP/receipts-fixture/brain" \
+            --spool "$RUNNER_TEMP/receipts-fixture/spool" \
+            --json

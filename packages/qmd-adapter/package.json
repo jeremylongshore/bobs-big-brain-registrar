@@ -23,6 +23,7 @@
     "reindex": "node dist/cli.js reindex",
     "search-canary": "node dist/cli.js canary",
     "eval:retrieval:ci": "node dist/eval/ci-retrieval-ratchet.js",
+    "seam:swap-model:ci": "tsx scripts/ci-swap-model-zero-migration.ts",
     "eval:governed:local": "node dist/eval/governed-eval-anchor.js"
   },
   "dependencies": {
