@@ -22,6 +22,7 @@
  */
 
 import { existsSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 import {
   CandidateRepository,
@@ -41,6 +42,7 @@ import type {
 
 import { Curator } from './curator.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
+import { walkProvenance } from './provenance/provenance-walk.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -81,6 +83,15 @@ Subcommands:
     without one is an orphan — the signature of a raw SQL INSERT that bypassed
     the curator promoter. Opens the db READ-ONLY; exits 2 when orphans exist.
 
+  provenance-walk --memory-id <id> --db <path> [--brain <path>] [--spool <dir>]... [--json]
+    Walk one curated memory's provenance chain across the govern/compile
+    boundary: curated_memories row → id derivation → 'promoted' receipt →
+    candidates row → content-addressed candidate id → spool manifest entry
+    (the bridge) → ICO compile trace. Prints PASS / FAIL / UNVERIFIABLE per
+    link with the evidence backing it. Opens the db READ-ONLY.
+    Exit: 0 all PASS · 1 any FAIL (broken chain) · 3 no FAIL but >=1
+    UNVERIFIABLE (artifact absent, e.g. no brain dir on CI) · 2 usage error.
+
   help | --help | -h
     Print this message.
 
@@ -108,6 +119,17 @@ Options for 'verify-corpus-accounting':
   --db <path>     SQLite path to read READ-ONLY (required for any meaningful
                   run; an in-memory db is always empty). Never mutated.
   --json          Emit a structured JSON envelope in place of the summary.
+
+Options for 'provenance-walk':
+  --memory-id <id>  The curated_memories id to walk (required).
+  --db <path>       SQLite path to read READ-ONLY (required). Never mutated.
+  --brain <path>    ICO brain root holding audit/traces/. Its basename is the
+                    workspaceId used in the candidate-id derivation.
+                    Default: ~/.teamkb/brain.
+  --spool <dir>     Directory scanned recursively for spool *.manifest.json
+                    sidecars. Repeatable. Default: <db-dir>/spool and
+                    <db-dir>/brain/spool.
+  --json            Emit a structured JSON envelope in place of the summary.
 `;
 
 // ---------------------------------------------------------------------------
@@ -129,6 +151,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdGenerateExceptionManifest(argv.slice(1), deps);
     case 'verify-corpus-accounting':
       return cmdVerifyCorpusAccounting(argv.slice(1), deps);
+    case 'provenance-walk':
+      return cmdProvenanceWalk(argv.slice(1), deps);
     case 'help':
     case '--help':
     case '-h':
@@ -768,6 +792,139 @@ async function cmdVerifyCorpusAccounting(args: string[], deps: CuratorCliDeps): 
       process.stderr.write(`  ${o.id}  tenant=${o.tenantId}  promoted_at=${o.promotedAt}\n`);
     }
     return 2;
+  } finally {
+    try {
+      (db as unknown as { close?: () => void }).close?.();
+    } catch {
+      // non-fatal
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// provenance-walk
+//
+// Walk one memory's full provenance chain across the govern/compile boundary
+// (046-AT-ARCH): the INTKB store rows + 'promoted' receipt (govern), the
+// UUID-v5 id lineage, the spool manifest bridge, and the ICO compile trace
+// (compile). Each link is verified against the artifact that actually backs
+// it; an absent artifact is honestly UNVERIFIABLE, never PASS.
+// ---------------------------------------------------------------------------
+
+interface ProvenanceWalkOpts {
+  memoryId: string;
+  dbPath: string;
+  brainDir?: string;
+  spoolDirs: string[];
+  json: boolean;
+}
+
+function parseProvenanceWalkArgs(
+  args: string[],
+): { ok: true; opts: ProvenanceWalkOpts } | { ok: false; message: string } {
+  let memoryId: string | undefined;
+  let dbPath: string | undefined;
+  let brainDir: string | undefined;
+  const spoolDirs: string[] = [];
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    switch (arg) {
+      case '--memory-id':
+        memoryId = args[i + 1];
+        i += 2;
+        break;
+      case '--db':
+        dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--brain':
+        brainDir = args[i + 1];
+        i += 2;
+        break;
+      case '--spool': {
+        const dir = args[i + 1];
+        if (dir !== undefined) spoolDirs.push(dir);
+        i += 2;
+        break;
+      }
+      case '--json':
+        json = true;
+        i += 1;
+        break;
+      default:
+        return { ok: false, message: `unknown flag: ${arg}` };
+    }
+  }
+
+  if (memoryId === undefined || memoryId.trim() === '') {
+    return { ok: false, message: 'missing required flag: --memory-id <id>' };
+  }
+  // --db is mandatory for the same reason as verify-corpus-accounting: an
+  // implicit in-memory store would make every link a verdict about nothing.
+  if (dbPath === undefined || dbPath.trim() === '') {
+    return {
+      ok: false,
+      message: 'missing required flag: --db <path> (refusing to walk an implicit in-memory store)',
+    };
+  }
+
+  return { ok: true, opts: { memoryId, dbPath, brainDir, spoolDirs, json } };
+}
+
+/** Directory containing a db path (mirror of defaultManifestPath's logic). */
+function dbDir(dbPath: string): string {
+  const idx = Math.max(dbPath.lastIndexOf('/'), dbPath.lastIndexOf('\\'));
+  return idx >= 0 ? dbPath.slice(0, idx) : '.';
+}
+
+async function cmdProvenanceWalk(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseProvenanceWalkArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli provenance-walk: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { memoryId, dbPath, json } = parsed.opts;
+  const brainDir = parsed.opts.brainDir ?? `${homedir()}/.teamkb/brain`;
+  const spoolDirs =
+    parsed.opts.spoolDirs.length > 0
+      ? parsed.opts.spoolDirs
+      : [`${dbDir(dbPath)}/spool`, `${dbDir(dbPath)}/brain/spool`];
+
+  // Open READ-ONLY — a verifier must never mutate a live brain.
+  const db = deps.createDb({ dbPath, readonly: true });
+  try {
+    const result = walkProvenance(db, memoryId, { spoolDirs, brainDir });
+
+    if (json) {
+      process.stdout.write(JSON.stringify(result) + '\n');
+      return result.exitCode;
+    }
+
+    process.stdout.write(`provenance walk: memory ${result.memoryId}\n`);
+    process.stdout.write(`brain root:  ${brainDir}\n`);
+    process.stdout.write(`spool dirs:  ${spoolDirs.join(', ')}\n\n`);
+    for (const link of result.links) {
+      process.stdout.write(`  [${link.status.padEnd(12)}] ${link.link}\n`);
+      process.stdout.write(`      ${link.evidence}\n`);
+    }
+    process.stdout.write(
+      `\nChain: ${result.passCount} PASS / ${result.failCount} FAIL / ` +
+        `${result.unverifiableCount} UNVERIFIABLE\n`,
+    );
+    if (result.failCount > 0) {
+      process.stderr.write(
+        `PROVENANCE_BROKEN: ${result.failCount} link(s) contradicted by the artifacts that back them.\n`,
+      );
+    } else if (result.unverifiableCount > 0) {
+      process.stdout.write(
+        `Some links are UNVERIFIABLE: their backing artifacts are absent on this host — ` +
+          `absence of evidence, not contradiction.\n`,
+      );
+    }
+    return result.exitCode;
   } finally {
     try {
       (db as unknown as { close?: () => void }).close?.();
