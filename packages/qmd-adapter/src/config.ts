@@ -76,6 +76,12 @@ export interface QmdAdapterConfig {
     /** Rerank-ordered hits returned (default 8). */
     topN?: number;
     /**
+     * Truncate each document body sent to the model (default 1500 chars).
+     * CPU cross-encoder latency scales ~linearly with total characters, so
+     * this knob × candidateWindow IS the latency budget.
+     */
+    maxDocChars?: number;
+    /**
      * Override for the sidecar score cache (tests use `:memory:`). Defaults to
      * `<qmd-index>/<tenantId>/rerank-cache.sqlite` — derived, deletable data.
      */

@@ -217,6 +217,7 @@ function buildRerankStage(config: QmdAdapterConfig): RerankStage | null {
       exportDir: config.exportDir,
       candidateWindow: rerank.candidateWindow,
       topN: rerank.topN,
+      maxDocChars: rerank.maxDocChars,
     });
   } catch {
     return null;

@@ -38,7 +38,9 @@ ExecStart=%h/.local/lib/bbb/llama-server/current/llama-server \
   -m %h/.cache/qmd/models/hf_ggml-org_qwen3-reranker-0.6b-q8_0.gguf \
   --rerank \
   --ctx-size 4096 \
-  --threads 4
+  --threads 6 \
+  --threads-batch 6 \
+  --ubatch-size 1024
 # ~640 MB model + KV/compute buffers; guard well below that so a runaway can
 # never pressure the dev box (17 GiB free, but this box has OOM history).
 MemoryMax=2G
