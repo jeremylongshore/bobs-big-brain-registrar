@@ -53,4 +53,23 @@ export type {
   DecisionFalseNegative,
   DecisionCasesReport,
 } from './govern-decision/decision-types.js';
+export {
+  evaluateGroundedness,
+  GROUNDEDNESS_FLOORS,
+  type GroundednessOptions,
+} from './groundedness.js';
+export { scoreGroundedness, DEFAULT_TOKEN_SUPPORT_THRESHOLD } from './groundedness/scorer.js';
+export {
+  FIXTURE_VERSION as GROUNDEDNESS_FIXTURE_VERSION,
+  GROUNDEDNESS_ITEMS,
+} from './groundedness/fixture/v1/index.js';
+export { judgeFromEnv, type GroundednessJudge } from './groundedness/llm-judge.js';
+export type {
+  GroundednessItem,
+  GroundednessLabel,
+  GroundednessPrediction,
+  GroundednessError,
+  GroundednessReport,
+  Perturbation,
+} from './groundedness/types.js';
 export type { EvaluatorResult, RetrievalProbe, DedupProbe } from './types.js';

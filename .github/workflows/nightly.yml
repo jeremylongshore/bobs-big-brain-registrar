@@ -44,6 +44,17 @@ jobs:
         # gap). Documented gaps are reported, not failed.
         run: pnpm --filter @qmd-team-intent-kb/eval-surface govern:ci
 
+      - name: Groundedness eval (deterministic scorer over the labeled fixture, fail-closed on regression)
+        # GSB Wave-2 C2: does an answer-like claim stay anchored to the memory
+        # it cites? Runs the DETERMINISTIC groundedness scorer (token/number/
+        # negation arithmetic — no LLM anywhere in this gate) over fixture v1
+        # (real promoted-memory excerpts + synthetic claims). Prints the
+        # segmented supported-precision / unsupported-catch-rate numbers and
+        # fails closed on any UNDOCUMENTED scorer error or a segment dropping
+        # below its measured-then-committed floor. Documented limitations
+        # (argument swaps, one distant negation) are reported, not failed.
+        run: pnpm --filter @qmd-team-intent-kb/eval-surface groundedness:ci
+
       - name: Put workspace bins on PATH (qmd for the search-health canary)
         # qmd is a pinned root devDependency (@tobilu/qmd); the workspace bin
         # makes it discoverable so the reindex+canary CLI runs against a real
