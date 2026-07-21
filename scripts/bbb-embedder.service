@@ -1,0 +1,98 @@
+# bbb-embedder.service — Bob's Big Brain embedding runtime (blueprint bead B4).
+#
+# Serves EmbeddingGemma-300M (Gemma license, GGUF Q8_0) via the SHA-256-pinned
+# llama.cpp `llama-server` (installed by scripts/install-llama-server.sh — the
+# SAME pinned runtime the reranker uses) with ONLY the /v1/embeddings endpoint
+# enabled, bound to loopback. No external API is ever in the serving path; the
+# qmd-adapter's dense arm calls http://127.0.0.1:8098/v1/embeddings and fails
+# open to the lexical RRF fusion if this service is down (queries lose only the
+# dense candidate list; the sidecar index simply stays stale until the service
+# returns).
+#
+# Install (copy, don't symlink — systemd user units should survive worktree GC):
+#   cp scripts/bbb-embedder.service ~/.config/systemd/user/bbb-embedder.service
+#   printf '%s  %s\n' \
+#     b5ce9d77a3fc4b3b39ccb5643c36777911cc4eb46a66962eadfa3f5f60490d63 \
+#     "$HOME/.cache/qmd/models/hf_ggml-org_embeddinggemma-300M-Q8_0.gguf" \
+#     > ~/.local/lib/bbb/embedder-weights.sha256
+#   systemctl --user daemon-reload && systemctl --user enable --now bbb-embedder
+#
+# Weight gate choice: ExecStartPre runs `sha256sum -c` against a one-line pin
+# file whose hash is the SAME constant pinned for id 'embedding' in
+# packages/qmd-adapter/src/weights/weights-manifest.ts (re-verified against the
+# on-disk GGUF during the B4 build). Chosen over invoking the compiled
+# assertWeightsVerified from the main checkout because a service unit must not
+# depend on a repo checkout's build state (dist/ may be stale or absent); the
+# pin file is the manifest value, restated where systemd can check it
+# fail-closed with a coreutils binary. Keep the two in lock-step on any weight
+# bump. (<1 s to hash 334 MB at start; negligible.)
+#
+# Pooling + normalization are PINNED explicitly (--pooling mean
+# --embd-normalize 2) rather than left to GGUF-metadata auto-detect. This is
+# load-bearing for correctness: the adapter's cosine score `1 - d^2/2` and the
+# raw-L2-distance KNN ordering are only valid for MEAN-pooled, L2-normalized
+# vectors. If the server silently fell back to last-token/CLS pooling, every
+# query would return well-formed but wrongly-ordered hits and nothing in the
+# fail-open path would catch it. EmbeddingGemma requires mean pooling; a
+# govern-by-pinning product does not leave retrieval ordering to an unstated
+# default. (Verified 2026-07-20: mean is also this GGUF's default — the
+# relevant/irrelevant cosine separation was 0.63 vs 0.00 — so pinning changes
+# nothing observable; it just removes the silent-misconfig failure mode.)
+#
+# --ubatch-size 2048 is REQUIRED for correctness, not a memory knob (learned the
+# hard way, 2026-07-20). llama-server refuses any single embedding input longer
+# than the physical batch: "input (586 tokens) is too large to process, increase
+# the physical batch size (current batch size: 512)". Real 2000-char corpus docs
+# tokenize to up to ~600+ tokens, and token-dense docs (code, hashes, CJK) can
+# approach the 2048 model context — so the ubatch MUST cover the largest possible
+# input. A 512 ubatch (tried as a memory reduction) made every long doc a hard
+# error that retry-stormed and aborted the whole build after ~32 docs. Setting
+# ubatch = ctx (2048) guarantees any doc the model will accept also fits one
+# physical batch.
+#
+# Memory: the ORIGINAL failure was the CAP (old MemoryMax=1.5G), not the ubatch.
+# ubatch 2048 peaks the cgroup at ~1.1G measured (334 MB model + KV for the
+# 2048-ctx slot + a 2048-token compute buffer); MemoryMax=3G leaves ~2.1G
+# headroom, bounded. (The original 1.5G OOM was ubatch 2048 under PARALLEL 2 —
+# two slots — against a 1.5G cap; parallel 1 + a 3G cap is the fix.)
+# Do NOT remove the cap: this box has OOM history and an unbounded llama-server
+# is exactly the failure mode the dev-box DO-NOT list guards against. Do NOT
+# shrink ubatch below 2048 to save memory — it breaks embedding of long docs.
+#
+# --parallel 1: one 2048-token sequence slot. The adapter sends BATCHED requests
+# (one POST with an `input` array of N docs), which llama-server processes across
+# its slots; one slot is the simplest robust posture for a long unattended build
+# (batched requests measured ~0.44 s/doc at parallel 1). The indexer additionally
+# (a) retries a failed batch with bounded backoff to bridge a systemd auto-restart
+# and (b) skips a data-poison batch while the service is healthy rather than
+# aborting the build (dense-indexer.ts).
+#
+# Runbook: 000-docs/051-AT-RNBK-embedder-service-and-dense-index-runbook.md
+
+[Unit]
+Description=Bob's Big Brain embedder (llama-server + EmbeddingGemma-300M, loopback :8098)
+
+[Service]
+Type=simple
+# Fail-closed weight integrity gate before the model is ever loaded.
+ExecStartPre=/usr/bin/sha256sum -c %h/.local/lib/bbb/embedder-weights.sha256
+ExecStart=%h/.local/lib/bbb/llama-server/current/llama-server \
+  --host 127.0.0.1 \
+  --port 8098 \
+  -m %h/.cache/qmd/models/hf_ggml-org_embeddinggemma-300M-Q8_0.gguf \
+  --embedding \
+  --pooling mean \
+  --embd-normalize 2 \
+  --ctx-size 2048 \
+  --parallel 1 \
+  --threads 6 \
+  --threads-batch 6 \
+  --ubatch-size 2048
+# ~334 MB model + KV + a 2048-token compute buffer; measured cgroup peak ~1.5G.
+# 3G leaves ~1.5G headroom, bounded (the box has 11 GiB+ free but OOM history).
+MemoryMax=3G
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

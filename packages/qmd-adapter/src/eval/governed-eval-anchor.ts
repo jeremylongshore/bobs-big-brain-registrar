@@ -248,6 +248,15 @@ function extractSnapshot(tarballPath: string, tmpBase: string): string {
   return exportDir;
 }
 
+/** Wall-clock + outcome of a dense index build inside an eval arm (B4). */
+interface DenseBuildInfo {
+  wallClockMs: number;
+  embedded: number;
+  skipped: number;
+  removed: number;
+  totalDocs: number;
+}
+
 /** Build a temp index over `exportDir` and run the full governed-brain-v1 set. */
 async function evalCorpus(
   exportDir: string,
@@ -255,17 +264,35 @@ async function evalCorpus(
   opts: {
     /** Opt-in rerank arm for the A/B comparison (044-AT-DECR ship order). */
     rerank?: QmdAdapterConfig['rerank'];
+    /** Opt-in dense arm for the A/B comparison (B4 ship gate). */
+    dense?: QmdAdapterConfig['dense'];
     /** Reuse the index a prior evalCorpus call already built for this tenant. */
     skipIndexBuild?: boolean;
+    /**
+     * Build the dense sidecar index (embed the corpus) before querying, and
+     * report its wall-clock. Requires `dense`. Fails the arm loudly when the
+     * embedder is down or the build embeds nothing — an A/B arm must never
+     * report numbers from a silently-empty dense index.
+     */
+    buildDenseIndex?: boolean;
+    /**
+     * Log a per-query progress line (index i/N + wall-clock ms + top hit) during
+     * the verdict phase. Turns a slow/hung query phase from a silent black box
+     * into an observable stream — added after a full run's query phase was
+     * misread as hung when it was actually still building.
+     */
+    logProgress?: boolean;
   } = {},
 ): Promise<
-  { ok: true; sr: StratifiedReport; perQuery: EvalPerQuery[] } | { ok: false; reason: string }
+  | { ok: true; sr: StratifiedReport; perQuery: EvalPerQuery[]; denseBuild?: DenseBuildInfo }
+  | { ok: false; reason: string }
 > {
   const adapter = new QmdAdapter({
     tenantId: ANCHOR_TENANT,
     exportDir,
     timeout: ANCHOR_QMD_TIMEOUT_MS,
     ...(opts.rerank ? { rerank: opts.rerank } : {}),
+    ...(opts.dense ? { dense: opts.dense } : {}),
   });
   if (!opts.skipIndexBuild) {
     const built = await reindex(adapter);
@@ -276,7 +303,53 @@ async function evalCorpus(
       };
     }
   }
-  const retrieve = qmdRetrievalFn(adapter, ANCHOR_TENANT, 'curated');
+  let denseBuild: DenseBuildInfo | undefined;
+  if (opts.buildDenseIndex === true) {
+    const t0 = Date.now();
+    const report = await adapter.denseSync();
+    const wallClockMs = Date.now() - t0;
+    if (report === null) {
+      return { ok: false, reason: 'dense build requested but the adapter has no dense arm' };
+    }
+    if (report.serviceDown) {
+      return {
+        ok: false,
+        reason: `dense index build aborted — embedding service down (embedded ${report.embedded}, skipped ${report.skipped})`,
+      };
+    }
+    if (report.embedded === 0 && report.totalDocs > 0) {
+      return {
+        ok: false,
+        reason: `dense index build embedded 0 of ${report.totalDocs} docs — refusing to eval an empty dense index`,
+      };
+    }
+    denseBuild = {
+      wallClockMs,
+      embedded: report.embedded,
+      skipped: report.skipped,
+      removed: report.removed,
+      totalDocs: report.totalDocs,
+    };
+    console.log(
+      `dense index built: ${report.embedded}/${report.totalDocs} docs embedded ` +
+        `(${report.skipped} skipped) in ${(wallClockMs / 60_000).toFixed(1)} min`,
+    );
+  }
+  const baseRetrieve = qmdRetrievalFn(adapter, ANCHOR_TENANT, 'curated');
+  const totalQueries = GOVERNED_BRAIN_V1_DATASET.queries.length;
+  let queryNum = 0;
+  const retrieve = opts.logProgress
+    ? async (q: string, k: number): Promise<string[]> => {
+        const t0 = Date.now();
+        const ids = await baseRetrieve(q, k);
+        queryNum++;
+        console.log(
+          `  [verdict] query ${queryNum}/${totalQueries}  ${Date.now() - t0} ms  ` +
+            `top=${ids[0] ?? '(none)'}`,
+        );
+        return ids;
+      }
+    : baseRetrieve;
   const report = await runEval(GOVERNED_BRAIN_V1_DATASET, retrieve, {
     k: 10,
     backend: backendLabel,
@@ -291,6 +364,7 @@ async function evalCorpus(
   }
   return {
     ok: true,
+    ...(denseBuild ? { denseBuild } : {}),
     sr: stratify(report, GOVERNED_BRAIN_V1_DATASET.queries),
     perQuery: report.perQuery.map((q) => ({
       id: q.id,
@@ -409,6 +483,10 @@ export async function runGovernedEvalAnchor(): Promise<number> {
     // part of the verdict — the floors gate the fused arm only.
     await maybeRunRerankArm(exportDir, frozen.sr, resultsDir, verified.sha256);
 
+    // Informational dense A/B arm (B4 ship gate: dense retrieval is judged on
+    // this harness BEFORE any default wiring — same discipline as rerank).
+    await maybeRunDenseArm(exportDir, frozen.sr, resultsDir, verified.sha256);
+
     // Informational live run — never part of the verdict, off by default so the
     // frozen anchor stays the deterministic path.
     await maybeRunLiveInformational();
@@ -514,6 +592,192 @@ async function maybeRunRerankArm(
     console.log(`rerank A/B artifact written: ${outPath}`);
   } catch (err: unknown) {
     console.error('WARN could not write the rerank A/B artifact:', err);
+  }
+}
+
+/**
+ * GOVERNED_EVAL_DENSE=1: the A/B arm for the dense-retrieval verdict (B4).
+ * Builds the sqlite-vec sidecar index over the SAME extracted frozen corpus
+ * (embedding every doc via the local `bbb-embedder` service — an offline,
+ * measured cost reported as wall-clock), then runs the identical frozen query
+ * set through the same lexical indexes with the dense list joining the RRF
+ * fusion. Embedder URL override: GOVERNED_EVAL_DENSE_URL (default the
+ * bbb-embedder loopback service). Informational only — prints the
+ * side-by-side per-stratum deltas, the ship-gate readout, and writes
+ * `governed-brain-v1-dense.json`; the exit code never depends on this arm.
+ *
+ * SHIP GATE (blueprint B4, judged from this run's own fused baseline):
+ * semantic Recall@10 must beat the fused arm's semantic Recall@10 materially
+ * — this build exists because dense should retrieve what lexical cannot —
+ * and lexical Recall@10 must not drop below its fused baseline minus the
+ * canonical epsilon.
+ */
+async function maybeRunDenseArm(
+  exportDir: string,
+  fusedSr: StratifiedReport,
+  resultsDir: string,
+  snapshotSha256: string,
+): Promise<void> {
+  if (process.env['GOVERNED_EVAL_DENSE'] !== '1') return;
+  // Hard fail-open boundary: this is an INFORMATIONAL arm and must never be
+  // able to fail the anchor verdict. `evalCorpus` returns {ok:false} for the
+  // expected failure modes, but an unexpected throw anywhere below (embedder
+  // OOM-killed mid-build, a runEval defect, a disk error) would otherwise
+  // propagate to main() and print "governed eval anchor crashed" INSTEAD of
+  // "ANCHOR PASS" on the perfectly-good fused floor. Same discipline the
+  // reranker arm follows — the model side can never take the deterministic
+  // verdict down.
+  try {
+    await runDenseArm(exportDir, fusedSr, resultsDir, snapshotSha256);
+  } catch (err: unknown) {
+    console.error(
+      '\ndense arm CRASHED (informational, verdict unaffected — the fused ' +
+        'floor still governs):',
+      err,
+    );
+  }
+}
+
+async function runDenseArm(
+  exportDir: string,
+  fusedSr: StratifiedReport,
+  resultsDir: string,
+  snapshotSha256: string,
+): Promise<void> {
+  const url = process.env['GOVERNED_EVAL_DENSE_URL'] ?? 'http://127.0.0.1:8098';
+
+  // Embedding the full 17k-doc corpus takes ~3 h; GOVERNED_EVAL_DENSE_PREBUILT
+  // lets a run REUSE an already-built dense-vec.sqlite (copied into the temp
+  // tenant dir so the eval never mutates the preserved artifact) and run ONLY
+  // the fast verdict phase. The index carries its own model+dims+prefix pin, so
+  // opening it fail-closed verifies it matches this code (a mismatch would wipe
+  // it, which we detect below via the empty-index guard). This makes every
+  // re-measure minutes, not hours.
+  const prebuilt = process.env['GOVERNED_EVAL_DENSE_PREBUILT'];
+  let denseIndexPath: string | undefined;
+  const buildDenseIndex = prebuilt === undefined;
+  if (prebuilt !== undefined) {
+    const resolved = expandHome(prebuilt);
+    if (!existsSync(resolved)) {
+      console.error(`\ndense arm FAILED: GOVERNED_EVAL_DENSE_PREBUILT not found: ${resolved}`);
+      return;
+    }
+    denseIndexPath = join(
+      process.env['TEAMKB_BASE_PATH'] ?? tmpdir(),
+      'dense-prebuilt-reuse.sqlite',
+    );
+    cpSync(resolved, denseIndexPath);
+    console.log(
+      `\ndense arm: REUSING prebuilt index ${resolved} (${denseIndexPath}) — ` +
+        'skipping the corpus embed, running the verdict phase only.',
+    );
+  }
+
+  const dense = await evalCorpus(
+    exportDir,
+    'qmd-bm25+fts5+embeddinggemma-dense-rrf (frozen snapshot)',
+    {
+      skipIndexBuild: true, // the lexical indexes are already built for this tenant
+      buildDenseIndex, // build the dense sidecar unless reusing a prebuilt one
+      logProgress: true, // per-query verdict-phase progress (never a silent black box again)
+      dense: {
+        enabled: true,
+        url,
+        searchK: 50,
+        maxDocChars: 2000, // matches DEFAULT_DENSE_MAX_DOC_CHARS — the shipped default
+        timeoutMs: 30_000, // offline arm: a slow query-embed is data, not an outage
+        ...(denseIndexPath ? { indexPath: denseIndexPath } : {}),
+      },
+    },
+  );
+  if (!dense.ok) {
+    console.error(`\ndense arm FAILED (informational, verdict unaffected): ${dense.reason}`);
+    return;
+  }
+  console.log('\n=== dense A/B arm (informational — B4 ship-gate evidence) ===');
+  console.log(formatStratifiedReport(dense.sr));
+  console.log('\n=== per-stratum delta (dense-fused − lexical-fused) ===');
+  const fusedBy = new Map(fusedSr.byKind.map((s) => [s.stratum, s]));
+  const rows = [
+    ...dense.sr.byKind.map((s) => ({ s, f: fusedBy.get(s.stratum) })),
+    { s: dense.sr.overall, f: fusedSr.overall },
+  ];
+  const d = (a: number, b: number): string => {
+    const delta = a - b;
+    return `${delta >= 0 ? '+' : ''}${delta.toFixed(4)}`;
+  };
+  for (const { s, f } of rows) {
+    if (!f) continue;
+    console.log(
+      `  ${s.stratum.padEnd(9)} ΔRecall@10=${d(s.meanRecallAtK, f.meanRecallAtK)}  ` +
+        `ΔnDCG@10=${d(s.meanNdcgAtK, f.meanNdcgAtK)}  ΔMRR=${d(s.mrr, f.mrr)}`,
+    );
+  }
+
+  // Ship-gate readout (informational): semantic must improve materially,
+  // lexical must hold within the canonical epsilon of its fused baseline.
+  const fusedSemantic = fusedSr.byKind.find((s) => s.stratum === 'semantic');
+  const fusedLexical = fusedSr.byKind.find((s) => s.stratum === 'lexical');
+  const denseSemantic = dense.sr.byKind.find((s) => s.stratum === 'semantic');
+  const denseLexical = dense.sr.byKind.find((s) => s.stratum === 'lexical');
+  let gate: {
+    semanticBaseline: number;
+    semanticMeasured: number;
+    semanticImproved: boolean;
+    lexicalBaseline: number;
+    lexicalMeasured: number;
+    lexicalHeld: boolean;
+    epsilon: number;
+    verdict: 'PASS' | 'MISS';
+  } | null = null;
+  if (fusedSemantic && fusedLexical && denseSemantic && denseLexical) {
+    const semanticImproved =
+      denseSemantic.meanRecallAtK > fusedSemantic.meanRecallAtK + RATCHET_EPSILON;
+    const lexicalHeld = denseLexical.meanRecallAtK >= fusedLexical.meanRecallAtK - RATCHET_EPSILON;
+    gate = {
+      semanticBaseline: fusedSemantic.meanRecallAtK,
+      semanticMeasured: denseSemantic.meanRecallAtK,
+      semanticImproved,
+      lexicalBaseline: fusedLexical.meanRecallAtK,
+      lexicalMeasured: denseLexical.meanRecallAtK,
+      lexicalHeld,
+      epsilon: RATCHET_EPSILON,
+      verdict: semanticImproved && lexicalHeld ? 'PASS' : 'MISS',
+    };
+    console.log(
+      `\nship gate: semantic Recall@10 ${gate.semanticMeasured.toFixed(4)} vs baseline ` +
+        `${gate.semanticBaseline.toFixed(4)} (${semanticImproved ? 'improved' : 'NOT materially improved'}); ` +
+        `lexical ${gate.lexicalMeasured.toFixed(4)} vs floor ` +
+        `${(gate.lexicalBaseline - gate.epsilon).toFixed(4)} (${lexicalHeld ? 'held' : 'REGRESSED'}) ` +
+        `→ ${gate.verdict}`,
+    );
+  }
+  try {
+    const outPath = join(resultsDir, 'governed-brain-v1-dense.json');
+    writeFileSync(
+      outPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          dataset: dense.sr.dataset,
+          snapshotSha256,
+          embedderUrl: url,
+          denseIndexBuild: dense.denseBuild ?? null,
+          // Provenance: whether the dense index was freshly built or reused from
+          // a preserved prebuilt (null = freshly built this run).
+          reusedPrebuiltIndex: prebuilt ?? null,
+          gate,
+          fused: { overall: fusedSr.overall, byKind: fusedSr.byKind },
+          dense: { overall: dense.sr.overall, byKind: dense.sr.byKind },
+          perQuery: dense.perQuery,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    console.log(`dense A/B artifact written: ${outPath}`);
+  } catch (err: unknown) {
+    console.error('WARN could not write the dense A/B artifact:', err);
   }
 }
 

@@ -1,0 +1,573 @@
+{
+  "schemaVersion": 1,
+  "dataset": "governed-brain-v1",
+  "snapshotSha256": "0a0bf76963fd114c1c5b92f3ec6cdd8a6a91708df669cd5e35ea1c6047c7366b",
+  "embedderUrl": "http://127.0.0.1:8098",
+  "denseIndexBuild": null,
+  "gate": {
+    "semanticBaseline": 0.3392857142857143,
+    "semanticMeasured": 0.9642857142857143,
+    "semanticImproved": true,
+    "lexicalBaseline": 1,
+    "lexicalMeasured": 1,
+    "lexicalHeld": true,
+    "epsilon": 0.001,
+    "verdict": "PASS"
+  },
+  "fused": {
+    "overall": {
+      "stratum": "overall",
+      "queryCount": 42,
+      "meanRecallAtK": 0.5595238095238095,
+      "meanNdcgAtK": 0.5425678156068795,
+      "mrr": 0.5476190476190477
+    },
+    "byKind": [
+      {
+        "stratum": "lexical",
+        "queryCount": 14,
+        "meanRecallAtK": 1,
+        "meanNdcgAtK": 0.9410500759088202,
+        "mrr": 0.9285714285714286
+      },
+      {
+        "stratum": "semantic",
+        "queryCount": 28,
+        "meanRecallAtK": 0.3392857142857143,
+        "meanNdcgAtK": 0.3433266854559092,
+        "mrr": 0.35714285714285715
+      }
+    ]
+  },
+  "dense": {
+    "overall": {
+      "stratum": "overall",
+      "queryCount": 42,
+      "meanRecallAtK": 0.9761904761904762,
+      "meanNdcgAtK": 0.8224071498559318,
+      "mrr": 0.7772817460317459
+    },
+    "byKind": [
+      {
+        "stratum": "lexical",
+        "queryCount": 14,
+        "meanRecallAtK": 1,
+        "meanNdcgAtK": 0.9264550951334166,
+        "mrr": 0.9166666666666666
+      },
+      {
+        "stratum": "semantic",
+        "queryCount": 28,
+        "meanRecallAtK": 0.9642857142857143,
+        "meanNdcgAtK": 0.7703831772171895,
+        "mrr": 0.7075892857142857
+      }
+    ]
+  },
+  "perQuery": [
+    {
+      "id": "q01",
+      "kind": "lexical",
+      "query": "confused deputy problem",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/00c95f4e-e1ee-51ad-9331-3aefd68a1629.md",
+        "qmd://kb-curated/2d1c3cf1-97d4-57b6-a0fb-2b007f12f26f.md",
+        "qmd://kb-curated/1495ae27-7537-54e3-b816-f1e4aef31e75.md"
+      ]
+    },
+    {
+      "id": "q02",
+      "kind": "lexical",
+      "query": "compile then govern",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/c68ad991-6134-50c8-a577-2aa12c4e9d81.md",
+        "qmd://kb-guides/4437de5f-94ec-4279-ad07-187779b7be55.md",
+        "qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md"
+      ]
+    },
+    {
+      "id": "q03",
+      "kind": "lexical",
+      "query": "hash chain audit log",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/03a1e7c7-9b85-58fb-aa77-08ac74e8486a.md",
+        "qmd://kb-guides/de880add-7c73-5104-b4a8-2283eb00b900.md",
+        "qmd://kb-guides/35025d14-9768-552c-9c13-ddfcb2e7f66b.md"
+      ]
+    },
+    {
+      "id": "q04",
+      "kind": "lexical",
+      "query": "rapid write race condition",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/d09ddcef-9754-5ef4-8402-0fe397ebe4ce.md",
+        "qmd://kb-guides/0ef3d7fb-92cc-5d0e-ab57-ec84f0acc7c9.md",
+        "qmd://kb-guides/9f6770c4-0de0-5adc-b58d-3af99bfaf47a.md"
+      ]
+    },
+    {
+      "id": "q05",
+      "kind": "lexical",
+      "query": "pgvector HNSW index parameters",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/1230fddb-467b-5bbc-a611-b568b9c46e40.md",
+        "qmd://kb-curated/5c235b11-c75b-5882-a2c7-90a9e5560343.md",
+        "qmd://kb-curated/46c53844-2b99-53d4-94be-9bfc538e4ca9.md"
+      ]
+    },
+    {
+      "id": "q06",
+      "kind": "lexical",
+      "query": "row level security",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/c39f9b40-f1cf-5e96-b6af-47faa598e935.md",
+        "qmd://kb-guides/902766b2-9377-5725-9c0a-02bec9449bf0.md",
+        "qmd://kb-guides/e8403a83-3244-522d-813e-4b9e408286ba.md"
+      ]
+    },
+    {
+      "id": "q07",
+      "kind": "lexical",
+      "query": "single tasking",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md",
+        "qmd://kb-guides/450ee64a-0270-5f6d-a410-47bdfe46d48b.md",
+        "qmd://kb-guides/d6cf2d7e-7182-54c6-8ef8-413996291dae.md"
+      ]
+    },
+    {
+      "id": "q08",
+      "kind": "lexical",
+      "query": "curated only default search",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/5c600718-4993-5ae6-b0e3-125a25bae51d.md",
+        "qmd://kb-guides/ac9f9724-486e-556f-8705-35d9894480ce.md",
+        "qmd://kb-guides/62a1e0b9-388b-40ce-a359-c5719b90d897.md"
+      ]
+    },
+    {
+      "id": "q09",
+      "kind": "lexical",
+      "query": "beads post compaction recovery",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/d2dd0c93-851d-526e-9f26-4e14b5dd6dff.md",
+        "qmd://kb-guides/4465afce-4e9c-455c-95d5-2da1dfc33067.md",
+        "qmd://kb-curated/6dc4a43f-3b1e-577d-9b21-fffd78e35425.md"
+      ]
+    },
+    {
+      "id": "q10",
+      "kind": "lexical",
+      "query": "SOPS age secrets management",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+        "qmd://kb-guides/9b2c5afa-bac2-5c76-bce8-b63b1d5b553b.md",
+        "qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md"
+      ]
+    },
+    {
+      "id": "q11",
+      "kind": "lexical",
+      "query": "Z3 formal verification",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/270376d1-cdf5-58e0-86f5-29f1c8ae5d1f.md",
+        "qmd://kb-guides/babcc81d-ccf3-5d74-b9af-609daf563b87.md",
+        "qmd://kb-guides/de20600e-3dfc-50b2-8806-90c61109bb93.md"
+      ]
+    },
+    {
+      "id": "q12",
+      "kind": "lexical",
+      "query": "ultralight travel",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/87f285db-4166-4a28-8962-6c17569f4b9d.md",
+        "qmd://kb-curated/69bf58b3-35d0-5588-8199-9b0a2292034b.md",
+        "qmd://kb-guides/6e4de229-1512-571c-ab21-5d4115086e56.md"
+      ]
+    },
+    {
+      "id": "q13",
+      "kind": "lexical",
+      "query": "spool boundary threat model",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/45e98c3c-8da9-5e73-ae55-6ec24012fbfd.md",
+        "qmd://kb-guides/92dd0782-44d5-5c1d-9f9b-6e9bff0e6b99.md",
+        "qmd://kb-guides/bd7aea98-fb24-447b-b99c-f8f7824094b6.md"
+      ]
+    },
+    {
+      "id": "q14",
+      "kind": "lexical",
+      "query": "token passthrough prohibited MCP",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/2effddb9-ded0-5d50-a16b-c5b1df16b3e3.md",
+        "qmd://kb-curated/2d1c3cf1-97d4-57b6-a0fb-2b007f12f26f.md",
+        "qmd://kb-guides/e3045468-4d92-45b0-a057-25494767f6c1.md"
+      ]
+    },
+    {
+      "id": "q15",
+      "kind": "semantic",
+      "query": "when a server gets tricked into using its own credentials for someone else's request",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/6e35ede6-83fb-576f-b613-dc1121626f6a.md",
+        "qmd://kb-curated/00c95f4e-e1ee-51ad-9331-3aefd68a1629.md",
+        "qmd://kb-guides/f50db081-15aa-5679-896e-297769a4a7d0.md"
+      ]
+    },
+    {
+      "id": "q16",
+      "kind": "semantic",
+      "query": "the model can propose actions but the deterministic system owns durable state and control",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+        "qmd://kb-curated/316bf636-cc61-507b-afa9-1d811ed441d7.md",
+        "qmd://kb-curated/4dcecaa3-b415-5727-8a29-12f86fe919a5.md"
+      ]
+    },
+    {
+      "id": "q17",
+      "kind": "semantic",
+      "query": "do one thing at a time with presence and gratitude to feel less overloaded",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/b6efbfa7-66a7-4226-a9e4-19cfd0625b6d.md",
+        "qmd://kb-guides/b4dd7ebc-13ea-5590-a06b-7f2557d625f9.md",
+        "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md"
+      ]
+    },
+    {
+      "id": "q18",
+      "kind": "semantic",
+      "query": "why do I keep filling every quiet moment so I never have to sit still",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/b4dd7ebc-13ea-5590-a06b-7f2557d625f9.md",
+        "qmd://kb-curated/fcfb7a3c-c9ad-5925-8c91-5b89a6a90f94.md",
+        "qmd://kb-guides/010a9639-6588-46e6-af3a-48e871d5f198.md"
+      ]
+    },
+    {
+      "id": "q19",
+      "kind": "semantic",
+      "query": "overcome procrastination by observing urges and releasing false comforts",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/9aecb44e-c70d-40ec-8c5f-c4a4ace8a605.md",
+        "qmd://kb-guides/8621ca89-152e-5823-9777-7b4139c94ce3.md",
+        "qmd://kb-curated/f9a94d2d-8baf-5c5a-9a03-368c5bae8fb9.md"
+      ]
+    },
+    {
+      "id": "q20",
+      "kind": "semantic",
+      "query": "a green checkmark that passes even when the tool could not run launders trust",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/35025d14-9768-552c-9c13-ddfcb2e7f66b.md",
+        "qmd://kb-curated/51be40a8-5575-5730-9f9f-6483cb32903a.md",
+        "qmd://kb-guides/b9cd2354-a09b-52d8-b020-9da9bc8f625f.md"
+      ]
+    },
+    {
+      "id": "q21",
+      "kind": "semantic",
+      "query": "each entry contains a cryptographic hash of the previous entry so tampering breaks the chain",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/03a1e7c7-9b85-58fb-aa77-08ac74e8486a.md",
+        "qmd://kb-guides/0471c010-fc65-5ef8-83f4-e8750a23c856.md",
+        "qmd://kb-curated/f54f3afa-852e-5174-b85f-3f45d0820a4a.md"
+      ]
+    },
+    {
+      "id": "q22",
+      "kind": "semantic",
+      "query": "deny access by default unless explicitly approved",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/bb527104-0513-5cc7-a203-88ca53e1f28d.md",
+        "qmd://kb-guides/33c3c1c0-7a8d-53aa-af9d-c24692fa52a4.md",
+        "qmd://kb-guides/5319c13d-44a6-5200-95c8-7b6f8a1948ac.md"
+      ]
+    },
+    {
+      "id": "q23",
+      "kind": "semantic",
+      "query": "picking one task clearing distractions giving it complete attention",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md",
+        "qmd://kb-guides/b6efbfa7-66a7-4226-a9e4-19cfd0625b6d.md",
+        "qmd://kb-guides/b4dd7ebc-13ea-5590-a06b-7f2557d625f9.md"
+      ]
+    },
+    {
+      "id": "q24",
+      "kind": "semantic",
+      "query": "separate the writer database pool from the reader so the verification path cannot write",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/311c194f-9bd7-534d-9d8a-9c862b3bfbc4.md",
+        "qmd://kb-guides/d95f0c44-d0aa-455a-be39-064196f4d574.md",
+        "qmd://kb-guides/1428bf01-65db-50bc-a2a3-5c28d17ea608.md"
+      ]
+    },
+    {
+      "id": "q25",
+      "kind": "semantic",
+      "query": "the fastest path when bootstrapping from zero is a linear series of phases",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/4236510f-d643-5994-8ec5-5b81dd09d4b3.md",
+        "qmd://kb-guides/2e818cbd-6e55-445d-83c0-21392f24d747.md",
+        "qmd://kb-guides/6d7a2320-8f3e-509a-840c-6e25f9977dc8.md"
+      ]
+    },
+    {
+      "id": "q26",
+      "kind": "semantic",
+      "query": "raise alert priority once a failure streak forms",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/08909f28-291a-5d1b-a867-030f09f6fc03.md",
+        "qmd://kb-guides/81dcce81-9a1b-558e-bde2-89e3195c4c0c.md",
+        "qmd://kb-guides/2cbc4475-330e-4ca3-86d5-a16efb339afc.md"
+      ]
+    },
+    {
+      "id": "q27",
+      "kind": "semantic",
+      "query": "transforms raw corpus into structured semantic knowledge through defined passes",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/b1c0e2d7-6fd6-5e65-9cf0-4e94d5bd585e.md",
+        "qmd://kb-guides/e15a0c22-7b95-5de5-a0cc-acc9023915d4.md",
+        "qmd://kb-guides/25232649-ef76-5b34-a149-e64f9099b060.md"
+      ]
+    },
+    {
+      "id": "q28",
+      "kind": "semantic",
+      "query": "MCP servers must not accept tokens that were not issued for themselves",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/2effddb9-ded0-5d50-a16b-c5b1df16b3e3.md",
+        "qmd://kb-curated/9be5297b-cfa2-5645-8662-3a2472f9c7b8.md",
+        "qmd://kb-guides/49ae2178-d7e4-59cb-a561-76c76f21aa9f.md"
+      ]
+    },
+    {
+      "id": "q29",
+      "kind": "semantic",
+      "query": "sort tasks by urgency to reduce stress from an overloaded schedule",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/b6efbfa7-66a7-4226-a9e4-19cfd0625b6d.md",
+        "qmd://kb-guides/b4dd7ebc-13ea-5590-a06b-7f2557d625f9.md",
+        "qmd://kb-guides/8ffb1267-45a8-508a-b953-e89e84431957.md"
+      ]
+    },
+    {
+      "id": "q30",
+      "kind": "semantic",
+      "query": "route cheap simple requests to a free local model and hard ones to a paid cloud API",
+      "hit": false,
+      "recallAtK": 0,
+      "retrievedTop3": [
+        "qmd://kb-guides/aaac9f6b-e539-58af-ac62-cd122d03eaad.md",
+        "qmd://kb-guides/428a69b8-bef7-47d5-8d9f-0be4344da573.md",
+        "qmd://kb-guides/2e0426ff-c6af-5525-904c-b286314d1d6a.md"
+      ]
+    },
+    {
+      "id": "q31",
+      "kind": "semantic",
+      "query": "use real database containers in tests instead of mocks to catch production bugs",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/a3be9ff3-9fe0-4a2a-b03a-ee22ae452453.md",
+        "qmd://kb-guides/4206af4b-4801-562b-adf2-edbc70f65b5c.md",
+        "qmd://kb-curated/32743115-7333-5076-9143-c997fb662faf.md"
+      ]
+    },
+    {
+      "id": "q32",
+      "kind": "semantic",
+      "query": "give each dashboard panel its own error boundary so one crash does not blank the page",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/f32f7ee1-c295-50bd-a837-49e98e4e643a.md",
+        "qmd://kb-guides/e9652320-69d6-54e2-adbc-17b1bb113a7c.md",
+        "qmd://kb-guides/cc61b012-03f0-532c-b3ff-2a39c3c95642.md"
+      ]
+    },
+    {
+      "id": "q33",
+      "kind": "semantic",
+      "query": "the pipeline executes a misread specification perfectly and ships the wrong product",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/1d74a14d-4cd3-4493-9526-f4d3a182979d.md",
+        "qmd://kb-curated/75620fd4-eb23-5c6b-a57e-f480a5611bb2.md",
+        "qmd://kb-curated/9f16d9e4-0c8a-5763-ac47-9f2612e57e32.md"
+      ]
+    },
+    {
+      "id": "q34",
+      "kind": "semantic",
+      "query": "two environment variables must both be set before an expensive or dangerous operation runs",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/7e789883-2c59-5b0d-9117-57746de98acc.md",
+        "qmd://kb-guides/1a2b5e32-0d82-554c-9d63-55c306e74f30.md",
+        "qmd://kb-guides/12242e88-9382-50a7-baf1-38ffdc914ea1.md"
+      ]
+    },
+    {
+      "id": "q35",
+      "kind": "semantic",
+      "query": "search the brain before saving because it only dedupes at promotion not intake",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/8aeabdba-504f-5ffe-a908-02c73021a390.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-guides/79b7c1bc-e3f7-53de-bd44-6722cafe51fa.md"
+      ]
+    },
+    {
+      "id": "q36",
+      "kind": "semantic",
+      "query": "teammates reach one shared brain over the network instead of each running their own",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md",
+        "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+        "qmd://kb-guides/c6782345-d828-5c66-8ce4-919a1d877dc9.md"
+      ]
+    },
+    {
+      "id": "q37",
+      "kind": "semantic",
+      "query": "reducing the available tool set from twenty to four or five based on the current context",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/aa69b924-73ca-5f30-92fa-779da6f0dacb.md",
+        "qmd://kb-guides/523c99e2-ee8e-5ca1-8068-069ac482af66.md",
+        "qmd://kb-guides/a3350926-6205-5892-9ef6-388b0a0b7009.md"
+      ]
+    },
+    {
+      "id": "q38",
+      "kind": "semantic",
+      "query": "separate the build environment from the runtime environment to reduce the final image size",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/016efea4-8115-56df-80b6-2127a07a298f.md",
+        "qmd://kb-guides/901be397-1cf1-563e-be4c-8e574c017c05.md",
+        "qmd://kb-guides/1c1c4ff3-2aab-5bbc-9b99-e67028df8aed.md"
+      ]
+    },
+    {
+      "id": "q39",
+      "kind": "semantic",
+      "query": "the moat is deterministic governance and receipts not better recall",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/9050496d-a3ef-5c3f-a27e-2fe8e30f14ce.md",
+        "qmd://kb-curated/4dcecaa3-b415-5727-8a29-12f86fe919a5.md",
+        "qmd://kb-decisions/45fcbe44-972f-5a3e-9c7b-00d03dc66beb.md"
+      ]
+    },
+    {
+      "id": "q40",
+      "kind": "semantic",
+      "query": "each stage returns a new model via model_copy update rather than mutating the original",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/f9f16dc2-ad20-5ae2-8e7c-058a87daba66.md",
+        "qmd://kb-guides/3c01fd2c-8494-569e-b20f-e344251a16bd.md",
+        "qmd://kb-guides/a03f4154-ddde-5448-ae39-0239feeb8f10.md"
+      ]
+    },
+    {
+      "id": "q41",
+      "kind": "semantic",
+      "query": "member proposes and the server disposes with a remote proxy over the tailnet",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md",
+        "qmd://kb-guides/48daecf6-2aa8-5b7f-afe4-06d596faebad.md",
+        "qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md"
+      ]
+    },
+    {
+      "id": "q42",
+      "kind": "semantic",
+      "query": "the brain does not dedupe at intake only promotion dedupes so search before you save",
+      "hit": true,
+      "recallAtK": 1,
+      "retrievedTop3": [
+        "qmd://kb-guides/8aeabdba-504f-5ffe-a908-02c73021a390.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-guides/79b7c1bc-e3f7-53de-bd44-6722cafe51fa.md"
+      ]
+    }
+  ]
+}
