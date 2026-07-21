@@ -212,4 +212,54 @@ describe('QmdAdapter — native FTS5 fusion', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toEqual([]);
   });
+
+  // ---- dense arm opt-in + fail-open (B4) ---------------------------------
+
+  function denseAdapter(): QmdAdapter {
+    return new QmdAdapter(
+      {
+        tenantId: 'test-tenant',
+        exportDir,
+        nativeIndexPath: ':memory:',
+        // Closed port: every embed call fails, which MUST degrade to the
+        // lexical fusion, never to an error.
+        dense: {
+          enabled: true,
+          url: 'http://127.0.0.1:1',
+          timeoutMs: 300,
+          indexPath: ':memory:',
+        },
+      },
+      mock,
+    );
+  }
+
+  it('dense enabled but embedder down: query serves the lexical fusion unchanged (fail-open)', async () => {
+    write('curated', 'a.md', 'resilience content for the dense fail-open test');
+    const qmdJson = JSON.stringify([
+      { score: 0.9, file: 'qmd://kb-curated/a.md', snippet: 'resilience' },
+    ]);
+    mock.queueSuccess(qmdJson);
+    const withDense = await denseAdapter().query('resilience content', 'curated', 'test-tenant');
+    mock.queueSuccess(qmdJson);
+    const withoutDense = await fusedAdapter().query('resilience content', 'curated', 'test-tenant');
+    expect(withDense.ok).toBe(true);
+    expect(withoutDense.ok).toBe(true);
+    if (withDense.ok && withoutDense.ok) {
+      expect(withDense.value).toEqual(withoutDense.value);
+    }
+  });
+
+  it('denseSync() with the embedder down reports serviceDown instead of throwing', async () => {
+    write('curated', 'a.md', 'doc that would need embedding');
+    const report = await denseAdapter().denseSync();
+    expect(report).not.toBeNull();
+    expect(report?.serviceDown).toBe(true);
+    expect(report?.embedded).toBe(0);
+    expect(report?.skipped).toBeGreaterThan(0);
+  });
+
+  it('denseSync() is null when dense is not configured (the default)', async () => {
+    expect(await fusedAdapter().denseSync()).toBeNull();
+  });
 });
