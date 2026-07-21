@@ -116,6 +116,29 @@ export type {
   RerankStageOptions,
 } from './rerank/index.js';
 
+// Dense — opt-in sqlite-vec + EmbeddingGemma retrieval arm, fail-open (B4, 038/044-AT-DECR)
+export {
+  EmbedClient,
+  denseScore,
+  DenseVecIndex,
+  DenseIndexer,
+  DENSE_SNIPPET_CHARS,
+  DEFAULT_EMBED_TIMEOUT_MS,
+  DEFAULT_DENSE_MAX_DOC_CHARS,
+  DEFAULT_DENSE_BATCH_SIZE,
+  EMBEDDINGGEMMA_QUERY_PREFIX,
+  EMBEDDINGGEMMA_DOCUMENT_PREFIX,
+} from './dense/index.js';
+export type {
+  DenseScore,
+  EmbedRole,
+  EmbedClientOptions,
+  DenseSearchHit,
+  DenseDocEntry,
+  DenseIndexReport,
+  DenseIndexerOptions,
+} from './dense/index.js';
+
 // Reindex — idempotent rebuild of the derived qmd-index from kb-export (e06.13)
 export { reindex } from './reindex/reindex.js';
 export type { ReindexReport } from './reindex/reindex.js';

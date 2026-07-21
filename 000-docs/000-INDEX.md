@@ -125,5 +125,6 @@
 | 048 | TQ-AUDT | grounding-audit-every-improvement-loop-and-its-anchor | Improvement-loop grounding audit |
 | 049 | AT-DECR | write-time-provenance-origin-tokens                   | Origin-token decision record     |
 | 050 | AT-RNBK | reranker-service-runbook                              | bbb-reranker service runbook     |
+| 051 | AT-RNBK | embedder-service-and-dense-index-runbook              | bbb-embedder + dense index (B4)  |
 
-## Next Available Sequence: 051
+## Next Available Sequence: 052

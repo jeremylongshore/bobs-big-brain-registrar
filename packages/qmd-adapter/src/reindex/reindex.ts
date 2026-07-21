@@ -1,6 +1,7 @@
 import type { Result } from '@qmd-team-intent-kb/common';
 import type { QmdError } from '../types.js';
 import type { QmdAdapter } from '../adapter.js';
+import type { DenseIndexReport } from '../dense/dense-indexer.js';
 
 /** Outcome of an idempotent reindex run. */
 export interface ReindexReport {
@@ -8,6 +9,14 @@ export interface ReindexReport {
   collectionsCreated: string[];
   /** Whether `qmd update` (re-index of every registered collection) completed. */
   indexUpdated: boolean;
+  /**
+   * Dense sidecar sync outcome (B4). Absent when the adapter has no dense arm
+   * configured. An embedder outage shows up here as `serviceDown: true` with
+   * the pending docs counted in `skipped` — the dense index stays stale
+   * (degrade) but the reindex itself still succeeds: the lexical index is the
+   * serving floor and MUST NOT be held hostage by the optional dense arm.
+   */
+  dense?: DenseIndexReport;
 }
 
 /**
@@ -53,9 +62,19 @@ export async function reindex(adapter: QmdAdapter): Promise<Result<ReindexReport
       return { ok: false, error: updateResult.error };
     }
 
+    // Dense sidecar sync (B4) — only after the lexical index is up to date,
+    // and never fatal: `denseSync()` returns null when dense is not
+    // configured and a serviceDown report (not a throw) when the embedder is
+    // unreachable.
+    const dense = await adapter.denseSync();
+
     return {
       ok: true,
-      value: { collectionsCreated: ensureResult.value, indexUpdated: true },
+      value: {
+        collectionsCreated: ensureResult.value,
+        indexUpdated: true,
+        ...(dense === null ? {} : { dense }),
+      },
     };
   } catch (error) {
     return {

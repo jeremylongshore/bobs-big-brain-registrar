@@ -94,6 +94,35 @@ export interface QmdAdapterConfig {
      */
     cachePath?: string;
   };
+  /**
+   * OPT-IN dense retrieval arm (blueprint bead B4; 038/044-AT-DECR:
+   * sqlite-vec + EmbeddingGemma-300M only). Explicit options only — no env
+   * magic. When omitted or `enabled: false`, the query path is byte-identical
+   * to the lexical-only deterministic fusion. When enabled, the arm FAILS
+   * OPEN: embedder down / index unbuilt / any failure serves the lexical
+   * fusion with no dense list.
+   */
+  dense?: {
+    enabled: boolean;
+    /** Embedding service base URL, e.g. `http://127.0.0.1:8098` (loopback only). */
+    url: string;
+    /** Hard timeout for the query-embed call (default 5000 ms). */
+    timeoutMs?: number;
+    /**
+     * Override for the sqlite-vec sidecar index (tests use `:memory:`).
+     * Defaults to `<qmd-index>/<tenantId>/dense-vec.sqlite` — derived,
+     * rebuildable, deletable data next to the other derived indexes.
+     */
+    indexPath?: string;
+    /** Dense KNN hits fed to the fusion, pre scope-filter (default 50). */
+    searchK?: number;
+    /** Truncate each doc to this many chars before embedding (default 1200). */
+    maxDocChars?: number;
+    /** Timeout for a document-batch embed call during indexing (default 120000 ms). */
+    indexTimeoutMs?: number;
+    /** Docs per embed request during indexing (default 16). */
+    batchSize?: number;
+  };
 }
 
 /** Default configuration values */
