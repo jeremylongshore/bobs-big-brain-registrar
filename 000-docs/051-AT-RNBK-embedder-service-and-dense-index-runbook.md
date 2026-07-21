@@ -128,7 +128,7 @@ the lexical-only deterministic fusion (unit-tested).
   slot); 93% of this corpus's docs exceed 1200 chars and the median is 2778
   bytes, so a 1200 cap would truncate away most of the body while 2000 captures
   the bulk of the median doc. Throughput ~0.53 s/doc (batched, `--parallel 1`);
-  full-build wall-clock (17,310 docs): see the measured verdict in §9.
+  full-build wall-clock (17,295 docs): see the measured verdict in §9.
   Incremental syncs after a normal governance cycle embed only the handful of
   promoted/changed docs — seconds.
 - **`--ubatch-size` is a CORRECTNESS knob, not a memory knob (load-bearing,
@@ -230,7 +230,7 @@ below the epsilon that governs the gate.
 
 ### Corpus-coverage honesty (how this number was produced)
 
-This verdict was measured against a **preserved dense index of 12,645 / 17,310
+This verdict was measured against a **preserved dense index of 12,645 / 17,295
 docs (73% overall)**. That is complete for what the eval actually measures: the
 governed-brain-v1 queries run in the **default `curated` scope** (curated +
 decisions + guides), and those collections were essentially fully embedded —
@@ -260,7 +260,7 @@ kept opt-in). For THIS PR it nonetheless stays behind the explicit `dense` confi
 govern `DeterministicScore`), and the plugin does NOT wire it — a conservative
 first landing. **Recommendation (tracked as a B4 follow-up):** the serving/plugin
 path SHOULD enable dense-by-default given the measured **+0.63 semantic Recall@10**,
-pending (a) a full-corpus rebuild that confirms these numbers over 17,310 docs
+pending (a) a full-corpus rebuild that confirms these numbers over 17,295 docs
 and (b) an embedder resource/latency check for the interactive path (a query
 embed is ~0.4 s; the service is `MemoryMax`-bounded and loopback-only). Do not
 flip the default silently — flip it on that evidence.

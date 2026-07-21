@@ -55,7 +55,7 @@ export interface DenseIndexReport {
  * Chars of each doc embedded (the rest is truncated). 2000 chars ≈ ~500
  * EmbeddingGemma tokens — comfortably inside both the 2048-token model context
  * and a 1024-token `--parallel 2` slot. Chosen from the measured corpus +
- * throughput curve (2026-07-20, 17,310-doc frozen corpus): median doc is 2778
+ * throughput curve (2026-07-20, 17,295-doc frozen corpus): median doc is 2778
  * bytes and 93% exceed 1200 chars, so 1200 would truncate away most of the
  * body; embedding at 2000 vs 1200 chars costs only +23% wall-clock (~138 vs
  * ~112 min full-corpus) while capturing ~72% of the median doc vs ~43%. 3000
