@@ -90,9 +90,11 @@ context so no single doc exceeds the physical batch (see §5 — this is a
 correctness requirement, not a tuning choice).
 
 **Prompt contract:** EmbeddingGemma is asymmetric. The adapter's `EmbedClient`
-prefixes every query with `task: search result | query: ` and every document
-with `title: none | text: ` — send raw un-prefixed text and similarity quality
-silently degrades. Never bypass the client.
+prefixes every query with `task: search result | query:` and every document
+with `title: none | text:` (each prefix ends with a trailing space — see
+`EMBEDDINGGEMMA_QUERY_PREFIX` / `EMBEDDINGGEMMA_DOCUMENT_PREFIX`). Send raw
+un-prefixed text and similarity quality silently degrades. Never bypass the
+client.
 
 ## 4. Enabling dense in the adapter
 
