@@ -12,10 +12,23 @@
 # `node_modules/@intentsolutions/audit-harness/scripts/harness-hash.sh` with
 # a hardcoded PATTERNS array that misses this repo's policy files
 # (tests/TESTING.md, RTM, PERSONAS, JOURNEYS, stryker.config.mjs,
-# vitest.config.ts, scripts/crap-score.ts). The upstream script has no env
-# override or config file for the pattern list. This script encodes the
-# right pattern list for THIS repo until upstream supports configurability —
-# tracked in qmd-team-intent-kb-tpp.
+# vitest.config.ts, scripts/crap-score.ts). This script encodes the right
+# pattern list for THIS repo — tracked in qmd-team-intent-kb-tpp.
+#
+# STATUS 2026-07-22 — the upstream limitation this forked around is FIXED.
+# audit-harness v1.3.0's `harness-hash.sh` reads an optional
+# `.harness-hash-extra-patterns` file at the repo root and appends its lines to
+# the default PATTERNS array, which is exactly the configurability this comment
+# said did not exist. Of the 8 files pinned here, only `.dependency-cruiser.cjs`
+# is an upstream default; the other 7 would move into that file.
+#
+# Retiring this fork is therefore now POSSIBLE but is deliberately NOT bundled
+# into the cleanup that removed the dead vendored copy. It changes the gate that
+# guards every policy artifact in the repo, and the two scripts' `.harness-hash`
+# manifest formats have not been proven byte-compatible — a mismatch means a
+# forced re-init, and re-initialising a tamper manifest is itself a policy event
+# that has to be reviewed, not a side effect of a tidy-up. Do it as its own
+# change, with the pinned-set equivalence demonstrated before and after.
 #
 # ## Usage
 #
