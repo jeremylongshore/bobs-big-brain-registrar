@@ -61,7 +61,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { QmdAdapter } from '../adapter.js';
-import type { QmdAdapterConfig } from '../config.js';
+import { getQmdTenantIndexPath, type QmdAdapterConfig } from '../config.js';
 import { reindex } from '../reindex/reindex.js';
 import { runEval } from './run-eval.js';
 import { stratify, formatStratifiedReport } from './stratified-report.js';
@@ -694,6 +694,41 @@ async function runDenseArm(
     console.error(`\ndense arm FAILED (informational, verdict unaffected): ${dense.reason}`);
     return;
   }
+
+  // Preserve a FRESHLY-BUILT index so the ~3 h corpus embed is never paid twice.
+  //
+  // The whole `tmpBase` is rmSync'd when the run ends, which means a fresh dense
+  // build is DESTROYED on exit. That is not hypothetical: the 2026-07-20 B4 build
+  // measured semantic Recall@10 0.3393 -> 0.9643, and by 2026-07-31 the
+  // `~/.teamkb/eval-anchor/dense-prebuilt/` directory was EMPTY — so re-verifying
+  // a shipped number required rebuilding from scratch. An artifact that costs
+  // three hours and is thrown away by default is a defect, not a policy.
+  //
+  // Opt-in via GOVERNED_EVAL_DENSE_PRESERVE=<path> and only meaningful on a fresh
+  // build (reusing a prebuilt has nothing new to save). Failure to preserve is
+  // logged but never fatal — this arm is informational and must not be able to
+  // take the deterministic verdict down.
+  const preserveTo = process.env['GOVERNED_EVAL_DENSE_PRESERVE'];
+  if (buildDenseIndex && preserveTo !== undefined && preserveTo !== '') {
+    const builtIndex = join(getQmdTenantIndexPath(ANCHOR_TENANT), 'dense-vec.sqlite');
+    try {
+      if (!existsSync(builtIndex)) {
+        console.error(`WARN could not preserve the dense index — not found at ${builtIndex}`);
+      } else {
+        const dest = expandHome(preserveTo);
+        mkdirSync(dirname(dest), { recursive: true });
+        cpSync(builtIndex, dest);
+        console.log(
+          `\ndense index PRESERVED: ${dest}\n` +
+            '  Re-run the verdict phase in minutes instead of hours with:\n' +
+            `    GOVERNED_EVAL_DENSE=1 GOVERNED_EVAL_DENSE_PREBUILT=${preserveTo} pnpm eval:governed:local`,
+        );
+      }
+    } catch (err: unknown) {
+      console.error('WARN could not preserve the dense index (informational arm):', err);
+    }
+  }
+
   console.log('\n=== dense A/B arm (informational — B4 ship-gate evidence) ===');
   console.log(formatStratifiedReport(dense.sr));
   console.log('\n=== per-stratum delta (dense-fused − lexical-fused) ===');
