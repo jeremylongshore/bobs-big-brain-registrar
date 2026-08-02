@@ -60,6 +60,12 @@ async function main(): Promise<void> {
       // adapter.denseSync(), so without dense configured here the sidecar index
       // would never be built or kept fresh and the API's dense arm would fail
       // open forever — on, but silently serving nothing.
+      //
+      // The chain, so a future reader does not have to re-derive it:
+      //   cycle.ts (step 4) -> reindex() [qmd-adapter/src/reindex/reindex.ts:69]
+      //     -> adapter.denseSync() [qmd-adapter/src/adapter.ts]
+      //   denseSync() returns null when `dense` is absent — hence configuring it
+      //   HERE, not only in apps/api, is what makes the index exist at all.
       dense: resolveDenseConfig(process.env),
     }),
   };

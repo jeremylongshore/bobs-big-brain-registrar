@@ -89,19 +89,62 @@ export type DensePolicyEnv = Readonly<Record<string, string | undefined>>;
  * operator reaching for a kill switch under pressure should not have to
  * remember which spelling the code wanted.
  *
- * `TEAMKB_DENSE_URL` overrides the embedder endpoint (loopback by default; the
- * embedder is never exposed off-host).
+ * `TEAMKB_DENSE_URL` overrides the embedder endpoint. The DEFAULT is loopback —
+ * but that is a default, **not a guarantee**. An operator may point the dense arm
+ * at a remote embedder, and if they do, **every query's text leaves this host**
+ * to be embedded there. Only do that deliberately.
+ *
+ * Note the embedder service binding loopback-only (`--host 127.0.0.1` in the
+ * systemd unit) constrains INBOUND connections and does nothing to constrain
+ * this OUTBOUND one — so a mistyped or leaked `TEAMKB_DENSE_URL` is a
+ * query-exfiltration channel, not a connection that fails closed. Hence the
+ * warning below rather than silent acceptance.
+ *
+ * A non-loopback override is WARNED, not blocked: blocking would break a
+ * legitimate future remote-embedder deployment, while silence would let an
+ * accidental override ship unnoticed. Loud-but-permitted is the honest middle.
  *
  * @param env - Environment to read (pass `process.env`).
+ * @param warn - Sink for the off-host warning; defaults to stderr. Injectable so
+ *               tests assert the warning without capturing global console.
  */
-export function resolveDenseConfig(env: DensePolicyEnv): DenseServingConfig {
+export function resolveDenseConfig(
+  env: DensePolicyEnv,
+  warn: (message: string) => void = (m) => process.stderr.write(`${m}\n`),
+): DenseServingConfig {
   const raw = env['TEAMKB_DENSE']?.trim().toLowerCase();
   const disabled = raw === '0' || raw === 'false' || raw === 'off' || raw === 'no';
+  const url = env['TEAMKB_DENSE_URL']?.trim() || DEFAULT_DENSE_EMBED_URL;
+
+  if (!disabled && !isLoopbackUrl(url)) {
+    warn(
+      `[dense] WARNING: TEAMKB_DENSE_URL points off-host (${url}). ` +
+        'Every search query will be sent there to be embedded. ' +
+        'Set TEAMKB_DENSE=0 to disable the dense arm if this was not intended.',
+    );
+  }
 
   return {
     enabled: !disabled,
-    url: env['TEAMKB_DENSE_URL']?.trim() || DEFAULT_DENSE_EMBED_URL,
+    url,
     searchK: DEFAULT_DENSE_SEARCH_K,
     timeoutMs: DEFAULT_DENSE_TIMEOUT_MS,
   };
+}
+
+/**
+ * Is this URL a loopback address?
+ *
+ * Parsed with `URL` rather than string-matched so `http://127.0.0.1@evil.tld/`
+ * — which *contains* a loopback literal but resolves to `evil.tld` — is
+ * correctly classified as off-host. An unparseable URL is treated as NOT
+ * loopback, so a malformed override warns rather than passing silently.
+ */
+function isLoopbackUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
 }

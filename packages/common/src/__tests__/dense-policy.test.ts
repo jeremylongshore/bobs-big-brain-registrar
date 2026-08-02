@@ -70,6 +70,54 @@ describe('resolveDenseConfig — kill switch', () => {
   });
 });
 
+describe('resolveDenseConfig — off-host override is warned, not silently accepted', () => {
+  /**
+   * The embedder binding loopback-only constrains INBOUND connections and does
+   * nothing to constrain this OUTBOUND one, so a mistyped or leaked
+   * TEAMKB_DENSE_URL is a query-exfiltration channel rather than a connection
+   * that fails closed. These lock the warning so that stays visible.
+   */
+  function capture(env: Record<string, string | undefined>): string[] {
+    const seen: string[] = [];
+    resolveDenseConfig(env, (m) => seen.push(m));
+    return seen;
+  }
+
+  it('does NOT warn for loopback forms', () => {
+    for (const u of [
+      'http://127.0.0.1:8098',
+      'http://localhost:8098',
+      'http://[::1]:8098',
+      undefined,
+    ]) {
+      expect(capture(u === undefined ? {} : { TEAMKB_DENSE_URL: u }), `url=${u}`).toEqual([]);
+    }
+  });
+
+  it('WARNS when the override points off-host', () => {
+    const warnings = capture({ TEAMKB_DENSE_URL: 'http://embeddings.example.com:8098' });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('off-host');
+    // The warning must say what the actual consequence is, not just "careful".
+    expect(warnings[0]).toContain('sent there to be embedded');
+  });
+
+  it('classifies a userinfo-spoofed loopback URL as OFF-host', () => {
+    // `http://127.0.0.1@evil.tld/` CONTAINS a loopback literal but resolves to
+    // evil.tld — a naive string match would wave it through.
+    const warnings = capture({ TEAMKB_DENSE_URL: 'http://127.0.0.1@evil.tld/' });
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('warns on an unparseable override rather than passing it silently', () => {
+    expect(capture({ TEAMKB_DENSE_URL: 'not-a-url' })).toHaveLength(1);
+  });
+
+  it('does not warn when dense is disabled — nothing will be sent anywhere', () => {
+    expect(capture({ TEAMKB_DENSE: '0', TEAMKB_DENSE_URL: 'http://evil.tld' })).toEqual([]);
+  });
+});
+
 describe('resolveDenseConfig — endpoint override', () => {
   it('honors TEAMKB_DENSE_URL', () => {
     expect(resolveDenseConfig({ TEAMKB_DENSE_URL: 'http://127.0.0.1:9999' }).url).toBe(
