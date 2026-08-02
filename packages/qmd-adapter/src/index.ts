@@ -8,13 +8,15 @@ export type {
 } from './types.js';
 
 // Config
-export type { QmdAdapterConfig } from './config.js';
+export type { DenseConfig, QmdAdapterConfig } from './config.js';
 export {
   QMD_INDEX_DIR,
+  DEFAULT_DENSE_URL,
   getQmdIndexBasePath,
   getQmdTenantIndexPath,
   getQmdCollectionIndexPath,
   getQmdTenantEnv,
+  getDefaultDenseConfig,
   DEFAULT_QMD_BINARY,
   DEFAULT_TIMEOUT,
 } from './config.js';
@@ -116,7 +118,8 @@ export type {
   RerankStageOptions,
 } from './rerank/index.js';
 
-// Dense — opt-in sqlite-vec + EmbeddingGemma retrieval arm, fail-open (B4, 038/044-AT-DECR)
+// Dense — production-default sqlite-vec + EmbeddingGemma retrieval arm,
+// fail-open (B4, 038/044-AT-DECR)
 export {
   EmbedClient,
   denseScore,

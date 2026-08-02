@@ -16,6 +16,7 @@
  *   TEAMKB_TENANT_ID  (default: intent-solutions — the live brain's tenant)
  *   TEAMKB_BASE_PATH  (default: ~/.teamkb)         → exportDir = <base>/kb-export
  *   TEAMKB_EXPORT_DIR (overrides exportDir)
+ *   TEAMKB_DENSE_ENABLED (default: true; set false only for emergency rollback)
  *
  * Why (bead compile-then-govern-e06.13 / risk register R11 / umbrella #27):
  * `brain_search` degrades to an EMPTY result on a missing/misrouted index
@@ -23,7 +24,8 @@
  * exactly the "SEARCH DEGRADED, 0 hits on known-positive controls" incident.
  * `canary` turns that silent failure into a non-zero exit code so CI / the
  * nightly / an operator sees it; `reindex` is the repeatable, idempotent
- * rebuild of the derived index (never touches teamkb.db or brain/raw).
+ * rebuild of the derived lexical + dense indexes (never touches teamkb.db or
+ * brain/raw).
  */
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -33,6 +35,7 @@ import Database from 'better-sqlite3';
 import { getTeamKbBasePath } from '@qmd-team-intent-kb/common';
 import { IndexStateRepository } from '@qmd-team-intent-kb/store';
 import { QmdAdapter } from './adapter.js';
+import { getDefaultDenseConfig } from './config.js';
 import type { StalenessProbe } from './types.js';
 import { reindex } from './reindex/reindex.js';
 import { runSearchCanary, formatCanaryReport } from './canary/search-canary.js';
@@ -107,7 +110,8 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
   const errLog = deps.errLog ?? console.error;
   const makeAdapter =
     deps.makeAdapter ??
-    ((tenantId: string, exportDir: string) => new QmdAdapter({ tenantId, exportDir }));
+    ((tenantId: string, exportDir: string) =>
+      new QmdAdapter({ tenantId, exportDir, dense: getDefaultDenseConfig(env) }));
 
   const [command, ...rest] = argv;
   const { tenantId, exportDir } = resolveCliContext(env);

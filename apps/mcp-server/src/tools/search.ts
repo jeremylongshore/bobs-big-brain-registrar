@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { SearchScope } from '@qmd-team-intent-kb/schema';
-import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import {
   extractMemoryIdFromCitation,
   isSearchVisibleSensitivity,
@@ -123,7 +123,7 @@ export async function searchTool(
 }
 
 function defaultAdapter(tenantId: string, exportDir: string): QmdQueryPort {
-  return new QmdAdapter({ tenantId, exportDir });
+  return new QmdAdapter({ tenantId, exportDir, dense: getDefaultDenseConfig() });
 }
 
 /** Local mode: run qmd in-process and map results to cited hits. */
