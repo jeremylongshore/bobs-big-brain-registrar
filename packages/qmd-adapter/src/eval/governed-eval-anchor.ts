@@ -60,6 +60,8 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import Database from 'better-sqlite3';
+
 import { QmdAdapter } from '../adapter.js';
 import { getQmdTenantIndexPath, type QmdAdapterConfig } from '../config.js';
 import { reindex } from '../reindex/reindex.js';
@@ -717,7 +719,30 @@ async function runDenseArm(
       } else {
         const dest = expandHome(preserveTo);
         mkdirSync(dirname(dest), { recursive: true });
-        cpSync(builtIndex, dest);
+        // WAL-SAFE COPY — a bare cpSync of the main DB file is NOT correct here.
+        //
+        // DenseVecIndex sets `journal_mode = WAL` (dense-index.ts), so committed
+        // pages can still live in the `-wal` sidecar until a checkpoint runs.
+        // Copying only `dense-vec.sqlite` can therefore capture a STALE or TORN
+        // snapshot, and the failure mode is silent: the next run reusing this
+        // artifact via GOVERNED_EVAL_DENSE_PREBUILT would simply produce
+        // different numbers — exactly the nondeterminism this harness exists to
+        // prevent, and worse than no artifact at all.
+        //
+        // `db.backup()` is SQLite's online backup API: it is WAL-safe by
+        // construction and produces a single self-contained destination file.
+        // Chose it over `PRAGMA wal_checkpoint(TRUNCATE)` + copy because a
+        // TRUNCATE checkpoint cannot fully complete while any other connection
+        // holds the DB open (it reports BUSY and silently leaves frames behind),
+        // and the adapter may still hold this index open at this point — which
+        // would reintroduce the very torn-copy bug being fixed. The backup API
+        // has no such precondition.
+        const src = new Database(builtIndex, { readonly: true });
+        try {
+          await src.backup(dest);
+        } finally {
+          src.close();
+        }
         console.log(
           `\ndense index PRESERVED: ${dest}\n` +
             '  Re-run the verdict phase in minutes instead of hours with:\n' +
