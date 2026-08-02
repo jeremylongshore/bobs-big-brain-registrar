@@ -1,0 +1,7 @@
+[Unit]
+Description=Bob's Big Brain — reindex and search-health self-heal
+Documentation=https://github.com/jeremylongshore/bobs-big-brain-registrar/blob/main/000-docs/042-OD-OPSM-bbb-qmd-operator-runbook.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/bbb-reindex-heal.sh
