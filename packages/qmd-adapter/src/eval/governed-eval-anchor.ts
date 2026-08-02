@@ -53,6 +53,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -60,8 +61,10 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import Database from 'better-sqlite3';
+
 import { QmdAdapter } from '../adapter.js';
-import type { QmdAdapterConfig } from '../config.js';
+import { getQmdTenantIndexPath, type QmdAdapterConfig } from '../config.js';
 import { reindex } from '../reindex/reindex.js';
 import { runEval } from './run-eval.js';
 import { stratify, formatStratifiedReport } from './stratified-report.js';
@@ -694,6 +697,86 @@ async function runDenseArm(
     console.error(`\ndense arm FAILED (informational, verdict unaffected): ${dense.reason}`);
     return;
   }
+
+  // Preserve a FRESHLY-BUILT index so the ~3 h corpus embed is never paid twice.
+  //
+  // The whole `tmpBase` is rmSync'd when the run ends, which means a fresh dense
+  // build is DESTROYED on exit. That is not hypothetical: the 2026-07-20 B4 build
+  // measured semantic Recall@10 0.3393 -> 0.9643, and by 2026-07-31 the
+  // `~/.teamkb/eval-anchor/dense-prebuilt/` directory was EMPTY — so re-verifying
+  // a shipped number required rebuilding from scratch. An artifact that costs
+  // three hours and is thrown away by default is a defect, not a policy.
+  //
+  // Opt-in via GOVERNED_EVAL_DENSE_PRESERVE=<path> and only meaningful on a fresh
+  // build (reusing a prebuilt has nothing new to save). Failure to preserve is
+  // logged but never fatal — this arm is informational and must not be able to
+  // take the deterministic verdict down.
+  const preserveTo = process.env['GOVERNED_EVAL_DENSE_PRESERVE'];
+  if (buildDenseIndex && preserveTo !== undefined && preserveTo !== '') {
+    const builtIndex = join(getQmdTenantIndexPath(ANCHOR_TENANT), 'dense-vec.sqlite');
+    try {
+      if (!existsSync(builtIndex)) {
+        console.error(`WARN could not preserve the dense index — not found at ${builtIndex}`);
+      } else {
+        const dest = expandHome(preserveTo);
+        mkdirSync(dirname(dest), { recursive: true });
+        // WAL-SAFE COPY — a bare cpSync of the main DB file is NOT correct here.
+        //
+        // DenseVecIndex sets `journal_mode = WAL` (dense-index.ts), so committed
+        // pages can still live in the `-wal` sidecar until a checkpoint runs.
+        // Copying only `dense-vec.sqlite` can therefore capture a STALE or TORN
+        // snapshot, and the failure mode is silent: the next run reusing this
+        // artifact via GOVERNED_EVAL_DENSE_PREBUILT would simply produce
+        // different numbers — exactly the nondeterminism this harness exists to
+        // prevent, and worse than no artifact at all.
+        //
+        // `db.backup()` is SQLite's online backup API: it is WAL-safe by
+        // construction and produces a single self-contained destination file.
+        // Chose it over `PRAGMA wal_checkpoint(TRUNCATE)` + copy because a
+        // TRUNCATE checkpoint cannot fully complete while any other connection
+        // holds the DB open (it reports BUSY and silently leaves frames behind),
+        // and the adapter may still hold this index open at this point — which
+        // would reintroduce the very torn-copy bug being fixed. The backup API
+        // has no such precondition.
+        // WRITE-THEN-RENAME — never clobber a good artifact with a partial one.
+        //
+        // `db.backup()` writes the destination IN PLACE. If the process dies
+        // mid-backup (Ctrl-C on a long run, OOM, systemd stop), `dest` is left
+        // truncated AND whatever known-good index was already there is gone. On
+        // a change whose entire purpose is "never pay the ~3 h embed twice",
+        // destroying the previous copy on a partial write is the exact failure
+        // it exists to prevent. So back up to a sibling temp path and `rename`
+        // only on success: rename is atomic within a filesystem, so `dest` is
+        // always either the old good index or the new complete one, never a
+        // half-written file. The temp is cleaned up on failure.
+        const staging = `${dest}.partial`;
+        rmSync(staging, { force: true });
+        const src = new Database(builtIndex, { readonly: true });
+        try {
+          await src.backup(staging);
+        } finally {
+          src.close();
+        }
+        try {
+          renameSync(staging, dest);
+        } catch (renameErr: unknown) {
+          rmSync(staging, { force: true });
+          throw renameErr;
+        }
+        console.log(
+          `\ndense index PRESERVED: ${dest}\n` +
+            '  Re-run the verdict phase in minutes instead of hours with:\n' +
+            // Print the RESOLVED path, not the raw env value: a `~`-relative or
+            // relative `GOVERNED_EVAL_DENSE_PRESERVE` would otherwise be echoed
+            // back verbatim and re-resolve against a different cwd on reuse.
+            `    GOVERNED_EVAL_DENSE=1 GOVERNED_EVAL_DENSE_PREBUILT=${dest} pnpm eval:governed:local`,
+        );
+      }
+    } catch (err: unknown) {
+      console.error('WARN could not preserve the dense index (informational arm):', err);
+    }
+  }
+
   console.log('\n=== dense A/B arm (informational — B4 ship-gate evidence) ===');
   console.log(formatStratifiedReport(dense.sr));
   console.log('\n=== per-stratum delta (dense-fused − lexical-fused) ===');
