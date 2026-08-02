@@ -4,6 +4,7 @@ import {
   DEFAULT_DENSE_EMBED_URL,
   DEFAULT_DENSE_SEARCH_K,
   DEFAULT_DENSE_TIMEOUT_MS,
+  MEASURED_DENSE_P95_MS,
   resolveDenseConfig,
 } from '../dense-policy.js';
 
@@ -37,11 +38,13 @@ describe('resolveDenseConfig — default ON', () => {
   });
 
   it('sets a serving timeout well above the measured p95 but still bounded', () => {
-    // Measured 2026-08-02 on the real 17,289-vector index: ~123 ms p95 added.
-    // The timeout must not trip in normal operation, but must still bound a
-    // wedged embedder rather than hanging the search.
+    // The assertion is about the RATIO to the measured p95, not a frozen number:
+    // referencing the exported MEASURED_DENSE_P95_MS keeps the relationship
+    // greppable, so if the measurement is ever re-taken the constant moves and
+    // this test moves with it — rather than the test name quietly going stale
+    // while a hardcoded literal still passes.
     const { timeoutMs } = resolveDenseConfig({});
-    expect(timeoutMs).toBeGreaterThan(123 * 5);
+    expect(timeoutMs).toBeGreaterThan(MEASURED_DENSE_P95_MS * 5);
     expect(timeoutMs).toBeLessThanOrEqual(5000);
   });
 });

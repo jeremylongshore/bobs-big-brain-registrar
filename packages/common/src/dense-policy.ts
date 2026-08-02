@@ -52,8 +52,37 @@
  * @module dense-policy
  */
 
+/**
+ * ⚠️ SERVING ONLY — the eval harness must NOT call `resolveDenseConfig`.
+ *
+ * `@qmd-team-intent-kb/qmd-adapter` depends on this package, so this helper is
+ * *reachable* from the eval code, and it is the obvious thing to reach for. Do
+ * not. The retrieval eval deliberately opts into the dense arm with its own
+ * switch (`GOVERNED_EVAL_DENSE=1`) and builds its adapter with explicit options
+ * (`ci-retrieval-ratchet.ts` constructs `new QmdAdapter({ tenantId, exportDir })`
+ * with no `dense` field at all).
+ *
+ * That separation is load-bearing: the committed anchor floors were measured on
+ * the LEXICAL arm. If the eval started resolving its config from the serving
+ * policy, flipping `TEAMKB_DENSE` would silently change what the daily timer
+ * measures and the floors would no longer describe the thing being gated —
+ * either failing the timer nightly or, worse, passing against a stale baseline
+ * and silently approving a ranking change nobody reviewed.
+ *
+ * Serving default and eval default are intentionally allowed to differ. Aligning
+ * them is a deliberate change to the floors, not a side effect of an import.
+ */
+
 /** Loopback embedding service (`bbb-embedder`, EmbeddingGemma-300M). */
 export const DEFAULT_DENSE_EMBED_URL = 'http://127.0.0.1:8098';
+
+/**
+ * Measured p95 of the total dense-added latency (query embed + sqlite-vec KNN),
+ * 2026-08-02, 40 queries warm against the real 17,289-vector index on a
+ * normally-loaded box. Named so the timeout's relationship to it is greppable
+ * rather than a frozen literal buried in a test assertion.
+ */
+export const MEASURED_DENSE_P95_MS = 123;
 
 /** Dense KNN hits fed to the RRF fusion, pre scope-filter. */
 export const DEFAULT_DENSE_SEARCH_K = 50;
