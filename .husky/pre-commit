@@ -39,3 +39,5 @@ MSG
     exit 2
   fi
 fi
+
+.husky/beads-hook pre-commit "$@"
