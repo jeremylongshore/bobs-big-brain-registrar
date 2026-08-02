@@ -84,6 +84,18 @@ export const DEFAULT_DENSE_EMBED_URL = 'http://127.0.0.1:8098';
  */
 export const MEASURED_DENSE_P95_MS = 123;
 
+/**
+ * Policy ceiling on the serving-path dense timeout.
+ *
+ * A search must stay responsive, so however generous the timeout gets it may
+ * never exceed this. Named and exported rather than written as a literal in a
+ * test assertion: raising {@link DEFAULT_DENSE_TIMEOUT_MS} (e.g. to 3000 ms to
+ * absorb the documented saturation case) is a legitimate tuning change and
+ * should NOT break a test, whereas raising it past this ceiling is a deliberate
+ * policy change that SHOULD require editing this constant.
+ */
+export const MAX_DENSE_TIMEOUT_MS = 5000;
+
 /** Dense KNN hits fed to the RRF fusion, pre scope-filter. */
 export const DEFAULT_DENSE_SEARCH_K = 50;
 
@@ -172,7 +184,15 @@ export function resolveDenseConfig(
 function isLoopbackUrl(url: string): boolean {
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+    // IPv6 note (verified against Node 22, not assumed): `URL.hostname` KEEPS the
+    // brackets for IPv6 literals —
+    //   new URL('http://[::1]:8098').hostname            === '[::1]'
+    //   new URL('http://[0:0:0:0:0:0:0:1]:8098').hostname === '[::1]'   (normalized)
+    // so `'[::1]'` is the form that actually matches here and a bare `'::1'`
+    // comparison would be the dead branch. Kept bracketed-only for that reason;
+    // the "does NOT warn for loopback forms" test covers `http://[::1]:8098` and
+    // would fail if this arm were wrong.
+    return host === '127.0.0.1' || host === 'localhost' || host === '[::1]';
   } catch {
     return false;
   }

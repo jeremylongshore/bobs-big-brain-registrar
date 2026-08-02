@@ -4,6 +4,7 @@ import {
   DEFAULT_DENSE_EMBED_URL,
   DEFAULT_DENSE_SEARCH_K,
   DEFAULT_DENSE_TIMEOUT_MS,
+  MAX_DENSE_TIMEOUT_MS,
   MEASURED_DENSE_P95_MS,
   resolveDenseConfig,
 } from '../dense-policy.js';
@@ -45,7 +46,7 @@ describe('resolveDenseConfig — default ON', () => {
     // while a hardcoded literal still passes.
     const { timeoutMs } = resolveDenseConfig({});
     expect(timeoutMs).toBeGreaterThan(MEASURED_DENSE_P95_MS * 5);
-    expect(timeoutMs).toBeLessThanOrEqual(5000);
+    expect(timeoutMs).toBeLessThanOrEqual(MAX_DENSE_TIMEOUT_MS);
   });
 });
 

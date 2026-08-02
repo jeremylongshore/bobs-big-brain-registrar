@@ -265,6 +265,23 @@ describe('QmdAdapter — native FTS5 fusion', () => {
     expect(report?.skipped).toBeGreaterThan(0);
   });
 
+  it('denseSync() returns null when the dense arm is NOT CONFIGURED at all', async () => {
+    // Distinct from the serviceDown case above — that is dense CONFIGURED but
+    // unreachable; this is dense ABSENT from the adapter config entirely.
+    //
+    // This is the linchpin of wiring apps/edge-daemon and not only apps/api
+    // (bead compile-then-govern-39z.6): the daemon's cycle calls denseSync() via
+    // reindex(), so if `dense` is absent there the sidecar index is NEVER BUILT
+    // — and the API's dense arm, however correctly configured, would fail open
+    // forever against an empty index. Nominally ON while serving nothing.
+    //
+    // Asserted here rather than left as prose so the architectural rationale is
+    // self-evidencing: if this ever returns non-null, wiring the daemon becomes
+    // redundant and that reasoning must be revisited.
+    write('curated', 'a.md', 'doc that would need embedding');
+    expect(await fusedAdapter().denseSync()).toBeNull();
+  });
+
   it('denseSync() is null when dense is not configured (the default)', async () => {
     expect(await fusedAdapter().denseSync()).toBeNull();
   });
