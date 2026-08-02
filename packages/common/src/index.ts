@@ -57,3 +57,10 @@ export type {
   DisclosureViolation,
   DisclosureScanInput,
 } from './disclosure-filter.js';
+export {
+  resolveDenseConfig,
+  DEFAULT_DENSE_EMBED_URL,
+  DEFAULT_DENSE_SEARCH_K,
+  DEFAULT_DENSE_TIMEOUT_MS,
+} from './dense-policy.js';
+export type { DenseServingConfig, DensePolicyEnv } from './dense-policy.js';

@@ -9,7 +9,7 @@ import {
   ExportStateRepository,
   IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
-import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
+import { resolveDenseConfig, resolveTeamKbPath } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { loadDaemonConfig } from './config.js';
 import { PinoDaemonLogger } from './pino-logger.js';
@@ -55,6 +55,12 @@ async function main(): Promise<void> {
     qmdAdapter: new QmdAdapter({
       tenantId: config.tenantId,
       exportDir: resolve(config.exportOutputDir),
+      // Dense arm ON by default via the SAME shared policy the API uses. This
+      // site matters for more than search: the cycle's reindex step calls
+      // adapter.denseSync(), so without dense configured here the sidecar index
+      // would never be built or kept fresh and the API's dense arm would fail
+      // open forever — on, but silently serving nothing.
+      dense: resolveDenseConfig(process.env),
     }),
   };
 

@@ -1,0 +1,107 @@
+/**
+ * Serving policy for the dense retrieval arm (bead `compile-then-govern-39z.6`).
+ *
+ * ## Why this lives in `common` and not in the adapter
+ *
+ * `QmdAdapterConfig.dense` is deliberately documented as *"Explicit options only
+ * — no env magic"*, and that contract is worth keeping: the adapter should do
+ * what it is told, so a test or an eval can construct it deterministically.
+ *
+ * But *whether dense is on in production* is a POLICY decision, not an adapter
+ * concern. So the policy is resolved here, at the application edge, and handed
+ * to the adapter as explicit options. The adapter contract is unchanged.
+ *
+ * ## Why it is shared rather than inlined at each call site
+ *
+ * There are TWO serving paths that must agree — the API's `SearchService` and
+ * the plugin's local search path — and bead `qmd-team-intent-kb-vps.1` was
+ * closed after exactly this class of bug: the freshness/category rerank had been
+ * wired into the API path only, so the plugin (which bypasses the API entirely)
+ * silently served un-reranked results. Two call sites configured by hand drift.
+ * One helper cannot.
+ *
+ * ## Why ON by default
+ *
+ * Measured on the frozen 42-query governed-brain-v1 anchor, full-corpus rebuild
+ * 2026-08-01 (registrar PR #318 preserved the index):
+ *
+ * | stratum  | lexical-only | dense-fused | Δ Recall@10 |
+ * |----------|--------------|-------------|-------------|
+ * | lexical  | 1.0000       | 1.0000      | +0.0000     |
+ * | semantic | 0.3393       | 0.9643      | +0.6250     |
+ * | overall  | 0.5595       | 0.9762      | +0.4167     |
+ *
+ * `ship gate ... PASS`. Overall clears the ADR-038 0.85 gate that the
+ * lexical-only arm misses. Interactive latency measured 2026-08-02 over the real
+ * 17,289-vector index: **~75 ms median / ~123 ms p95 added** per query (34 ms
+ * query-embed + 41 ms sqlite-vec KNN). Both of PR #311's conditions — full-corpus
+ * rebuild confirm and interactive latency — are therefore satisfied.
+ *
+ * ## Why there is still a kill switch
+ *
+ * The latency number is CPU-contention-sensitive, not load-invariant: the same
+ * benchmark under saturation (load 10.96 on 8 cores) measured the query-embed at
+ * 758 ms median / 2.2 s p95, a 22x degradation, while the KNN barely moved
+ * (index-bound, not CPU-bound). So the risk is real but bounded and operational.
+ * `TEAMKB_DENSE=0` turns the arm off without a deploy.
+ *
+ * Note the arm ALSO fails open inside the adapter: embedder down, index unbuilt,
+ * or any query-embed error degrades to the lexical fusion rather than erroring.
+ * This switch is for the case where dense is *working* but you want it off.
+ *
+ * @module dense-policy
+ */
+
+/** Loopback embedding service (`bbb-embedder`, EmbeddingGemma-300M). */
+export const DEFAULT_DENSE_EMBED_URL = 'http://127.0.0.1:8098';
+
+/** Dense KNN hits fed to the RRF fusion, pre scope-filter. */
+export const DEFAULT_DENSE_SEARCH_K = 50;
+
+/**
+ * Hard timeout for the query-embed call.
+ *
+ * 2000 ms is ~16x the measured p95 (123 ms total added) and ~28x the median, so
+ * it never trips in normal operation — but it still bounds the pathological
+ * contention case rather than letting a search hang on a wedged embedder. The
+ * offline eval arm uses a far longer timeout on purpose (a slow embed there is
+ * data, not an outage); serving is the opposite and must stay responsive.
+ */
+export const DEFAULT_DENSE_TIMEOUT_MS = 2000;
+
+/** The explicit dense options handed to `QmdAdapterConfig.dense`. */
+export interface DenseServingConfig {
+  enabled: boolean;
+  url: string;
+  searchK: number;
+  timeoutMs: number;
+}
+
+/** Minimal env shape; callers pass `process.env`. */
+export type DensePolicyEnv = Readonly<Record<string, string | undefined>>;
+
+/**
+ * Resolve the dense serving policy.
+ *
+ * Dense is **on by default**. `TEAMKB_DENSE` accepts the usual off-switches
+ * (`0`, `false`, `off`, `no`, case-insensitive); anything else — including unset
+ * — leaves it on. Parsing is permissive in the OFF direction on purpose: an
+ * operator reaching for a kill switch under pressure should not have to
+ * remember which spelling the code wanted.
+ *
+ * `TEAMKB_DENSE_URL` overrides the embedder endpoint (loopback by default; the
+ * embedder is never exposed off-host).
+ *
+ * @param env - Environment to read (pass `process.env`).
+ */
+export function resolveDenseConfig(env: DensePolicyEnv): DenseServingConfig {
+  const raw = env['TEAMKB_DENSE']?.trim().toLowerCase();
+  const disabled = raw === '0' || raw === 'false' || raw === 'off' || raw === 'no';
+
+  return {
+    enabled: !disabled,
+    url: env['TEAMKB_DENSE_URL']?.trim() || DEFAULT_DENSE_EMBED_URL,
+    searchK: DEFAULT_DENSE_SEARCH_K,
+    timeoutMs: DEFAULT_DENSE_TIMEOUT_MS,
+  };
+}

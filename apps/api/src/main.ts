@@ -29,6 +29,7 @@ import { createDatabase, IndexStateRepository } from '@qmd-team-intent-kb/store'
 import {
   loadOrCreateOriginSecret,
   ORIGIN_SECRET_UNAVAILABLE_WARNING,
+  resolveDenseConfig,
   resolveTeamKbPath,
 } from '@qmd-team-intent-kb/common';
 import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
@@ -56,6 +57,11 @@ async function main(): Promise<void> {
     tenantId,
     exportDir,
     stalenessProbe: () => indexStateRepo.stalenessSeconds(tenantId),
+    // Dense retrieval arm, ON by default (bead compile-then-govern-39z.6).
+    // Policy — including the TEAMKB_DENSE kill switch — lives in one shared
+    // helper so this path and the plugin's local search path cannot drift; see
+    // dense-policy.ts for the measured evidence and the fail-open semantics.
+    dense: resolveDenseConfig(process.env),
   });
 
   let qmdAdapter: QmdQueryPort | undefined;
