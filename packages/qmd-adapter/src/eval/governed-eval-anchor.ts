@@ -53,6 +53,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -737,16 +738,38 @@ async function runDenseArm(
         // and the adapter may still hold this index open at this point — which
         // would reintroduce the very torn-copy bug being fixed. The backup API
         // has no such precondition.
+        // WRITE-THEN-RENAME — never clobber a good artifact with a partial one.
+        //
+        // `db.backup()` writes the destination IN PLACE. If the process dies
+        // mid-backup (Ctrl-C on a long run, OOM, systemd stop), `dest` is left
+        // truncated AND whatever known-good index was already there is gone. On
+        // a change whose entire purpose is "never pay the ~3 h embed twice",
+        // destroying the previous copy on a partial write is the exact failure
+        // it exists to prevent. So back up to a sibling temp path and `rename`
+        // only on success: rename is atomic within a filesystem, so `dest` is
+        // always either the old good index or the new complete one, never a
+        // half-written file. The temp is cleaned up on failure.
+        const staging = `${dest}.partial`;
+        rmSync(staging, { force: true });
         const src = new Database(builtIndex, { readonly: true });
         try {
-          await src.backup(dest);
+          await src.backup(staging);
         } finally {
           src.close();
+        }
+        try {
+          renameSync(staging, dest);
+        } catch (renameErr: unknown) {
+          rmSync(staging, { force: true });
+          throw renameErr;
         }
         console.log(
           `\ndense index PRESERVED: ${dest}\n` +
             '  Re-run the verdict phase in minutes instead of hours with:\n' +
-            `    GOVERNED_EVAL_DENSE=1 GOVERNED_EVAL_DENSE_PREBUILT=${preserveTo} pnpm eval:governed:local`,
+            // Print the RESOLVED path, not the raw env value: a `~`-relative or
+            // relative `GOVERNED_EVAL_DENSE_PRESERVE` would otherwise be echoed
+            // back verbatim and re-resolve against a different cwd on reuse.
+            `    GOVERNED_EVAL_DENSE=1 GOVERNED_EVAL_DENSE_PREBUILT=${dest} pnpm eval:governed:local`,
         );
       }
     } catch (err: unknown) {
