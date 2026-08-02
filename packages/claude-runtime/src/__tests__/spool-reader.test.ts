@@ -160,6 +160,58 @@ describe('spool-reader', () => {
       }
     });
 
+    it('parses a verified batch receipt and candidate ID pin', async () => {
+      const spool = join(tmpDir, 'spool-bulk.jsonl');
+      const body = '{"id":"candidate-1","content":"hello"}\n';
+      await writeFile(spool, body, 'utf8');
+      await writeFile(
+        `${spool}.manifest.json`,
+        JSON.stringify({
+          spoolFileSha256: sha256(body),
+          candidateIds: ['candidate-1'],
+          batchReceipt: {
+            batchId: 'batch-1',
+            tenantId: 'tenant-1',
+            scope: 'all',
+            source: 'bulk_import',
+            trustLevel: 'untrusted',
+            candidateCount: 1,
+            maxCandidates: 5000,
+          },
+        }),
+        'utf8',
+      );
+
+      const result = await verifySpoolManifest(spool);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.batchReceipt).toMatchObject({
+          batchId: 'batch-1',
+          source: 'bulk_import',
+          candidateCount: 1,
+        });
+        expect(result.value.candidateIds).toEqual(['candidate-1']);
+      }
+    });
+
+    it('rejects a malformed batch receipt before reading candidate content', async () => {
+      const spool = join(tmpDir, 'spool-invalid-receipt.jsonl');
+      const body = '{"id":"candidate-1","content":"hello"}\n';
+      await writeFile(spool, body, 'utf8');
+      await writeFile(
+        `${spool}.manifest.json`,
+        JSON.stringify({
+          spoolFileSha256: sha256(body),
+          batchReceipt: { batchId: 'batch-1', candidateCount: 1 },
+        }),
+        'utf8',
+      );
+
+      const result = await verifySpoolManifest(spool);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toContain('invalid batchReceipt');
+    });
+
     it("returns 'tampered' when the file content no longer matches the manifest", async () => {
       const spool = join(tmpDir, 'spool-3.jsonl');
       await writeFile(spool, 'tampered content\n', 'utf8');
