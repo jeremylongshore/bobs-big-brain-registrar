@@ -123,9 +123,13 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
       errLog(`reindex FAILED (tenant=${tenantId}): ${result.error.code}: ${result.error.message}`);
       return 1;
     }
-    const { collectionsCreated, indexUpdated } = result.value;
+    const { collectionsCreated, indexUpdated, dense } = result.value;
+    const denseSummary =
+      dense === undefined
+        ? 'dense=disabled'
+        : `dense={embedded:${dense.embedded},removed:${dense.removed},skipped:${dense.skipped},totalDocs:${dense.totalDocs},serviceDown:${dense.serviceDown}}`;
     log(
-      `reindex OK (tenant=${tenantId}): collectionsCreated=[${collectionsCreated.join(', ')}], indexUpdated=${indexUpdated}`,
+      `reindex OK (tenant=${tenantId}): collectionsCreated=[${collectionsCreated.join(', ')}], indexUpdated=${indexUpdated}, ${denseSummary}`,
     );
     return 0;
   }
