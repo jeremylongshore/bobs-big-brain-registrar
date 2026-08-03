@@ -43,6 +43,8 @@ interface DenseArm {
   queryClient: EmbedClient;
   indexer: DenseIndexer;
   searchK: number;
+  /** Optional degradation observer — unset in serving, set by the eval harness. */
+  onQueryDegraded?: (reason: unknown) => void;
 }
 
 /** Facade class composing all qmd adapter managers */
@@ -212,13 +214,37 @@ export class QmdAdapter {
     try {
       const vectors = await this.dense.queryClient.embed([queryText], 'query');
       const queryVec = vectors?.[0];
-      if (queryVec === undefined) return [];
+      if (queryVec === undefined) {
+        this.notifyDenseDegraded(new Error('embedder returned no vector for the query'));
+        return [];
+      }
       // Scope is pushed INTO the KNN (vec0 partition key), not applied after —
       // so out-of-scope collections (e.g. archive under a curated search)
       // never occupy one of the k slots and starve in-scope recall.
       return this.dense.index.search(queryVec, this.dense.searchK, resolveScopeCollections(scope));
-    } catch {
+    } catch (err: unknown) {
+      this.notifyDenseDegraded(err);
       return [];
+    }
+  }
+
+  /**
+   * Tell an observer the dense arm degraded for this query, then carry on
+   * failing open.
+   *
+   * The callback is optional and unset in serving, so this is a no-op there and
+   * the fail-open contract is unchanged. The eval harness sets it to turn a
+   * SILENT degradation into a loud one — see `QmdAdapterConfig.dense.onQueryDegraded`
+   * for why a silently-degraded measurement is worse than a failed one.
+   *
+   * Swallows any throw from the observer: this runs inside the fail-open catch,
+   * and a broken observer must not convert a degraded query into a failed one.
+   */
+  private notifyDenseDegraded(reason: unknown): void {
+    try {
+      this.dense?.onQueryDegraded?.(reason);
+    } catch {
+      /* an observer that throws must not break the fail-open path */
     }
   }
 
@@ -303,6 +329,10 @@ function buildDenseArm(config: QmdAdapterConfig): DenseArm | null {
       modelVersion,
     });
     const queryClient = new EmbedClient({ url: dense.url, timeoutMs: dense.timeoutMs });
+    // Passed through verbatim: serving leaves it undefined (fail-open, silent),
+    // the eval sets it so a degraded query is observable instead of scored as a
+    // genuine miss.
+    const onQueryDegraded = dense.onQueryDegraded;
     const indexClient = new EmbedClient({
       url: dense.url,
       timeoutMs: dense.indexTimeoutMs ?? DENSE_INDEX_TIMEOUT_MS,
@@ -314,7 +344,13 @@ function buildDenseArm(config: QmdAdapterConfig): DenseArm | null {
       maxDocChars: dense.maxDocChars,
       batchSize: dense.batchSize,
     });
-    return { index, queryClient, indexer, searchK: dense.searchK ?? DENSE_SEARCH_K };
+    return {
+      index,
+      queryClient,
+      indexer,
+      searchK: dense.searchK ?? DENSE_SEARCH_K,
+      ...(onQueryDegraded ? { onQueryDegraded } : {}),
+    };
   } catch {
     return null;
   }
