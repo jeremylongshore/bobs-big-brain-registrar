@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "dataset": "governed-brain-v1",
+  "k": 10,
+  "epsilon": 0.001,
+  "floors": {
+    "overall": 0.9762,
+    "lexical": 1,
+    "semantic": 0.9643
+  },
+  "measuredAtUtc": "2026-08-01T06:48:00.000Z",
+  "snapshotSha256": "0a0bf76963fd114c1c5b92f3ec6cdd8a6a91708df669cd5e35ea1c6047c7366b",
+  "note": "Per-stratum mean Recall@10 floors for the DENSE arm (qmd BM25 + FTS5 + EmbeddingGemma sqlite-vec, RRF-fused) \u2014 the arm production serves by default since bead compile-then-govern-39z.6. Gated here and NOT in CI because the PR-time ratchet runs on a cold runner with no bbb-embedder and no access to the private corpus. Update ONLY alongside a deliberate re-measure."
+}
