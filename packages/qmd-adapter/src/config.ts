@@ -57,6 +57,28 @@ export interface DenseConfig {
   indexTimeoutMs?: number;
   /** Docs per embed request during indexing (default 16). */
   batchSize?: number;
+  /**
+   * Observer invoked when a QUERY's dense arm degrades — embed failure, embed
+   * timeout, or a missing query vector — immediately before the arm fails open
+   * and returns zero candidates.
+   *
+   * Production leaves this unset, and {@link getDefaultDenseConfig} never sets
+   * it: fail-open is correct in serving, because a user with a slow embedder
+   * should still get lexical results rather than an error.
+   *
+   * MEASUREMENT is the opposite case, and that asymmetry is why this exists.
+   * Silent fail-open makes a contended eval indistinguishable from a real
+   * regression: measured 2026-08-02, the same frozen snapshot and the same
+   * prebuilt index scored semantic Recall@10 0.9643 on an idle box and 0.7679
+   * under load 9.5 on 8 cores — with ZERO errors logged, because every
+   * timed-out query silently contributed zero dense candidates. A floor
+   * committed against the first number would then go red on contention rather
+   * than on a regression, and a gate that cries wolf gets ignored.
+   *
+   * So the eval harness sets this and refuses to render a verdict when it
+   * fires. Never throw from the callback — it runs inside the fail-open catch.
+   */
+  onQueryDegraded?: (reason: unknown) => void;
 }
 
 /**
