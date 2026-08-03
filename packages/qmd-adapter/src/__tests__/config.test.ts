@@ -7,6 +7,8 @@ import {
   getQmdTenantIndexPath,
   getQmdCollectionIndexPath,
   getQmdTenantEnv,
+  DEFAULT_DENSE_URL,
+  getDefaultDenseConfig,
 } from '../config.js';
 
 describe('qmd-adapter config', () => {
@@ -54,5 +56,17 @@ describe('qmd-adapter config', () => {
       XDG_CONFIG_HOME: '/custom/qmd-index/t1/config',
       XDG_CACHE_HOME: '/custom/qmd-index/t1/cache',
     });
+  });
+
+  it('defaults production dense retrieval on at the pinned loopback endpoint', () => {
+    expect(getDefaultDenseConfig({})).toEqual({ enabled: true, url: DEFAULT_DENSE_URL });
+  });
+
+  it('supports the documented emergency dense kill switch', () => {
+    expect(getDefaultDenseConfig({ TEAMKB_DENSE_ENABLED: 'false' })).toEqual({
+      enabled: false,
+      url: DEFAULT_DENSE_URL,
+    });
+    expect(getDefaultDenseConfig({ TEAMKB_DENSE_ENABLED: '  OFF  ' }).enabled).toBe(false);
   });
 });

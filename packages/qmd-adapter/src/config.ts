@@ -37,6 +37,44 @@ export function getQmdTenantEnv(tenantId: string): Record<string, string> {
   };
 }
 
+/** Loopback endpoint served by the pinned EmbeddingGemma user service. */
+export const DEFAULT_DENSE_URL = 'http://127.0.0.1:8098';
+
+/** Configuration for the sqlite-vec + EmbeddingGemma retrieval arm. */
+export interface DenseConfig {
+  enabled: boolean;
+  /** Embedding service base URL (loopback-only in the supported deployment). */
+  url: string;
+  /** Hard timeout for the query-embed call (default 5000 ms). */
+  timeoutMs?: number;
+  /** Override for the derived sqlite-vec sidecar index. */
+  indexPath?: string;
+  /** Dense KNN hits fed to the fusion, pre scope-filter (default 50). */
+  searchK?: number;
+  /** Truncate each doc to this many chars before embedding (default 2000). */
+  maxDocChars?: number;
+  /** Timeout for a document-batch embed call during indexing (default 120000 ms). */
+  indexTimeoutMs?: number;
+  /** Docs per embed request during indexing (default 16). */
+  batchSize?: number;
+}
+
+/**
+ * Resolve the production dense default.
+ *
+ * The library remains explicit-by-config so lexical-only fixtures and callers
+ * can opt out deliberately. Production entrypoints call this helper, which
+ * makes dense retrieval default-on while retaining one documented emergency
+ * kill switch for a broken local embedder.
+ */
+export function getDefaultDenseConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): DenseConfig {
+  const rawEnabled = env['TEAMKB_DENSE_ENABLED']?.trim().toLowerCase();
+  const enabled = rawEnabled === undefined || !['0', 'false', 'off', 'no'].includes(rawEnabled);
+  return { enabled, url: DEFAULT_DENSE_URL };
+}
+
 /** Adapter configuration */
 export interface QmdAdapterConfig {
   tenantId: string;
@@ -95,34 +133,14 @@ export interface QmdAdapterConfig {
     cachePath?: string;
   };
   /**
-   * OPT-IN dense retrieval arm (blueprint bead B4; 038/044-AT-DECR:
-   * sqlite-vec + EmbeddingGemma-300M only). Explicit options only — no env
-   * magic. When omitted or `enabled: false`, the query path is byte-identical
-   * to the lexical-only deterministic fusion. When enabled, the arm FAILS
-   * OPEN: embedder down / index unbuilt / any failure serves the lexical
-   * fusion with no dense list.
+   * Dense retrieval arm (blueprint bead B4; 038/044-AT-DECR: sqlite-vec +
+   * EmbeddingGemma-300M only). The production entrypoints pass
+   * {@link getDefaultDenseConfig}; direct library callers remain lexical-only
+   * when this field is omitted. When enabled, the arm FAILS OPEN: embedder
+   * down / index unbuilt / any failure serves the lexical fusion with no dense
+   * list.
    */
-  dense?: {
-    enabled: boolean;
-    /** Embedding service base URL, e.g. `http://127.0.0.1:8098` (loopback only). */
-    url: string;
-    /** Hard timeout for the query-embed call (default 5000 ms). */
-    timeoutMs?: number;
-    /**
-     * Override for the sqlite-vec sidecar index (tests use `:memory:`).
-     * Defaults to `<qmd-index>/<tenantId>/dense-vec.sqlite` — derived,
-     * rebuildable, deletable data next to the other derived indexes.
-     */
-    indexPath?: string;
-    /** Dense KNN hits fed to the fusion, pre scope-filter (default 50). */
-    searchK?: number;
-    /** Truncate each doc to this many chars before embedding (default 1200). */
-    maxDocChars?: number;
-    /** Timeout for a document-batch embed call during indexing (default 120000 ms). */
-    indexTimeoutMs?: number;
-    /** Docs per embed request during indexing (default 16). */
-    batchSize?: number;
-  };
+  dense?: DenseConfig;
 }
 
 /** Default configuration values */

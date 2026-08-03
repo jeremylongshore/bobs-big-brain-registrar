@@ -6,7 +6,7 @@
 
 ## 1. What this is
 
-An OPT-IN dense retrieval arm. The deterministic RRF fusion in
+A production-default dense retrieval arm. The deterministic RRF fusion in
 `QmdAdapter.query()` gains a THIRD ranked list — top-50 nearest neighbours
 from a sqlite-vec index of EmbeddingGemma-300M document embeddings — joining
 qmd BM25 and native FTS5 by `qmd://` citation. The model runs as a
@@ -39,6 +39,13 @@ dependency-cruiser rule).
   arm exists to buy. `WHERE collection IN (...)` inside the vec0 query returns
   the k nearest _within scope_.
 
+The adapter library remains explicit-by-config so isolated fixtures and
+lexical baselines can opt out. The API, edge daemon, local MCP path, and qmd
+CLI all call `getDefaultDenseConfig()`, which enables this arm by default at
+the serving/reindex boundary. The only emergency override is
+`TEAMKB_DENSE_ENABLED=false`; it is intentionally a kill switch, not the
+normal operating mode.
+
 ## 2. Components
 
 | Piece          | Where                                                                                            | Pinned by                                                                                                                    |
@@ -47,7 +54,7 @@ dependency-cruiser rule).
 | Model weights  | `~/.cache/qmd/models/hf_ggml-org_embeddinggemma-300M-Q8_0.gguf` (333,590,944 bytes)              | SHA-256 `b5ce9d77…490d63` in `weights-manifest.ts` (id `embedding`); re-verified on disk 2026-07-20                          |
 | Service unit   | `~/.config/systemd/user/bbb-embedder.service` (source of truth: `scripts/bbb-embedder.service`)  | ExecStartPre `sha256sum -c ~/.local/lib/bbb/embedder-weights.sha256` — the manifest pin restated where systemd can check it  |
 | Endpoint       | `http://127.0.0.1:8098/v1/embeddings` (+ `/health`)                                              | loopback only; port 8098 chosen free in the 8090–8199 range, ≠ 8097 (bbb-reranker) and avoiding 8090/8091 (forms/scott APIs) |
-| Adapter arm    | `packages/qmd-adapter/src/dense/`                                                                | opt-in via `QmdAdapterConfig.dense`                                                                                          |
+| Adapter arm    | `packages/qmd-adapter/src/dense/`                                                                | default-on through production `getDefaultDenseConfig()`; direct library callers may omit it for lexical-only fixtures        |
 | Sidecar index  | `<qmd-index>/<tenant>/dense-vec.sqlite` (sqlite-vec vec0 + bookkeeping tables)                   | derived data — rebuildable from kb-export + this service; deletable at any time; outside backup scope                        |
 
 Weight-gate design choice: identical to B1 — the unit uses a `sha256sum -c`
@@ -96,29 +103,31 @@ with `title: none | text:` (each prefix ends with a trailing space — see
 un-prefixed text and similarity quality silently degrades. Never bypass the
 client.
 
-## 4. Enabling dense in the adapter
+## 4. Production default and emergency rollback
 
-Dense is OFF unless a caller passes explicit config — no env magic:
+Production entrypoints use the shared default explicitly:
 
 ```ts
+import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+
 const adapter = new QmdAdapter({
   tenantId,
   exportDir,
-  dense: {
-    enabled: true,
-    url: 'http://127.0.0.1:8098',
-    // optional: timeoutMs (5000), indexPath, searchK (50),
-    //           maxDocChars (2000), indexTimeoutMs (120000), batchSize (16)
-  },
+  dense: getDefaultDenseConfig(),
 });
 ```
 
-With `dense` absent or `enabled: false` the query path is byte-identical to
-the lexical-only deterministic fusion (unit-tested).
+`getDefaultDenseConfig()` targets the pinned loopback service at
+`http://127.0.0.1:8098` and returns `enabled: true`. Set
+`TEAMKB_DENSE_ENABLED=false` only as a reviewed emergency rollback; the
+fail-open path still serves lexical results if the service or sidecar is
+unavailable. Direct library callers may omit `dense`, or pass
+`{ enabled: false, url: 'http://127.0.0.1:8098' }`, when they intentionally need
+the lexical-only deterministic fusion used by baselines and fixtures.
 
 ## 5. The sidecar index — build, rebuild, staleness
 
-- **What builds it:** `reindex(adapter)` (the CLI / canary / edge-daemon
+- **What builds it:** `reindex(adapter)` (the default-on CLI / canary / edge-daemon
   reindex primitive) now ends with `adapter.denseSync()` when the adapter has
   a dense arm — an incremental sweep of `kb-export` that embeds NEW/CHANGED
   docs only (keyed by content hash of the exact truncated text embedded, not
@@ -252,15 +261,12 @@ phase — this verdict was produced that way against the preserved index at
 emits a per-query progress line (`[verdict] query i/42  N ms  top=…`) so a slow
 or hung query phase is observable, never a silent black box.
 
-### Posture (this PR) + recommendation
+### Historical B4 posture and Track B rollout
 
 Dense EARNED default wiring on the semantic slice — unlike the reranker (a MISS,
-kept opt-in). For THIS PR it nonetheless stays behind the explicit `dense` config
-(fail-open, read-path-only, seam-firewalled: a `DenseScore` cannot become a
-govern `DeterministicScore`), and the plugin does NOT wire it — a conservative
-first landing. **Recommendation (tracked as a B4 follow-up):** the serving/plugin
-path SHOULD enable dense-by-default given the measured **+0.63 semantic Recall@10**,
-pending (a) a full-corpus rebuild that confirms these numbers over 17,295 docs
-and (b) an embedder resource/latency check for the interactive path (a query
-embed is ~0.4 s; the service is `MemoryMax`-bounded and loopback-only). Do not
-flip the default silently — flip it on that evidence.
+kept opt-in). The measured **+0.63 semantic Recall@10** now drives the Track B
+default-on change in the production serving/reindex entrypoints. The rollout
+gate still requires a fresh full-corpus receipt and an interactive latency
+measurement against the live brain; those receipts belong to the Track B bead
+and must be recorded before calling the rollout complete. The plugin remains
+downstream in Track C.
