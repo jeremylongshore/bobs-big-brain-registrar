@@ -58,7 +58,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import Database from 'better-sqlite3';
@@ -519,6 +519,20 @@ export async function runGovernedEvalAnchor(): Promise<number> {
     const denseFloorPath = join(resultsDir, DENSE_FLOOR_BASENAME);
     if (denseSr !== null && existsSync(denseFloorPath)) {
       const denseFloor = JSON.parse(readFileSync(denseFloorPath, 'utf8')) as GovernedFloor;
+      // Mirror the fused floor's snapshot cross-check (line ~486). A floor
+      // measured against a DIFFERENT corpus is not a floor for this one, and
+      // silently applying it would gate today's retrieval against yesterday's
+      // corpus — failing or passing for a reason that has nothing to do with
+      // retrieval quality. The fused arm already warns on this; the dense arm
+      // carrying a snapshotSha256 it never checked was an asymmetry, not a
+      // design choice.
+      if (denseFloor.snapshotSha256 !== verified.sha256) {
+        console.warn(
+          'WARN: the DENSE floor was measured against a DIFFERENT snapshot ' +
+            `(floor: ${denseFloor.snapshotSha256.slice(0, 12)}…, current: ${verified.sha256.slice(0, 12)}…). ` +
+            'Re-measure the dense floor after refreezing.',
+        );
+      }
       denseChecks.push(...checkFloors(denseSr, denseFloor.floors, denseFloor.epsilon));
       console.log(`\n=== DENSE floor (per-stratum Recall@10 ≥ floor − ${denseFloor.epsilon}) ===`);
       for (const c of denseChecks) {
@@ -918,7 +932,22 @@ async function runDenseArm(
           denseIndexBuild: dense.denseBuild ?? null,
           // Provenance: whether the dense index was freshly built or reused from
           // a preserved prebuilt (null = freshly built this run).
-          reusedPrebuiltIndex: prebuilt ?? null,
+          //
+          // BASENAME ONLY — never the resolved path. This artifact is committed,
+          // and the resolved form embeds the operator's $HOME (e.g.
+          // /home/<user>/.teamkb/...), which leaks the username and names a path
+          // that exists on exactly one machine. The basename carries the only
+          // fact a reader needs — which prebuilt was reused — and stays
+          // reproducible.
+          reusedPrebuiltIndex: prebuilt === undefined ? null : basename(expandHome(prebuilt)),
+          // FINDING 1(a): make the artifact self-evidencing about whether these
+          // numbers were gate-eligible. A degraded run's numbers are below floor
+          // BY CONSTRUCTION, and without this a later reader sees a sub-floor
+          // measurement with no indication the floor check was deliberately
+          // skipped — which is precisely the ambiguity this gate exists to remove.
+          degraded: degradedQueries.length > 0,
+          degradedQueryCount: degradedQueries.length,
+          degradedReasonSample: [...new Set(degradedQueries)].slice(0, 3),
           gate,
           fused: { overall: fusedSr.overall, byKind: fusedSr.byKind },
           dense: { overall: dense.sr.overall, byKind: dense.sr.byKind },
