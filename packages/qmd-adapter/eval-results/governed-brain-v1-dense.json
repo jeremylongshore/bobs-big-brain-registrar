@@ -4,9 +4,10 @@
   "snapshotSha256": "0a0bf76963fd114c1c5b92f3ec6cdd8a6a91708df669cd5e35ea1c6047c7366b",
   "embedderUrl": "http://127.0.0.1:8098",
   "denseIndexBuild": null,
+  "reusedPrebuiltIndex": "/home/jeremy/.teamkb/eval-anchor/dense-prebuilt/dense-vec.sqlite",
   "gate": {
     "semanticBaseline": 0.3392857142857143,
-    "semanticMeasured": 0.9642857142857143,
+    "semanticMeasured": 0.7678571428571429,
     "semanticImproved": true,
     "lexicalBaseline": 1,
     "lexicalMeasured": 1,
@@ -43,9 +44,9 @@
     "overall": {
       "stratum": "overall",
       "queryCount": 42,
-      "meanRecallAtK": 0.9761904761904762,
-      "meanNdcgAtK": 0.8224071498559318,
-      "mrr": 0.7772817460317459
+      "meanRecallAtK": 0.8452380952380952,
+      "meanNdcgAtK": 0.7371836052737689,
+      "mrr": 0.7157738095238094
     },
     "byKind": [
       {
@@ -58,9 +59,9 @@
       {
         "stratum": "semantic",
         "queryCount": 28,
-        "meanRecallAtK": 0.9642857142857143,
-        "meanNdcgAtK": 0.7703831772171895,
-        "mrr": 0.7075892857142857
+        "meanRecallAtK": 0.7678571428571429,
+        "meanNdcgAtK": 0.6425478603439448,
+        "mrr": 0.615327380952381
       }
     ]
   },
@@ -261,13 +262,9 @@
       "id": "q17",
       "kind": "semantic",
       "query": "do one thing at a time with presence and gratitude to feel less overloaded",
-      "hit": true,
-      "recallAtK": 1,
-      "retrievedTop3": [
-        "qmd://kb-guides/b6efbfa7-66a7-4226-a9e4-19cfd0625b6d.md",
-        "qmd://kb-guides/b4dd7ebc-13ea-5590-a06b-7f2557d625f9.md",
-        "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md"
-      ]
+      "hit": false,
+      "recallAtK": 0,
+      "retrievedTop3": ["qmd://kb-guides/b6efbfa7-66a7-4226-a9e4-19cfd0625b6d.md"]
     },
     {
       "id": "q18",
@@ -285,25 +282,17 @@
       "id": "q19",
       "kind": "semantic",
       "query": "overcome procrastination by observing urges and releasing false comforts",
-      "hit": true,
-      "recallAtK": 1,
-      "retrievedTop3": [
-        "qmd://kb-guides/9aecb44e-c70d-40ec-8c5f-c4a4ace8a605.md",
-        "qmd://kb-guides/8621ca89-152e-5823-9777-7b4139c94ce3.md",
-        "qmd://kb-curated/f9a94d2d-8baf-5c5a-9a03-368c5bae8fb9.md"
-      ]
+      "hit": false,
+      "recallAtK": 0,
+      "retrievedTop3": ["qmd://kb-guides/9aecb44e-c70d-40ec-8c5f-c4a4ace8a605.md"]
     },
     {
       "id": "q20",
       "kind": "semantic",
       "query": "a green checkmark that passes even when the tool could not run launders trust",
-      "hit": true,
-      "recallAtK": 1,
-      "retrievedTop3": [
-        "qmd://kb-guides/35025d14-9768-552c-9c13-ddfcb2e7f66b.md",
-        "qmd://kb-curated/51be40a8-5575-5730-9f9f-6483cb32903a.md",
-        "qmd://kb-guides/b9cd2354-a09b-52d8-b020-9da9bc8f625f.md"
-      ]
+      "hit": false,
+      "recallAtK": 0,
+      "retrievedTop3": []
     },
     {
       "id": "q21",
@@ -325,8 +314,7 @@
       "recallAtK": 1,
       "retrievedTop3": [
         "qmd://kb-curated/bb527104-0513-5cc7-a203-88ca53e1f28d.md",
-        "qmd://kb-guides/33c3c1c0-7a8d-53aa-af9d-c24692fa52a4.md",
-        "qmd://kb-guides/5319c13d-44a6-5200-95c8-7b6f8a1948ac.md"
+        "qmd://kb-guides/33c3c1c0-7a8d-53aa-af9d-c24692fa52a4.md"
       ]
     },
     {
@@ -393,13 +381,9 @@
       "id": "q28",
       "kind": "semantic",
       "query": "MCP servers must not accept tokens that were not issued for themselves",
-      "hit": true,
-      "recallAtK": 1,
-      "retrievedTop3": [
-        "qmd://kb-curated/2effddb9-ded0-5d50-a16b-c5b1df16b3e3.md",
-        "qmd://kb-curated/9be5297b-cfa2-5645-8662-3a2472f9c7b8.md",
-        "qmd://kb-guides/49ae2178-d7e4-59cb-a561-76c76f21aa9f.md"
-      ]
+      "hit": false,
+      "recallAtK": 0,
+      "retrievedTop3": []
     },
     {
       "id": "q29",
@@ -454,12 +438,8 @@
       "kind": "semantic",
       "query": "the pipeline executes a misread specification perfectly and ships the wrong product",
       "hit": true,
-      "recallAtK": 1,
-      "retrievedTop3": [
-        "qmd://kb-guides/1d74a14d-4cd3-4493-9526-f4d3a182979d.md",
-        "qmd://kb-curated/75620fd4-eb23-5c6b-a57e-f480a5611bb2.md",
-        "qmd://kb-curated/9f16d9e4-0c8a-5763-ac47-9f2612e57e32.md"
-      ]
+      "recallAtK": 0.5,
+      "retrievedTop3": ["qmd://kb-guides/1d74a14d-4cd3-4493-9526-f4d3a182979d.md"]
     },
     {
       "id": "q34",
@@ -477,13 +457,9 @@
       "id": "q35",
       "kind": "semantic",
       "query": "search the brain before saving because it only dedupes at promotion not intake",
-      "hit": true,
-      "recallAtK": 1,
-      "retrievedTop3": [
-        "qmd://kb-guides/8aeabdba-504f-5ffe-a908-02c73021a390.md",
-        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
-        "qmd://kb-guides/79b7c1bc-e3f7-53de-bd44-6722cafe51fa.md"
-      ]
+      "hit": false,
+      "recallAtK": 0,
+      "retrievedTop3": ["qmd://kb-guides/8aeabdba-504f-5ffe-a908-02c73021a390.md"]
     },
     {
       "id": "q36",

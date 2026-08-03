@@ -221,7 +221,7 @@ describe('QmdAdapter — native FTS5 fusion', () => {
 
   // ---- dense arm opt-in + fail-open (B4) ---------------------------------
 
-  function denseAdapter(): QmdAdapter {
+  function denseAdapter(extra: { onQueryDegraded?: (reason: unknown) => void } = {}): QmdAdapter {
     return new QmdAdapter(
       {
         tenantId: 'test-tenant',
@@ -234,6 +234,7 @@ describe('QmdAdapter — native FTS5 fusion', () => {
           url: 'http://127.0.0.1:1',
           timeoutMs: 300,
           indexPath: ':memory:',
+          ...extra,
         },
       },
       mock,
@@ -263,6 +264,63 @@ describe('QmdAdapter — native FTS5 fusion', () => {
     expect(report?.serviceDown).toBe(true);
     expect(report?.embedded).toBe(0);
     expect(report?.skipped).toBeGreaterThan(0);
+  });
+
+  it('onQueryDegraded fires when the embedder is down, while the query still fails open', async () => {
+    // The measurement/serving asymmetry (bead compile-then-govern-39z.6):
+    // serving must fail OPEN and silent, but a MEASUREMENT that silently scores
+    // a timed-out embed as a genuine miss is indistinguishable from a real
+    // regression. Measured 2026-08-02: the same snapshot + same prebuilt index
+    // scored semantic Recall@10 0.9643 idle vs 0.7679 under load, with ZERO
+    // errors logged. This observer is what makes that visible.
+    write('curated', 'a.md', 'content for the degradation-observer test');
+    const degraded: unknown[] = [];
+    const adapter = denseAdapter({ onQueryDegraded: (r: unknown) => degraded.push(r) });
+
+    mock.queueSuccess(
+      JSON.stringify([{ score: 0.9, file: 'qmd://kb-curated/a.md', snippet: 'content' }]),
+    );
+    const result = await adapter.query('content for the test', 'curated', 'test-tenant');
+
+    // Still fails OPEN — the caller gets lexical results, not an error.
+    expect(result.ok).toBe(true);
+    // ...but the degradation is no longer silent.
+    expect(degraded.length).toBeGreaterThan(0);
+  });
+
+  it('a throwing onQueryDegraded observer cannot break the fail-open path', async () => {
+    // The observer runs INSIDE the fail-open catch. A broken observer must not
+    // convert a degraded query into a failed one.
+    write('curated', 'a.md', 'content for the throwing-observer test');
+    const adapter = denseAdapter({
+      onQueryDegraded: () => {
+        throw new Error('observer is broken');
+      },
+    });
+
+    mock.queueSuccess(
+      JSON.stringify([{ score: 0.9, file: 'qmd://kb-curated/a.md', snippet: 'content' }]),
+    );
+    const result = await adapter.query('content for the test', 'curated', 'test-tenant');
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('denseSync() returns null when the dense arm is NOT CONFIGURED at all', async () => {
+    // Distinct from the serviceDown case above — that is dense CONFIGURED but
+    // unreachable; this is dense ABSENT from the adapter config entirely.
+    //
+    // This is the linchpin of wiring apps/edge-daemon and not only apps/api
+    // (bead compile-then-govern-39z.6): the daemon's cycle calls denseSync() via
+    // reindex(), so if `dense` is absent there the sidecar index is NEVER BUILT
+    // — and the API's dense arm, however correctly configured, would fail open
+    // forever against an empty index. Nominally ON while serving nothing.
+    //
+    // Asserted here rather than left as prose so the architectural rationale is
+    // self-evidencing: if this ever returns non-null, wiring the daemon becomes
+    // redundant and that reasoning must be revisited.
+    write('curated', 'a.md', 'doc that would need embedding');
+    expect(await fusedAdapter().denseSync()).toBeNull();
   });
 
   it('denseSync() is null when dense is not configured (the default)', async () => {
