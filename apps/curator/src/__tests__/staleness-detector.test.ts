@@ -133,7 +133,7 @@ describe('detectStaleness — provenance and scope', () => {
           tags: [],
           repoUrl: 'https://github.com/jeremylongshore/intentional-cognition-os',
         },
-      } as Partial<Subject>),
+      }),
     );
 
     expect(findings.map((f) => f.ruleId)).toContain('repo-renamed-2026-07-19-compiler');
@@ -151,7 +151,7 @@ describe('detectStaleness — provenance and scope', () => {
           filePaths: ['docs/legacy/retired/old-notes.md'],
           tags: [],
         },
-      } as Partial<Subject>),
+      }),
     );
 
     expect(findings).toHaveLength(1);

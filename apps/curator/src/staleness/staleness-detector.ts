@@ -4,7 +4,9 @@ import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
  * Evidence-linked staleness detection (bead `compile-then-govern-39z.2`).
  *
  * The deterministic, model-free half of truth-maintenance: a memory is stale
- * when the ESTATE FACT it depends on is provably gone — a platform that was torn
+ * when a rule in {@link ESTATE_STALENESS_RULES} declares the estate fact it
+ * depends on gone, and the memory's text or provenance implicates that rule's
+ * tokens — a platform that was torn
  * down, a repo that was renamed, a service that was removed. No LLM, no
  * embeddings, no similarity. Just: does the thing this answer tells you to use
  * still exist?
@@ -54,7 +56,12 @@ import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
  * @module staleness/staleness-detector
  */
 
-/** A single estate fact that has provably stopped being true. */
+/**
+ * A single estate fact declared dead by the rule author. The rule hygiene test
+ * (every `because` carries a date) makes a retirement EXPLAINABLE — not proven:
+ * the code never independently verifies the estate; it verifies the memory
+ * against the rule.
+ */
 export interface StalenessRule {
   /** Stable id, recorded in the audit event so a retirement can be explained. */
   readonly id: string;
