@@ -56,7 +56,7 @@ jobs:
 
       - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           # Node >= 22.6 — the emit scripts run under --experimental-strip-types.
           node-version: '22'
