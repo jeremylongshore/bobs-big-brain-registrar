@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Bob's Big Brain reindex self-heal after the nightly compile window
+
+[Timer]
+# The compile runs at about 03:30 CT and the brain backup at about 04:30 CT.
+# Run after both windows have normally settled; Persistent catches a missed run.
+OnCalendar=*-*-* 05:15:00
+Persistent=true
+RandomizedDelaySec=120
+Unit=bbb-reindex-heal.service
+
+[Install]
+WantedBy=timers.target
