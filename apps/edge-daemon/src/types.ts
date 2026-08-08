@@ -5,6 +5,7 @@ import type {
   MemoryRepository,
   PolicyRepository,
   AuditRepository,
+  ImportBatchRepository,
   ExportStateRepository,
   IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
@@ -59,6 +60,8 @@ export interface DaemonConfig {
 /** Repository dependencies injected into the daemon */
 export interface DaemonDependencies {
   candidateRepo: CandidateRepository;
+  /** Durable ledger for broad/bulk spool admission receipts. */
+  importBatchRepo?: ImportBatchRepository;
   memoryRepo: MemoryRepository;
   policyRepo: PolicyRepository;
   auditRepo: AuditRepository;
