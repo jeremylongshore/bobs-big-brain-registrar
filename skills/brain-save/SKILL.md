@@ -1,10 +1,10 @@
 ---
 name: brain-save
 description: |
-  Create and manage one governed Registrar memory by proposing a durable fact or
-  applying a supported lifecycle transition. This is a local operator write and
-  never auto-fires. Use when an administrator needs to preserve one team fact or
-  retire an outdated memory. Trigger with "/brain-save".
+  Create one Registrar memory proposal or apply a supported lifecycle transition
+  to an existing memory. This is a local operator write and never auto-fires. Use
+  when an administrator needs to preserve one team fact or retire an outdated
+  memory. Trigger with "/brain-save".
 allowed-tools: 'mcp__teamkb__teamkb_search, mcp__teamkb__teamkb_propose, mcp__teamkb__teamkb_transition, mcp__teamkb__teamkb_status'
 version: 1.1.0
 author: Intent Solutions <jeremy@intentsolutions.io>

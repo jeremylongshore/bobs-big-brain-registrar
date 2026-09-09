@@ -41,4 +41,5 @@ deduplication, policy, and promotion.
 
 The current `teamkb_transition` surface cannot supply `supersededBy`, although domain validation
 requires that link for an `active` to `superseded` transition. Do not request that transition until the
-tracked runtime defect is fixed. The other state-machine transitions listed in the skill are supported.
+runtime defect tracked as Beads issue `qmd-team-intent-kb-ehi` is fixed. The other state-machine
+transitions listed in the skill are supported.
