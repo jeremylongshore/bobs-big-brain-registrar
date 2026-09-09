@@ -1,125 +1,126 @@
 ---
 name: brain-save
 description: |
-  Saves a single fact, decision, pattern, or convention into the governed knowledge brain so it can be
-  recalled later — and (for admins) retires memories that are outdated. Admin-only and side-effecting:
-  it writes to the governed corpus, so it never auto-fires — invoke it explicitly. Use when an admin
-  wants the brain to remember something specific going forward without a full recompile, or to mark an
-  old memory outdated. Trigger with "/brain-save".
-allowed-tools: 'mcp__teamkb__teamkb_propose, mcp__teamkb__teamkb_transition, mcp__teamkb__teamkb_status'
-version: 1.0.0
+  Create and manage one governed Registrar memory by proposing a durable fact or
+  applying a supported lifecycle transition. This is a local operator write and
+  never auto-fires. Use when an administrator needs to preserve one team fact or
+  retire an outdated memory. Trigger with "/brain-save".
+allowed-tools: 'mcp__teamkb__teamkb_search, mcp__teamkb__teamkb_propose, mcp__teamkb__teamkb_transition, mcp__teamkb__teamkb_status'
+version: 1.1.0
 author: Intent Solutions <jeremy@intentsolutions.io>
 license: Apache-2.0
-compatibility: 'Designed for Claude Code; requires the intent-brain plugin installed with admin role (TEAMKB_ROLE=admin)'
-tags: [brain, governance, save, capture, admin]
-argument-hint: '[save <fact> | retire <memory-id>]'
+compatibility: 'Designed for Claude Code operators running the built Registrar apps/mcp-server with TEAMKB_TENANT_ID, TEAMKB_BASE_PATH, and TEAMKB_ROLE=admin. The shipped intent-brain marketplace plugin is read-only and does not expose these write tools.'
+tags: [brain, governance, save, capture, admin, registrar]
+argument-hint: '[save <fact> | retire <memory-id> | status]'
 disable-model-invocation: true
+model: inherit
+effort: medium
 ---
 
-# Brain Save — write a fact into the brain (admin only)
+# Brain Save — write one local Registrar memory proposal
 
-This is the **write** side of the brain. `/brain` reads; `/brain-save` writes. Use it to tell the brain
-to remember a specific fact going forward — without re-running a full compile — or to retire a memory
-that's no longer true.
+Propose one fact to the local Registrar spool or apply one supported lifecycle transition. Never claim
+that a queued proposal is already governed or searchable.
 
 ## Overview
 
-The brain learns in two ways: the bulk **compile** ingests a whole corpus at once, and `/brain-save`
-adds (or retires) a **single** item on demand. Either way, governance stays in code: this skill
-_proposes_ a memory to the deterministic curator, which decides what actually gets stored after policy
-checks (dedupe, secret-detection). You are saving an item for the brain to keep, not bypassing the
-governance pipeline.
-
-## Why this never auto-fires
-
-`disable-model-invocation: true` means Claude will not trigger this from conversation — it runs only
-when you explicitly type it. Writing to the _shared company brain_ is a deliberate act, not a chat side
-effect. The brain API **also** enforces this server-side: the write tools succeed only for an admin
-token, returning `403` otherwise. This skill is the convenient front door; the server is the real gate.
+This is the full Registrar operator surface, not the read-only `intent-brain` marketplace runtime and
+not the unified `governed-second-brain` plugin. `teamkb_propose`, `teamkb_transition`, and
+`teamkb_status` operate on the local paths configured for `apps/mcp-server`, even when remote search is
+configured. Keep `TEAMKB_API_URL` unset when the search and write sides must address the same brain.
 
 ## Prerequisites
 
-- The `intent-brain` plugin is installed with **admin** role (`TEAMKB_ROLE=admin`), so the write MCP
-  tools are registered. A member install never sees them.
-- Team mode: the admin's per-user `TEAMKB_API_TOKEN` must carry the admin role, or the brain API
-  rejects the write with `403`.
-
-## Authentication
-
-In team mode the write tools reach the brain API over the tailnet with the admin's per-user bearer
-token (`TEAMKB_API_TOKEN`), sent as an `Authorization: Bearer` header. A member token is rejected
-server-side with `403`. Never hardcode the token; supply it via env or a `headersHelper`. In local
-mode no token is needed.
+- Build and configure `apps/mcp-server` from this repository.
+- Set `TEAMKB_TENANT_ID`, `TEAMKB_BASE_PATH`, and `TEAMKB_ROLE=admin`.
+- Protect the local base path with operating-system permissions; `TEAMKB_ROLE=admin` is a tool
+  registration gate, not remote authentication.
+- Read [the runtime contract](references/runtime-contract.md) before operating mixed local/remote mode.
 
 ## Instructions
 
 ### Save a new fact
 
-1. Confirm it's worth keeping — _"Would a new teammate benefit from finding this in 30 days?"_ Skip
-   ephemeral debugging steps, personal preferences, secrets, or anything already in a CLAUDE.md/README.
-2. Pick a category: `decision`, `pattern`, `convention`, `architecture`, `troubleshooting`,
-   `onboarding`, or `reference`.
-3. Call **`teamkb_propose`** with `{ title, content, category, filePaths? }`. It writes to the spool;
-   the curator promotes it after policy checks.
+1. Search first with `teamkb_search({ query: "KEY_TERMS", scope: "all" })`. If existing governed
+   content already covers the fact, stop instead of duplicating it.
+2. Exclude ephemeral debugging, personal preferences, secrets, credentials, and facts already
+   maintained in authoritative project documentation.
+3. Choose `decision`, `pattern`, `convention`, `architecture`, `troubleshooting`, `onboarding`, or
+   `reference`.
+4. Call `teamkb_propose` with `{ title, content, category, filePaths? }`.
+5. Report the returned `candidateId` as queued to the local spool. Promotion happens only when the
+   separate curator processes it; this skill does not run or prove that step.
 
-### Retire an outdated memory
+### Retire or restore a memory
 
-1. Find the memory's UUID (via `/brain` search or `teamkb_status`).
-2. Call **`teamkb_transition`** with `{ memoryId, to, reason, actor }`. Valid moves:
-   `active → {deprecated, superseded, archived}`, `deprecated → {active, archived}`,
-   `superseded → archived`. Every transition writes a hash-chained audit event.
+1. Search for the memory and extract its UUID from a UUID-shaped citation filename such as
+   `qmd://kb-curated/9c2e42f1-7b60-4ed2-a9dd-648d6c786d43.md`.
+2. Call `teamkb_transition` with `{ memoryId, to, reason, actor }`.
+3. Use only transitions the current tool can complete safely: `active` to `deprecated` or `archived`,
+   `deprecated` to `active` or `archived`, and `superseded` to `archived`.
+4. Do not request `active` to `superseded` through this version of the MCP tool; its input surface
+   cannot supply the required replacement-memory link.
 
-### Check brain health
+### Check local status
 
-Call **`teamkb_status`** to see counts by lifecycle state and recent rejection feedback before or after
-a batch of saves.
+Call `teamkb_status` for local database counts and recent governance feedback. Status does not list
+spool proposals and cannot confirm that a newly queued candidate has been promoted.
 
 ## Output
 
-- After a save: report the returned `candidateId` and that it is queued for governance review.
-- After a retire: report the new lifecycle state and confirm an audit event was written.
-- After a status check: summarize counts by lifecycle state and any recent rejections.
+- Save: candidate UUID, local-spool disposition, and an explicit “not yet promoted” statement.
+- Transition: memory UUID, old and new lifecycle states, and audit-event UUID.
+- Status: counts by lifecycle/category/tenant and recent feedback, without printing `dbPath` unless the
+  operator explicitly requests it.
 
 ## Examples
 
-**Save a decision:**
+```text
+teamkb_search({ query: "Apache license", scope: "all" })
+teamkb_propose({
+  title: "License: Apache-2.0 across public engines",
+  content: "The public engines use Apache-2.0.",
+  category: "decision"
+})
 
+Candidate 4f3a2e0e-0ee4-4f63-b63e-22306c45115a was queued locally. It is not governed memory until the
+curator processes it.
 ```
-/brain-save we're going Apache-2.0 on both flagships so the public can self-host.
 
-→ teamkb_propose({ title: "License: Apache-2.0 on both flagships",
-                   content: "...", category: "decision" })
-→ Saved as candidate 4f3a… — queued for governance review.
-```
+```text
+teamkb_transition({
+  memoryId: "9c2e42f1-7b60-4ed2-a9dd-648d6c786d43",
+  to: "deprecated",
+  reason: "Replaced by the current deployment runbook",
+  actor: "registrar-operator"
+})
 
-**Retire a superseded memory:**
-
-```
-/brain-save retire memory 9c2e… — superseded by the new deploy runbook.
-
-→ teamkb_transition({ memoryId: "9c2e…", to: "archived",
-                      reason: "Superseded by the new deploy runbook", actor: "jeremy" })
-→ Memory 9c2e… → archived; audit event written.
+Memory 9c2e42f1-7b60-4ed2-a9dd-648d6c786d43 moved from active to deprecated; audit event
+83e1bc9a-0048-44e7-b70b-52bc7cf6e954 recorded the transition.
 ```
 
 ## Error Handling
 
-| Situation                            | Response                                                                                |
-| ------------------------------------ | --------------------------------------------------------------------------------------- |
-| Write returns `403`                  | The token is not an admin token. The gate working as designed — do not route around it. |
-| Write tools are absent               | The install is `member` role; only an `admin` install registers them.                   |
-| `teamkb_transition` rejects the move | The lifecycle state machine forbids it; pick a valid target state.                      |
-| Content may contain a secret         | Stop and strip it. Do not rely on the pipeline's secret-detection as the only check.    |
+| Situation                        | Response                                                                                            |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Write tools are absent           | The read-only plugin or member role is active; use the built local server with `TEAMKB_ROLE=admin`. |
+| Spool write fails                | Report the error; do not claim the candidate was queued.                                            |
+| Transition ID is not UUID-shaped | Stop and obtain an exact ID from a returned citation.                                               |
+| Transition is rejected           | Report the state-machine reason; do not route around it.                                            |
+| Content may contain a secret     | Strip it before calling `teamkb_propose`; policy scanning is not the only control.                  |
 
 ## Guardrails
 
-- Never save content containing secrets, tokens, or credentials.
-- `reason` on a retire must be a real, human-readable justification — it lands in the permanent audit
-  trail.
-- A `403` is the system working as designed, not a bug to work around.
+- Never persist secrets, tokens, credentials, or private keys.
+- Require a human-readable transition reason and a truthful actor identifier.
+- Local filesystem access is the security boundary for writes; a bearer token does not authorize this
+  tool path.
+- Provenance proves capture origin, not factual truth.
 
 ## Resources
 
-- [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) — the stack and its governance thesis.
-- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — the governance plane (this plugin's home).
-- The read counterpart: the `/brain` skill (cited, member-safe queries).
+- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — source,
+  build instructions, and operator documentation.
+- [`apps/mcp-server`](https://github.com/jeremylongshore/bobs-big-brain-registrar/tree/main/apps/mcp-server) —
+  the required full operator runtime.
+- `brain` — read counterpart using the Registrar-native `teamkb_search` tool.
