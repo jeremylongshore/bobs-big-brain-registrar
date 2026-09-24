@@ -21,9 +21,10 @@ const VERSION = '0.1.0';
  * (propose, import, transition, vault_*) register only for admin installs —
  * "Jeremy-only promote", mirroring the `withSync` conditional-registration
  * pattern. `canWrite` defaults to `config.role === 'admin'`. This is a
- * client-side UX gate (members never see tools they can't use); the brain API
- * enforces the same boundary server-side, so it holds even if a member
- * mis-sets their role.
+ * client-side capability gate (members never see tools they can't use). These
+ * write tools operate directly on the local spool and SQLite database; they do
+ * not call the brain API. Local filesystem permissions are the write security
+ * boundary.
  *
  * Call `isQmdAvailable()` first if you want to conditionally register sync.
  */

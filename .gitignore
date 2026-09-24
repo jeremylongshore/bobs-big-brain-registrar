@@ -78,3 +78,9 @@ packages/qmd-adapter/eval-results/*
 !packages/qmd-adapter/eval-results/governed-brain-v1-floor.json
 !packages/qmd-adapter/eval-results/governed-brain-v1-rerank.json
 !packages/qmd-adapter/eval-results/governed-brain-v1-dense.json
+# The DENSE floor is committed configuration for the same reason as the fused one
+# (bead compile-then-govern-39z.6): it is what holds the arm production actually
+# serves to a baseline. Left ignored it would exist only on the box that measured
+# it, the pinned eval checkout would find no floor, and the nightly gate would
+# warn-and-pass forever — a gate that silently gates nothing.
+!packages/qmd-adapter/eval-results/governed-brain-v1-dense-floor.json
