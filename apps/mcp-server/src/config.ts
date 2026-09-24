@@ -32,7 +32,8 @@ export interface McpServerConfig {
   /**
    * Install role. `admin` registers write tools (propose/import/transition/
    * vault) — "Jeremy-only promote". `member` (default) gets read tools only.
-   * Client-side UX gate; the brain API enforces the same boundary server-side.
+   * Client-side capability gate for local writes. The write tools do not call
+   * the brain API; local filesystem permissions are the security boundary.
    */
   role?: 'admin' | 'member';
 }
