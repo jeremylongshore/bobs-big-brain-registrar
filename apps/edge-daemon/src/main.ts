@@ -10,7 +10,7 @@ import {
   IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
 import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
-import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { loadDaemonConfig } from './config.js';
 import { PinoDaemonLogger } from './pino-logger.js';
 import { dispatch } from './cli.js';
@@ -55,6 +55,7 @@ async function main(): Promise<void> {
     qmdAdapter: new QmdAdapter({
       tenantId: config.tenantId,
       exportDir: resolve(config.exportOutputDir),
+      dense: getDefaultDenseConfig(),
     }),
   };
 

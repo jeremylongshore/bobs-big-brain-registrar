@@ -35,6 +35,7 @@ describe('GET /openapi.json', () => {
     expect(spec.paths).toBeDefined();
     expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(['/api/candidates']));
     expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(['/api/memories']));
+    expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(['/api/audit/receipt-tip']));
 
     // Tag metadata should be propagated from route schemas.
     const tagNames = (spec.tags ?? []).map((t) => t.name);

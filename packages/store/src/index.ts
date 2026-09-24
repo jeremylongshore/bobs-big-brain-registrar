@@ -16,7 +16,7 @@ export type {
 } from './repositories/memory-repository.js';
 export { PolicyRepository } from './repositories/policy-repository.js';
 export { AuditRepository } from './repositories/audit-repository.js';
-export type { AuditChainRow } from './repositories/audit-repository.js';
+export type { AuditChainPosition, AuditChainRow } from './repositories/audit-repository.js';
 export { verifyAuditChain, type AuditVerifyResult, type AuditChainBreak } from './audit-verify.js';
 export { computeEntryHash, canonicalRowJson, CURRENT_AUDIT_HASH_VERSION } from './audit-chain.js';
 export type { CanonicalAuditRow, AuditHashVersion } from './audit-chain.js';

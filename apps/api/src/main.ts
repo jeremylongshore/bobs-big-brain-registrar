@@ -18,6 +18,7 @@
  *   TEAMKB_DB_PATH      — SQLite path (default ~/.teamkb/data/teamkb.db)
  *   TEAMKB_TENANT_ID    — tenant scope for qmd isolation (default intent-solutions)
  *   TEAMKB_EXPORT_DIR   — git-exporter output dir qmd indexes (default ~/.teamkb/kb-export)
+ *   TEAMKB_DENSE_ENABLED — dense retrieval is on by default; set false only for emergency rollback
  *   TEAMKB_REVOKED_FILE — durable revoke-by-actor list (default ~/.teamkb/revoked-actors.json)
  *   TEAMKB_ALLOWED_CHANNELS — comma-separated origin channels captures may claim
  *                         (H3; default: team-mcp,local-mcp)
@@ -31,7 +32,7 @@ import {
   ORIGIN_SECRET_UNAVAILABLE_WARNING,
   resolveTeamKbPath,
 } from '@qmd-team-intent-kb/common';
-import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import { loadBrainignoreRuleset } from '@qmd-team-intent-kb/curator';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
@@ -55,6 +56,7 @@ async function main(): Promise<void> {
   const adapter = new QmdAdapter({
     tenantId,
     exportDir,
+    dense: getDefaultDenseConfig(),
     stalenessProbe: () => indexStateRepo.stalenessSeconds(tenantId),
   });
 
