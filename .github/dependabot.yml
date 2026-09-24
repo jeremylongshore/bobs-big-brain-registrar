@@ -29,6 +29,11 @@ updates:
       - dependency-name: 'typescript'
         update-types:
           - 'version-update:semver-major'
+      # @tobilu/qmd is an exact canonical pin (2.5.3) shared with gsb.lock.json, the
+      # live brain's global qmd binary and the synthetic-v1 eval baseline. Bump it
+      # deliberately in lockstep with those, never as a grouped dev-dependency update
+      # (2.8.3 also requires Node >=22 and broke `qmd collection add` in CI, #341).
+      - dependency-name: '@tobilu/qmd'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
