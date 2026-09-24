@@ -1,135 +1,137 @@
 ---
 name: teamkb
 description: |
-  Runs an end-of-session capture sweep for the governed knowledge brain: reviews what
-  happened, classifies insights, checks for conflicts, and proposes governed memories
-  via the teamkb MCP tools. Admin capture workflow that complements the one-shot
-  /brain-save. Use when wrapping up a session with team-relevant discoveries, or
-  when importing existing docs into the brain. Trigger with "/teamkb", "capture this
-  session", or "sweep for team knowledge".
-allowed-tools: 'Read, Glob, Grep, Agent'
-version: 1.0.0
+  Review, classify, and capture a bounded set of team insights or explicitly
+  approved Markdown files through the local Registrar operator tools. This is
+  side-effecting and never auto-fires. Use when closing a session, importing a
+  small document batch, reviewing existing memory, or checking local brain status.
+  Trigger with "/teamkb", "capture this session", or "import these team docs".
+allowed-tools: 'Read, Glob, Grep, AskUserQuestion, mcp__teamkb__teamkb_search, mcp__teamkb__teamkb_propose, mcp__teamkb__teamkb_import, mcp__teamkb__teamkb_status'
+version: 1.1.0
 author: Intent Solutions <jeremy@intentsolutions.io>
 license: Apache-2.0
-compatibility: 'Designed for Claude Code; requires the intent-brain plugin with admin role (TEAMKB_ROLE=admin) for the write tools'
-tags: [brain, capture, governance, knowledge, admin]
-argument-hint: '[capture | import | status | review]'
+compatibility: 'Designed for Claude Code operators running the built Registrar apps/mcp-server with TEAMKB_TENANT_ID, TEAMKB_BASE_PATH, and TEAMKB_ROLE=admin. The shipped intent-brain marketplace plugin is read-only and does not expose capture or import tools.'
+tags: [brain, capture, governance, knowledge, admin, registrar]
+argument-hint: '[capture | import GLOB | review QUERY | status]'
+disable-model-invocation: true
+model: inherit
+effort: medium
 ---
 
-# TeamKB — governed team-knowledge capture sweep
+# TeamKB — bounded local Registrar capture
 
-Capture team memory at the end of a session: review what happened, classify the
-insights worth keeping, check them against existing memories for conflicts, and queue
-them for governance review. This is the multi-step, subagent-driven capture workflow
-that sits alongside the one-shot `/brain-save`.
+Turn a small, explicit set of durable team insights into local spool proposals. Search before capture,
+inspect imports before writing, and report proposals as ungoverned until the curator disposes them.
 
 ## Overview
 
-The brain captures knowledge, validates it through deterministic governance policies,
-and shares it across the team via qmd. This skill drives the **capture** side: it uses
-the `teamkb` MCP tools to propose candidates (never writing governed state directly —
-the curator promotes after policy checks) and delegates the judgment-heavy steps to
-specialized subagents.
+This self-contained operator workflow uses the full locally built Registrar MCP server. It does not
+depend on repository subagents, and it does not work with the read-only `intent-brain` marketplace
+runtime. Capture and import write candidate files to the local spool; deterministic governance and
+promotion happen later in the curator.
 
 ## Prerequisites
 
-- The `intent-brain` plugin is installed with **admin** role (`TEAMKB_ROLE=admin`), so
-  the write MCP tools (`teamkb_propose`, `teamkb_status`) are registered. A member
-  install is read-only and cannot capture.
-- For conflict checking, the brain has an existing corpus to compare against.
+- Build and configure `apps/mcp-server` from the Registrar repository.
+- Set `TEAMKB_TENANT_ID`, `TEAMKB_BASE_PATH`, and `TEAMKB_ROLE=admin`.
+- Keep `TEAMKB_API_URL` unset when search and writes must target the same local brain.
+- Read [the runtime contract](references/runtime-contract.md) for exact bounds and result semantics.
 
-## Authentication
+## Modes
 
-In team mode, the write tools reach the brain API over the tailnet with the admin's
-per-user bearer token (`TEAMKB_API_TOKEN`), sent as an `Authorization: Bearer` header.
-A non-admin token is rejected server-side with `403`. Never hardcode the token; supply
-it via env or a `headersHelper`. In local mode no token is needed.
-
-## Available MCP tools
-
-- **teamkb_propose** — capture a single insight as a candidate `{ title, content, category?, filePaths? }`. Writes to the spool; the governance pipeline decides promotion.
-- **teamkb_import** — bulk-import files as candidates `{ glob, basePath? }`.
-- **teamkb_status** — counts by lifecycle state, category, and recent rejection feedback.
-- **teamkb_transition** — change a memory's lifecycle state `{ memoryId, to, reason, actor }`.
+- `capture`: distill up to five durable insights from the current session and explicitly supplied
+  files, then propose only new content.
+- `import GLOB`: inspect and explicitly approve 1–20 Markdown files before `teamkb_import` queues them.
+- `review QUERY`: search only; make no writes.
+- `status`: call `teamkb_status`; make no writes.
 
 ## Instructions
 
-### Step 1: Review the session
+### Capture a session
 
-Use `Read`, `Glob`, and `Grep` to gather what changed and what was decided — the diff,
-the files touched, and any decisions stated in the conversation. Delegate the sweep to
-the **@teamkb-scout** subagent (via `Agent`) when the session is large.
+1. Review the conversation and use `Read`, `Glob`, or `Grep` only on files the user placed in scope.
+2. Select at most five items that would help a teammate after 30 days. Classify each as `decision`,
+   `pattern`, `convention`, `architecture`, `troubleshooting`, `onboarding`, or `reference`.
+3. Reject ephemeral steps, personal preferences, secrets, and facts already maintained in an
+   authoritative README or project instruction file.
+4. For each candidate, call `teamkb_search` with 1–4 keywords and `scope: "all"`. Skip covered facts;
+   surface contradictions instead of creating a competing memory.
+5. Call `teamkb_propose` once for each surviving item. The returned candidate UUID proves only that
+   the local spool write succeeded.
 
-### Step 2: Classify each candidate insight
+### Import Markdown files
 
-Recognize capturable moments and assign a category:
+1. Require an explicit base directory and glob. Refuse a home directory, repository root, hidden
+   credential directory, or an unresolved environment variable as the base.
+2. Use `Glob` to resolve the exact set. Accept 1–20 `.md` files; require the user to split larger
+   batches.
+3. Use `Grep` for common secret markers and `Read` any suspicious file. Exclude credentials, tokens,
+   private keys, environment dumps, and empty files.
+4. Show the final relative file list and use `AskUserQuestion` for explicit confirmation because
+   `teamkb_import` writes every match to the spool.
+5. Call `teamkb_import({ glob, basePath })` exactly once. Report `queued`, `failed`, and every failed
+   file from `outcomes`; never claim promotion.
 
-1. Decisions made ("Let's use X instead of Y because…") → `decision`
-2. Patterns discovered ("This pattern works well for…") → `pattern`
-3. Conventions agreed ("We should always…") → `convention`
-4. Architecture documented ("The data flows from…") → `architecture`
-5. Bugs solved ("The root cause was…") → `troubleshooting`
-6. Setup documented ("To get this running…") → `onboarding`
+### Review or status
 
-Delegate ambiguous content to **@teamkb-classifier**.
-
-### Step 3: Check for conflicts
-
-Before proposing, delegate to **@teamkb-conflict-checker** to compare each candidate
-against existing memories. Surface conflicts rather than creating duplicates or
-contradictions — the governance layer tracks contradictions explicitly.
-
-### Step 4: Propose
-
-For each surviving candidate, call `teamkb_propose`. Then call `teamkb_status` to
-confirm the candidates landed and review any recent rejection feedback.
-
-## Quality bar
-
-Before proposing, ask: **"Would a new team member benefit from finding this in 30 days?"**
-Do NOT propose:
-
-- Session-specific debugging steps (too ephemeral)
-- Personal preferences (not team knowledge)
-- Content already in CLAUDE.md or README
-- Anything containing secrets, tokens, or credentials
-
-## Subagents
-
-- **@teamkb-scout** — sweeps the session for capturable moments.
-- **@teamkb-curator** — end-of-session capture orchestration.
-- **@teamkb-classifier** — categorizes ambiguous content into a MemoryCategory.
-- **@teamkb-conflict-checker** — compares a proposed memory against existing ones.
+- For `review`, call `teamkb_search` with `curated` first and broaden to `all` only if needed. Cite the
+  exact returned `qmd://` URIs.
+- For `status`, call `teamkb_status` and summarize local counts and recent feedback. Do not print the
+  absolute `dbPath` unless explicitly requested.
 
 ## Output
 
-- A list of proposed candidates with their categories and returned `candidateId`s.
-- Any conflicts surfaced (and how they were resolved).
-- A closing `teamkb_status` summary.
-
-## Error Handling
-
-| Situation                      | Response                                                              |
-| ------------------------------ | --------------------------------------------------------------------- |
-| Write tools absent             | The install is `member` role; capture requires an `admin` install.    |
-| Propose returns `403`          | The token is not an admin token — the gate working as designed.       |
-| Candidate may contain a secret | Strip it; do not rely on pipeline secret-detection as the only check. |
+- Mode and local tenant context, without secrets or absolute storage paths.
+- Proposed or imported candidate UUIDs, categories, and spool disposition.
+- Skipped duplicates, conflicts, rejected files, and reasons.
+- Clear statement that queued candidates are not governed memory until curator processing.
 
 ## Examples
 
-```
+```text
 /teamkb capture
-→ @teamkb-curator reviews the session, proposes 3 candidates (1 decision, 2 patterns).
+Reviewed the session, skipped one README-duplicated fact, and queued two local proposals:
+- decision — 4f3a2e0e-0ee4-4f63-b63e-22306c45115a
+- pattern — 83e1bc9a-0048-44e7-b70b-52bc7cf6e954
+Neither proposal is promoted yet.
+```
 
-/teamkb import docs/**/*.md
-→ Bulk-imports matching files as candidates queued for governance review.
+```text
+/teamkb import docs/runbooks/*.md
+Resolved 6 Markdown files. After explicit approval, teamkb_import queued 5 and failed 1; the failed
+file and error are reported without claiming a partial batch was fully successful.
+```
+
+```text
+/teamkb review deployment rollback
+Searched curated memory first and returned two cited runbook results. No write tools were called.
 
 /teamkb status
-→ Shows counts by lifecycle state and recent rejection feedback.
+Reported local lifecycle/category/tenant counts and recent feedback without exposing the database path.
 ```
+
+## Error Handling
+
+| Situation                               | Response                                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Write tools are absent                  | Use the built local server with `TEAMKB_ROLE=admin`; the shipped marketplace plugin is read-only. |
+| Search is unexpectedly empty            | Check the local qmd index and tenant before concluding no memory exists.                          |
+| Import resolves 0 or more than 20 files | Stop; correct the glob or split the batch.                                                        |
+| Secret-like content is found            | Exclude the file or redact the candidate before any MCP write.                                    |
+| A spool write fails                     | Report exact failed outcomes; do not claim they were queued.                                      |
+
+## Guardrails
+
+- Local operating-system permissions are the write security boundary; `TEAMKB_ROLE=admin` is a
+  registration gate, not authentication.
+- Never broaden an import glob after confirmation.
+- Never save secrets or rely solely on downstream policy detection.
+- Provenance identifies capture origin, not truth.
 
 ## Resources
 
-- The read counterpart: the `/brain` skill (cited, member-safe queries).
-- The one-shot capture: the `/brain-save` skill.
-- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — the governance plane.
+- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — source,
+  build instructions, and governance architecture.
+- [`apps/mcp-server`](https://github.com/jeremylongshore/bobs-big-brain-registrar/tree/main/apps/mcp-server) —
+  the full local operator runtime required by this skill.
+- `brain-save` — one-item write workflow; `brain` — read-only cited-query workflow.

@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { AuditRepository } from '@qmd-team-intent-kb/store';
+import { type AuditRepository, verifyAuditChain } from '@qmd-team-intent-kb/store';
+
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 /**
  * Register audit event query routes.
@@ -14,6 +16,88 @@ import type { AuditRepository } from '@qmd-team-intent-kb/store';
  * `memoryId` / `action` query returned rows regardless of ownership.
  */
 export function registerAuditRoutes(app: FastifyInstance, repo: AuditRepository): void {
+  app.get(
+    '/api/audit/receipt-tip',
+    {
+      schema: {
+        tags: ['audit'],
+        summary: 'Read or resolve the global governance receipt-chain tip',
+        description:
+          'Authenticated, content-safe receipt pointer for AGP cross-chain correlation. ' +
+          'Optional `hash` resolves a previously observed tip after the chain advances. ' +
+          'This proves chain position, not which search results an agent read.',
+      },
+    },
+    async (request, reply) => {
+      const { hash } = request.query as { hash?: unknown };
+      if (hash !== undefined && (typeof hash !== 'string' || !SHA256_HEX.test(hash))) {
+        return reply.code(400).send({
+          error: 'invalid_receipt_hash',
+          message: 'hash must be a lowercase SHA-256 hex value',
+        });
+      }
+
+      const verification = verifyAuditChain(repo);
+      const tamperBreaks = verification.breaks.filter((finding) => finding.reason !== 'CHAIN_FORK');
+      const orderingForks = verification.breaks.length - tamperBreaks.length;
+      const integrity = {
+        status:
+          tamperBreaks.length === 0
+            ? ('no_tamper_signatures' as const)
+            : ('tamper_signatures_detected' as const),
+        checkedRows: verification.cleanRows,
+        unverifiedRows: verification.unverifiedRows,
+        orderingForks,
+        tamperBreaks: tamperBreaks.length,
+      };
+
+      // Fail closed: never give an agent a tip to sign into a new action when
+      // the current receipt chain has a tamper signature.
+      if (tamperBreaks.length > 0) {
+        return reply.code(503).send({
+          schemaVersion: 1,
+          chain: 'audit_events',
+          scope: 'global-governance-receipt-chain',
+          hashAlgorithm: 'sha256',
+          current: null,
+          requested: null,
+          integrity,
+          error: 'audit_chain_tamper_detected',
+        });
+      }
+
+      const currentPosition = repo.findChainTip();
+      const current =
+        currentPosition === null
+          ? null
+          : {
+              hash: currentPosition.entryHash,
+              sequence: currentPosition.sequence,
+              hashVersion: currentPosition.hashVersion,
+            };
+      const requestedPosition = typeof hash === 'string' ? repo.findChainPosition(hash) : null;
+      const requested =
+        typeof hash !== 'string'
+          ? null
+          : {
+              hash,
+              present: requestedPosition !== null,
+              sequence: requestedPosition?.sequence ?? null,
+              isCurrent: current?.hash === hash,
+            };
+
+      return reply.send({
+        schemaVersion: 1,
+        chain: 'audit_events',
+        scope: 'global-governance-receipt-chain',
+        hashAlgorithm: 'sha256',
+        current,
+        requested,
+        integrity,
+      });
+    },
+  );
+
   app.get(
     '/api/audit',
     {

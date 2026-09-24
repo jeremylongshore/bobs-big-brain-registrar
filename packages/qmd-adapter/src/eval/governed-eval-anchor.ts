@@ -53,15 +53,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import Database from 'better-sqlite3';
+
 import { QmdAdapter } from '../adapter.js';
-import type { QmdAdapterConfig } from '../config.js';
+import { getQmdTenantIndexPath, type QmdAdapterConfig } from '../config.js';
 import { reindex } from '../reindex/reindex.js';
 import { runEval } from './run-eval.js';
 import { stratify, formatStratifiedReport } from './stratified-report.js';
@@ -89,6 +92,17 @@ export const SNAPSHOT_LOCK_BASENAME = 'governed-brain-v1-snapshot.lock.json';
 
 /** The committed per-stratum floor file (relative to the package root). */
 export const FLOOR_BASENAME = 'governed-brain-v1-floor.json';
+
+/**
+ * The committed per-stratum floor for the DENSE arm.
+ *
+ * Separate from {@link FLOOR_BASENAME} because the two arms are measured
+ * independently and regress independently: the fused floor describes
+ * lexical-only retrieval, the dense floor describes the arm production actually
+ * serves (bead `compile-then-govern-39z.6`). Collapsing them into one file
+ * would force a re-measure of both whenever either moved.
+ */
+export const DENSE_FLOOR_BASENAME = 'governed-brain-v1-dense-floor.json';
 
 /** Shape of `eval-results/governed-brain-v1-snapshot.lock.json`. */
 export interface SnapshotLock {
@@ -483,9 +497,58 @@ export async function runGovernedEvalAnchor(): Promise<number> {
     // part of the verdict — the floors gate the fused arm only.
     await maybeRunRerankArm(exportDir, frozen.sr, resultsDir, verified.sha256);
 
-    // Informational dense A/B arm (B4 ship gate: dense retrieval is judged on
-    // this harness BEFORE any default wiring — same discipline as rerank).
-    await maybeRunDenseArm(exportDir, frozen.sr, resultsDir, verified.sha256);
+    // Dense arm. Historically informational (B4 ship gate, judged BEFORE any
+    // default wiring). As of bead compile-then-govern-39z.6 dense serves by
+    // DEFAULT in production, so when a dense floor file is committed this arm
+    // becomes part of the verdict — see denseChecks below.
+    const denseSr = await maybeRunDenseArm(exportDir, frozen.sr, resultsDir, verified.sha256);
+
+    // GATE THE ARM PRODUCTION ACTUALLY SERVES.
+    //
+    // The PR-time CI ratchet cannot cover dense: it runs on a cold ubuntu-latest
+    // runner with no `bbb-embedder` and no access to the ~80 MB private corpus.
+    // That is a physical constraint, not a policy choice — so if dense were left
+    // ungated here, NOTHING would gate it, and production would serve a path no
+    // check measures. This box has the embedder and (since #318) a preserved
+    // index, so this is the one place the real arm can be held to a floor.
+    //
+    // Skipped silently when the dense arm did not run (GOVERNED_EVAL_DENSE unset)
+    // or crashed — a measurement that never happened must not fail the run. Only
+    // a real dense REGRESSION against a committed dense floor fails it.
+    const denseChecks: FloorCheck[] = [];
+    const denseFloorPath = join(resultsDir, DENSE_FLOOR_BASENAME);
+    if (denseSr !== null && existsSync(denseFloorPath)) {
+      const denseFloor = JSON.parse(readFileSync(denseFloorPath, 'utf8')) as GovernedFloor;
+      // Mirror the fused floor's snapshot cross-check (line ~486). A floor
+      // measured against a DIFFERENT corpus is not a floor for this one, and
+      // silently applying it would gate today's retrieval against yesterday's
+      // corpus — failing or passing for a reason that has nothing to do with
+      // retrieval quality. The fused arm already warns on this; the dense arm
+      // carrying a snapshotSha256 it never checked was an asymmetry, not a
+      // design choice.
+      if (denseFloor.snapshotSha256 !== verified.sha256) {
+        console.warn(
+          'WARN: the DENSE floor was measured against a DIFFERENT snapshot ' +
+            `(floor: ${denseFloor.snapshotSha256.slice(0, 12)}…, current: ${verified.sha256.slice(0, 12)}…). ` +
+            'Re-measure the dense floor after refreezing.',
+        );
+      }
+      denseChecks.push(...checkFloors(denseSr, denseFloor.floors, denseFloor.epsilon));
+      console.log(`\n=== DENSE floor (per-stratum Recall@10 ≥ floor − ${denseFloor.epsilon}) ===`);
+      for (const c of denseChecks) {
+        console.log(
+          `  ${c.stratum.padEnd(12)} measured=${c.measured.toFixed(4)}  ` +
+            `floor=${c.baseline.toFixed(4)}  min=${c.floor.toFixed(4)}  ` +
+            `${c.held ? 'OK' : 'REGRESSED'}`,
+        );
+      }
+    } else if (denseSr !== null) {
+      console.warn(
+        `\nWARN: the dense arm ran but no dense floor is committed at ${denseFloorPath} — ` +
+          'dense is NOT gated this run. Commit a dense floor so the arm production ' +
+          'serves is held to a baseline.',
+      );
+    }
 
     // Informational live run — never part of the verdict, off by default so the
     // frozen anchor stays the deterministic path.
@@ -493,7 +556,7 @@ export async function runGovernedEvalAnchor(): Promise<number> {
 
     writeArtifact(resultsDir, frozen.sr, verified.sha256, lock, floor, checks, frozen.perQuery);
 
-    const regressed = checks.filter((c) => !c.held);
+    const regressed = [...checks, ...denseChecks].filter((c) => !c.held);
     if (regressed.length > 0) {
       console.error(
         `\nANCHOR FAILED — ${regressed.length} stratum/strata regressed below the committed floor:`,
@@ -508,7 +571,11 @@ export async function runGovernedEvalAnchor(): Promise<number> {
       return 1;
     }
 
-    console.log('\nANCHOR PASS — no stratum regressed below its committed floor.');
+    console.log(
+      denseChecks.length > 0
+        ? '\nANCHOR PASS — no stratum regressed below its committed floor (fused AND dense).'
+        : '\nANCHOR PASS — no stratum regressed below its committed floor.',
+    );
     return 0;
   } finally {
     rmSync(tmpBase, { recursive: true, force: true });
@@ -617,8 +684,8 @@ async function maybeRunDenseArm(
   fusedSr: StratifiedReport,
   resultsDir: string,
   snapshotSha256: string,
-): Promise<void> {
-  if (process.env['GOVERNED_EVAL_DENSE'] !== '1') return;
+): Promise<StratifiedReport | null> {
+  if (process.env['GOVERNED_EVAL_DENSE'] !== '1') return null;
   // Hard fail-open boundary: this is an INFORMATIONAL arm and must never be
   // able to fail the anchor verdict. `evalCorpus` returns {ok:false} for the
   // expected failure modes, but an unexpected throw anywhere below (embedder
@@ -628,13 +695,17 @@ async function maybeRunDenseArm(
   // reranker arm follows — the model side can never take the deterministic
   // verdict down.
   try {
-    await runDenseArm(exportDir, fusedSr, resultsDir, snapshotSha256);
+    return await runDenseArm(exportDir, fusedSr, resultsDir, snapshotSha256);
   } catch (err: unknown) {
     console.error(
       '\ndense arm CRASHED (informational, verdict unaffected — the fused ' +
         'floor still governs):',
       err,
     );
+    // A CRASH still returns null, so the dense floor is skipped rather than
+    // failing the run on a measurement that never happened. A dense REGRESSION
+    // is a different thing entirely and is gated by the caller.
+    return null;
   }
 }
 
@@ -643,7 +714,7 @@ async function runDenseArm(
   fusedSr: StratifiedReport,
   resultsDir: string,
   snapshotSha256: string,
-): Promise<void> {
+): Promise<StratifiedReport | null> {
   const url = process.env['GOVERNED_EVAL_DENSE_URL'] ?? 'http://127.0.0.1:8098';
 
   // Embedding the full 17k-doc corpus takes ~3 h; GOVERNED_EVAL_DENSE_PREBUILT
@@ -660,7 +731,7 @@ async function runDenseArm(
     const resolved = expandHome(prebuilt);
     if (!existsSync(resolved)) {
       console.error(`\ndense arm FAILED: GOVERNED_EVAL_DENSE_PREBUILT not found: ${resolved}`);
-      return;
+      return null;
     }
     denseIndexPath = join(
       process.env['TEAMKB_BASE_PATH'] ?? tmpdir(),
@@ -672,6 +743,10 @@ async function runDenseArm(
         'skipping the corpus embed, running the verdict phase only.',
     );
   }
+
+  // Every query whose dense arm degraded (embed failure/timeout/no vector).
+  // A non-empty list means this run's dense numbers are NOT a valid measurement.
+  const degradedQueries: string[] = [];
 
   const dense = await evalCorpus(
     exportDir,
@@ -685,15 +760,107 @@ async function runDenseArm(
         url,
         searchK: 50,
         maxDocChars: 2000, // matches DEFAULT_DENSE_MAX_DOC_CHARS — the shipped default
-        timeoutMs: 30_000, // offline arm: a slow query-embed is data, not an outage
+        // Offline arm: a slow query-embed is DATA, not an outage — so give it
+        // room. 30 s was not enough under real contention: on 2026-08-02 a
+        // loaded box (load 9.5 / 8 cores) pushed single queries to 25.8 s, right
+        // at the old ceiling, and the ones that crossed it silently contributed
+        // zero dense candidates. 300 s cannot be hit by anything except a wedged
+        // embedder, which onQueryDegraded then reports loudly.
+        timeoutMs: 300_000,
+        // Turn SILENT fail-open into a LOUD refusal. Serving leaves this unset
+        // (a user with a slow embedder should still get lexical results); a
+        // measurement must never quietly score a timeout as a genuine miss.
+        onQueryDegraded: (reason: unknown) => {
+          degradedQueries.push(reason instanceof Error ? reason.message : String(reason));
+        },
         ...(denseIndexPath ? { indexPath: denseIndexPath } : {}),
       },
     },
   );
   if (!dense.ok) {
     console.error(`\ndense arm FAILED (informational, verdict unaffected): ${dense.reason}`);
-    return;
+    return null;
   }
+
+  // Preserve a FRESHLY-BUILT index so the ~3 h corpus embed is never paid twice.
+  //
+  // The whole `tmpBase` is rmSync'd when the run ends, which means a fresh dense
+  // build is DESTROYED on exit. That is not hypothetical: the 2026-07-20 B4 build
+  // measured semantic Recall@10 0.3393 -> 0.9643, and by 2026-07-31 the
+  // `~/.teamkb/eval-anchor/dense-prebuilt/` directory was EMPTY — so re-verifying
+  // a shipped number required rebuilding from scratch. An artifact that costs
+  // three hours and is thrown away by default is a defect, not a policy.
+  //
+  // Opt-in via GOVERNED_EVAL_DENSE_PRESERVE=<path> and only meaningful on a fresh
+  // build (reusing a prebuilt has nothing new to save). Failure to preserve is
+  // logged but never fatal — this arm is informational and must not be able to
+  // take the deterministic verdict down.
+  const preserveTo = process.env['GOVERNED_EVAL_DENSE_PRESERVE'];
+  if (buildDenseIndex && preserveTo !== undefined && preserveTo !== '') {
+    const builtIndex = join(getQmdTenantIndexPath(ANCHOR_TENANT), 'dense-vec.sqlite');
+    try {
+      if (!existsSync(builtIndex)) {
+        console.error(`WARN could not preserve the dense index — not found at ${builtIndex}`);
+      } else {
+        const dest = expandHome(preserveTo);
+        mkdirSync(dirname(dest), { recursive: true });
+        // WAL-SAFE COPY — a bare cpSync of the main DB file is NOT correct here.
+        //
+        // DenseVecIndex sets `journal_mode = WAL` (dense-index.ts), so committed
+        // pages can still live in the `-wal` sidecar until a checkpoint runs.
+        // Copying only `dense-vec.sqlite` can therefore capture a STALE or TORN
+        // snapshot, and the failure mode is silent: the next run reusing this
+        // artifact via GOVERNED_EVAL_DENSE_PREBUILT would simply produce
+        // different numbers — exactly the nondeterminism this harness exists to
+        // prevent, and worse than no artifact at all.
+        //
+        // `db.backup()` is SQLite's online backup API: it is WAL-safe by
+        // construction and produces a single self-contained destination file.
+        // Chose it over `PRAGMA wal_checkpoint(TRUNCATE)` + copy because a
+        // TRUNCATE checkpoint cannot fully complete while any other connection
+        // holds the DB open (it reports BUSY and silently leaves frames behind),
+        // and the adapter may still hold this index open at this point — which
+        // would reintroduce the very torn-copy bug being fixed. The backup API
+        // has no such precondition.
+        // WRITE-THEN-RENAME — never clobber a good artifact with a partial one.
+        //
+        // `db.backup()` writes the destination IN PLACE. If the process dies
+        // mid-backup (Ctrl-C on a long run, OOM, systemd stop), `dest` is left
+        // truncated AND whatever known-good index was already there is gone. On
+        // a change whose entire purpose is "never pay the ~3 h embed twice",
+        // destroying the previous copy on a partial write is the exact failure
+        // it exists to prevent. So back up to a sibling temp path and `rename`
+        // only on success: rename is atomic within a filesystem, so `dest` is
+        // always either the old good index or the new complete one, never a
+        // half-written file. The temp is cleaned up on failure.
+        const staging = `${dest}.partial`;
+        rmSync(staging, { force: true });
+        const src = new Database(builtIndex, { readonly: true });
+        try {
+          await src.backup(staging);
+        } finally {
+          src.close();
+        }
+        try {
+          renameSync(staging, dest);
+        } catch (renameErr: unknown) {
+          rmSync(staging, { force: true });
+          throw renameErr;
+        }
+        console.log(
+          `\ndense index PRESERVED: ${dest}\n` +
+            '  Re-run the verdict phase in minutes instead of hours with:\n' +
+            // Print the RESOLVED path, not the raw env value: a `~`-relative or
+            // relative `GOVERNED_EVAL_DENSE_PRESERVE` would otherwise be echoed
+            // back verbatim and re-resolve against a different cwd on reuse.
+            `    GOVERNED_EVAL_DENSE=1 GOVERNED_EVAL_DENSE_PREBUILT=${dest} pnpm eval:governed:local`,
+        );
+      }
+    } catch (err: unknown) {
+      console.error('WARN could not preserve the dense index (informational arm):', err);
+    }
+  }
+
   console.log('\n=== dense A/B arm (informational — B4 ship-gate evidence) ===');
   console.log(formatStratifiedReport(dense.sr));
   console.log('\n=== per-stratum delta (dense-fused − lexical-fused) ===');
@@ -765,7 +932,22 @@ async function runDenseArm(
           denseIndexBuild: dense.denseBuild ?? null,
           // Provenance: whether the dense index was freshly built or reused from
           // a preserved prebuilt (null = freshly built this run).
-          reusedPrebuiltIndex: prebuilt ?? null,
+          //
+          // BASENAME ONLY — never the resolved path. This artifact is committed,
+          // and the resolved form embeds the operator's $HOME (e.g.
+          // /home/<user>/.teamkb/...), which leaks the username and names a path
+          // that exists on exactly one machine. The basename carries the only
+          // fact a reader needs — which prebuilt was reused — and stays
+          // reproducible.
+          reusedPrebuiltIndex: prebuilt === undefined ? null : basename(expandHome(prebuilt)),
+          // FINDING 1(a): make the artifact self-evidencing about whether these
+          // numbers were gate-eligible. A degraded run's numbers are below floor
+          // BY CONSTRUCTION, and without this a later reader sees a sub-floor
+          // measurement with no indication the floor check was deliberately
+          // skipped — which is precisely the ambiguity this gate exists to remove.
+          degraded: degradedQueries.length > 0,
+          degradedQueryCount: degradedQueries.length,
+          degradedReasonSample: [...new Set(degradedQueries)].slice(0, 3),
           gate,
           fused: { overall: fusedSr.overall, byKind: fusedSr.byKind },
           dense: { overall: dense.sr.overall, byKind: dense.sr.byKind },
@@ -779,6 +961,29 @@ async function runDenseArm(
   } catch (err: unknown) {
     console.error('WARN could not write the dense A/B artifact:', err);
   }
+
+  // REFUSE A VERDICT ON A DEGRADED RUN.
+  //
+  // If any query's dense arm failed open, the dense numbers measure "how
+  // contended was this box", not "did retrieval regress" — and scoring them
+  // against a floor would fail the gate for the wrong reason. A gate that cries
+  // wolf on load gets ignored, which is exactly how the six-day quiet-skip of
+  // this very detector survived. So return null: the caller skips the dense
+  // floor, the fused floor still governs, and the operator is told why.
+  if (degradedQueries.length > 0) {
+    console.error(
+      `\ndense arm DEGRADED on ${degradedQueries.length}/${GOVERNED_BRAIN_V1_DATASET.queries.length} ` +
+        'queries — the dense floor is NOT evaluated this run because these numbers ' +
+        'measure contention, not retrieval quality. First reasons: ' +
+        `${[...new Set(degradedQueries)].slice(0, 3).join(' | ')}`,
+    );
+    return null;
+  }
+
+  // Hand the measured report back so the caller can gate on it. Writing the
+  // artifact is best-effort; the REPORT is the thing the verdict needs, so a
+  // failed artifact write must not suppress the floor check.
+  return dense.sr;
 }
 
 /**

@@ -27,12 +27,12 @@ The one-line rule:
 
 **Artifacts** (all under the brain root, canonically `~/.teamkb/brain/`):
 
-| Artifact                                      | What it is                                                                                                                                                                                                                 |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `brain/.ico/state.db`                         | The compiler's deterministic kernel state (SQLite): sources, tasks, outputs.                                                                                                                                               |
-| `brain/audit/traces/YYYY-MM-DD.jsonl`         | Daily trace files. Each event carries `event_type`, `event_id`, `timestamp`, `payload`, and a `prev_hash` linking it to the previous event — hash-chained within the day and now cross-day-chained across file boundaries. |
-| `brain/audit/provenance/<sourceId>.jsonl`     | Per-source provenance records: which compile operation (`compile.summarize`, …) emitted which `outputPath` from which source.                                                                                              |
-| `brain/spool/…jsonl` + `<file>.manifest.json` | The emitted spool candidates and the manifest sidecar pinning the file's SHA-256 and listing every emitted `candidateId` (ICO kernel `packages/kernel/src/spool.ts`).                                                      |
+| Artifact                                          | What it is                                                                                                                                                                                                                 |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `brain/.ico/state.db`                             | The compiler's deterministic kernel state (SQLite): sources, tasks, outputs.                                                                                                                                               |
+| `brain/audit/traces/YYYY-MM-DD.jsonl`             | Daily trace files. Each event carries `event_type`, `event_id`, `timestamp`, `payload`, and a `prev_hash` linking it to the previous event — hash-chained within the day and now cross-day-chained across file boundaries. |
+| `brain/audit/provenance/<sourceId>.jsonl`         | Per-source provenance records: which compile operation (`compile.summarize`, …) emitted which `outputPath` from which source.                                                                                              |
+| `~/.teamkb/spool/…jsonl` + `<file>.manifest.json` | The emitted spool candidates at the shared compiler/plugin→registrar boundary and the manifest sidecar pinning the file's SHA-256 and listing every emitted `candidateId` (ICO kernel `packages/kernel/src/spool.ts`).     |
 
 **What this chain evidences:** that a compile pass ran over given inputs at a
 recorded time and emitted given artifacts — e.g. "on 2026-07-16 a
@@ -99,6 +99,21 @@ manifest entry → ICO trace event) and reports PASS / FAIL / UNVERIFIABLE per
 link — UNVERIFIABLE, not PASS, when a backing artifact is absent (e.g. no
 brain directory on CI).
 
+### The separate AGP action pointer
+
+The Agent Governance Plane can bind an action to the governance-receipt head it
+observed through authenticated `GET /api/audit/receipt-tip`. The endpoint returns
+the current `audit_events` SHA-256 head and sequence; `?hash=<sha256>` resolves a
+previously observed head after the chain advances. It walks the chain before
+answering, refuses to publish a tip when it finds a tamper signature, and reports
+legacy unverified rows and benign historical ordering forks separately.
+
+This is deliberately a **governance-state pointer**, not a read receipt. It proves
+that a hash occupied a position in the governance chain; it does not record which
+`qmd://` results an agent read or prove that those results caused the action. An
+exact "what did it know?" claim still needs a content-safe per-query read-set
+receipt correlated to the AGP run.
+
 ## 5. The conflation failure mode
 
 The failure mode this document exists to prevent is any sentence shaped like
@@ -133,3 +148,4 @@ flags the wrong forms on brand surfaces.
 | "Did every corpus row come through the promoter?"    | `curator-cli verify-corpus-accounting`                                      | govern                  |
 | "Did a compile pass emit this page?"                 | trace/provenance files under `brain/audit/`                                 | compile                 |
 | "Does this memory's whole lineage hold, end to end?" | `curator-cli provenance-walk --memory-id <id> --db <path> [--brain <path>]` | both, via the bridge    |
+| "Can AGP resolve the governance head it observed?"   | `GET /api/audit/receipt-tip?hash=<sha256>`                                  | govern (`audit_events`) |
