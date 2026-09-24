@@ -267,6 +267,20 @@ describe('dispatch ingest — hand-crafted spool file', () => {
     const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
     expect(parsed['ingested_count']).toBe(1);
   });
+
+  it('returns BATCH_ADMISSION_REJECTED for bulk input without a receipt', async () => {
+    await writeSpoolFile('spool-2026-08-02T170000Z.jsonl', [
+      makeSpoolLine({ source: 'bulk_import', trustLevel: 'untrusted' }),
+    ]);
+
+    const rc = await dispatch(['ingest', spoolDir, '--tenant', 'demo-e2e', '--json'], testDeps);
+    expect(rc).toBe(1);
+    const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
+    expect(parsed['ok']).toBe(false);
+    expect(parsed['code']).toBe('BATCH_ADMISSION_REJECTED');
+    expect(parsed['admission_rejected_count']).toBe(1);
+    expect(parsed['ingested_count']).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

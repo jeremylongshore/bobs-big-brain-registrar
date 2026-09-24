@@ -5,11 +5,16 @@ import {
   listSpoolFiles,
   readSpoolFile,
   verifySpoolManifest,
+  type SpoolBatchReceipt,
+  type SpoolManifestResult,
 } from '@qmd-team-intent-kb/claude-runtime';
 import { computeContentHash, DisclosureRejectedError } from '@qmd-team-intent-kb/common';
 import type { Result } from '@qmd-team-intent-kb/common';
-import type { CandidateRepository } from '@qmd-team-intent-kb/store';
+import type { CandidateRepository, ImportBatchRepository } from '@qmd-team-intent-kb/store';
 import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
+
+/** A file above this size is broad-import material even if it uses `import`. */
+export const DEFAULT_BROAD_IMPORT_CANDIDATE_LIMIT = 100;
 
 /** Options for `ingestFromSpool`. All optional — defaults preserve the
  *  pre-`dmj.4` behavior except that manifest verification is now ON. */
@@ -44,6 +49,12 @@ export interface IngestFromSpoolOptions {
    * `<spool>/ingested`.
    */
   archiveIngestedDir?: string;
+  /**
+   * Durable batch ledger used for broad/bulk spool admission. Production CLI
+   * and daemon wiring supplies this; ordinary single-source spool files remain
+   * backward-compatible without it.
+   */
+  importBatchRepo?: ImportBatchRepository;
 }
 
 /** Record of a spool file refused during ingest because it failed manifest
@@ -62,6 +73,13 @@ export interface SpoolDisclosureRejection {
   category: string;
 }
 
+/** A broad/bulk file refused before any candidate is inserted. */
+export interface SpoolAdmissionRejection {
+  spoolFile: string;
+  reason: string;
+  batchId?: string;
+}
+
 /** Result payload from `ingestFromSpoolDetailed`. */
 export interface IngestResult {
   ingested: MemoryCandidate[];
@@ -73,6 +91,64 @@ export interface IngestResult {
    * fail-closed on the bad candidate, not a denial-of-service on the whole spool.
    */
   rejected: SpoolDisclosureRejection[];
+  /** Broad/bulk files refused before insertion because their receipt was absent or invalid. */
+  admissionRejected: SpoolAdmissionRejection[];
+}
+
+function requiresBatchReceipt(
+  candidates: MemoryCandidate[],
+  broadLimit = DEFAULT_BROAD_IMPORT_CANDIDATE_LIMIT,
+  manifest?: SpoolManifestResult,
+): boolean {
+  return (
+    manifest?.batchReceipt !== undefined ||
+    candidates.some((candidate) => candidate.source === 'bulk_import') ||
+    candidates.length > broadLimit
+  );
+}
+
+function validateBatchReceipt(
+  receipt: SpoolBatchReceipt | undefined,
+  manifest: SpoolManifestResult | undefined,
+  candidates: MemoryCandidate[],
+): string | null {
+  if (receipt === undefined) return 'missing batchReceipt in the spool manifest';
+  if (manifest?.status !== 'verified') {
+    return 'batchReceipt requires a manifest whose spool-file hash verifies';
+  }
+  if (receipt.candidateCount !== candidates.length) {
+    return `batchReceipt candidateCount=${receipt.candidateCount} does not match parsed candidate count=${candidates.length}`;
+  }
+  if (receipt.candidateCount > receipt.maxCandidates) {
+    return `batchReceipt candidateCount=${receipt.candidateCount} exceeds maxCandidates=${receipt.maxCandidates}`;
+  }
+  const candidateIds = manifest.candidateIds;
+  if (candidateIds === undefined || candidateIds.length !== candidates.length) {
+    return 'batchReceipt requires manifest candidateIds for every parsed candidate';
+  }
+  const expectedIds = new Set(candidateIds);
+  if (expectedIds.size !== candidates.length || candidates.some((c) => !expectedIds.has(c.id))) {
+    return 'manifest candidateIds do not match the parsed candidate IDs';
+  }
+  for (const candidate of candidates) {
+    if (candidate.tenantId !== receipt.tenantId) {
+      return `candidate ${candidate.id} tenantId does not match batchReceipt tenantId`;
+    }
+    if (candidate.source !== receipt.source) {
+      return `candidate ${candidate.id} source does not match batchReceipt source`;
+    }
+    if (candidate.trustLevel !== receipt.trustLevel) {
+      return `candidate ${candidate.id} trustLevel does not match batchReceipt trustLevel`;
+    }
+  }
+  if (
+    receipt.source === 'bulk_import' &&
+    receipt.trustLevel !== 'low' &&
+    receipt.trustLevel !== 'untrusted'
+  ) {
+    return "bulk_import batchReceipt must use trustLevel 'low' or 'untrusted'";
+  }
+  return null;
 }
 
 /**
@@ -122,13 +198,20 @@ export async function ingestFromSpoolDetailed(
   const ingested: MemoryCandidate[] = [];
   const tampered: SpoolTamperRecord[] = [];
   const rejected: SpoolDisclosureRejection[] = [];
+  const admissionRejected: SpoolAdmissionRejection[] = [];
+  const importBatchRepo = opts?.importBatchRepo;
 
   for (const filepath of filesResult.value) {
+    let manifest: SpoolManifestResult | undefined;
     if (verifyManifest) {
       const verify = await verifySpoolManifest(filepath);
       // A verification *error* (malformed manifest JSON, unreadable file)
       // is treated like an unreadable spool file: skip, keep processing.
-      if (!verify.ok) continue;
+      if (!verify.ok) {
+        admissionRejected.push({ spoolFile: filepath, reason: verify.error });
+        continue;
+      }
+      manifest = verify.value;
       if (verify.value.status === 'tampered') {
         const quarantinedTo = await quarantineTamperedFile(
           filepath,
@@ -151,9 +234,88 @@ export async function ingestFromSpoolDetailed(
     const readResult = await readSpoolFile(filepath);
     if (!readResult.ok) continue; // skip unreadable files, keep processing others
 
-    for (const candidate of readResult.value) {
+    const candidates = readResult.value;
+    if (requiresBatchReceipt(candidates, DEFAULT_BROAD_IMPORT_CANDIDATE_LIMIT, manifest)) {
+      // A caller may disable ordinary manifest verification for legacy files,
+      // but broad/bulk admission always performs it. This prevents the escape
+      // hatch from becoming a way around the batch receipt contract.
+      if (manifest === undefined) {
+        const verify = await verifySpoolManifest(filepath);
+        if (!verify.ok) {
+          admissionRejected.push({ spoolFile: filepath, reason: verify.error });
+          continue;
+        }
+        manifest = verify.value;
+      }
+      const receiptError = validateBatchReceipt(manifest.batchReceipt, manifest, candidates);
+      if (receiptError !== null) {
+        admissionRejected.push({
+          spoolFile: filepath,
+          reason: receiptError,
+          batchId: manifest.batchReceipt?.batchId,
+        });
+        continue;
+      }
+      if (importBatchRepo === undefined) {
+        admissionRejected.push({
+          spoolFile: filepath,
+          reason: 'durable import batch repository is required for broad/bulk admission',
+          batchId: manifest.batchReceipt?.batchId,
+        });
+        continue;
+      }
+    }
+
+    const receipt = manifest?.batchReceipt;
+    let batchCreated = 0;
+    let batchRejected = 0;
+    let batchSkipped = 0;
+    let batchWasExisting = false;
+
+    if (receipt !== undefined) {
+      if (importBatchRepo === undefined) {
+        // This is unreachable for a validated broad/bulk file, but keeps the
+        // receipt path fail-closed if the admission rules change later.
+        admissionRejected.push({
+          spoolFile: filepath,
+          reason: 'durable import batch repository is required for batch receipts',
+          batchId: receipt.batchId,
+        });
+        continue;
+      }
+      const existingBatch = importBatchRepo.findById(receipt.batchId);
+      batchWasExisting = existingBatch !== null;
+      if (!batchWasExisting) {
+        try {
+          importBatchRepo.insert({
+            id: receipt.batchId,
+            tenantId: receipt.tenantId,
+            sourcePath: filepath,
+            fileCount: 1,
+            createdCount: 0,
+            rejectedCount: 0,
+            skippedCount: 0,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            rolledBackAt: null,
+          });
+        } catch (e) {
+          admissionRejected.push({
+            spoolFile: filepath,
+            reason: `failed to persist batch receipt: ${e instanceof Error ? e.message : String(e)}`,
+            batchId: receipt.batchId,
+          });
+          continue;
+        }
+      }
+    }
+
+    for (const candidate of candidates) {
       const existing = candidateRepo.findById(candidate.id);
-      if (existing !== null) continue;
+      if (existing !== null) {
+        batchSkipped++;
+        continue;
+      }
 
       const hash = computeContentHash(candidate.content);
       try {
@@ -161,16 +323,28 @@ export async function ingestFromSpoolDetailed(
         // content before it can be written. Refuse this one candidate and keep
         // processing the rest of the batch — a poisoned spool entry must not be
         // able to block every other candidate's ingest.
-        candidateRepo.insert(candidate, hash);
+        candidateRepo.insert(candidate, hash, receipt?.batchId);
         ingested.push(candidate);
+        batchCreated++;
       } catch (e) {
         if (e instanceof DisclosureRejectedError) {
           // Record only the id + category — never the matched value.
           rejected.push({ candidateId: candidate.id, category: e.category });
+          batchRejected++;
           continue;
         }
         throw e;
       }
+    }
+
+    if (receipt !== undefined && !batchWasExisting && importBatchRepo !== undefined) {
+      importBatchRepo.updateCounts(receipt.batchId, {
+        fileCount: 1,
+        createdCount: batchCreated,
+        rejectedCount: batchRejected,
+        skippedCount: batchSkipped,
+      });
+      importBatchRepo.complete(receipt.batchId);
     }
 
     // Idempotency (B1): once a file's candidates are read + ingested, move it out
@@ -182,7 +356,7 @@ export async function ingestFromSpoolDetailed(
     }
   }
 
-  return { ok: true, value: { ingested, tampered, rejected } };
+  return { ok: true, value: { ingested, tampered, rejected, admissionRejected } };
 }
 
 /**

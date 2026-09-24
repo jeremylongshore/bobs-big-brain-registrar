@@ -1,7 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { ingestFromSpool, Curator, loadBrainignoreRuleset } from '@qmd-team-intent-kb/curator';
+import {
+  ingestFromSpoolDetailed,
+  Curator,
+  loadBrainignoreRuleset,
+} from '@qmd-team-intent-kb/curator';
 import {
   loadOrCreateOriginSecret,
   ORIGIN_SECRET_UNAVAILABLE_WARNING,
@@ -111,17 +115,25 @@ async function ingestStep(
   result: CycleResult,
 ): Promise<MemoryCandidate[]> {
   try {
-    const ingestResult = await ingestFromSpool(deps.candidateRepo, config.spoolDir);
+    const ingestResult = await ingestFromSpoolDetailed(deps.candidateRepo, config.spoolDir, {
+      ...(deps.importBatchRepo !== undefined ? { importBatchRepo: deps.importBatchRepo } : {}),
+    });
     if (!ingestResult.ok) {
       result.ingest.errors.push(ingestResult.error);
       logger.error(`Ingest failed: ${ingestResult.error}`);
       return [];
     }
 
+    for (const rejection of ingestResult.value.admissionRejected) {
+      const msg = `Broad/bulk spool admission refused for ${rejection.spoolFile}: ${rejection.reason}`;
+      result.ingest.errors.push(msg);
+      logger.error(msg);
+    }
+
     // Threat #2: Cap candidates per cycle
-    const capped = ingestResult.value.slice(0, config.maxCandidatesPerCycle);
-    if (ingestResult.value.length > config.maxCandidatesPerCycle) {
-      const msg = `Capped ingestion: ${ingestResult.value.length} found, processing ${config.maxCandidatesPerCycle}`;
+    const capped = ingestResult.value.ingested.slice(0, config.maxCandidatesPerCycle);
+    if (ingestResult.value.ingested.length > config.maxCandidatesPerCycle) {
+      const msg = `Capped ingestion: ${ingestResult.value.ingested.length} found, processing ${config.maxCandidatesPerCycle}`;
       result.ingest.errors.push(msg);
       logger.warn(msg);
     }

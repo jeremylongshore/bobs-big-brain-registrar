@@ -6,6 +6,7 @@ import {
   MemoryRepository,
   PolicyRepository,
   AuditRepository,
+  ImportBatchRepository,
   ExportStateRepository,
   IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
@@ -41,6 +42,7 @@ async function main(): Promise<void> {
 
   const daemonDeps = {
     candidateRepo: new CandidateRepository(db),
+    importBatchRepo: new ImportBatchRepository(db),
     memoryRepo: new MemoryRepository(db),
     policyRepo: new PolicyRepository(db),
     auditRepo: new AuditRepository(db),

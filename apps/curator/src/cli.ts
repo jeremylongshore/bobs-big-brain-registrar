@@ -48,6 +48,7 @@ import {
   PolicyRepository,
   AuditRepository,
   MemoryLinksRepository,
+  ImportBatchRepository,
   verifyAuditChain,
   computeManifestHash,
   appendSignedMergeAnchor,
@@ -365,11 +366,14 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     const policyRepo = new PolicyRepository(db);
     const auditRepo = new AuditRepository(db);
     const linksRepo = new MemoryLinksRepository(db);
+    const importBatchRepo = new ImportBatchRepository(db);
 
     // Stage A: ingestFromSpoolDetailed — reads JSONL, verifies each file's
     // manifest SHA-256 (tampered files refused + quarantined per dmj.4),
     // validates, writes surviving candidates to the store.
-    const ingestResult = await ingestFromSpoolDetailed(candidateRepo, spoolDir);
+    const ingestResult = await ingestFromSpoolDetailed(candidateRepo, spoolDir, {
+      importBatchRepo,
+    });
     if (!ingestResult.ok) {
       // ingestFromSpoolDetailed returns Result<_, string> — message IS the error.
       const msg = ingestResult.error;
@@ -387,6 +391,8 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     // Candidates refused at the disclosure / secret choke point (Epic 0).
     // Reported, never silently dropped — carries only id + category.
     const disclosureRejected = ingestResult.value.rejected;
+    const admissionRejected = ingestResult.value.admissionRejected;
+    const admissionOk = admissionRejected.length === 0;
 
     // Stage B: Curator.processBatch — dedup + policy + promote.
     // Write-time provenance (H1): resolve the installation origin secret so
@@ -420,12 +426,15 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     if (json) {
       process.stdout.write(
         JSON.stringify({
-          ok: true,
+          ok: admissionOk,
+          ...(admissionOk ? {} : { code: 'BATCH_ADMISSION_REJECTED' }),
           spool_dir: spoolDir,
           tenant_id: tenantId,
           ingested_count: candidates.length,
           tampered_count: tampered.length,
           tampered,
+          admission_rejected_count: admissionRejected.length,
+          admission_rejected: admissionRejected,
           disclosure_rejected_count: disclosureRejected.length,
           disclosure_rejected: disclosureRejected,
           batch,
@@ -460,8 +469,18 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           process.stderr.write(`  ${r.candidateId} (${r.category})\n`);
         }
       }
+      if (admissionRejected.length > 0) {
+        process.stderr.write(
+          `\nBATCH_ADMISSION_REJECTED: ${admissionRejected.length} spool file(s) refused before insertion:\n`,
+        );
+        for (const rejection of admissionRejected) {
+          process.stderr.write(
+            `  ${rejection.spoolFile}${rejection.batchId === undefined ? '' : ` (batch ${rejection.batchId})`}: ${rejection.reason}\n`,
+          );
+        }
+      }
     }
-    return 0;
+    return admissionOk ? 0 : 1;
   } finally {
     // better-sqlite3 Databases hold an OS file descriptor — close to avoid
     // leaks when --db points at a real file (in-memory dbs don't care).

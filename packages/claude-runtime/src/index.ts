@@ -38,6 +38,7 @@ export {
   verifySpoolManifest,
   type SpoolManifestStatus,
   type SpoolManifestResult,
+  type SpoolBatchReceipt,
 } from './spool/spool-reader.js';
 export { writeToFailureBucket } from './spool/failure-bucket.js';
 export type { FailureRecord } from './spool/failure-bucket.js';
