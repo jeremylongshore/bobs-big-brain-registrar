@@ -42,10 +42,18 @@ serve from an **immutable, tag-pinned release directory** behind an atomic `curr
 └── DEPLOYS.log                         # append-only: <utc> tag= sha= actor= note=
 ```
 
-Each `releases/<tag>` is produced by `git archive <tag>` (no `.git`, immutable) + `pnpm install
---frozen-lockfile` + `pnpm -r build`, built with **`/usr/bin/node`** so `better-sqlite3`'s native
-ABI matches the node the unit runs. Releases are **never rebuilt in place** — a new tag is a new
-directory, and rollback is a symlink flip.
+Each `releases/<ref>-<short-sha>` is produced by `git archive <resolved-commit-sha>` (no `.git`,
+immutable) + a frozen pnpm install + `pnpm -r build`, built with **`/usr/bin/node`** so
+`better-sqlite3`'s native ABI matches the node the unit runs. pnpm uses
+`--package-import-method=copy`: a production release must not share
+writable package-file hardlinks with pnpm's global store or another checkout. Optional local-LLM
+platform binaries are excluded because the tailnet API does not load them. Each build uses a fresh,
+release-local pnpm store and removes that disposable store after the copied dependency graph is
+built, so a corrupted global store cannot contaminate a candidate. Releases are **never
+rebuilt in place** — a new commit is a new directory; a corrupt same-SHA artifact is preserved and
+its replacement gets a unique `-rebuild-<UTC>` suffix. A full commit SHA is a valid deploy input.
+Tag fetches are deliberately not forced: a moved tag aborts instead of silently changing a release's
+source identity.
 
 ## The release floor — the ONE rule
 
@@ -59,22 +67,46 @@ double-hashes `~/.teamkb/tokens.json` and locks out every teammate.
 ## Deploy
 
 ```bash
-cd ~/000-projects/qmd-team-intent-kb
-scripts/deploy-brain-api.sh v0.8.0        # or any later tag that contains a2143be
+cd ~/000-projects/bobs-big-brain-registrar
+scripts/deploy-brain-api.sh v0.8.0        # or a full commit SHA containing a2143be
 ```
 
 What it does, in order (all `set -euo pipefail`, idempotent, safe):
 
-1. `git fetch --tags` in the source repo.
-2. **Floor check** — abort unless the tag contains `a2143be`.
-3. **Build** a fresh `releases/<tag>` (archive → `pnpm install` → `pnpm -r build`). If the dir already
-   exists and passes preflight, it is **reused** (re-running the same tag is a safe no-op re-point).
-4. **Lockout preflight** — `grep parseStoredHash …/dist/auth/token-registry.js`, else abort.
-5. **Smoke** — see below.
-6. **Flip** `current -> releases/<tag>`, then `systemctl --user daemon-reload && restart`.
-7. **Post-restart health gate** — if the new build is unhealthy it **auto-rolls back** the symlink,
+1. `git fetch --tags` without force in the source repo; moved-tag rejection is a hard failure.
+2. Resolve the tag or commit input once and **floor-check that SHA** — abort unless it contains
+   `a2143be`. The build archives that SHA, not the ref name.
+3. **Cold-start the current rollback target.** Every package manifest must parse and a fresh curator
+   process must load. A healthy long-running process does not satisfy this check. Failure aborts
+   without restarting anything.
+4. **Build** a fresh `<ref>-<short-sha>` release (archive → copied, no-optional frozen install →
+   `pnpm -r build`). An
+   existing directory is reused only when its full cold-start preflight passes; otherwise it is
+   preserved and a uniquely named rebuild is created.
+5. **Artifact preflight** — `parseStoredHash` must exist, every `package.json` must be non-empty valid
+   JSON, and a fresh `/usr/bin/node apps/curator/dist/main.js --help` must succeed.
+6. **Smoke** — see below.
+7. **Flip** `current -> releases/<release-name>`, then `systemctl --user daemon-reload && restart`.
+8. **Post-restart health gate** — if the new build is unhealthy it **auto-rolls back** the symlink,
    restarts, and exits non-zero (the service is never left down).
-8. Append a line to `DEPLOYS.log` and **prune** to the newest 5 release dirs (never the live one).
+9. Append a line to `DEPLOYS.log` and **prune** to the newest 5 release dirs (never the live one).
+
+## Cold-start failure — do not restart
+
+If deploy reports that `current` fails its cold-start preflight, leave the existing process running.
+The process may have loaded its dependencies before the files were damaged; `/api/health` can remain
+green even though the same artifact cannot start again. Do not use `systemctl restart` and do not
+point `current` at another retained release until that release independently passes all three gates:
+
+1. every package manifest parses;
+2. a fresh curator CLI process loads;
+3. an isolated API over a SQLite backup returns health 200, unauthenticated search 401, and an
+   authenticated search with `qmd://` citations.
+
+Build two copied-package artifacts from the recorded tag/SHA, prove both, and use one as the primary
+and one as the rollback. Only then flip `current` and restart. The 2026-08-16 incident proved why:
+510–525 zero-byte hardlinked package manifests affected every retained release simultaneously while
+the week-old API process continued to answer health checks.
 
 ### What the smoke proves (and what it can't)
 
@@ -147,6 +179,6 @@ checkout is never again the live service. To undo the cutover itself, restore th
   code artifact comes from_.
 - **Disk:** each `releases/<tag>` is ~1 GB (full workspace `node_modules`, mostly pnpm-store
   hardlinks); the script keeps the newest 5.
-- **Env overrides** (defaults shown): `TEAMKB_SRC_REPO=$HOME/000-projects/qmd-team-intent-kb`,
+- **Env overrides** (defaults shown): `TEAMKB_SRC_REPO=$HOME/000-projects/bobs-big-brain-registrar`,
   `TEAMKB_API_OPT=$HOME/.local/opt/teamkb-api`, `TEAMKB_API_UNIT=teamkb-brain-api.service`,
   `TEAMKB_API_NODE=/usr/bin/node`, `TEAMKB_KEEP=5`, `TEAMKB_FLOOR_SHA=a2143be`.
