@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Chain the tracked beads shim without replacing Husky's load-bearing hook path.
+# Beads is fail-open here: lint and policy-hash gates remain authoritative.
+
+if [ "$#" -eq 0 ]; then
+  exit 0
+fi
+
+hook_name=$1
+shift
+
+case "$hook_name" in
+  pre-commit|pre-push|post-checkout|post-merge|prepare-commit-msg)
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+beads_hook="$repo_root/.beads/hooks/$hook_name"
+
+if [ -x "$beads_hook" ]; then
+  "$beads_hook" "$@" || true
+fi

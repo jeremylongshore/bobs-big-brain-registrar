@@ -233,6 +233,10 @@ Incremental export of curated memories to `kb-export/` as Markdown with YAML fro
 - Always `bd sync` after closing
 - Workflow: `bd update <id> --status in_progress` → work → `bd close <id> --reason "evidence"` → `bd sync`
 
+### Git hooks and Beads
+
+This repository keeps `core.hooksPath=.husky/_` so Husky's lint-staged and policy-hash gates remain active. The tracked `.husky/*` hooks chain into `.beads/hooks/<hook>` through `.husky/beads-hook`; do not repoint `core.hooksPath` to `.beads/hooks` or bypass the Husky gates. The beads chain is deliberately fail-open, while the repository's lint and policy verification gates remain fail-closed.
+
 ### Scaffolding vs Implemented
 
 - Be explicit about what is currently scaffolding vs implemented
