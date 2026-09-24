@@ -56,6 +56,7 @@
 - `046-AT-ARCH-what-each-chain-proves-compile-vs-govern-boundary.md` — Substrate-boundary doctrine: the ICO trace chain proves COMPILE, the INTKB audit chain proves GOVERN admission; neither proves the other's claims (nor content truth); the spool manifest SHA-256 + UUID-v5 id lineage are the bridge; walked end-to-end by `curator-cli provenance-walk`
 - `047-OD-RNBK-merge-govern-and-anchor-receipts-runbook.md` — merge-govern operator runbook (Wave-2 E3/F3/F4): when/how to run the govern-at-merge CLI, what it does NOT do, signed merge-anchor key custody + rotation (SOPS-encrypted private / committed public), and the opt-in OpenTimestamps receipt for anchor heads with its honest network/trust limits
 - `049-AT-DECR-write-time-provenance-origin-tokens.md` — Write-time provenance (GSB Wave-2 H1–H5): HMAC-SHA256 origin tokens over (id, tenantId, capturedAt) keyed by the 0600 `~/.teamkb/origin-secret`, verified structurally before promotion (`origin_token_invalid` receipted reject), accept-with-`unattested` backward compatibility, team-API channel allowlist (`unrecognized_channel` 422), local-mode channel attestation out of scope v1, honest insider-poisoning residual
+- `052-AT-DECR-reference-import-flood-2026-08-02.md` — Reference-import flood investigation: 2026-07-16 producer replay, bounded/receipted broad-import admission, and reversible legacy-corpus review
 
 - `016-OD-OPSM-branch-protection-checklist.md` — GitHub branch protection configuration checklist
 - `027-OD-OPSM-edge-daemon-runbook.md` — edge-daemon operations runbook (install, config, health check, recovery, upgrade, rollback)
@@ -126,5 +127,6 @@
 | 049 | AT-DECR | write-time-provenance-origin-tokens                   | Origin-token decision record     |
 | 050 | AT-RNBK | reranker-service-runbook                              | bbb-reranker service runbook     |
 | 051 | AT-RNBK | embedder-service-and-dense-index-runbook              | bbb-embedder + dense index (B4)  |
+| 052 | AT-DECR | reference-import-flood-2026-08-02                     | Reference-import flood decision  |
 
-## Next Available Sequence: 052
+## Next Available Sequence: 053
