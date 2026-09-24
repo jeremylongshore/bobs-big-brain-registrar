@@ -76,6 +76,20 @@ describe('AuditRepository', () => {
     expect(found[0]?.action).toBe('promoted');
     expect(found[1]?.action).toBe('archived');
   });
+
+  it('preserves an explicit future hash version in content-safe chain positions', () => {
+    repo.insert(makeAuditEvent({ memoryId: randomUUID() }));
+    const original = repo.findChainTip();
+    expect(original).not.toBeNull();
+
+    db.prepare('UPDATE audit_events SET hash_version = ? WHERE entry_hash = ?').run(
+      3,
+      original?.entryHash,
+    );
+
+    expect(repo.findChainTip()?.hashVersion).toBe(3);
+    expect(repo.findChainPosition(original?.entryHash ?? '')?.hashVersion).toBe(3);
+  });
 });
 
 describe('AuditRepository — aggregation queries', () => {

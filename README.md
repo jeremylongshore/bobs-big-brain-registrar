@@ -15,6 +15,8 @@ Turn ephemeral Claude Code session insights into persistent, governed, team-wide
 
 > **Part of the [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) stack** — the Registrar is the **govern** layer. Upstream, [Bob's Big Brain Compiler](https://github.com/jeremylongshore/bobs-big-brain-compiler) (compile) emits the spool it consumes; downstream, [qmd](https://github.com/tobi/qmd) (retrieve) serves the curated result with `qmd://` citations. → [Ecosystem overview](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/U5S225PTME)
+
 ## Positioning
 
 This project has a clear separation of responsibilities:

@@ -1,133 +1,117 @@
 ---
 name: brain
 description: |
-  Answers questions about Intent Solutions' own systems, decisions, runbooks, and
-  conventions from the governed knowledge brain, returning a qmd:// citation for
-  every claim — receipts, not recall. Use when a teammate asks what the team knows
-  about its own architecture, infrastructure, decisions, or conventions (e.g.
-  "what does our system map say about the Caddy block", "why did we pick Apache-2.0",
-  "how does the brain auth work", "what is our deploy runbook"). Trigger with "/brain",
-  "ask the brain", "what do we know about", "what does our system map say", or "check
-  the team knowledge base".
+  Search and analyze Intent Solutions' governed team memory through the Registrar,
+  returning qmd:// citations for supported claims. Use when checking recorded
+  architecture, infrastructure, decisions, runbooks, or conventions. Trigger with
+  "/brain", "ask the team brain", or "check the team knowledge base".
 allowed-tools: 'mcp__teamkb__teamkb_search'
-version: 1.0.0
+version: 1.1.0
 author: Intent Solutions <jeremy@intentsolutions.io>
 license: Apache-2.0
-compatibility: 'Designed for Claude Code; requires the intent-brain plugin (auto-wires the teamkb MCP server)'
-tags: [brain, knowledge, search, citations, governance]
+compatibility: 'Designed for Claude Code; requires the Registrar intent-brain remote plugin with TEAMKB_API_URL and a per-user TEAMKB_API_TOKEN, or a locally built Registrar MCP server exposing teamkb_search. The shipped intent-brain marketplace runtime is remote and read-only.'
+tags: [brain, knowledge, search, citations, governance, registrar]
 argument-hint: '[question]'
+model: inherit
+effort: low
 ---
 
-# Brain — cited answers from the governed knowledge base
+# Brain — cite the Registrar's governed team memory
 
-Ask the Intent Solutions knowledge **brain** a question and get an answer grounded
-in the governed corpus, where **every claim carries a qmd:// citation**. The brain
-does not paraphrase from memory — it retrieves governed memories and cites them, so
-any answer is verifiable after the fact.
+Answer questions from the Registrar's governed corpus and attach a returned `qmd://` citation to every
+load-bearing claim. Refuse to present unsupported recall as team knowledge.
 
 ## Overview
 
-This is the read surface of the Compile-Then-Govern stack: ICO **compiles** raw
-material into governed memories, INTKB **governs** them, and qmd **retrieves** them
-with citations. The `teamkb_search` MCP tool fronts that retrieval. The job here is
-to turn a natural-language question into a cited answer — and to refuse to answer
-beyond what the citations support.
+The Registrar is the govern layer of Bob's Big Brain: the Compiler prepares candidate knowledge,
+deterministic policy decides what becomes durable, and qmd retrieves the governed result. This skill
+uses the Registrar-native `teamkb_search` surface. The unified `governed-second-brain` plugin exposes a
+different tool name, `brain_search`; do not mix the two contracts.
 
 ## Prerequisites
 
-- The `intent-brain` plugin is installed, which auto-wires the `teamkb` MCP server.
-- Team mode: `TEAMKB_API_URL` points at the brain on the dev box, and the teammate's
-  per-user `TEAMKB_API_TOKEN` is set. Local mode: neither is set, and search runs
-  against the local `~/.teamkb` index.
+- Install the public `intent-brain` plugin from this repository for remote, read-only search, or build
+  `apps/mcp-server` for the full local operator runtime.
+- For the shipped remote plugin, configure `TEAMKB_API_URL` and a per-user `TEAMKB_API_TOKEN`.
+- Read [the runtime contract](references/runtime-contract.md) for exact inputs, authentication, modes,
+  and failure ambiguity.
 
 ## Authentication
 
-In team mode, `teamkb_search` reaches the brain API over the tailnet with a per-user
-bearer token. The token is supplied as `TEAMKB_API_TOKEN` (set once via env or a
-`headersHelper` script) and is sent as an `Authorization: Bearer` header by the MCP
-server — never hardcode it in committed config. In local mode no token is needed;
-search runs in-process against the local qmd index. This skill never handles the
-token directly; it only calls the MCP tool, which carries the credential.
+The shipped remote client sends `TEAMKB_API_TOKEN` as an `Authorization: Bearer` header to
+`TEAMKB_API_URL`. Supply it through the plugin environment and never print, capture, or commit it. A
+locally built Registrar server can search a local index without API authentication.
 
 ## Instructions
 
-### Step 1: Search the governed corpus
+### Step 1: Search curated memory
 
-Call **`teamkb_search`** with the user's question as `query`. Keep `scope` at its
-default (`curated`) unless the user explicitly asks for inbox/archived material —
-curated is the governed, promoted knowledge.
+Derive 1–4 distinctive keywords from the question, dropping generic question words. Call
+`teamkb_search` with `scope: "curated"` and an optional `limit` from 1 through 50.
 
+```text
+teamkb_search({ query: "Caddy reverse proxy", scope: "curated", limit: 10 })
 ```
-teamkb_search({ query: "the user's question, lightly cleaned up", scope: "curated" })
-```
 
-The tool returns `{ source, results: [{ citation, snippet, score, collection }] }`.
-Each `citation` is a `qmd://COLLECTION/FILENAME` URI — the receipt for that hit.
+If the result is empty, retry the same keywords once with `scope: "all"`. Use `inbox`, `archived`, or
+`bulk` only when the user explicitly requests that uncurated, retired, or bulk-digestion material.
 
-### Step 2: Answer ONLY from the cited results
+### Step 2: Answer only from results
 
-- Synthesize a direct answer from the returned snippets.
-- **Attach the qmd:// citation to every claim**, inline — for example:
-  `The Caddy block reverse-proxies the API (qmd://kb-curated/system-map.md).`
-- If two hits conflict, surface both with their citations rather than silently
-  picking one — the governance layer tracks contradictions; do not paper over them.
-- **Do not add knowledge the citations do not support.** Any reasoning beyond the
-  corpus must be labeled clearly as inference, not the brain's answer.
+- Synthesize a short answer from returned snippets.
+- Attach the exact returned `qmd://` citation to each supported claim.
+- Surface conflicting results with both citations.
+- Label reasoning beyond the cited snippets as inference.
+- Never invent a citation or silently fill a gap with general knowledge.
 
-### Step 3: Handle an empty result honestly
+### Step 3: Handle no evidence
 
-If `results` is empty, say so plainly: the brain has nothing governed on that topic.
-Do **not** fall back to general knowledge and present it as the team's answer.
-Optionally note that the topic may need to be saved (an admin runs `/brain-save`).
+After the curated-to-all retry, state plainly that no governed evidence was found. The legacy remote
+client maps several transport and authorization failures to an empty result, so do not claim that an
+empty response proves the corpus lacks the fact; mention this limitation when the miss is unexpected.
 
 ## Output
 
-1. A short, direct answer.
-2. Each load-bearing claim followed by its qmd:// citation.
-3. A closing **Sources** list of the distinct qmd:// URIs used.
+1. Direct answer or honest no-evidence statement.
+2. Inline `qmd://` citation after every load-bearing claim.
+3. A **Sources** list containing each distinct citation used.
 
 ## Examples
 
-**Cited answer:**
+```text
+/brain what does the system map say about the reverse proxy?
 
-```
-/brain what does our system map say about the Caddy block?
-
-→ Caddy is the single ingress; it reverse-proxies each domain to its container
-  and must be reloaded, not restarted, after edits (qmd://kb-curated/system-map.md).
+The reverse proxy is the single ingress (qmd://kb-curated/9c2e42f1-7b60-4ed2-a9dd-648d6c786d43.md).
 
 Sources:
-- qmd://kb-curated/system-map.md
+- qmd://kb-curated/9c2e42f1-7b60-4ed2-a9dd-648d6c786d43.md
 ```
 
-**Empty result (honest refusal):**
+If both scopes return no results:
 
-```
-/brain what is our refund policy?
-
-→ The brain has nothing governed on a refund policy. I won't guess from general
-  knowledge. If this should be team knowledge, an admin can capture it with
-  /brain-save.
+```text
+No governed evidence was found for that topic. The legacy remote client can also return an empty set
+when the service or credential fails, so an operator should check connectivity if this miss is
+unexpected.
 ```
 
 ## Error Handling
 
-| Situation                                         | Response                                                                              |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `teamkb_search` returns empty `results`           | State the brain has nothing governed; do not fabricate.                               |
-| Tool reports `source: "brain-api"` with 0 results | The remote brain answered but had no match — treat as empty, not as an error.         |
-| MCP tool unavailable                              | The plugin/MCP server is not enabled; tell the user to install/enable `intent-brain`. |
-| User asks to write/capture                        | Out of scope here — direct them to `/brain-save` (admin-only).                        |
+| Situation                  | Response                                                                                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `source` is `unconfigured` | Configure `TEAMKB_API_URL`; do not describe this as an empty corpus.                                       |
+| Empty `brain-api` result   | Complete the scope retry, then state no evidence was returned and note the legacy ambiguity when relevant. |
+| Tool is unavailable        | Enable the Registrar `intent-brain` plugin or locally built `teamkb` MCP server.                           |
+| User asks to write         | This skill is read-only; use the Registrar operator `brain-save` skill only with the full local server.    |
 
 ## Guardrails
 
-- Read-only. This skill never writes to the corpus — capture and promotion are
-  admin-only (`/brain-save`).
-- Never invent a qmd:// URI. Cite only URIs returned by `teamkb_search`.
-- Prefer fewer, well-cited claims over a broad answer that cannot be anchored.
+- Treat inbox, archive, and bulk results as explicitly requested context, not curated truth.
+- Provenance identifies where a capture came from; it does not prove the content is true.
+- Prefer a narrow cited answer over a broad unsupported one.
 
 ## Resources
 
-- [Bob's Big Brain](https://github.com/intent-solutions-io/bobs-big-brain-umbrella) — the stack this brain belongs to.
-- [Bob's Big Brain Compiler](https://github.com/jeremylongshore/bobs-big-brain-compiler) — the compiler (ICO).
-- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar) — the governance + retrieval plane (this plugin's home).
+- [Bob's Big Brain Registrar](https://github.com/jeremylongshore/bobs-big-brain-registrar)
+- [Bob's Big Brain umbrella](https://github.com/intent-solutions-io/bobs-big-brain-umbrella)
+- [tobi/qmd](https://github.com/tobi/qmd), the attributed retrieval engine
