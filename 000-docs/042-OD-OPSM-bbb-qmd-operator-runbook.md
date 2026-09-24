@@ -43,6 +43,42 @@ pnpm reindex
 
 Tenant default: `TEAMKB_TENANT_ID=intent-solutions`.
 
+## Scheduled reindex and self-heal
+
+The qmd index is derived state. A successful compile is not enough to prove
+that promoted memories are searchable, so the Registrar ships
+`bin/bbb-reindex-heal.sh`. It runs the known-positive canary with `--heal` for
+both `intent-solutions` and `local`, using the pinned workspace qmd binary when
+available and requiring qmd `2.5.3`. It exits non-zero if either tenant is still unhealthy after one
+reindex attempt; `notify-lib` turns that failure into a `bbb-reindex-heal`
+failure page and maintains the `.beat`/`.ok` liveness markers.
+
+Install the wrapper to `~/bin` from a reviewed Registrar checkout and ensure
+the adapter has been built:
+
+```bash
+install -m 0755 bin/bbb-reindex-heal.sh ~/bin/bbb-reindex-heal.sh
+pnpm --filter @qmd-team-intent-kb/qmd-adapter... build
+TEAMKB_BASE_PATH="$HOME/.teamkb" ~/bin/bbb-reindex-heal.sh
+```
+
+The user timer templates are `scripts/systemd/bbb-reindex-heal.{service,timer}`.
+Mission Control owns installation and enablement after the compile window; the
+timer must run from the same user that owns `~/.teamkb` and `~/bin`.
+
+Useful overrides for a disposable fixture or a controlled drill:
+
+```bash
+BBB_REGISTRAR_ROOT=/path/to/bobs-big-brain-registrar \
+BBB_REINDEX_TENANTS='intent-solutions local' \
+BBB_REINDEX_MAX_STALENESS_SECONDS=86400 \
+~/bin/bbb-reindex-heal.sh
+```
+
+Verification is outcome-based: each tenant must report all six known-positive
+controls healthy after the optional heal. A zero exit from the surrounding
+compile job does not bypass this check.
+
 ## Auto-update when Tobi releases
 
 1. Dependabot weekly opens PR when `@tobilu/qmd` bumps (not ignored).
