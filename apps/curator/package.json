@@ -33,6 +33,6 @@
   },
   "devDependencies": {
     "@qmd-team-intent-kb/test-fixtures": "workspace:*",
-    "@types/better-sqlite3": "^7.6.0"
+    "@types/better-sqlite3": "^9.6.0"
   }
 }

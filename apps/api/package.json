@@ -33,7 +33,7 @@
     "@qmd-team-intent-kb/git-exporter": "workspace:*"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@qmd-team-intent-kb/test-fixtures": "workspace:*"
   }
 }
