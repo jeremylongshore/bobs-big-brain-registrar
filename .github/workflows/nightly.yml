@@ -80,6 +80,10 @@ jobs:
           # Audit chain receipts and the governed brain backup
           The audit chain keeps cryptographic receipts. This memory documents the
           compile then govern architecture used for backup and DR of the governed brain.
+          # Estate and ops notes
+          Secrets are managed with SOPS and age encryption, so SOPS age secrets stay out of git.
+          Work is tracked with beads issue tracking, one bead per task.
+          Production runs on the Contabo VPS intentsolutions behind a single Caddy ingress.
           MD
           export TEAMKB_BASE_PATH="$FIXTURE"
           export TEAMKB_TENANT_ID="ci-canary"
