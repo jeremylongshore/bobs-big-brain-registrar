@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   createTestDatabase,
   CandidateRepository,
@@ -253,6 +253,20 @@ describe('Curator — subject-keyed supersession', () => {
       });
       for (const r of a) expect(d.memoryRepo.findById(r.id)?.lifecycle).toBe('superseded');
       for (const r of b) expect(d.memoryRepo.findById(r.id)?.lifecycle).toBe('active');
+    });
+
+    it('a promotion that throws (rolled back) does not spend the per-run budget', () => {
+      const ref = seedReference(d, 'topic.a');
+      const curator = new Curator(d, { tenantId: TENANT, maxSupersedesPerRun: 1 });
+      const insert = vi.spyOn(d.memoryRepo, 'insert').mockImplementationOnce(() => {
+        throw new Error('disk full');
+      });
+      expect(() => curator.processSingle(decision(['topic.a']))).toThrow('disk full');
+      insert.mockRestore();
+      // The failed promotion rolled back: the reference is still active ...
+      expect(d.memoryRepo.findById(ref.id)?.lifecycle).toBe('active');
+      // ... and the budget of 1 is intact, so the retry still supersedes.
+      expect(curator.processSingle(decision(['topic.a'])).supersededIds).toEqual([ref.id]);
     });
 
     it('per-run budget allows a spend that lands exactly on the limit', () => {

@@ -38,9 +38,11 @@ export const AUTHORITATIVE_CATEGORIES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Hard ceiling on how many memories one promotion may retire by subject match.
- * A subject key matching more than this is treated as mis-keyed or over-broad:
- * NOTHING is superseded (fail closed) and the plan reports the blocked count.
+ * Hard ceiling on the TOTAL number of memories one promotion may retire by
+ * subject match (summed across all of the candidate's subject keys, not per
+ * key). A candidate whose subjects match more than this is treated as mis-keyed
+ * or over-broad: NOTHING is superseded (fail closed) and the plan reports the
+ * blocked count.
  * Raising it is an explicit per-call opt-in (`maxSupersedes`), never a default.
  */
 export const DEFAULT_MAX_SUPERSEDES_PER_PROMOTION = 25;

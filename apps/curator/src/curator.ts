@@ -303,11 +303,6 @@ export class Curator {
       toApply = [];
     }
 
-    // Dry-run persists nothing, so it must not consume the run budget either.
-    if (this.config.dryRun !== true) {
-      this.subjectSupersessionsApplied += toApply.filter((m) => m.basis === 'subject').length;
-    }
-
     const memory = promote(
       {
         candidate,
@@ -320,6 +315,13 @@ export class Curator {
       this.config.dryRun,
       this.deps.linksRepo,
     );
+
+    // Spend the run budget only AFTER the atomic promote() succeeded: a thrown
+    // (rolled-back) promotion must not consume budget. Dry-run persists nothing,
+    // so it spends none either.
+    if (this.config.dryRun !== true) {
+      this.subjectSupersessionsApplied += toApply.filter((m) => m.basis === 'subject').length;
+    }
 
     return {
       candidateId: candidate.id,
