@@ -33,6 +33,11 @@ export interface PromotionInput {
   pipelineResult: PipelineResult;
   supersession?: SupersessionMatch;
   /**
+   * Every memory this promotion retires (subject-keyed supersession can retire
+   * several). Merged with {@link supersession}; duplicates by id are ignored.
+   */
+  supersessions?: readonly SupersessionMatch[];
+  /**
    * Who is promoting this candidate — recorded verbatim as the actor of the
    * 'promoted' audit receipt AND the curated memory's `promotedBy` (jfv.8). The
    * agent-review path passes `{ type: 'ai', id: 'teamkb-review-agent' }` so the
@@ -125,6 +130,17 @@ export function promote(
   // would make the entry_hash per-clone even with timestamp excluded (8da.6).
   const memoryId = deriveMemoryId(input.candidate.id, input.contentHash);
 
+  // Normalise the single + plural supersession inputs into one de-duplicated list.
+  const supersessions: SupersessionMatch[] = [];
+  for (const m of [
+    ...(input.supersession !== undefined ? [input.supersession] : []),
+    ...(input.supersessions ?? []),
+  ]) {
+    if (!supersessions.some((x) => x.supersededMemoryId === m.supersededMemoryId)) {
+      supersessions.push(m);
+    }
+  }
+
   // The pipeline does not carry a per-evaluation policyId, so one is derived per
   // record. It is content-derived (bead 8da.5/8da.9) from (memoryId, ruleId,
   // index), not random: the durable curated_memories row embeds these ids in its
@@ -191,15 +207,18 @@ export function promote(
     // a savepoint inside this outer transaction (bead yxp).
     memoryRepo.connection
       .transaction((): void => {
-        if (input.supersession !== undefined) {
-          const oldMemory = memoryRepo.findById(input.supersession.supersededMemoryId);
+        for (const sup of supersessions) {
+          const oldMemory = memoryRepo.findById(sup.supersededMemoryId);
           if (oldMemory !== null) {
             const updatedOld = CuratedMemorySchema.parse({
               ...oldMemory,
               lifecycle: 'superseded',
               supersession: {
                 supersededBy: memoryId,
-                reason: `Title similarity: ${input.supersession.similarity.toFixed(2)}`,
+                reason:
+                  sup.basis === 'subject'
+                    ? `Subject match: ${sup.subject ?? 'unknown'}`
+                    : `Title similarity: ${sup.similarity.toFixed(2)}`,
                 linkedAt: now,
               },
               updatedAt: now,
@@ -213,15 +232,20 @@ export function promote(
               // the 'superseded' action + the superseding memory id as discriminator,
               // so two clones supersede-by-the-same-memory mint the same audit id and
               // hence the same v2 entry_hash at the same chain position.
-              id: deriveAuditEventId(input.supersession.supersededMemoryId, 'superseded', memoryId),
+              id: deriveAuditEventId(sup.supersededMemoryId, 'superseded', memoryId),
               action: 'superseded',
-              memoryId: input.supersession.supersededMemoryId,
+              memoryId: sup.supersededMemoryId,
               tenantId: input.candidate.tenantId,
               actor: { type: 'system', id: 'curator' },
               reason: `Superseded by ${memoryId}`,
               details: {
                 newMemoryId: memoryId,
-                similarity: input.supersession.similarity,
+                similarity: sup.similarity,
+                // Legacy title matches keep their exact pre-existing receipt
+                // shape; only subject matches add the basis + subject key.
+                ...(sup.basis === 'subject'
+                  ? { basis: sup.basis, subject: sup.subject ?? 'unknown' }
+                  : {}),
               },
               timestamp: now,
             }),
@@ -230,17 +254,18 @@ export function promote(
 
         memoryRepo.insert(memory);
 
-        if (input.supersession !== undefined && linksRepo) {
+        for (const sup of supersessions) {
+          if (linksRepo === undefined) break;
           linksRepo.insert({
             // Content-derived (bead 8da.5): a graph edge's identity is its
             // (source, target, type) triple, stable across clones for the same
             // logical promotion. Not part of the audit chain, but kept deterministic
             // so the whole promotion is byte-reproducible across clones.
-            id: deriveLinkId(memoryId, input.supersession.supersededMemoryId, 'supersedes'),
+            id: deriveLinkId(memoryId, sup.supersededMemoryId, 'supersedes'),
             sourceMemoryId: memoryId,
-            targetMemoryId: input.supersession.supersededMemoryId,
+            targetMemoryId: sup.supersededMemoryId,
             linkType: 'supersedes',
-            weight: input.supersession.similarity,
+            weight: sup.similarity,
             createdBy: 'curator',
             source: 'curator',
             importBatchId: null,

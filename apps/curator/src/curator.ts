@@ -9,16 +9,26 @@ import type {
   AuditRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
-import type { CuratorConfig, CurationResult, CurationBatchResult } from './types.js';
+import type {
+  CuratorConfig,
+  CurationResult,
+  CurationBatchResult,
+  SupersessionReport,
+} from './types.js';
 import { checkDuplicate } from './dedup/dedup-checker.js';
 import {
-  detectSupersession,
+  planSupersession,
   DEFAULT_SUPERSESSION_THRESHOLD,
+  DEFAULT_MAX_SUPERSEDES_PER_PROMOTION,
 } from './supersession/supersession-detector.js';
+import type { SupersessionMatch } from './supersession/supersession-detector.js';
 import { promote } from './promotion/promoter.js';
 import { reject } from './rejection/rejector.js';
 import { checkOriginAttestation } from './origin/origin-gate.js';
 import { checkImportExclusion } from './import-exclusion/import-exclusion-gate.js';
+
+/** Default per-run budget of subject-key retirements (see CuratorConfig.maxSupersedesPerRun). */
+const DEFAULT_MAX_SUPERSEDES_PER_RUN = 200;
 
 /** Repository dependencies required by the Curator */
 export interface CuratorDependencies {
@@ -38,7 +48,7 @@ export interface CuratorDependencies {
  *   3. Load the first enabled governance policy for the tenant
  *   4. Run policy pipeline (secret detection, length, trust, relevance, dedup, tenant match)
  *   5. On rejection/flagging: record audit and return outcome
- *   6. On approval: detect title-similarity supersession, then promote
+ *   6. On approval: plan subject-keyed (then title-fallback) supersession, then promote
  *
  * All operations are synchronous. Only `ingestFromSpool` (file I/O) is async.
  */
@@ -49,6 +59,9 @@ export class Curator {
    * digestion batch must not emit 17k identical warnings.
    */
   private readonly warnedDormantPolicies = new Set<string>();
+
+  /** Subject-key retirements applied so far by this instance (the per-run budget meter). */
+  private subjectSupersessionsApplied = 0;
 
   constructor(
     private readonly deps: CuratorDependencies,
@@ -256,18 +269,51 @@ export class Curator {
     contentHash: string,
     pipelineResult: PipelineResult,
   ): CurationResult {
-    const supersession = detectSupersession(
-      candidate,
-      this.deps.memoryRepo,
-      this.config.supersessionThreshold ?? DEFAULT_SUPERSESSION_THRESHOLD,
-    );
+    const plan = planSupersession(candidate, this.deps.memoryRepo, {
+      threshold: this.config.supersessionThreshold ?? DEFAULT_SUPERSESSION_THRESHOLD,
+      maxSupersedes: this.config.maxSupersedesPerPromotion ?? DEFAULT_MAX_SUPERSEDES_PER_PROMOTION,
+    });
+
+    let toApply: SupersessionMatch[] = plan.matches;
+    let report: SupersessionReport | undefined;
+
+    const subjectCount = toApply.filter((m) => m.basis === 'subject').length;
+    const runBudget = this.config.maxSupersedesPerRun ?? DEFAULT_MAX_SUPERSEDES_PER_RUN;
+
+    if (plan.blocked !== undefined) {
+      report = {
+        status: 'blocked',
+        wouldSupersede: [],
+        blockedReason: `subject match exceeds per-promotion cap (${plan.blocked.cap})`,
+        blockedCount: plan.blocked.wouldSupersede,
+      };
+      toApply = [];
+    } else if (this.config.supersessionMode === 'report') {
+      if (toApply.length > 0) {
+        report = { status: 'report', wouldSupersede: toApply };
+      }
+      toApply = [];
+    } else if (subjectCount > 0 && this.subjectSupersessionsApplied + subjectCount > runBudget) {
+      report = {
+        status: 'blocked',
+        wouldSupersede: [],
+        blockedReason: `per-run subject-supersession budget exhausted (${runBudget})`,
+        blockedCount: subjectCount,
+      };
+      toApply = [];
+    }
+
+    // Dry-run persists nothing, so it must not consume the run budget either.
+    if (this.config.dryRun !== true) {
+      this.subjectSupersessionsApplied += toApply.filter((m) => m.basis === 'subject').length;
+    }
 
     const memory = promote(
       {
         candidate,
         contentHash,
         pipelineResult,
-        supersession: supersession ?? undefined,
+        supersessions: toApply,
       },
       this.deps.memoryRepo,
       this.deps.auditRepo,
@@ -279,12 +325,16 @@ export class Curator {
       candidateId: candidate.id,
       outcome: 'promoted',
       memoryId: memory.id,
-      supersedes: supersession?.supersededMemoryId,
+      supersedes: toApply[0]?.supersededMemoryId,
+      ...(toApply.length > 0 ? { supersededIds: toApply.map((m) => m.supersededMemoryId) } : {}),
+      ...(report !== undefined ? { supersessionReport: report } : {}),
       pipelineResult,
       reason:
-        supersession !== null
-          ? `Promoted (supersedes ${supersession.supersededMemoryId})`
-          : 'Promoted',
+        toApply.length > 0
+          ? `Promoted (supersedes ${toApply.map((m) => m.supersededMemoryId).join(', ')})`
+          : report?.status === 'blocked'
+            ? `Promoted (supersession blocked: ${report.blockedReason})`
+            : 'Promoted',
     };
   }
 }

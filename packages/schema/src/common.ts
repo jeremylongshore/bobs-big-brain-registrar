@@ -30,6 +30,23 @@ export type SemVer = z.infer<typeof SemVer>;
 export const Tag = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'Must be a lowercase tag');
 export type Tag = z.infer<typeof Tag>;
 
+/**
+ * Subject key — the stable identity of "what this memory is about" (the
+ * `(s,r,o)` head: the subject `s`). Supersession keys on SUBJECT identity, not
+ * title-token overlap: a newer memory about the same subject retires an older
+ * one. Lowercase dot/hyphen-separated slug, length-bounded so it is a pure
+ * identifier that can never carry free-form prose (compared by exact
+ * equality, never fuzzily).
+ */
+export const SubjectKey = z
+  .string()
+  .max(96)
+  .regex(
+    /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/,
+    'Must be a lowercase dot/hyphen slug (e.g. "hosting.gcp")',
+  );
+export type SubjectKey = z.infer<typeof SubjectKey>;
+
 /** Author metadata */
 export const Author = z.object({
   type: AuthorType,
@@ -53,6 +70,13 @@ export const ContentMetadata = z.object({
   confidence: Confidence.optional(),
   sensitivity: Sensitivity.optional(),
   tags: z.array(Tag).default([]),
+  /**
+   * Explicit subject keys this memory is about (see {@link SubjectKey}).
+   * Optional: absent on every legacy record, which then falls back to the
+   * same-category title-similarity near-duplicate path. Bounded so a candidate
+   * cannot declare an unbounded fan-out of subjects.
+   */
+  subjects: z.array(SubjectKey).max(8).optional(),
   /**
    * The role of the token that proposed this candidate, stamped server-side at
    * intake (R8, bead compile-then-govern-jfv.6.7). Never client-supplied — the
