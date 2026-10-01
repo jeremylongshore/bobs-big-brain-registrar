@@ -208,6 +208,7 @@ describe('promote', () => {
     const supersession = {
       supersededMemoryId: old.id,
       supersededTitle: old.title,
+      basis: 'title' as const,
       similarity: 0.75,
     };
 
@@ -232,6 +233,7 @@ describe('promote', () => {
     const supersession = {
       supersededMemoryId: old.id,
       supersededTitle: old.title,
+      basis: 'title' as const,
       similarity: 0.8,
     };
 
@@ -291,6 +293,7 @@ describe('promote', () => {
     const supersession = {
       supersededMemoryId: old.id,
       supersededTitle: old.title,
+      basis: 'title' as const,
       similarity: 0.9,
     };
 
@@ -342,6 +345,7 @@ describe('promote', () => {
     const supersession = {
       supersededMemoryId: old.id,
       supersededTitle: old.title,
+      basis: 'title' as const,
       similarity: 0.85,
     };
 
@@ -439,6 +443,7 @@ describe('promote', () => {
     const supersession = {
       supersededMemoryId: old.id,
       supersededTitle: old.title,
+      basis: 'title' as const,
       similarity: 0.75,
     };
 
@@ -757,6 +762,7 @@ describe('promote: cross-clone determinism on the supersession path (8da.5)', ()
             supersession: {
               supersededMemoryId: old.id,
               supersededTitle: old.title,
+              basis: 'title' as const,
               similarity: 0.75,
             },
           },

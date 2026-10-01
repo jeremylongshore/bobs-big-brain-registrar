@@ -7,7 +7,7 @@ import {
 import { PolicyPipeline, type PipelineResult } from '@qmd-team-intent-kb/policy-engine';
 import {
   promote,
-  detectSupersession,
+  planSupersession,
   DEFAULT_SUPERSESSION_THRESHOLD,
   checkOriginAttestation,
   checkImportExclusion,
@@ -220,13 +220,17 @@ export class PromotionService {
 
     // Approved → promote atomically: inserts the memory, writes the 'promoted'
     // audit event (actor = promotedBy), and applies supersession + wiki-links.
-    const supersession = detectSupersession(candidate, this.memoryRepo, SUPERSESSION_THRESHOLD);
+    // A blocked plan (subject over the per-promotion cap) retires nothing and
+    // the memory still promotes; the cap is the fail-safe against mass-supersede.
+    const supersessionPlan = planSupersession(candidate, this.memoryRepo, {
+      threshold: SUPERSESSION_THRESHOLD,
+    });
     const memory = promote(
       {
         candidate,
         contentHash,
         pipelineResult,
-        supersession: supersession ?? undefined,
+        supersessions: supersessionPlan.matches,
         promotedBy,
         promotionReason,
       },

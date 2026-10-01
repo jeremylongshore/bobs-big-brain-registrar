@@ -23,12 +23,19 @@ export { evaluateContradictionCheck } from './rules/contradiction-check-rule.js'
 export { PolicyPipeline } from './pipeline.js';
 export {
   detectSupersession,
+  planSupersession,
   computeTitleSimilarity,
   DEFAULT_SUPERSESSION_THRESHOLD,
+  DEFAULT_MAX_SUPERSEDES_PER_PROMOTION,
+  AUTHORITATIVE_CATEGORIES,
 } from './supersession/supersession-detector.js';
 export type {
   SupersessionMatch,
   SupersessionMemorySource,
+  SupersessionBasis,
+  SupersessionBlock,
+  SupersessionPlan,
+  SupersessionOptions,
 } from './supersession/supersession-detector.js';
 export {
   RECOMMENDED_POLICY_RULES,

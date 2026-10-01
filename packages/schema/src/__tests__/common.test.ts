@@ -7,6 +7,7 @@ import {
   NonEmptyString,
   SemVer,
   Tag,
+  SubjectKey,
   Author,
   ContentMetadata,
 } from '../common.js';
@@ -161,5 +162,54 @@ describe('ContentMetadata', () => {
   });
   it('rejects invalid confidence', () => {
     expect(() => ContentMetadata.parse({ confidence: 'very_high' })).toThrow();
+  });
+});
+
+describe('SubjectKey', () => {
+  it.each(['gcp', 'hosting.gcp', 'hosting.gcp-cloud-run', 'a1.b2.c3', '0abc'])(
+    'accepts %s',
+    (k) => {
+      expect(SubjectKey.safeParse(k).success).toBe(true);
+    },
+  );
+
+  it.each([
+    '',
+    'Hosting.GCP',
+    '.gcp',
+    'gcp.',
+    'hosting..gcp',
+    '-gcp',
+    'hosting.-gcp',
+    'has space',
+    'under_score',
+    'colon:key',
+  ])('rejects %j', (k) => {
+    expect(SubjectKey.safeParse(k).success).toBe(false);
+  });
+
+  it('accepts exactly 96 chars and rejects 97', () => {
+    expect(SubjectKey.safeParse('a'.repeat(96)).success).toBe(true);
+    expect(SubjectKey.safeParse('a'.repeat(97)).success).toBe(false);
+  });
+});
+
+describe('ContentMetadata.subjects', () => {
+  it('is optional and absent by default (legacy records unchanged)', () => {
+    expect(ContentMetadata.parse({}).subjects).toBeUndefined();
+  });
+
+  it('accepts up to 8 valid subject keys', () => {
+    const subjects = Array.from({ length: 8 }, (_, i) => `s${i}`);
+    expect(ContentMetadata.parse({ subjects }).subjects).toEqual(subjects);
+  });
+
+  it('rejects 9 subject keys (bounded fan-out)', () => {
+    const subjects = Array.from({ length: 9 }, (_, i) => `s${i}`);
+    expect(ContentMetadata.safeParse({ subjects }).success).toBe(false);
+  });
+
+  it('rejects a malformed subject key', () => {
+    expect(ContentMetadata.safeParse({ subjects: ['Not A Slug'] }).success).toBe(false);
   });
 });

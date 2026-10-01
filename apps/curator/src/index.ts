@@ -1,4 +1,9 @@
-export type { CurationResult, CurationBatchResult, CuratorConfig } from './types.js';
+export type {
+  CurationResult,
+  CurationBatchResult,
+  CuratorConfig,
+  SupersessionReport,
+} from './types.js';
 export { Curator } from './curator.js';
 export type { CuratorDependencies } from './curator.js';
 export { ingestFromSpool, ingestFromSpoolDetailed } from './intake/spool-intake.js';
@@ -13,10 +18,12 @@ export { checkDuplicate } from './dedup/dedup-checker.js';
 export type { DedupResult } from './dedup/dedup-checker.js';
 export {
   detectSupersession,
+  planSupersession,
+  DEFAULT_MAX_SUPERSEDES_PER_PROMOTION,
   computeTitleSimilarity,
   DEFAULT_SUPERSESSION_THRESHOLD,
 } from './supersession/supersession-detector.js';
-export type { SupersessionMatch } from './supersession/supersession-detector.js';
+export type { SupersessionMatch, SupersessionPlan } from './supersession/supersession-detector.js';
 export { promote } from './promotion/promoter.js';
 export type { PromotionInput } from './promotion/promoter.js';
 export { reject } from './rejection/rejector.js';

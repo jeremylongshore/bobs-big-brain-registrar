@@ -143,6 +143,8 @@ SQLite via better-sqlite3 with 5 tables: `candidates`, `curated_memories`, `gove
 
 `PolicyPipeline` composes rules and short-circuits on first failure. Rules are registered in `RULE_REGISTRY` keyed by `PolicyRuleType` enum. Current rules: secret-detection, content-length, source-trust, relevance-score, dedup-check, tenant-match, sensitivity-gate, content-sanitization.
 
+**Supersession** (`packages/policy-engine/src/supersession/`): `planSupersession` is pure and read-only. Primary path is SUBJECT-KEYED: a candidate declaring `metadata.subjects` retires every active same-tenant memory sharing a subject key, across categories, but only when the candidate is authoritative (`decision`/`architecture`/`convention`) or the target is its own category; a memory promoted after the candidate was captured is never retired. Fail-safe: more than `DEFAULT_MAX_SUPERSEDES_PER_PROMOTION` (25) matches retires NOTHING (total across the candidate's subjects) and the Curator reports it as blocked (the API promotion path skips it without a report yet); the Curator adds a per-run budget (`maxSupersedesPerRun`, default 200) and a `supersessionMode: 'report'` dry-run. Un-keyed memories fall back to same-category title-Jaccard near-duplicate collapse (never cross-category). Existing memories need `metadata.subjects` backfilled before a decision can retire them.
+
 ### API (apps/api)
 
 Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware stack: rate-limiter → api-key-auth → input-sanitizer. Routes: `/api/candidates`, `/api/memories`, `/api/policies`, `/api/audit`, `/api/search`, `/health`.
