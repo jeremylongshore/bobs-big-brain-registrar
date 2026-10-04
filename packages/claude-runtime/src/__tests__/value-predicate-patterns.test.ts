@@ -4,6 +4,7 @@
  * compile-then-govern-39z.17. Every credential-looking value is SYNTHETIC.
  */
 import { describe, it, expect } from 'vitest';
+import { classifyContent } from '../secrets/content-classifier.js';
 import { isPathLikeValue, isPlaceholderSecretValue } from '../secrets/placeholder.js';
 import { redactSecrets } from '../secrets/redactor.js';
 import { scanForSecrets } from '../secrets/secret-scanner.js';
@@ -300,5 +301,60 @@ describe('redactSecrets — value predicate agreement with the scanner', () => {
       description: 'test pattern',
     };
     expect(redactSecrets('TOK1 TOK2', [plain])).toBe('[REDACTED:plain] [REDACTED:plain]');
+  });
+});
+
+describe('redactSecrets — value predicate on a pattern with no capture group', () => {
+  it('passes [fullMatch] alone to the predicate (the offset is never mistaken for a group)', () => {
+    const seen: Array<readonly (string | undefined)[]> = [];
+    const noGroups: SecretPattern = {
+      id: 'no-groups',
+      name: 'No Groups',
+      regex: /\d{4}/,
+      description: 'test pattern: digits only, no capture group',
+      accept: (match) => {
+        seen.push([...match]);
+        return match[0] === '2222';
+      },
+    };
+    expect(redactSecrets('1111 and 2222', [noGroups])).toBe('1111 and [REDACTED:no-groups]');
+    expect(seen).toEqual([['1111'], ['2222']]);
+  });
+
+  it('passes an all-digit capture group through as a string', () => {
+    const seen: Array<readonly (string | undefined)[]> = [];
+    const digitGroup: SecretPattern = {
+      id: 'digit-group',
+      name: 'Digit Group',
+      regex: /pin (\d+)/,
+      description: 'test pattern: a capture group holding only digits',
+      accept: (match) => {
+        seen.push([...match]);
+        return true;
+      },
+    };
+    expect(redactSecrets('pin 9042', [digitGroup])).toBe('[REDACTED:digit-group]');
+    expect(seen).toEqual([['pin 9042', '9042']]);
+  });
+});
+
+describe('classifyContent — the new patterns reach the sensitivity classifier', () => {
+  it('classifies a prose password as restricted', () => {
+    const result = classifyContent('The sudo password for the migration is `Tq7!vexLorn42`.');
+    expect(result.sensitivityLevel).toBe('restricted');
+    expect(result.hasCredentials).toBe(true);
+    expect(result.matchedPatterns).toContain('prose-password');
+  });
+
+  it('classifies an embedded-credential URL of a non-standard scheme as restricted', () => {
+    const result = classifyContent('dialect+driver://svc_app:Pz7mossHalyard@db.internal:5432/app');
+    expect(result.sensitivityLevel).toBe('restricted');
+    expect(result.matchedPatterns).toContain('url-embedded-credentials');
+  });
+
+  it('leaves the documentation placeholder URL public', () => {
+    const result = classifyContent('dialect+driver://username:password@host:port/database');
+    expect(result.sensitivityLevel).toBe('public');
+    expect(result.hasCredentials).toBe(false);
   });
 });
