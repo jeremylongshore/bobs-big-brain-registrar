@@ -29,7 +29,7 @@ what stays in it after the context changes.
 ## Recommendation per bead
 
 | Bead | Call | Shape | Order |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **K2** audience/scope field | **SHIP** | Optional field on `CuratedMemory`, zero store migration (JSON-validated column). Start minimal: a small closed set of audience tiers inside a tenant (e.g. owner, admins, team), default = tenant-wide so every existing memory keeps today's behavior. | 1st |
 | **K3** narrowing rule | **SHIP, expanded scope** | New `PolicyRuleType` for narrowing, plus a governed redact/purge transition that rewrites content with a hash-chained receipt and forces a re-backup. Fold `39z.16` into K3 so there is one mechanism, not two. Measured on its own precision/recall fixture (KR8.2). | 2nd |
 | **K6** human-escalation HOLD | **SHIP** | Bounded HOLD state for ambiguous audience or secret decisions, reusing the `014-AT-DECR` recommend/pipeline-owns split. The model may recommend; the pipeline owns the state. | 3rd |
