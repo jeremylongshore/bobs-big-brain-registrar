@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
 import { getRelativePath } from '../formatter/directory-mapper.js';
-import { isSensitivityRestricted } from '../sensitivity.js';
+import { isExportRestricted } from '../sensitivity.js';
 import type { RemovalBlocked } from '../types.js';
 
 /** Every directory the exporter ever places a memory file in. */
@@ -36,7 +36,8 @@ export interface StaleScan {
  * A `<uuid>.md` file under a known export directory is STALE when:
  *   - its memory exists but belongs at a different path (lifecycle moved it to
  *     archive/, recategorized, bulk routing) — a leftover copy in the old place;
- *   - its memory is now sensitivity-restricted (must not sit on disk at all);
+ *   - its memory is now sensitivity-restricted, or its audience is narrower
+ *     than the whole tenant (K2) — it must not sit on disk at all;
  *   - its id is not in the DB at all (an ORPHAN) AND the file's own frontmatter
  *     tenant matches `tenantId` (or no tenant filter is configured).
  *
@@ -61,7 +62,7 @@ export function findStaleFiles(
   const desired = new Map<string, string | null>();
   for (const m of memories) {
     if (quarantinedIds.has(m.id)) continue;
-    if (isSensitivityRestricted(m.sensitivity)) {
+    if (isExportRestricted(m)) {
       desired.set(m.id, null);
       continue;
     }

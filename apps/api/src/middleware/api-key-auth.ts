@@ -1,4 +1,6 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { readerRoleFor } from '@qmd-team-intent-kb/common';
+import type { ReaderRole } from '@qmd-team-intent-kb/common';
 import type { TokenRegistry, TokenRole } from '../auth/token-registry.js';
 
 declare module 'fastify' {
@@ -8,6 +10,12 @@ declare module 'fastify' {
     /** Role granted by the token. `admin` may write/promote. */
     role?: TokenRole;
     /**
+     * True when the token is the tenant owner's (K2 claim-level audience):
+     * admin + owner may read `owner`-audience memories. Read standing only.
+     * Use {@link readerRoleOf} rather than reading this directly.
+     */
+    owner?: boolean;
+    /**
      * Tenant allowlist bound to the bearer token (undefined when the token is
      * unscoped / dev no-auth). The tenancy guard enforces that any
      * request-supplied tenantId is a member of this list — server-side, so a
@@ -15,6 +23,15 @@ declare module 'fastify' {
      */
     tenants?: readonly string[];
   }
+}
+
+/**
+ * The caller's read standing for claim-level audience filtering (K2), derived
+ * from what the auth middleware stamped on the request. A request the middleware
+ * never stamped (no role) reads as `member` — least privilege.
+ */
+export function readerRoleOf(request: Pick<FastifyRequest, 'role' | 'owner'>): ReaderRole {
+  return readerRoleFor(request.role, request.owner === true);
 }
 
 /** Options that shape the auth/no-auth decision at boot. */
@@ -69,7 +86,7 @@ export function isLoopbackHost(host: string): boolean {
  *   bind ran fully open with admin.
  * - `/api/health`, `/openapi.json`, and `/docs*` are always exempt.
  *
- * The resolved `actor`/`role`/`tenants` are decorated onto the request for
+ * The resolved `actor`/`role`/`owner`/`tenants` are decorated onto the request for
  * downstream audit logging, the admin-only write gate, and the tenancy guard.
  */
 export function registerApiKeyAuth(
@@ -83,6 +100,7 @@ export function registerApiKeyAuth(
 
   app.decorateRequest('actor', undefined);
   app.decorateRequest('role', undefined);
+  app.decorateRequest('owner', undefined);
   app.decorateRequest('tenants', undefined);
 
   if (registry.isEmpty()) {
@@ -104,10 +122,12 @@ export function registerApiKeyAuth(
       );
     }
     // Loopback dev mode — no auth, but stamp a known actor so audit logs are
-    // populated. Safe because the socket is loopback-only.
+    // populated. Safe because the socket is loopback-only. Local single-user
+    // mode IS the owner (K2): the one person at the keyboard sees every audience.
     app.addHook('onRequest', async (request) => {
       request.actor = 'dev';
       request.role = 'admin';
+      request.owner = true;
     });
     return;
   }
@@ -157,6 +177,7 @@ export function registerApiKeyAuth(
 
     request.actor = identity.actor;
     request.role = identity.role;
+    request.owner = identity.owner === true;
     request.tenants = identity.tenants;
   });
 }
