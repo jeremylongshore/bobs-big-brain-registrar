@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Claim-level audience field (Epic K bead K2, decision `053-AT-DECR`).** A memory can now say who
+  inside its tenant it is for: optional `metadata.audience` of `tenant` (default), `admins` or
+  `owner`, on both `MemoryCandidate` and `CuratedMemory`. It is declared at capture and carried by
+  promotion, lives in the existing `metadata_json` column (no store migration), and a record without
+  it behaves exactly as before. The API filters `POST /api/search`, `GET /api/memories`,
+  `GET /api/memories/:id`, `GET /api/memories/by-hash/:hash`, the graph routes, and the
+  transition/recategorize responses by the caller's read standing; a memory the caller is not
+  cleared for answers 404. Owner standing is a new optional `"owner": true` on an `admin` token
+  record (loopback dev no-auth is the owner; the legacy shared key is not). The git-exporter writes
+  only `tenant`-audience memories to the shared export tree, and reconcile removes the file of a
+  memory whose audience was narrowed. Limitation: `admins`/`owner` memories are therefore absent
+  from the qmd index and are not returned by qmd-cited search for anyone until per-audience indexes
+  exist.
 - **git-exporter reconcile mode (`runExport({ reconcile: true })`, `exporter-cli export --reconcile`).**
   Converges the whole export tree on the DB instead of exporting only memories changed since the
   last run: lifecycle changes made outside a promotion (curator `batch-transition`) land in

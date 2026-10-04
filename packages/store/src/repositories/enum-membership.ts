@@ -41,6 +41,7 @@ import {
   Confidence,
   Sensitivity,
   AuthorType,
+  Audience,
   type MemoryCandidate,
   type CuratedMemory,
 } from '@qmd-team-intent-kb/schema';
@@ -93,7 +94,7 @@ interface EnumCheck {
  *   2. otherwise rejected as {@link EnumConstraintViolationError} carrying only the
  *      field name.
  *
- * Optional fields (`metadata.confidence`, `metadata.sensitivity`) are checked only
+ * Optional fields (`metadata.confidence`, `metadata.sensitivity`, `metadata.audience`) are checked only
  * when present - an absent optional is not a violation.
  *
  * Fail-closed and value-non-leaking. Called by `CandidateRepository.insert()`
@@ -119,6 +120,8 @@ export function assertEnumMembership(candidate: MemoryCandidate): void {
       schema: Sensitivity,
       value: candidate.metadata?.sensitivity,
     },
+    // Claim-level audience (K2): closed vocabulary, optional, checked when present.
+    { field: 'metadata.audience', schema: Audience, value: candidate.metadata?.audience },
   ]);
 }
 
@@ -152,6 +155,10 @@ export function assertMemoryEnumMembership(memory: CuratedMemory): void {
     { field: 'sensitivity', schema: Sensitivity, value: memory.sensitivity },
     { field: 'lifecycle', schema: MemoryLifecycleState, value: memory.lifecycle },
     { field: 'author.type', schema: AuthorType, value: memory.author?.type },
+    // Claim-level audience (K2). An off-vocabulary audience must never reach the
+    // governed table: the read-side predicate would hide it from everyone, so
+    // refuse it at the write choke point instead of storing an unreadable row.
+    { field: 'metadata.audience', schema: Audience, value: memory.metadata?.audience },
   ]);
 }
 

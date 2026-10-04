@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { SearchQuery } from '@qmd-team-intent-kb/schema';
 import { ApiError } from '../errors.js';
 import type { SearchService } from '../services/search-service.js';
+import { readerRoleOf } from '../middleware/api-key-auth.js';
 
 /**
  * Register the search endpoint.
@@ -16,7 +17,9 @@ export function registerSearchRoutes(app: FastifyInstance, service: SearchServic
         tags: ['search'],
         summary: 'Full-text search over curated memories',
         description:
-          'Applies freshness reranking. Body is validated against the SearchQuery schema.',
+          'Applies freshness reranking. Body is validated against the SearchQuery schema. ' +
+          'Hits are filtered by the read standing of the caller token: a memory whose audience ' +
+          'is narrower than the caller is cleared for is never returned.',
       },
     },
     async (request, reply) => {
@@ -26,7 +29,9 @@ export function registerSearchRoutes(app: FastifyInstance, service: SearchServic
           return reply.status(400).send({ error: `Invalid search query: ${parsed.error.message}` });
         }
 
-        const result = await service.search(parsed.data);
+        // Claim-level audience (K2): the caller's read standing comes from the
+        // server-side token identity, never from the request body.
+        const result = await service.search(parsed.data, readerRoleOf(request));
 
         // Per-read access audit. Deliberately a structured access-log line, NOT
         // a governance AuditEvent — the hash-chained memory audit trail records

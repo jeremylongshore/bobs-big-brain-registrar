@@ -2,6 +2,19 @@ import type { FastifyInstance } from 'fastify';
 import { ApiError, notFound, badRequest } from '../errors.js';
 import type { MemoryLinksRepository, Neighbor, GraphNode } from '@qmd-team-intent-kb/store';
 import type { MemoryRepository } from '@qmd-team-intent-kb/store';
+import { isAudienceVisibleToRole } from '@qmd-team-intent-kb/common';
+import type { ReaderRole } from '@qmd-team-intent-kb/common';
+import { readerRoleOf } from '../middleware/api-key-auth.js';
+
+/**
+ * Claim-level audience gate for graph reads (K2). True when the memory exists
+ * AND the caller may read it; a link to a memory the caller is not cleared for
+ * is dropped, so the graph never names a memory the caller could not fetch.
+ */
+function isReadable(memoryRepo: MemoryRepository, id: string, role: ReaderRole): boolean {
+  const memory = memoryRepo.findById(id);
+  return memory !== null && isAudienceVisibleToRole(memory.metadata.audience, role);
+}
 
 const MAX_DEPTH = 5;
 const DEFAULT_DEPTH = 2;
@@ -32,12 +45,14 @@ export function registerGraphRoutes(
       try {
         const { id } = request.params as { id: string };
 
-        const memory = memoryRepo.findById(id);
-        if (memory === null) {
+        const role = readerRoleOf(request);
+        if (!isReadable(memoryRepo, id, role)) {
           throw notFound(`Memory ${id} not found`);
         }
 
-        const neighbors: Neighbor[] = linksRepo.neighbors(id);
+        const neighbors: Neighbor[] = linksRepo
+          .neighbors(id)
+          .filter((n) => isReadable(memoryRepo, n.memoryId, role));
         return reply.send(neighbors);
       } catch (err) {
         if (err instanceof ApiError) {
@@ -78,12 +93,14 @@ export function registerGraphRoutes(
           throw badRequest(`depth exceeds maximum allowed value of ${MAX_DEPTH}`);
         }
 
-        const memory = memoryRepo.findById(id);
-        if (memory === null) {
+        const role = readerRoleOf(request);
+        if (!isReadable(memoryRepo, id, role)) {
           throw notFound(`Memory ${id} not found`);
         }
 
-        const nodes: GraphNode[] = linksRepo.traverse(id, depth);
+        const nodes: GraphNode[] = linksRepo
+          .traverse(id, depth)
+          .filter((n) => isReadable(memoryRepo, n.memoryId, role));
         return reply.send(nodes);
       } catch (err) {
         if (err instanceof ApiError) {

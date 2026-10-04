@@ -21,6 +21,14 @@ export interface TokenIdentity {
    * a caller can never widen their own scope by changing the body.
    */
   tenants?: readonly string[];
+  /**
+   * Marks the tenant OWNER (K2 claim-level audience). Only meaningful on an
+   * `admin` token: admin + owner reads `owner`-audience memories; a plain admin
+   * reads up to `admins`; a member reads tenant-wide memories only. It widens
+   * READ standing and nothing else — write authority stays keyed on `role`.
+   * Absent = not the owner (least privilege).
+   */
+  owner?: boolean;
 }
 
 /**
@@ -170,6 +178,9 @@ export class InMemoryTokenRegistry implements TokenRegistry {
         rec.tenants !== undefined && rec.tenants.length > 0
           ? { actor: rec.actor, role: rec.role, tenants: rec.tenants }
           : { actor: rec.actor, role: rec.role };
+      // Owner standing needs BOTH the admin role and an explicit `owner: true`
+      // (K2) — an owner flag on a member record is dropped, never honored.
+      if (rec.owner === true && rec.role === 'admin') identity.owner = true;
       const expiresAtMs = rec.expiresAt !== undefined ? Date.parse(rec.expiresAt) : undefined;
       return {
         salt,
@@ -252,7 +263,7 @@ export interface TokenSourceOptions {
   apiKey?: string;
   /** Explicit records (highest precedence). */
   records?: TokenRecord[];
-  /** JSON array string: [{ "token","actor","role","tenants"?,"expiresAt"? }]. */
+  /** JSON array string: [{ "token","actor","role","owner"?,"tenants"?,"expiresAt"? }]. */
   tokensJson?: string;
   /** Path to a JSON file of the same shape. */
   tokensFile?: string;
@@ -268,6 +279,9 @@ export interface TokenSourceOptions {
  *
  * Malformed entries are skipped (a bad token file must not silently grant
  * access); an entry missing a role defaults to the least-privileged `member`.
+ * `owner: true` is honored only on an `admin` entry (K2 audience); the legacy
+ * single shared key is an admin and deliberately NOT the owner, since one key
+ * handed to several people cannot identify which of them is.
  * An entry whose `expiresAt` is already in the past is dropped at load (an
  * expired credential should never be live, even momentarily).
  */
@@ -327,6 +341,8 @@ function parseRecords(raw: string): TokenRecord[] {
       if (Number.isNaN(ms) || ms <= now) continue;
     }
     const base: TokenRecord = { token, actor, role };
+    // Strict `=== true`: a truthy string ("yes", "true") never grants owner.
+    if (rec['owner'] === true && role === 'admin') base.owner = true;
     if (tenants !== undefined) base.tenants = tenants;
     if (expiresAt !== undefined) base.expiresAt = expiresAt;
     out.push(base);

@@ -52,7 +52,7 @@ export interface ExportResult {
   archived: string[];
   /** File paths removed */
   removed: string[];
-  /** Memory IDs skipped due to sensitivity restrictions */
+  /** Memory IDs skipped: restricted sensitivity, or an audience narrower than the tenant (K2) */
   skipped: string[];
   /** Memories set aside due to an unmappable/unformattable state (5bm.12) */
   quarantined: QuarantinedMemory[];

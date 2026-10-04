@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AuthorType, Confidence, ProposerRole, Sensitivity } from './enums.js';
+import { Audience, AuthorType, Confidence, ProposerRole, Sensitivity } from './enums.js';
 
 /** UUID v4 string */
 export const Uuid = z.string().uuid();
@@ -89,5 +89,13 @@ export const ContentMetadata = z.object({
    * quarantine member-authored content behind admin review.
    */
   proposedByRole: ProposerRole.optional(),
+  /**
+   * Who inside the tenant this claim is for (see {@link Audience}; K2). Optional
+   * and deliberately NOT defaulted: an absent value means `tenant`, resolved at
+   * read time, so every pre-K2 record round-trips byte-for-byte and keeps today's
+   * visibility. Declared at capture on the candidate and carried onto the curated
+   * memory by promotion (which copies `metadata` whole).
+   */
+  audience: Audience.optional(),
 });
 export type ContentMetadata = z.infer<typeof ContentMetadata>;
