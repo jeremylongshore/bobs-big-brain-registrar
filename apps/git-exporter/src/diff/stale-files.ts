@@ -96,7 +96,14 @@ export function findStaleFiles(
       if (known.has(id)) {
         if (!desired.has(id)) continue; // unmappable: leave alone
         const want = desired.get(id);
-        if (want === undefined || want !== rel) relocated.push(abs);
+        if (want === undefined || want !== rel) {
+          // Defense in depth: `memories` is already tenant-filtered, but a file
+          // that positively names ANOTHER tenant is never ours to delete, even
+          // if the id matches (e.g. a tenant change that was not re-rendered).
+          const owner = tenantId === undefined ? null : readFileTenant(abs);
+          if (owner !== null && owner !== tenantId) continue;
+          relocated.push(abs);
+        }
         continue;
       }
       // Orphan: only ours if the file itself says it belongs to this tenant.

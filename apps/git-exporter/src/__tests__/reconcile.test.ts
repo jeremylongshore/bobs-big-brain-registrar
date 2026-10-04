@@ -209,6 +209,20 @@ describe('runExport — reconcile mode', () => {
       expect(existsSync(join(out, 'curated', `${keep.id}.md`))).toBe(true);
     });
 
+    it('a mis-filed copy that positively names another tenant is never removed, even for a known id', () => {
+      const m = makeCuratedMemory({ category: 'reference' });
+      memoryRepo.insert(m);
+      mkdirSync(join(out, 'decisions'), { recursive: true });
+      const foreignCopy = join(out, 'decisions', `${m.id}.md`);
+      writeFileSync(foreignCopy, `---\nid: "${m.id}"\ntenant_id: "someone-else"\n---\nx`);
+
+      const r = runExport(memoryRepo, exportStateRepo, cfg());
+      expect(r.removed).toEqual([]);
+      expect(existsSync(foreignCopy)).toBe(true);
+      // Its own copy is still written where it belongs.
+      expect(existsSync(join(out, 'guides', `${m.id}.md`))).toBe(true);
+    });
+
     it('without a tenant filter every orphan is removed', () => {
       const a = plantOrphan('t1');
       const b = plantOrphan('t2');
