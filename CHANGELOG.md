@@ -24,6 +24,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every lifecycle state. Prints only memory id, title, lifecycle, category and pattern names (a
   title that itself matched is withheld). Exit 0 clean, 3 findings, 2 usage error, 1 I/O failure.
 
+- **Governed audience narrowing (Epic K bead K3, decision `053-AT-DECR`).** A promoted memory's
+  audience can now be narrowed after promotion, toward a stricter tier only (`tenant` -> `admins` ->
+  `owner`): `curator-cli narrow-audience --db --tenant --to --actor --reason (--memory-id <id|prefix>
+  | --ids-file <path>) [--dry-run] [--json]` and admin-only `POST /api/memories/:id/narrow-audience`.
+  The audience write and a hash-chained `audience_narrowed` receipt (actor, time, from, to, reason)
+  commit in one transaction. Widening, an equal tier and an unknown tier are refused. `--dry-run`
+  opens the store read-only. A narrowed memory leaves the shared export tree on the next exporter
+  reconcile.
+- **`audience_narrowing` policy rule (K3, KR8.2).** A new `PolicyRuleType` (no store migration) that
+  flags a candidate whose declared audience is wider than its content calls for (credentials ->
+  `owner`, PII -> `admins`). Flag-only and recommendation-only: it never rejects and never writes an
+  audience. Measured on its own hand-labeled 29-case fixture, separately from the disclosure
+  metrics: precision 0.81, recall 0.93. It is in `RECOMMENDED_POLICY_RULES`, so an existing store
+  reports it as dormant until `curator-cli upgrade-policy` runs.
+- **Governed redaction (K3 expanded scope).** `curator-cli redact --db --tenant --memory-id
+  <id|prefix> --actor --reason (--replacement-text | --replacement-file | --lines <ranges> | --scan)
+  [--replacement-title] [--show-title] [--dry-run] [--json] [--skip-scrub]` replaces the content of a
+  promoted memory that holds a secret, in the memory row and in every candidate copy, recomputes the
+  content hash, and appends hash-chained `redacted` receipts carrying the actor, reason, old and new
+  content hashes and secret-pattern names. The removed text is never written to a receipt, to output
+  or to an error. Every mode re-scans the result and refuses if a secret pattern still fires. After
+  the transaction it rebuilds the FTS index, truncates the WAL, runs `VACUUM` and byte-scans the
+  database, `-wal` and `-shm` files for the removed text (exit `4` if that is incomplete). No
+  existing audit row is edited, so the chain verifies exactly as before. Runbook, including what
+  redaction cannot reach (existing backups, exports, indexes, spool and compile artifacts):
+  `000-docs/054-OD-RNBK`.
 - **Claim-level audience field (Epic K bead K2, decision `053-AT-DECR`).** A memory can now say who
   inside its tenant it is for: optional `metadata.audience` of `tenant` (default), `admins` or
   `owner`, on both `MemoryCandidate` and `CuratedMemory`. It is declared at capture and carried by
@@ -72,6 +98,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and SQLite-fallback (source-level) paths.
 
 ### Changed
+
+- **Dedup now refuses redacted text.** A governed redaction changes a memory's stored content hash,
+  so an exact-hash check alone would let the original text be re-ingested. The curator, API
+  promotion, API intake (`422`, code `redacted_content`) and the candidate insert choke point now
+  also refuse content whose hash is the pre-redaction hash on a `redacted` receipt.
+- **`provenance-walk` verifies a redacted memory against its receipts.** A redacted memory's id no
+  longer derives from its current content hash; the walk now checks the id against the
+  pre-redaction hash recorded on the `redacted` receipts and that the receipts' hash history ends
+  at the current hash. A row changed any other way still fails.
 
 - Hardened the three public skills for skills.sh: `brain`, `brain-save`, and `teamkb` now distinguish
   the shipped read-only `intent-brain` client from the source-built local operator server, document
