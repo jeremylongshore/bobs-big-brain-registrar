@@ -12,6 +12,8 @@ export type {
 export type { DeterministicScore } from './deterministic-score.js';
 export { createRule, RULE_REGISTRY } from './rules/index.js';
 export { evaluateSecretDetection } from './rules/secret-detection-rule.js';
+export { scanTextForSecrets, listSecretPatternIds } from './secret-scan.js';
+export type { SecretFinding } from './secret-scan.js';
 export { evaluateContentLength } from './rules/content-length-rule.js';
 export { evaluateSourceTrust } from './rules/source-trust-rule.js';
 export { evaluateRelevanceScore } from './rules/relevance-score-rule.js';

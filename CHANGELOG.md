@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Secret scan catches passwords stated in prose and credentials in any-scheme URLs.** Two new
+  deterministic patterns join the governance secret scan (capture-time redaction and the
+  promote-time `secret_detection` rule): `prose-password` (`password` / `passwd` / `passphrase`,
+  then `is` / `was` / `:` / `=` within 40 characters, then a quoted or backticked value of 6–128
+  non-whitespace characters) and `url-embedded-credentials` (`scheme://user:secret@host` for any
+  scheme). Documentation placeholders (`username:password`, `<password>`, `${VAR}`, `changeme`,
+  env-var names, file paths) are excluded. The rule's failure reason now names each pattern and
+  its line, never the matched text. **Reason format change:** the stored rejection reason was
+  `… (ids: a, b)` and is now `… (ids: a, b; locations: a at line 3; b at line 7)`; anything parsing
+  that string must allow the new `; locations: …` suffix.
+- **Whole-brain secret sweep (`curator-cli secret-sweep --db <path> --tenant <id> [--pattern <id>]... [--json]`).**
+  Opens the store read-only and re-runs the same scan over every curated memory of the tenant in
+  every lifecycle state. Prints only memory id, title, lifecycle, category and pattern names (a
+  title that itself matched is withheld). Exit 0 clean, 3 findings, 2 usage error, 1 I/O failure.
+
 - **Claim-level audience field (Epic K bead K2, decision `053-AT-DECR`).** A memory can now say who
   inside its tenant it is for: optional `metadata.audience` of `tenant` (default), `admins` or
   `owner`, on both `MemoryCandidate` and `CuratedMemory`. It is declared at capture and carried by

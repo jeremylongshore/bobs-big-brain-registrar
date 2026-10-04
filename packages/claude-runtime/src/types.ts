@@ -44,6 +44,26 @@ export interface SecretPattern {
    * relaxes any OTHER pattern — every context-free rule keeps firing unchanged.
    */
   requiresContext?: RegExp;
+  /**
+   * Optional value predicate. When present, a `regex` match only counts when
+   * `accept` returns true for it; the scanner then looks at EVERY match in the
+   * window (not just the first) and reports the first accepted one. Receives the
+   * match as `[fullMatch, ...captureGroups]`.
+   *
+   * Used where the SHAPE is right but the value may be a documentation
+   * placeholder (`scheme://username:password@host`, `password is "<your
+   * password>"`): the regex finds the shape, `accept` rejects the placeholder.
+   * Must be pure and deterministic, and must never log or return the value.
+   */
+  accept?: (match: readonly (string | undefined)[]) => boolean;
+  /**
+   * When true the pattern is NOT run against the whitespace-stripped view of the
+   * newline-collapsed pre-pass (it still runs per line and against the
+   * single-space view). For patterns whose precision depends on whitespace —
+   * a quoted value containing spaces is prose, not a password, and stripping the
+   * spaces would turn it into a password-shaped token.
+   */
+  skipWhitespaceStrippedView?: boolean;
 }
 
 /** A match found by the secret scanner */

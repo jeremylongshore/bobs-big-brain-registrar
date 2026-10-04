@@ -70,6 +70,7 @@ import {
 import {
   buildRecommendedPolicy,
   findUncoveredRuleTypes,
+  listSecretPatternIds,
   RECOMMENDED_POLICY_RULES,
 } from '@qmd-team-intent-kb/policy-engine';
 import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
@@ -79,6 +80,7 @@ import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
 import { loadBrainignoreRuleset } from './import-exclusion/load-brainignore.js';
 import { mergeGovern } from './merge/merge-gate.js';
 import { walkProvenance } from './provenance/provenance-walk.js';
+import { sweepSecrets } from './secret-sweep/secret-sweep.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -159,6 +161,14 @@ Subcommands:
     recommended policy. Policy already complete → no-op, nothing written.
     --dry-run reports the dormant rules and the planned change without writing.
 
+  secret-sweep --db <path> --tenant <id> [--pattern <id>]... [--json]
+    Re-run the governance secret scan (the same deterministic scan the
+    secret_detection rule runs at promotion) over EVERY curated memory of the
+    tenant, in every lifecycle state. Opens the db READ-ONLY. Prints only the
+    memory id, title, lifecycle, category and pattern names — never the
+    matched text or the content.
+    Exit: 0 clean · 3 findings · 2 usage error · 1 I/O failure.
+
   help | --help | -h
     Print this message.
 
@@ -223,6 +233,13 @@ Options for 'provenance-walk':
                     <db-dir>/brain/spool.
   --json            Emit a structured JSON envelope in place of the summary.
 
+Options for 'secret-sweep':
+  --db <path>     SQLite path to read READ-ONLY (required). Never mutated.
+  --tenant <id>   Tenant whose memories are swept (required).
+  --pattern <id>  Report only this secret-pattern id. Repeatable. Default:
+                  every pattern. An unknown id is a usage error.
+  --json          Emit a structured JSON envelope in place of the summary.
+
 Options for 'merge-govern':
   --db <path>     Target (merged) SQLite path — the ONLY db written (required).
   --tenant <id>   Tenant scope for policy + audit events (required).
@@ -267,6 +284,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdMergeGovern(argv.slice(1), deps);
     case 'upgrade-policy':
       return cmdUpgradePolicy(argv.slice(1), deps);
+    case 'secret-sweep':
+      return cmdSecretSweep(argv.slice(1), deps);
     case 'help':
     case '--help':
     case '-h':
@@ -2273,5 +2292,169 @@ function emitUpgradePolicyReport(opts: UpgradePolicyOpts, report: UpgradePolicyR
             : `Would upgrade to the recommended rule set (${RECOMMENDED_POLICY_RULES.length} rules).\n`),
       );
       break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// secret-sweep
+//
+// Periodic whole-brain re-scan with the SAME deterministic secret scan the
+// promote-time secret_detection rule runs (umbrella bead
+// compile-then-govern-39z.17). The gate sees a memory once, with that day's
+// patterns; the sweep re-examines the standing corpus so a shape added later
+// (e.g. a password stated in prose) is found in memories already admitted.
+// Read-only; output is ids + row metadata + pattern names, never matched text.
+// ---------------------------------------------------------------------------
+
+/** Exit code for "the sweep ran and found something" — distinct from usage (2)
+ *  and I/O failure (1) so a cron wrapper can alert on exactly this. */
+const SECRET_SWEEP_FINDINGS_EXIT = 3;
+
+interface SecretSweepOpts {
+  dbPath: string;
+  tenantId: string;
+  patternIds: string[];
+  json: boolean;
+}
+
+function parseSecretSweepArgs(
+  args: string[],
+): { ok: true; opts: SecretSweepOpts } | { ok: false; message: string } {
+  let dbPath: string | undefined;
+  let tenantId: string | undefined;
+  const patternIds: string[] = [];
+  let json = false;
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i]!;
+    switch (arg) {
+      case '--db':
+        dbPath = args[i + 1];
+        i += 2;
+        break;
+      case '--tenant':
+        tenantId = args[i + 1];
+        i += 2;
+        break;
+      case '--pattern': {
+        const value = args[i + 1];
+        if (value === undefined) return { ok: false, message: '--pattern requires a value' };
+        patternIds.push(value);
+        i += 2;
+        break;
+      }
+      case '--json':
+        json = true;
+        i += 1;
+        break;
+      default:
+        return { ok: false, message: `unknown flag: ${arg}` };
+    }
+  }
+
+  // Both are mandatory: an implicit in-memory store, or no tenant, would report
+  // a trivially clean brain — a passing verdict about nothing.
+  if (dbPath === undefined) {
+    return {
+      ok: false,
+      message: 'missing required --db <path> (refusing to sweep an implicit in-memory store)',
+    };
+  }
+  if (tenantId === undefined) {
+    return { ok: false, message: 'missing required --tenant <id>' };
+  }
+  // A typo'd pattern id would silently match nothing and report clean.
+  const known = listSecretPatternIds();
+  const unknown = patternIds.filter((id) => !known.includes(id));
+  if (unknown.length > 0) {
+    return {
+      ok: false,
+      message: `unknown --pattern id(s): ${unknown.join(', ')} (known: ${known.join(', ')})`,
+    };
+  }
+
+  return { ok: true, opts: { dbPath, tenantId, patternIds, json } };
+}
+
+async function cmdSecretSweep(args: string[], deps: CuratorCliDeps): Promise<number> {
+  const parsed = parseSecretSweepArgs(args);
+  if (!parsed.ok) {
+    process.stderr.write(`curator-cli secret-sweep: ${parsed.message}\n\n${USAGE}`);
+    return 2;
+  }
+  const { dbPath, tenantId, patternIds, json } = parsed.opts;
+
+  let db: ReturnType<DatabaseFactory>;
+  try {
+    // READ-ONLY: a sweep must never mutate a live brain (no DDL, no migrations,
+    // no WAL switch, no chmod).
+    db = deps.createDb({ dbPath, readonly: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`curator-cli secret-sweep: cannot open ${dbPath} read-only: ${message}\n`);
+    return 1;
+  }
+
+  try {
+    const report = sweepSecrets(db, tenantId, { patternIds });
+    const ok = report.findings.length === 0;
+    const exitCode = ok ? 0 : SECRET_SWEEP_FINDINGS_EXIT;
+
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({
+          ok,
+          tenantId: report.tenantId,
+          scanned: report.scanned,
+          patternFilter: report.patternFilter,
+          findingCount: report.findings.length,
+          findings: report.findings,
+        }) + '\n',
+      );
+      return exitCode;
+    }
+
+    const scope =
+      report.patternFilter === null
+        ? 'all patterns'
+        : `patterns: ${report.patternFilter.join(', ')}`;
+    if (ok) {
+      process.stdout.write(`secret sweep OK\n`);
+      process.stdout.write(`Tenant:           ${report.tenantId}\n`);
+      process.stdout.write(`Memories scanned: ${report.scanned} (every lifecycle state)\n`);
+      process.stdout.write(`Scope:            ${scope}\n`);
+      if (report.scanned === 0) {
+        process.stderr.write(
+          `warning: tenant "${report.tenantId}" has no curated memories in ${dbPath} — ` +
+            `check --tenant and --db\n`,
+        );
+      }
+      return 0;
+    }
+
+    process.stderr.write(
+      `SECRETS_IN_BRAIN: ${report.findings.length} of ${report.scanned} curated memories ` +
+        `matched a secret pattern (tenant ${report.tenantId}; ${scope}).\n` +
+        `Matched text is never printed — open each memory by id to review it.\n\n`,
+    );
+    for (const f of report.findings) {
+      process.stderr.write(
+        `  ${f.id}  lifecycle=${f.lifecycle}  category=${f.category}\n` +
+          `    title:    ${f.title}\n` +
+          `    patterns: ${f.patterns.join(', ')}\n`,
+      );
+    }
+    return exitCode;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`curator-cli secret-sweep: sweep failed: ${message}\n`);
+    return 1;
+  } finally {
+    try {
+      (db as unknown as { close?: () => void }).close?.();
+    } catch {
+      // non-fatal
+    }
   }
 }

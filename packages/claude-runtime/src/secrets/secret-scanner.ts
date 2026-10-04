@@ -61,15 +61,41 @@ const HEX_CANDIDATE_RE = /[A-Fa-f0-9]{24,}/g;
  * Returns the RegExpExecArray for a counted hit, or `null` when the pattern does
  * not match or its context gate is not satisfied.
  */
+/**
+ * First match of `pattern.regex` in `text` that counts on value alone.
+ *
+ * Without a value predicate this is the plain first match (determinism: a
+ * global/sticky regex carries `lastIndex`, so it is reset first). With
+ * `pattern.accept`, EVERY match in the window is examined and the first accepted
+ * one wins — otherwise a documentation placeholder earlier on a line would hide
+ * a real credential later on the same line. The walk runs on a private global
+ * copy of the regex, so no shared `lastIndex` state is touched.
+ */
+function firstCountedMatch(pattern: SecretPattern, text: string): RegExpExecArray | null {
+  if (!pattern.accept) {
+    if (pattern.regex.global || pattern.regex.sticky) {
+      pattern.regex.lastIndex = 0;
+    }
+    return pattern.regex.exec(text);
+  }
+  const flags = pattern.regex.flags.includes('g') ? pattern.regex.flags : pattern.regex.flags + 'g';
+  const walker = new RegExp(pattern.regex.source, flags);
+  let match = walker.exec(text);
+  while (match !== null) {
+    if (pattern.accept(match)) return match;
+    // A zero-length match would never advance `lastIndex` — step past it.
+    if (match[0].length === 0) walker.lastIndex += 1;
+    match = walker.exec(text);
+  }
+  return null;
+}
+
 function execWithContext(
   pattern: SecretPattern,
   text: string,
   contextText?: string,
 ): RegExpExecArray | null {
-  if (pattern.regex.global || pattern.regex.sticky) {
-    pattern.regex.lastIndex = 0;
-  }
-  const match = pattern.regex.exec(text);
+  const match = firstCountedMatch(pattern, text);
   if (!match) return null;
   if (pattern.requiresContext) {
     if (pattern.requiresContext.global || pattern.requiresContext.sticky) {
@@ -142,8 +168,12 @@ function scanNewlineCollapsed(
   scanFlat(singleSpace, remaining, matches, locate);
   // Only try the no-whitespace view for patterns STILL unmatched, to catch a key
   // broken mid-token (which the single-space view leaves as two tokens).
+  // A pattern that opts out (`skipWhitespaceStrippedView`) depends on whitespace
+  // for its precision, so it is never run against the stripped view.
   const stillUnmatched = remaining.filter(
-    (p) => !matches.slice(before).some((m) => m.patternId === p.id),
+    (p) =>
+      p.skipWhitespaceStrippedView !== true &&
+      !matches.slice(before).some((m) => m.patternId === p.id),
   );
   if (stillUnmatched.length > 0) scanFlat(noWhitespace, stillUnmatched, matches, locate);
 }
