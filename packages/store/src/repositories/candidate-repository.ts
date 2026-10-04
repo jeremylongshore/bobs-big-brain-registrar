@@ -1,8 +1,28 @@
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
 import { MemoryCandidate, CandidateStatus } from '@qmd-team-intent-kb/schema';
-import { assertDisclosureClean } from '@qmd-team-intent-kb/common';
+import {
+  assertDisclosureClean,
+  computeContentHash,
+  DisclosureRejectedError,
+  scanDisclosureFields,
+} from '@qmd-team-intent-kb/common';
 import { assertEnumMembership } from './enum-membership.js';
+
+/**
+ * Thrown by {@link CandidateRepository.insert} when the incoming content is
+ * byte-identical to text a governed redaction removed (K3). A subclass of
+ * {@link DisclosureRejectedError}, so every write path that already handles a
+ * disclosure rejection refuses it the same way. Carries no content.
+ */
+export class RedactedContentReingestError extends DisclosureRejectedError {
+  constructor() {
+    super('secret');
+    this.name = 'RedactedContentReingestError';
+    this.message =
+      'Candidate rejected: this exact content was removed by a governed redaction and cannot re-enter the governed brain.';
+  }
+}
 
 /**
  * Zod schema for the raw SQLite row returned by better-sqlite3.
@@ -138,6 +158,10 @@ export class CandidateRepository {
   private readonly stmtCountByTenant: Database.Statement;
   private readonly stmtDeleteByBatch: Database.Statement;
   private readonly stmtUpdateStatus: Database.Statement;
+  private readonly stmtUpdateContent: Database.Statement;
+  private readonly stmtIdsByHashAndTenant: Database.Statement;
+  private readonly stmtReadText: Database.Statement;
+  private readonly stmtIsRedactedHash: Database.Statement;
 
   constructor(db: Database.Database) {
     this.stmtInsert = db.prepare(`
@@ -189,6 +213,30 @@ export class CandidateRepository {
       UPDATE candidates SET status = @status WHERE id = @id AND tenant_id = @tenantId
     `);
 
+    // Governed redaction of a candidate's stored copy (K3). The ONLY statement
+    // that rewrites candidate content; tenant-scoped like updateStatus.
+    this.stmtUpdateContent = db.prepare(`
+      UPDATE candidates SET content = @content, title = @title, content_hash = @contentHash
+      WHERE id = @id AND tenant_id = @tenantId
+    `);
+
+    this.stmtReadText = db.prepare(`
+      SELECT content, title FROM candidates WHERE id = ? AND tenant_id = ?
+    `);
+
+    this.stmtIdsByHashAndTenant = db.prepare(`
+      SELECT id FROM candidates WHERE content_hash = ? AND tenant_id = ?
+    `);
+
+    // True when a governed-redaction receipt (K3) records this hash as the
+    // PRE-redaction hash of a row in this tenant: the removed text coming back.
+    this.stmtIsRedactedHash = db.prepare(`
+      SELECT 1 FROM audit_events
+      WHERE action = 'redacted' AND tenant_id = ?
+        AND json_extract(details_json, '$.oldContentHash') = ?
+      LIMIT 1
+    `);
+
     this.stmtCount = db.prepare(`
       SELECT COUNT(*) as cnt FROM candidates
     `);
@@ -233,6 +281,9 @@ export class CandidateRepository {
    *   value is smuggled into an enum-constrained field.
    * @throws {EnumConstraintViolationError} when an enum-constrained field carries a
    *   non-vocabulary value that is not itself disclosure-shaped.
+   * @throws {RedactedContentReingestError} when the content is byte-identical to
+   *   text a governed redaction removed from this tenant (K3) — a redaction
+   *   changes the stored hash, so without this the original could be re-ingested.
    */
   insert(candidate: MemoryCandidate, contentHash: string, importBatchId?: string): void {
     // Choke-point enforcement: reject before the row is ever written.
@@ -240,6 +291,11 @@ export class CandidateRepository {
     // Re-assert closed-vocabulary membership so a raw caller cannot smuggle
     // disclosure content through a field the disclosure scan skips by name.
     assertEnumMembership(candidate);
+    // Redacted text must not come back (K3). Hash the content itself rather than
+    // trusting the caller-supplied `contentHash`.
+    if (this.isRedactedContent(candidate.content, candidate.tenantId)) {
+      throw new RedactedContentReingestError();
+    }
     this.stmtInsert.run({
       id: candidate.id,
       status: candidate.status,
@@ -310,6 +366,66 @@ export class CandidateRepository {
   updateStatus(id: string, status: CandidateStatus, tenantId: string): number {
     const validated = CandidateStatus.parse(status);
     return this.stmtUpdateStatus.run({ id, status: validated, tenantId }).changes;
+  }
+
+  /**
+   * True when `content` is byte-identical to text a governed redaction removed
+   * from this tenant (K3): its SHA-256 equals the `oldContentHash` of a
+   * `redacted` receipt. Compares hashes only; the removed text is not stored.
+   */
+  isRedactedContent(content: string, tenantId: string): boolean {
+    return this.stmtIsRedactedHash.get(tenantId, computeContentHash(content)) !== undefined;
+  }
+
+  /** Ids of every candidate in the tenant whose stored content hash is `hash` (K3). */
+  findIdsByContentHashAndTenant(hash: string, tenantId: string): string[] {
+    const rows = this.stmtIdsByHashAndTenant.all(hash, tenantId) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Read a candidate's stored content and title WITHOUT domain validation (K3).
+   * Governed redaction must be able to reach a legacy row that no longer parses
+   * as a `MemoryCandidate` — that row can still hold the text being removed.
+   * Tenant-scoped; null when no row matches `id` AND `tenantId`.
+   */
+  readStoredText(id: string, tenantId: string): { content: string; title: string } | null {
+    const row = this.stmtReadText.get(id, tenantId) as
+      { content: string; title: string } | undefined;
+    return row ?? null;
+  }
+
+  /**
+   * Replace a candidate's stored content and title IN PLACE (K3 governed
+   * redaction) and recompute its content hash. `candidates` is otherwise
+   * insert-only; this is the single content-rewriting statement and exists so a
+   * redaction of a promoted memory also removes the text from the candidate row
+   * it was promoted from. The caller writes the `redacted` receipt in the same
+   * transaction.
+   *
+   * The replacement text goes through the same disclosure scan as an insert, so
+   * a redaction cannot itself write disallowed material. It does not require the
+   * existing row to parse (see {@link readStoredText}). Tenant-scoped. Returns
+   * the new content hash, or null when no row matches `id` AND `tenantId`.
+   *
+   * @throws {DisclosureRejectedError} when the replacement fails the disclosure gate.
+   */
+  updateContent(
+    id: string,
+    tenantId: string,
+    replacement: { content: string; title: string },
+  ): string | null {
+    const violation = scanDisclosureFields([replacement.content, replacement.title]);
+    if (violation !== null) throw new DisclosureRejectedError(violation.category);
+    const contentHash = computeContentHash(replacement.content);
+    const changes = this.stmtUpdateContent.run({
+      id,
+      tenantId,
+      content: replacement.content,
+      title: replacement.title,
+      contentHash,
+    }).changes;
+    return changes > 0 ? contentHash : null;
   }
 
   /**

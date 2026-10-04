@@ -200,6 +200,151 @@ function findTraceEvent(
 }
 
 // ---------------------------------------------------------------------------
+// Governed-redaction trail (K3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The content-hash history a row's `redacted` receipts record. A governed
+ * redaction replaces a row's content and so its content hash, but the row keeps
+ * the id it was given at promotion (or capture) — an id derived from the
+ * ORIGINAL hash. The receipts carry each old/new hash pair, so the derivation
+ * can still be checked without the removed text.
+ */
+interface RedactionTrail {
+  /** The hash before the first redaction: what the id was derived from. */
+  originalHash: string;
+  /** Receipt ids, in chain order. */
+  receiptIds: string[];
+  /** True when each receipt's old hash is the previous one's new hash and the
+   *  last new hash is the row's current content hash. */
+  consistent: boolean;
+}
+
+/** Read a row's redaction trail from the audit chain; null when it has none. */
+function readRedactionTrail(db: Db, targetId: string, currentHash: string): RedactionTrail | null {
+  const rows = db
+    .prepare(
+      `SELECT id, details_json FROM audit_events
+       WHERE memory_id = ? AND action = 'redacted'
+       ORDER BY seq ASC`,
+    )
+    .all(targetId) as Array<{ id: string; details_json: string }>;
+  const pairs: Array<{ id: string; oldHash: string; newHash: string }> = [];
+  for (const row of rows) {
+    try {
+      const details = JSON.parse(row.details_json) as Record<string, unknown>;
+      const oldHash = details['oldContentHash'];
+      const newHash = details['newContentHash'];
+      if (typeof oldHash === 'string' && typeof newHash === 'string') {
+        pairs.push({ id: row.id, oldHash, newHash });
+      }
+    } catch {
+      // A malformed receipt contributes nothing; the trail is then inconsistent
+      // or absent, and the link reports FAIL on the plain derivation.
+    }
+  }
+  if (pairs.length === 0) return null;
+  let consistent = pairs[pairs.length - 1]!.newHash === currentHash;
+  for (let i = 1; i < pairs.length; i++) {
+    if (pairs[i]!.oldHash !== pairs[i - 1]!.newHash) consistent = false;
+  }
+  return { originalHash: pairs[0]!.oldHash, receiptIds: pairs.map((p) => p.id), consistent };
+}
+
+/** One link's verdict, before it is named and pushed. */
+interface LinkVerdict {
+  status: LinkStatus;
+  evidence: string;
+}
+
+/**
+ * Link 2: the memory id is content-derived from its candidate lineage
+ * (`deriveMemoryId`, packages/common/src/uuid-v5.ts), and the stored content
+ * still hashes to the stored content_hash.
+ *
+ * A governed redaction (K3) replaces the content, so the id — derived at
+ * promotion from the ORIGINAL hash — no longer matches the current one. The
+ * 'redacted' receipts record the hash history; the id is verified against that.
+ */
+function memoryIdDerivationLink(db: Db, memory: MemoryRow): LinkVerdict {
+  const recomputedHash = computeContentHash(memory.content);
+  if (recomputedHash !== memory.content_hash) {
+    return {
+      status: 'FAIL',
+      evidence: `stored content no longer hashes to content_hash (expected ${memory.content_hash}, got ${recomputedHash}) — the durable row was modified after promotion`,
+    };
+  }
+  const derivedMemoryId = deriveMemoryId(memory.candidate_id, memory.content_hash);
+  if (derivedMemoryId === memory.id) {
+    return {
+      status: 'PASS',
+      evidence: `id == uuidv5("memory", candidate_id, content_hash) == ${derivedMemoryId}; content re-hashes to content_hash`,
+    };
+  }
+  const trail = readRedactionTrail(db, memory.id, memory.content_hash);
+  if (trail === null) {
+    return {
+      status: 'FAIL',
+      evidence: `id ${memory.id} != derived ${derivedMemoryId} — the id is not a pure function of this candidate lineage (pre-derivation legacy row, or the lineage was altered)`,
+    };
+  }
+  const count = trail.receiptIds.length;
+  if (trail.consistent && deriveMemoryId(memory.candidate_id, trail.originalHash) === memory.id) {
+    return {
+      status: 'PASS',
+      evidence: `id == uuidv5("memory", candidate_id, pre-redaction content_hash) — the content was governed-redacted ${count} time(s); 'redacted' receipt(s) ${trail.receiptIds.join(', ')} record the hash history ending at the current content_hash; content re-hashes to content_hash`,
+    };
+  }
+  const why = trail.consistent
+    ? 'is consistent but its starting hash does not derive this id'
+    : 'does not end at the current content_hash';
+  return {
+    status: 'FAIL',
+    evidence: `id ${memory.id} does not derive from the current content_hash, and its ${count} 'redacted' receipt(s) do not account for it (hash history ${why}) — the row was changed outside a governed redaction`,
+  };
+}
+
+/**
+ * Link 5: the candidate id is content-addressed. ICO derives it as
+ * uuidv5(workspaceId, relPath, bodySha256) where bodySha256 is the SHA-256 of
+ * the compiled page body — exactly the candidate content INTKB stored.
+ * workspaceId is the basename of the brain root (ICO kernel spool.ts).
+ *
+ * The candidate copy of a governed-redacted memory (K3) was rewritten too; its
+ * 'redacted' receipt records the hash the id was addressed by.
+ */
+function candidateIdDerivationLink(
+  db: Db,
+  candidate: CandidateRow,
+  workspaceId: string,
+  relPath: string,
+): LinkVerdict {
+  const bodySha256 = computeContentHash(candidate.content);
+  const derivedCandidateId = deriveCandidateId(workspaceId, relPath, bodySha256);
+  if (derivedCandidateId === candidate.id) {
+    return {
+      status: 'PASS',
+      evidence: `candidate_id == uuidv5(workspaceId="${workspaceId}", relPath="${relPath}", sha256(content)) == ${derivedCandidateId}`,
+    };
+  }
+  const trail = readRedactionTrail(db, candidate.id, bodySha256);
+  if (
+    trail !== null &&
+    trail.consistent &&
+    deriveCandidateId(workspaceId, relPath, trail.originalHash) === candidate.id
+  ) {
+    return {
+      status: 'PASS',
+      evidence: `candidate_id == uuidv5(workspaceId="${workspaceId}", relPath="${relPath}", pre-redaction sha256(content)) — the candidate copy was governed-redacted; 'redacted' receipt(s) ${trail.receiptIds.join(', ')} record the hash history`,
+    };
+  }
+  return {
+    status: 'FAIL',
+    evidence: `candidate_id ${candidate.id} != derived ${derivedCandidateId} (workspaceId="${workspaceId}", relPath="${relPath}") — stored candidate content does not address to this id`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The walk
 // ---------------------------------------------------------------------------
 
@@ -232,32 +377,9 @@ export function walkProvenance(db: Db, memoryId: string, opts: WalkOptions): Wal
     `curated_memories row found (tenant=${memory.tenant_id}, source=${memory.source}, promoted_at=${memory.promoted_at})`,
   );
 
-  // Link 2 — the memory id is content-derived from its candidate lineage
-  // (deriveMemoryId, packages/common/src/uuid-v5.ts), and the stored content
-  // still hashes to the stored content_hash.
-  const recomputedHash = computeContentHash(memory.content);
-  if (recomputedHash !== memory.content_hash) {
-    push(
-      'memory-id-derivation',
-      'FAIL',
-      `stored content no longer hashes to content_hash (expected ${memory.content_hash}, got ${recomputedHash}) — the durable row was modified after promotion`,
-    );
-  } else {
-    const derivedMemoryId = deriveMemoryId(memory.candidate_id, memory.content_hash);
-    if (derivedMemoryId === memory.id) {
-      push(
-        'memory-id-derivation',
-        'PASS',
-        `id == uuidv5("memory", candidate_id, content_hash) == ${derivedMemoryId}; content re-hashes to content_hash`,
-      );
-    } else {
-      push(
-        'memory-id-derivation',
-        'FAIL',
-        `id ${memory.id} != derived ${derivedMemoryId} — the id is not a pure function of this candidate lineage (pre-derivation legacy row, or the lineage was altered)`,
-      );
-    }
-  }
+  // Link 2 — the memory id is content-derived from its candidate lineage.
+  const memoryIdLink = memoryIdDerivationLink(db, memory);
+  push('memory-id-derivation', memoryIdLink.status, memoryIdLink.evidence);
 
   // Link 3 — the govern-side receipt: the audit_events chain must carry the
   // row-creating 'promoted' event for this memory (the admission receipt).
@@ -321,22 +443,13 @@ export function walkProvenance(db: Db, memoryId: string, opts: WalkOptions): Wal
       `candidate source is '${candidate.source}' with no compile-side filePath — not a spool-derived candidate; its id is not content-addressed by design`,
     );
   } else {
-    const workspaceId = basename(resolve(opts.brainDir));
-    const bodySha256 = computeContentHash(candidate.content);
-    const derivedCandidateId = deriveCandidateId(workspaceId, relPath!, bodySha256);
-    if (derivedCandidateId === candidate.id) {
-      push(
-        'candidate-id-derivation',
-        'PASS',
-        `candidate_id == uuidv5(workspaceId="${workspaceId}", relPath="${relPath}", sha256(content)) == ${derivedCandidateId}`,
-      );
-    } else {
-      push(
-        'candidate-id-derivation',
-        'FAIL',
-        `candidate_id ${candidate.id} != derived ${derivedCandidateId} (workspaceId="${workspaceId}", relPath="${relPath}") — stored candidate content does not address to this id`,
-      );
-    }
+    const candidateIdLink = candidateIdDerivationLink(
+      db,
+      candidate,
+      basename(resolve(opts.brainDir)),
+      relPath!,
+    );
+    push('candidate-id-derivation', candidateIdLink.status, candidateIdLink.evidence);
   }
 
   // Link 6 — THE BRIDGE: the spool manifest sidecar ICO emitted alongside the

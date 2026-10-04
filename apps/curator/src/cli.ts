@@ -75,7 +75,9 @@ import {
 } from '@qmd-team-intent-kb/policy-engine';
 import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
 
+import { cmdNarrowAudience } from './audience/narrow-cli.js';
 import { Curator } from './curator.js';
+import { cmdRedact } from './redaction/redact-cli.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
 import { loadBrainignoreRuleset } from './import-exclusion/load-brainignore.js';
 import { mergeGovern } from './merge/merge-gate.js';
@@ -141,6 +143,24 @@ Subcommands:
     link with the evidence backing it. Opens the db READ-ONLY.
     Exit: 0 all PASS · 1 any FAIL (broken chain) · 3 no FAIL but >=1
     UNVERIFIABLE (artifact absent, e.g. no brain dir on CI) · 2 usage error.
+
+  narrow-audience --db <path> --tenant <id> --to <admins|owner> --actor <id>
+                  --reason <text> (--memory-id <id|prefix> | --ids-file <path>)
+                  [--dry-run] [--json]
+    Narrow a promoted memory's audience (tenant -> admins -> owner). Widening
+    is refused. Each memory gets its own transaction and its own hash-chained
+    'audience_narrowed' receipt. --dry-run opens the DB READ-ONLY.
+    Run with no arguments for the full option list.
+
+  redact --db <path> --tenant <id> --memory-id <id|prefix> --actor <id>
+         --reason <text> (--replacement-text <text> | --replacement-file <path>
+         | --lines <ranges> | --scan) [--replacement-title <text>]
+         [--dry-run] [--json] [--skip-scrub]
+    Replace the content of a promoted memory that holds a secret, in the memory
+    row and every candidate copy, with a hash-chained 'redacted' receipt (old
+    and new content hashes, pattern names — never the removed text). Then
+    rebuilds FTS, truncates the WAL, VACUUMs and byte-scans the store files.
+    Run with no arguments for the full option list.
 
   merge-govern <cloneA-db> <cloneB-db> --db <target> --tenant <id>
                [--dry-run] [--json] [--anchor <path>] [--commit <sha>]
@@ -280,6 +300,10 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdVerifyCorpusAccounting(argv.slice(1), deps);
     case 'provenance-walk':
       return cmdProvenanceWalk(argv.slice(1), deps);
+    case 'narrow-audience':
+      return cmdNarrowAudience(argv.slice(1), deps);
+    case 'redact':
+      return cmdRedact(argv.slice(1), deps);
     case 'merge-govern':
       return cmdMergeGovern(argv.slice(1), deps);
     case 'upgrade-policy':

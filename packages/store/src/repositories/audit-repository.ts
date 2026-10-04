@@ -77,6 +77,55 @@ function rowToChainPosition(row: AuditChainPositionRow): AuditChainPosition {
 }
 
 /**
+ * One governed-redaction receipt (K3), read back from the chain. Carries the
+ * content hashes only — a `redacted` receipt never holds the removed text.
+ */
+export interface RedactionReceipt {
+  /** The receipt's audit event id. */
+  eventId: string;
+  /** The redacted row's id: a memory id, or a candidate id for a candidate-copy receipt. */
+  targetId: string;
+  /** Which table the redacted row lives in. */
+  target: 'memory' | 'candidate';
+  /** SHA-256 of the content BEFORE the redaction. */
+  oldContentHash: string;
+  /** SHA-256 of the content AFTER the redaction. */
+  newContentHash: string;
+  /** Write-order position on the chain. */
+  sequence: number;
+}
+
+interface RedactionRow {
+  id: string;
+  memory_id: string;
+  details_json: string;
+  seq: number;
+}
+
+/** Parse a `redacted` audit row; null when its details are not a well-formed receipt. */
+function rowToRedactionReceipt(row: RedactionRow): RedactionReceipt | null {
+  let details: unknown;
+  try {
+    details = JSON.parse(row.details_json);
+  } catch {
+    return null;
+  }
+  if (details === null || typeof details !== 'object') return null;
+  const d = details as Record<string, unknown>;
+  const oldContentHash = d['oldContentHash'];
+  const newContentHash = d['newContentHash'];
+  if (typeof oldContentHash !== 'string' || typeof newContentHash !== 'string') return null;
+  return {
+    eventId: row.id,
+    targetId: row.memory_id,
+    target: d['target'] === 'candidate' ? 'candidate' : 'memory',
+    oldContentHash,
+    newContentHash,
+    sequence: row.seq,
+  };
+}
+
+/**
  * Parse a raw SQLite row into a validated AuditEvent domain object.
  * Throws a descriptive error if the row fails validation.
  *
@@ -154,6 +203,8 @@ export class AuditRepository {
   private readonly stmtFindChainTip: Database.Statement;
   private readonly stmtFindChainPosition: Database.Statement;
   private readonly stmtFindAllChronological: Database.Statement;
+  private readonly stmtFindRedactionByOldHash: Database.Statement;
+  private readonly stmtFindRedactionsForTarget: Database.Statement;
   /** Atomic (BEGIN IMMEDIATE) prev-read + INSERT — see the constructor. */
   private readonly appendTxn: Database.Transaction<(p: AppendParams) => void>;
 
@@ -208,6 +259,21 @@ export class AuditRepository {
     // walk (bead yxp).
     this.stmtFindAllChronological = db.prepare(`
       SELECT * FROM audit_events ORDER BY seq ASC
+    `);
+
+    // Governed-redaction lookups (K3). `idx_audit_action` narrows both to the
+    // (few) `redacted` rows before the JSON field is read.
+    this.stmtFindRedactionByOldHash = db.prepare(`
+      SELECT id, memory_id, details_json, seq FROM audit_events
+      WHERE action = 'redacted' AND tenant_id = ?
+        AND json_extract(details_json, '$.oldContentHash') = ?
+      ORDER BY seq ASC
+      LIMIT 1
+    `);
+    this.stmtFindRedactionsForTarget = db.prepare(`
+      SELECT id, memory_id, details_json, seq FROM audit_events
+      WHERE action = 'redacted' AND memory_id = ?
+      ORDER BY seq ASC
     `);
 
     this.stmtFindByMemory = db.prepare(`
@@ -332,6 +398,33 @@ export class AuditRepository {
   findChainPosition(entryHash: string): AuditChainPosition | null {
     const row = this.stmtFindChainPosition.get(entryHash) as AuditChainPositionRow | undefined;
     return row === undefined ? null : rowToChainPosition(row);
+  }
+
+  /**
+   * Find the governed-redaction receipt (K3) whose PRE-redaction content hash is
+   * `contentHash`, within one tenant, or null. This is how dedup keeps blocking
+   * the original text after a redaction changed the stored hash: content whose
+   * hash matches a redacted OLD hash is the removed material coming back.
+   */
+  findRedactionByOldContentHash(contentHash: string, tenantId: string): RedactionReceipt | null {
+    const row = this.stmtFindRedactionByOldHash.get(tenantId, contentHash) as
+      RedactionRow | undefined;
+    return row === undefined ? null : rowToRedactionReceipt(row);
+  }
+
+  /**
+   * Return every governed-redaction receipt (K3) for one row — a memory id or a
+   * candidate id — in chain order. The first receipt's `oldContentHash` is the
+   * hash the row was promoted (or captured) with.
+   */
+  findRedactionsFor(targetId: string): RedactionReceipt[] {
+    const rows = this.stmtFindRedactionsForTarget.all(targetId) as RedactionRow[];
+    const out: RedactionReceipt[] = [];
+    for (const row of rows) {
+      const receipt = rowToRedactionReceipt(row);
+      if (receipt !== null) out.push(receipt);
+    }
+    return out;
   }
 
   /**
