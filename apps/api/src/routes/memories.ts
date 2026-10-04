@@ -5,6 +5,8 @@ import type { MemoryRepository } from '@qmd-team-intent-kb/store';
 import { resolveWikiLinks } from '@qmd-team-intent-kb/curator';
 import { ApiError } from '../errors.js';
 import type { MemoryService } from '../services/memory-service.js';
+import { isAudienceVisibleToRole } from '@qmd-team-intent-kb/common';
+import { readerRoleOf } from '../middleware/api-key-auth.js';
 
 /**
  * Enforce token→tenant binding on a single-record fetch (EPIC 0,
@@ -19,6 +21,17 @@ function assertTenantVisible(request: FastifyRequest, memory: CuratedMemory): vo
   const allowed = request.tenants;
   if (allowed === undefined || allowed.length === 0) return;
   if (!allowed.includes(memory.tenantId)) {
+    throw new ApiError(404, `Memory ${memory.id} not found`);
+  }
+}
+
+/**
+ * Enforce claim-level audience on a single fetched record (K2). A memory whose
+ * audience is narrower than the caller's read standing answers 404 — the same
+ * shape as a missing id, so its existence is not disclosed by enumeration.
+ */
+function assertAudienceVisible(request: FastifyRequest, memory: CuratedMemory): void {
+  if (!isAudienceVisibleToRole(memory.metadata.audience, readerRoleOf(request))) {
     throw new ApiError(404, `Memory ${memory.id} not found`);
   }
 }
@@ -49,7 +62,10 @@ export function registerMemoryRoutes(
     },
     async (request, reply) => {
       const { tenantId } = request.query as { tenantId?: string };
-      const memories = service.list(tenantId);
+      const role = readerRoleOf(request);
+      const memories = service
+        .list(tenantId)
+        .filter((m) => isAudienceVisibleToRole(m.metadata.audience, role));
       return reply.send(memories);
     },
   );
@@ -70,6 +86,9 @@ export function registerMemoryRoutes(
           return reply.status(404).send({ error: `No memory found with hash ${hash}` });
         }
         assertTenantVisible(request, memory);
+        if (!isAudienceVisibleToRole(memory.metadata.audience, readerRoleOf(request))) {
+          return reply.status(404).send({ error: `No memory found with hash ${hash}` });
+        }
         return reply.send(memory);
       } catch (err) {
         if (err instanceof ApiError) {
@@ -94,11 +113,18 @@ export function registerMemoryRoutes(
         const query = request.query as { resolve_links?: string };
         const memory = service.getById(id);
         assertTenantVisible(request, memory);
+        assertAudienceVisible(request, memory);
 
         if (query.resolve_links === 'true' && memoryRepo) {
+          const role = readerRoleOf(request);
           const { resolvedContent } = resolveWikiLinks(memory.content, (slug) => {
             const matches = memoryRepo.searchByText(slug);
-            const match = matches.find((m) => m.title.toLowerCase() === slug.toLowerCase());
+            // A link never resolves to a memory the caller may not read (K2).
+            const match = matches.find(
+              (m) =>
+                m.title.toLowerCase() === slug.toLowerCase() &&
+                isAudienceVisibleToRole(m.metadata.audience, role),
+            );
             return match ? { id: match.id, title: match.title } : null;
           });
           return reply.send({ ...memory, content: resolvedContent });
@@ -137,6 +163,9 @@ export function registerMemoryRoutes(
             .send({ error: `Invalid lifecycle state: ${String(toRaw ?? 'undefined')}` });
         }
 
+        // An admin may not transition (and so read back) an owner-only memory (K2).
+        assertAudienceVisible(request, service.getById(id));
+
         // Forward the rest of the body as the TransitionRequest
         const { to: _to, ...transitionBody } = body;
         const memory = service.transition(id, toParsed.data, transitionBody);
@@ -164,6 +193,8 @@ export function registerMemoryRoutes(
     async (request, reply) => {
       try {
         const { id } = request.params as { id: string };
+        // Same audience gate as transition: the response carries the memory (K2).
+        assertAudienceVisible(request, service.getById(id));
         const memory = service.recategorize(id, request.body);
         return reply.send(memory);
       } catch (err) {

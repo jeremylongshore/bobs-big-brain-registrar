@@ -809,6 +809,50 @@ describe('promote: cross-clone determinism on the supersession path (8da.5)', ()
   });
 });
 
+describe('promote — carries the declared audience (K2)', () => {
+  let memoryRepo: MemoryRepository;
+  let auditRepo: AuditRepository;
+  let db: ReturnType<typeof createTestDatabase>;
+
+  beforeEach(() => {
+    db = createTestDatabase();
+    memoryRepo = new MemoryRepository(db);
+    auditRepo = new AuditRepository(db);
+  });
+  afterEach(() => db.close());
+
+  function promoteWithMetadata(metadata: Record<string, unknown>) {
+    const candidate = makeCandidate({
+      content: `audience carry ${JSON.stringify(metadata)}`,
+      metadata,
+    });
+    return promote(
+      {
+        candidate,
+        contentHash: computeContentHash(candidate.content),
+        pipelineResult: makePipelineResult({ candidateId: candidate.id }),
+      },
+      memoryRepo,
+      auditRepo,
+    );
+  }
+
+  it.each(['tenant', 'admins', 'owner'] as const)(
+    'a candidate declaring %s promotes to a stored memory with the same audience',
+    (audience) => {
+      const memory = promoteWithMetadata({ filePaths: [], tags: [], audience });
+      expect(memory.metadata.audience).toBe(audience);
+      expect(memoryRepo.findById(memory.id)?.metadata.audience).toBe(audience);
+    },
+  );
+
+  it('a candidate declaring no audience promotes to a memory with none (never invented)', () => {
+    const memory = promoteWithMetadata({ filePaths: [], tags: [] });
+    expect(memory.metadata.audience).toBeUndefined();
+    expect(Object.hasOwn(memoryRepo.findById(memory.id)!.metadata, 'audience')).toBe(false);
+  });
+});
+
 describe('promote — persists classified sensitivity (5bm.3)', () => {
   let memoryRepo: MemoryRepository;
   let auditRepo: AuditRepository;

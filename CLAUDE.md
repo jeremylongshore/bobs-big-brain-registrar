@@ -126,6 +126,8 @@ Core types defined as Zod schemas with derived TypeScript types:
 
 Key enums: `MemoryLifecycleState` (active/deprecated/superseded/archived), `Sensitivity` (public/internal/confidential/restricted), `MemoryCategory`, `TrustLevel`, `CandidateStatus`, `SearchScope`
 
+**Claim-level audience** (K2, decision `000-docs/053-AT-DECR`): `ContentMetadata.audience` is an OPTIONAL closed enum (`Audience`: `tenant` | `admins` | `owner`) saying who inside a tenant a claim is for. It extends `tenantId` and `sensitivity`, replaces neither, and lives in the JSON-validated `metadata_json` column (no DB column, no CHECK, no migration). Absent means `tenant`, so pre-K2 rows behave exactly as before. It is declared at capture on the candidate and carried by promotion; no rule infers it and no model writes it. Enforcement is the pure predicates in `packages/common/src/audience.ts` (fail-closed on an unknown audience or role): the API filters search, memory reads and graph reads by the caller's read standing (`member` < `admin` < `owner`; owner = an admin token with `"owner": true` in `tokens.json`, or loopback dev no-auth; the legacy shared key is admin, not owner), and the git-exporter writes ONLY `tenant`-audience memories to the shared export tree. Consequence: `admins`/`owner` memories are not in the qmd index, so they are reachable by id/list and the SQLite search fallback, not by qmd-cited search, until per-audience indexes exist.
+
 **Lifecycle state machine** (`packages/schema/src/lifecycle.ts`):
 
 ```

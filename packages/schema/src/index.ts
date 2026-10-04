@@ -9,6 +9,7 @@ export {
   PolicyRuleAction,
   AuditAction,
   ProposerRole,
+  Audience,
   Confidence,
   Sensitivity,
   AuthorType,

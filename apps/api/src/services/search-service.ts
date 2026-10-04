@@ -4,7 +4,9 @@ import {
   rerankSearchHits,
   rerankCitedHits,
   isSearchVisibleSensitivity,
+  isAudienceVisibleToRole,
 } from '@qmd-team-intent-kb/common';
+import type { ReaderRole } from '@qmd-team-intent-kb/common';
 import { badRequest } from '../errors.js';
 
 /**
@@ -61,16 +63,21 @@ export class SearchService {
    * the fallback (citations resolve to store rows for the metadata).
    * SQLite fallback: title match = 0.9, content-only = 0.6, then exponential
    * time decay + category boost.
+   *
+   * `readerRole` is the caller's read standing for claim-level audience (K2).
+   * Both paths drop a memory whose audience the role is not cleared for. It
+   * defaults to `member`, the least-privileged standing, so a caller that
+   * forgets to pass it can only ever see tenant-wide memories.
    */
-  async search(query: SearchQuery): Promise<SearchResult> {
+  async search(query: SearchQuery, readerRole: ReaderRole = 'member'): Promise<SearchResult> {
     if (query.query.trim().length === 0) {
       throw badRequest('Search query must not be empty');
     }
 
     if (this.qmd !== undefined) {
-      return this.searchViaQmd(query);
+      return this.searchViaQmd(query, readerRole);
     }
-    return this.searchViaSqlite(query);
+    return this.searchViaSqlite(query, readerRole);
   }
 
   /**
@@ -79,7 +86,7 @@ export class SearchService {
    * the top hit so the contract holds while qmd's relevance ordering is
    * preserved.
    */
-  private async searchViaQmd(query: SearchQuery): Promise<SearchResult> {
+  private async searchViaQmd(query: SearchQuery, readerRole: ReaderRole): Promise<SearchResult> {
     const nowIso = new Date().toISOString();
     // Propagate the tenant scope so the cited path is isolated to the same
     // tenant the SQLite fallback filters by — closing the cross-tenant leak on
@@ -126,6 +133,7 @@ export class SearchService {
               category: memory.category,
               updatedAt: memory.updatedAt,
               sensitivity: memory.sensitivity,
+              audience: memory.metadata.audience,
               title: memory.title,
               lifecycle: memory.lifecycle,
             };
@@ -139,7 +147,16 @@ export class SearchService {
     // hits so a sensitive memory is never returned to a search caller — the same
     // levels the exporter skips (5bm.3). The qmd index should already exclude
     // them; this is the defense-in-depth for a pre-skip index or a resolved row.
-    const visible = reranked.filter((hit) => isSearchVisibleSensitivity(hit.sensitivity));
+    //
+    // Read-time audience enforcement (K2): likewise drop a hit whose memory is
+    // for a narrower audience than this caller. The exporter keeps such memories
+    // out of the shared index, so this is the backstop for an index built before
+    // a memory was narrowed.
+    const visible = reranked.filter(
+      (hit) =>
+        isSearchVisibleSensitivity(hit.sensitivity) &&
+        isAudienceVisibleToRole(hit.audience, readerRole),
+    );
 
     const allHits: SearchHit[] = visible.map((hit) => ({
       memoryId: hit.memoryId ?? undefined,
@@ -157,7 +174,7 @@ export class SearchService {
   }
 
   /** SQLite text-match fallback with freshness reranking. */
-  private searchViaSqlite(query: SearchQuery): SearchResult {
+  private searchViaSqlite(query: SearchQuery, readerRole: ReaderRole): SearchResult {
     const allMemories = this.memoryRepo.searchByText(query.query, query.tenantId, query.categories);
     // Read-time sensitivity enforcement (5bm.11): the SQLite path returns rows
     // directly, so drop confidential/restricted here — the leak the audit found.
@@ -176,8 +193,13 @@ export class SearchService {
       if (query.scope === 'bulk') return m.source === 'bulk_import';
       return true;
     };
+    // Read-time audience enforcement (K2): this path reads store rows directly,
+    // so it is the PRIMARY gate here — nothing upstream has filtered by audience.
     const memories = allMemories.filter(
-      (m) => isSearchVisibleSensitivity(m.sensitivity) && bulkVisible(m),
+      (m) =>
+        isSearchVisibleSensitivity(m.sensitivity) &&
+        isAudienceVisibleToRole(m.metadata.audience, readerRole) &&
+        bulkVisible(m),
     );
 
     const nowIso = new Date().toISOString();

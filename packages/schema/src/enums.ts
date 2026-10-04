@@ -148,6 +148,28 @@ export type AuditAction = z.infer<typeof AuditAction>;
 export const ProposerRole = z.enum(['admin', 'member']);
 export type ProposerRole = z.infer<typeof ProposerRole>;
 
+/**
+ * Claim-level audience INSIDE a tenant (Epic K bead K2, decision record
+ * `000-docs/053-AT-DECR`). `tenantId` says which tenant owns a memory and
+ * `sensitivity` is a coarse global gate; `Audience` says who within the tenant
+ * a claim is for. It extends both and replaces neither.
+ *
+ * Ordered widest to narrowest:
+ *   - `tenant` — everyone in the tenant. The DEFAULT: a memory with no audience
+ *                behaves exactly as it did before this field existed.
+ *   - `admins` — admin and owner callers only.
+ *   - `owner`  — the owner only.
+ *
+ * A closed enum, declared by the capturing caller and validated here; no rule
+ * infers it and no model writes it (KR8.1). It rides in `ContentMetadata`, which
+ * is persisted in the JSON-validated `metadata_json` column, so adding it needs
+ * no store migration and no CHECK constraint. Keep the member list in step with
+ * `AUDIENCE_RANK` in `@qmd-team-intent-kb/common` (schema is the base package and
+ * cannot be imported there; a store test asserts the two agree).
+ */
+export const Audience = z.enum(['tenant', 'admins', 'owner']);
+export type Audience = z.infer<typeof Audience>;
+
 export const Confidence = z.enum(['high', 'medium', 'low']);
 export type Confidence = z.infer<typeof Confidence>;
 

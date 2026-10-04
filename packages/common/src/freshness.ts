@@ -1,4 +1,5 @@
 import { computeRerankPolicyFactors } from './rerank-policy.js';
+import { DEFAULT_AUDIENCE } from './audience.js';
 
 /**
  * Compute a freshness multiplier (0.0–1.0) based on memory age.
@@ -87,6 +88,9 @@ export interface CitedHitMetadata {
    * sensitivity-filtered at read time. Optional: a resolver that doesn't supply
    * it (e.g. a rank-only caller) leaves the hit search-visible ('public'). */
   sensitivity?: string;
+  /** Claim-level audience of the resolved memory (K2), so a cited hit can be
+   * audience-filtered at read time. Optional: absent means tenant-wide. */
+  audience?: string;
   /** Memory title; feeds the historical-record demotion. Optional (fail-open). */
   title?: string;
   /** Memory lifecycle state; feeds the lifecycle demotion. Missing = active. */
@@ -131,6 +135,7 @@ export function rerankCitedHits<T extends { file: string; score: number }>(
     category: string;
     updatedAt: string;
     sensitivity: string;
+    audience: string;
     memoryId: string | null;
   }
 > {
@@ -145,6 +150,10 @@ export function rerankCitedHits<T extends { file: string; score: number }>(
       // Unresolvable hit (orphaned citation) is not an identifiable sensitive
       // memory — treat as public/searchable; a resolved hit carries its real level.
       sensitivity: meta?.sensitivity ?? 'public',
+      // Same reasoning for audience (K2): an unresolvable hit names no memory
+      // whose audience could be narrower, and the shared index only ever holds
+      // tenant-wide memories; a resolved hit carries its declared audience.
+      audience: meta?.audience ?? DEFAULT_AUDIENCE,
       // Policy inputs; undefined (unresolved hit / resolver omits) = no demotion.
       // Note: these ride along on the returned hit objects (consumers pick fields).
       title: meta?.title,

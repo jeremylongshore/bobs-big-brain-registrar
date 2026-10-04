@@ -1,6 +1,6 @@
 import type { MemoryRepository, ExportStateRepository } from '@qmd-team-intent-kb/store';
 import type { ExportConfig, ExportResult } from './types.js';
-import { isSensitivityRestricted } from './sensitivity.js';
+import { isExportRestricted } from './sensitivity.js';
 import { detectChanges } from './diff/change-detector.js';
 import { formatMemoryAsMarkdown } from './formatter/markdown-formatter.js';
 import { writeFile, archiveFile, removeFile } from './writer/file-writer.js';
@@ -48,7 +48,7 @@ export function runExport(
   let unchanged = 0;
 
   for (const item of changeset.toWrite) {
-    if (isSensitivityRestricted(item.memory.sensitivity)) {
+    if (isExportRestricted(item.memory)) {
       skipped.push(item.memory.id);
       continue;
     }
@@ -78,7 +78,7 @@ export function runExport(
   }
 
   for (const item of changeset.toArchive) {
-    if (isSensitivityRestricted(item.memory.sensitivity)) {
+    if (isExportRestricted(item.memory)) {
       skipped.push(item.memory.id);
       continue;
     }

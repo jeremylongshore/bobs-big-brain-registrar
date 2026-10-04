@@ -39,6 +39,16 @@ export {
 } from './freshness.js';
 export type { CitedHitMetadata, RerankOptions } from './freshness.js';
 export {
+  DEFAULT_AUDIENCE,
+  AUDIENCE_RANK,
+  READER_ROLE_CLEARANCE,
+  resolveAudience,
+  isAudienceVisibleToRole,
+  isExportableAudience,
+  readerRoleFor,
+} from './audience.js';
+export type { ReaderRole } from './audience.js';
+export {
   LIFECYCLE_DEPRECATED_FACTOR,
   LIFECYCLE_ARCHIVED_FACTOR,
   HISTORICAL_RECORD_FACTOR,
