@@ -149,9 +149,16 @@ replaces the title as well.
 `0` redacted, would redact, or already redacted · `3` refused · `4` redacted and receipted, but the
 physical scrub is incomplete · `2` usage error · `1` I/O failure.
 
-Exit `4` means another process held the store while the scrub ran. The redaction is committed. Stop
-the other process and run the same command again: it reports `unchanged`, writes no new receipt,
-and retries the scrub.
+Exit `4` means another process held the store while the scrub ran. The redaction is committed and
+its receipts are on the chain, so the chain verifies the same on the exit `0` and exit `4` paths;
+only the removal of the old bytes from the files is unfinished. Stop the other process and run the
+same command again: it reports `unchanged`, writes no new receipt, and retries the scrub.
+
+`--skip-scrub` skips the FTS rebuild, the WAL truncate, `VACUUM` and the byte scan. The redaction is
+still committed and receipted and the command exits `0`, but **the old text is still in the database
+files** and nothing has checked otherwise. Use it only to defer the scrub to a quiet window, and
+finish by running the same command again without the flag. A redaction is not done until a run
+reports `Physical scrub: complete`.
 
 ### 4.6 Procedure
 
@@ -235,7 +242,9 @@ Two more limits worth knowing:
   validates it. A legacy memory row that fails domain validation cannot be redacted by this command.
   Candidate copies do not have this limit.
 - **Sensitivity is left as it was.** Redaction does not reclassify the memory, so a memory classified
-  `restricted` because of the secret stays `restricted` and stays out of the export tree.
+  `restricted` because of the secret stays `restricted` and stays out of the export tree. That is
+  the safe direction. There is no governed command to lower a memory's sensitivity today; if the
+  redacted memory should be searchable again, that is a separate decision and a separate change.
 - **No API route for redaction.** The scrub runs `VACUUM`, which is an operator act on a quiet store.
   Narrowing has an API route; redaction is CLI-only.
 - **Scan mode sees secrets only.** It uses the secret patterns, not the PII patterns.

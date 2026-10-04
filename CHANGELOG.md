@@ -49,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   database, `-wal` and `-shm` files for the removed text (exit `4` if that is incomplete). No
   existing audit row is edited, so the chain verifies exactly as before. Runbook, including what
   redaction cannot reach (existing backups, exports, indexes, spool and compile artifacts):
-  `000-docs/054-OD-RNBK`.
+  `000-docs/054-OD-RNBK`. Known gap: `curator-cli merge-govern` has not been taught about redaction
+  receipts, so a clone that contains a redacted memory fails the merge gate's id check.
 - **Claim-level audience field (Epic K bead K2, decision `053-AT-DECR`).** A memory can now say who
   inside its tenant it is for: optional `metadata.audience` of `tenant` (default), `admins` or
   `owner`, on both `MemoryCandidate` and `CuratedMemory`. It is declared at capture and carried by
