@@ -43,6 +43,7 @@ function assertAudienceVisible(request: FastifyRequest, memory: CuratedMemory): 
  * GET  /api/memories/by-hash/:hash        — find by content hash (200 | 404)
  * GET  /api/memories/:id                  — retrieve by UUID (200 | 404)
  * POST /api/memories/:id/transition       — lifecycle transition (200 | 400 | 404)
+ * POST /api/memories/:id/narrow-audience  — governed audience narrowing (200 | 400 | 404)
  *
  * Note: by-hash must be registered before :id so Fastify does not treat
  * "by-hash" as a UUID parameter value.
@@ -173,6 +174,38 @@ export function registerMemoryRoutes(
       } catch (err) {
         if (err instanceof ApiError) {
           return reply.status(err.statusCode).send({ error: err.message });
+        }
+        throw err;
+      }
+    },
+  );
+
+  // POST /api/memories/:id/narrow-audience — governed audience narrowing (K3)
+  app.post(
+    '/api/memories/:id/narrow-audience',
+    {
+      schema: {
+        tags: ['memories'],
+        summary: 'Narrow a memory’s audience with a receipted audit event',
+        description:
+          'Governed narrowing only: tenant → admins → owner. Widening, an equal tier and an unknown tier are refused (400). Writes an `audience_narrowed` audit event with {from, to} in the same transaction as the change; the actor is the authenticated caller. Body: { to, reason }. Admin only.',
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        // A caller may not narrow a memory they cannot read, in another tenant
+        // or above their read standing — both answer 404, like a missing id.
+        const memory = service.getById(id);
+        assertTenantVisible(request, memory);
+        assertAudienceVisible(request, memory);
+        const narrowed = service.narrowAudience(id, request.body, request.actor ?? 'unknown');
+        return reply.send(narrowed);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          return reply
+            .status(err.statusCode)
+            .send({ error: err.message, ...(err.code !== undefined ? { code: err.code } : {}) });
         }
         throw err;
       }

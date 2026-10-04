@@ -88,6 +88,21 @@ export class Curator {
       };
     }
 
+    // Redacted text must not come back (K3). A governed redaction changes the
+    // stored hash, so the exact-hash check above no longer matches the ORIGINAL
+    // content; the redaction receipt still records its hash.
+    const redaction = this.deps.auditRepo.findRedactionByOldContentHash(
+      contentHash,
+      this.config.tenantId,
+    );
+    if (redaction !== null) {
+      return {
+        candidateId: candidate.id,
+        outcome: 'duplicate',
+        reason: `Content was removed by a governed redaction (receipt ${redaction.eventId}) — re-ingest refused`,
+      };
+    }
+
     if (existingHashes?.has(contentHash)) {
       return {
         candidateId: candidate.id,

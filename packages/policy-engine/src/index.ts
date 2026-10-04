@@ -22,6 +22,11 @@ export { evaluateTenantMatch } from './rules/tenant-match-rule.js';
 export { evaluateSensitivityGate } from './rules/sensitivity-gate-rule.js';
 export { evaluateContentSanitization } from './rules/content-sanitization-rule.js';
 export { evaluateContradictionCheck } from './rules/contradiction-check-rule.js';
+export { evaluateAudienceNarrowing, recommendAudience } from './rules/audience-narrowing-rule.js';
+export type {
+  AudienceRecommendation,
+  AudienceRecommendationBasis,
+} from './rules/audience-narrowing-rule.js';
 export { PolicyPipeline } from './pipeline.js';
 export {
   detectSupersession,
@@ -56,3 +61,10 @@ export {
  */
 export { classifyContent } from '@qmd-team-intent-kb/claude-runtime';
 export type { ContentClassification } from '@qmd-team-intent-kb/claude-runtime';
+/**
+ * The deterministic redactor, re-exported for the same layering reason as
+ * {@link classifyContent}: governed redaction (K3) is a write path, so the
+ * curator reaches it through the govern package. Pure sync regex — no model, no
+ * network, no clock. Its counterpart for DETECTION is {@link scanTextForSecrets}.
+ */
+export { redactSecrets } from '@qmd-team-intent-kb/claude-runtime';

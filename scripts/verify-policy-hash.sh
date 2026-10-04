@@ -38,6 +38,7 @@ FILES=(
   "packages/policy-engine/src/rules/sensitivity-gate-rule.ts"
   "packages/policy-engine/src/rules/content-sanitization-rule.ts"
   "packages/policy-engine/src/rules/contradiction-check-rule.ts"
+  "packages/policy-engine/src/rules/audience-narrowing-rule.ts"
   "packages/policy-engine/src/rules/index.ts"
   "packages/policy-engine/src/policy-engine.ts"
   # 5kw.1: the import exclusion gate is a structural deterministic reject

@@ -94,6 +94,7 @@ describe('PolicyRuleType', () => {
     'sensitivity_gate',
     'content_sanitization',
     'contradiction_check',
+    'audience_narrowing',
   ];
   it.each(types)('accepts "%s"', (val) => {
     expect(PolicyRuleType.parse(val)).toBe(val);
@@ -123,6 +124,10 @@ describe('PolicyRuleType', () => {
   it('accepts contradiction_check as PolicyRuleType (E1)', () => {
     expect(PolicyRuleType.parse('contradiction_check')).toBe('contradiction_check');
   });
+
+  it('accepts audience_narrowing as PolicyRuleType (K3)', () => {
+    expect(PolicyRuleType.parse('audience_narrowing')).toBe('audience_narrowing');
+  });
 });
 
 describe('PolicyRuleAction', () => {
@@ -148,9 +153,16 @@ describe('AuditAction', () => {
     'recategorized',
     'governed',
     'policy_upgraded',
+    'audience_narrowed',
+    'redacted',
   ];
   it.each(actions)('accepts "%s"', (val) => {
     expect(AuditAction.parse(val)).toBe(val);
+  });
+  // Membership lock-step: the accept-list above IS the full enum, so a new
+  // receipt action cannot be added without being named here.
+  it('the accept-list covers the entire enum (no untested members)', () => {
+    expect([...actions].sort()).toEqual([...AuditAction.options].sort());
   });
   it('rejects invalid value', () => {
     expect(() => AuditAction.parse('created')).toThrow();

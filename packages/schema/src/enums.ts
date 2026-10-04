@@ -91,6 +91,12 @@ export const PolicyRuleType = z.enum([
   'sensitivity_gate',
   'content_sanitization',
   'contradiction_check',
+  // `audience_narrowing` (Epic K bead K3, decision `000-docs/053-AT-DECR`) flags
+  // a claim whose declared audience is WIDER than its content calls for
+  // (credentials -> `owner`, PII -> `admins`). Flag-only: it recommends a
+  // narrower audience, it never rejects and never writes one. Added the same way
+  // as `contradiction_check` — a Zod member, no store migration.
+  'audience_narrowing',
 ]);
 export type PolicyRuleType = z.infer<typeof PolicyRuleType>;
 
@@ -133,6 +139,16 @@ export const AuditAction = z.enum([
   // rules so the change is reversible from the receipt alone. The audit_events
   // `action` column has no CHECK constraint, so this member needs no migration.
   'policy_upgraded',
+  // Governed audience narrowing of an already-promoted memory (Epic K bead K3).
+  // `details` carries {from, to} audience tiers; narrowing only (tenant ->
+  // admins -> owner). `memoryId` is the narrowed memory.
+  'audience_narrowed',
+  // Governed redaction (K3 expanded scope, bead compile-then-govern-39z.16): the
+  // content of a promoted memory (or of its candidate copy) was REPLACED. The
+  // receipt records that it happened, by whom, why, the OLD and NEW content
+  // hashes and the secret-pattern names — never the removed text. `memoryId` is
+  // the memory's id, or the candidate's id for the candidate-copy receipt.
+  'redacted',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 

@@ -46,8 +46,14 @@ export {
   isAudienceVisibleToRole,
   isExportableAudience,
   readerRoleFor,
+  isAudienceNarrowing,
+  validateAudienceNarrowing,
 } from './audience.js';
-export type { ReaderRole } from './audience.js';
+export type {
+  ReaderRole,
+  AudienceNarrowingRefusal,
+  AudienceNarrowingValidation,
+} from './audience.js';
 export {
   LIFECYCLE_DEPRECATED_FACTOR,
   LIFECYCLE_ARCHIVED_FACTOR,

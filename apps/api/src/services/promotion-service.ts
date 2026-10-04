@@ -185,6 +185,16 @@ export class PromotionService {
       throw unprocessable(`Candidate already promoted — content matches memory ${duplicate.id}`);
     }
 
+    // Redacted text must not come back (K3): a governed redaction changes the
+    // stored hash, so the check above no longer matches the ORIGINAL content.
+    // The redaction receipt still records its hash.
+    if (this.auditRepo.findRedactionByOldContentHash(contentHash, tenantId) !== null) {
+      throw unprocessable(
+        'Candidate content was removed by a governed redaction — it cannot be promoted again.',
+        'redacted_content',
+      );
+    }
+
     // Run the tenant's enabled policy (or auto-approve when none), exactly as the
     // curator batch pipeline does — but with a tenant-scoped existing-hash set.
     const policy = this.policyRepo.findByTenant(tenantId).find((p) => p.enabled);

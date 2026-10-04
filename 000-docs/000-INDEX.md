@@ -128,5 +128,7 @@
 | 050 | AT-RNBK | reranker-service-runbook                              | bbb-reranker service runbook     |
 | 051 | AT-RNBK | embedder-service-and-dense-index-runbook              | bbb-embedder + dense index (B4)  |
 | 052 | AT-DECR | reference-import-flood-2026-08-02                     | Reference-import flood decision  |
+| 053 | AT-DECR | claim-level-audience-governance-k1                    | Audience governance decision     |
+| 054 | OD-RNBK | governed-redaction-and-audience-narrowing             | Redaction + narrowing runbook    |
 
-## Next Available Sequence: 053
+## Next Available Sequence: 055

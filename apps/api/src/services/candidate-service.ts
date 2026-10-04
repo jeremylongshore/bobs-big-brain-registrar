@@ -257,6 +257,15 @@ export class CandidateService {
       return { candidate: existing, intake: 'already_exists' };
     }
 
+    // Redacted text must not come back (K3). The repository insert refuses it
+    // too; checking here turns that into a 422 rather than an unhandled throw.
+    if (this.repo.isRedactedContent(candidate.content, candidate.tenantId)) {
+      throw unprocessable(
+        'Candidate rejected: this exact content was removed by a governed redaction and cannot re-enter the governed brain.',
+        'redacted_content',
+      );
+    }
+
     this.repo.insert(candidate, contentHash);
 
     // R8 intake receipt: every accepted proposal gets a provenance receipt from

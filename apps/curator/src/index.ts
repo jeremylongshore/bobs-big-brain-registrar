@@ -82,3 +82,19 @@ export type {
   ImportDependencies,
   RollbackResult,
 } from './import/index.js';
+export { narrowAudience } from './audience/narrow-audience.js';
+export type {
+  NarrowAudienceInput,
+  NarrowAudienceResult,
+  NarrowAudienceRefusalCode,
+} from './audience/narrow-audience.js';
+export { redactMemory, REDACTION_MARKER } from './redaction/redact-memory.js';
+export type {
+  RedactMemoryInput,
+  RedactMemoryResult,
+  RedactMemoryOutcome,
+  RedactionMode,
+  RedactionSpan,
+  RedactionRefusalCode,
+  RedactionDependencies,
+} from './redaction/redact-memory.js';

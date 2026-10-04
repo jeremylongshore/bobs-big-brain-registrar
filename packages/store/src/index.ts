@@ -1,7 +1,10 @@
 export { createDatabase, createTestDatabase } from './database.js';
 export type { DatabaseOptions } from './database.js';
 export { TABLE_DDL } from './schema.js';
-export { CandidateRepository } from './repositories/candidate-repository.js';
+export {
+  CandidateRepository,
+  RedactedContentReingestError,
+} from './repositories/candidate-repository.js';
 export {
   assertEnumMembership,
   EnumConstraintViolationError,
@@ -16,7 +19,19 @@ export type {
 } from './repositories/memory-repository.js';
 export { PolicyRepository } from './repositories/policy-repository.js';
 export { AuditRepository } from './repositories/audit-repository.js';
-export type { AuditChainPosition, AuditChainRow } from './repositories/audit-repository.js';
+export type {
+  AuditChainPosition,
+  AuditChainRow,
+  RedactionReceipt,
+} from './repositories/audit-repository.js';
+export {
+  enableSecureDelete,
+  scrubFreedPages,
+  storeFilesOf,
+  scanStoreFilesForFragments,
+  findRowsContaining,
+} from './redaction-scrub.js';
+export type { PhysicalScrubReport, FragmentScanReport, FragmentRowHit } from './redaction-scrub.js';
 export { verifyAuditChain, type AuditVerifyResult, type AuditChainBreak } from './audit-verify.js';
 export { computeEntryHash, canonicalRowJson, CURRENT_AUDIT_HASH_VERSION } from './audit-chain.js';
 export type { CanonicalAuditRow, AuditHashVersion } from './audit-chain.js';

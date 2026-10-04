@@ -7,7 +7,16 @@ import {
   validateTransition,
 } from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
-import { badRequest, notFound } from '../errors.js';
+import { narrowAudience } from '@qmd-team-intent-kb/curator';
+import { ApiError, badRequest, notFound } from '../errors.js';
+
+/** What a successful audience narrowing reports — ids and tiers, never content. */
+export interface AudienceNarrowed {
+  memoryId: string;
+  from: string;
+  to: string;
+  auditEventId: string;
+}
 
 /** Map a target lifecycle state to an audit action verb. */
 function lifecycleToAction(to: MemoryLifecycleState): AuditEvent['action'] {
@@ -96,6 +105,43 @@ export class MemoryService {
 
     // Return the updated memory without a second DB fetch
     return { ...memory, lifecycle: to, updatedAt: now };
+  }
+
+  /**
+   * Governed audience narrowing (Epic K bead K3): move a promoted memory to a
+   * NARROWER audience tier (`tenant` -> `admins` -> `owner`). The audience write
+   * and its `audience_narrowed` receipt (actor, time, from, to, reason) commit in
+   * one transaction. Widening is refused — that is a separate governed path (K4).
+   *
+   * `actor` is the authenticated caller, not a body field, so the receipt names
+   * who actually made the call.
+   *
+   * Throws 400 on a bad body, a widening, an equal tier or an unknown tier; 404
+   * when the memory does not exist.
+   */
+  narrowAudience(id: string, requestBody: unknown, actor: string): AudienceNarrowed {
+    const body = (requestBody ?? {}) as Record<string, unknown>;
+    const to = body['to'];
+    const reason = body['reason'];
+    if (typeof to !== 'string' || typeof reason !== 'string') {
+      throw badRequest('Invalid narrow-audience request: "to" and "reason" must be strings');
+    }
+    const memory = this.getById(id); // throws 404 if missing
+    const result = narrowAudience(
+      { memoryId: id, tenantId: memory.tenantId, to, actor, reason },
+      this.memoryRepo,
+      this.auditRepo,
+    );
+    if (!result.ok) {
+      throw new ApiError(result.code === 'not_found' ? 404 : 400, result.error, result.code);
+    }
+    return {
+      memoryId: result.memoryId,
+      from: result.from,
+      to: result.to,
+      // Non-null outside dry-run, which this path never requests.
+      auditEventId: result.auditEventId ?? '',
+    };
   }
 
   /**
