@@ -9,6 +9,7 @@ import { evaluateTenantMatch } from './tenant-match-rule.js';
 import { evaluateSensitivityGate } from './sensitivity-gate-rule.js';
 import { evaluateContentSanitization } from './content-sanitization-rule.js';
 import { evaluateContradictionCheck } from './contradiction-check-rule.js';
+import { evaluateAudienceNarrowing } from './audience-narrowing-rule.js';
 
 /** Registry mapping PolicyRuleType values to their evaluator functions */
 export const RULE_REGISTRY: Record<PolicyRuleType, RuleEvaluator> = {
@@ -21,6 +22,7 @@ export const RULE_REGISTRY: Record<PolicyRuleType, RuleEvaluator> = {
   sensitivity_gate: evaluateSensitivityGate,
   content_sanitization: evaluateContentSanitization,
   contradiction_check: evaluateContradictionCheck,
+  audience_narrowing: evaluateAudienceNarrowing,
 };
 
 /**

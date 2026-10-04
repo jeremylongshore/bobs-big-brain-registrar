@@ -51,6 +51,7 @@ describe('RECOMMENDED_POLICY_RULES', () => {
       'dedup_check',
       'content_sanitization',
       'contradiction_check',
+      'audience_narrowing',
     ] as const) {
       expect(byType.get(t)).toBe('flag');
     }
@@ -103,6 +104,7 @@ describe('findUncoveredRuleTypes + assertPolicyCompleteness', () => {
     });
     expect(findUncoveredRuleTypes(twoRule)).toEqual(
       [
+        'audience_narrowing',
         'content_sanitization',
         'contradiction_check',
         'dedup_check',
@@ -139,6 +141,7 @@ describe('findUncoveredRuleTypes + assertPolicyCompleteness', () => {
         'tenant_match',
         'content_sanitization',
         'contradiction_check',
+        'audience_narrowing',
       ]),
     ).not.toThrow();
   });
@@ -151,7 +154,7 @@ describe('PolicyPipeline.dormantRuleTypes (runtime completeness gate, 5bm.2)', (
     expect(new PolicyPipeline(policy).dormantRuleTypes).toEqual([]);
   });
 
-  it('lists the 7 dormant rules of the audited 2-rule live shape', async () => {
+  it('lists the 8 dormant rules of the audited 2-rule live shape', async () => {
     const { PolicyPipeline } = await import('../pipeline.js');
     const twoRule = GovernancePolicy.parse({
       id: '22222222-2222-4222-8222-222222222222',
@@ -182,6 +185,7 @@ describe('PolicyPipeline.dormantRuleTypes (runtime completeness gate, 5bm.2)', (
     });
     expect(new PolicyPipeline(twoRule).dormantRuleTypes).toEqual(
       [
+        'audience_narrowing',
         'content_sanitization',
         'contradiction_check',
         'dedup_check',

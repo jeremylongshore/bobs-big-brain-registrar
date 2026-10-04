@@ -138,6 +138,19 @@ export const RECOMMENDED_POLICY_RULES: readonly PolicyRule[] = [
     description:
       'Flag candidates that heavily overlap an existing active same-category memory (potential contradiction, v1 token-overlap heuristic).',
   },
+  {
+    // K3: flag-only by construction (the evaluator never returns 'fail'). It
+    // recommends a narrower audience and writes nothing; narrowing itself is the
+    // curator's receipted `narrow-audience` act.
+    id: 'rec-audience-narrowing',
+    type: 'audience_narrowing',
+    action: 'flag',
+    enabled: true,
+    priority: 9,
+    parameters: {},
+    description:
+      'Flag candidates whose declared audience is wider than their content calls for (credentials -> owner, PII -> admins). Recommendation only.',
+  },
 ];
 
 /**

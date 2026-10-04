@@ -89,3 +89,71 @@ export function readerRoleFor(role: string | null | undefined, owner: boolean): 
   if (role !== 'admin') return 'member';
   return owner ? 'owner' : 'admin';
 }
+
+/** Why a requested audience change is not a legal narrowing. */
+export type AudienceNarrowingRefusal = 'widening' | 'same' | 'unknown_from' | 'unknown_to';
+
+/** Result of {@link validateAudienceNarrowing}. */
+export type AudienceNarrowingValidation =
+  | { valid: true; from: string; to: string }
+  | { valid: false; code: AudienceNarrowingRefusal; error: string };
+
+/**
+ * True when `to` is STRICTLY narrower than `from` (K3). An absent `from` is the
+ * default (`tenant`). Fail-closed: an unrecognized value on either side is never
+ * a narrowing.
+ */
+export function isAudienceNarrowing(from: string | null | undefined, to: string): boolean {
+  return validateAudienceNarrowing(from, to).valid;
+}
+
+/**
+ * Validate a governed audience change (Epic K bead K3). The only legal move is
+ * toward a STRICTLY narrower tier: `tenant` -> `admins` -> `owner` (skipping a
+ * tier is allowed). Everything else is refused with a reason:
+ *
+ *   - `widening`     — `to` is wider than `from`. Widening is bead K4
+ *                      (widening-with-redaction) and is not available here.
+ *   - `same`         — `to` equals the current audience (nothing to do).
+ *   - `unknown_from` — the stored audience is not a known tier: a data fault to
+ *                      fix at source, never something to narrow "from".
+ *   - `unknown_to`   — the requested tier is not a known audience.
+ *
+ * Pure, takes plain strings, and is the single decision used by the curator CLI
+ * and the API route.
+ */
+export function validateAudienceNarrowing(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): AudienceNarrowingValidation {
+  const current = resolveAudience(from);
+  if (!Object.hasOwn(AUDIENCE_RANK, current)) {
+    return {
+      valid: false,
+      code: 'unknown_from',
+      error: `Current audience "${current}" is not a known tier; fix the record before narrowing it`,
+    };
+  }
+  if (to === undefined || to === null || !Object.hasOwn(AUDIENCE_RANK, to)) {
+    return {
+      valid: false,
+      code: 'unknown_to',
+      error: `Unknown audience "${String(to)}" (expected one of: ${Object.keys(AUDIENCE_RANK).join(', ')})`,
+    };
+  }
+  const fromRank = AUDIENCE_RANK[current]!;
+  const toRank = AUDIENCE_RANK[to]!;
+  if (toRank === fromRank) {
+    return { valid: false, code: 'same', error: `Audience is already "${current}"` };
+  }
+  if (toRank < fromRank) {
+    return {
+      valid: false,
+      code: 'widening',
+      error:
+        `Refusing to widen audience "${current}" -> "${to}": this operation only narrows ` +
+        `(tenant -> admins -> owner). Widening is a separate governed path (K4) and is not available.`,
+    };
+  }
+  return { valid: true, from: current, to };
+}

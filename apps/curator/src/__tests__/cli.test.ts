@@ -620,8 +620,9 @@ describe('dispatch upgrade-policy', () => {
     expect(parsed['ok']).toBe(true);
     expect(parsed['outcome']).toBe('upgraded');
     expect(parsed['written']).toBe(true);
-    // The 7 previously-dormant registered rules are named.
+    // The 8 previously-dormant registered rules are named.
     expect(parsed['dormantRules']).toEqual([
+      'audience_narrowing',
       'content_sanitization',
       'contradiction_check',
       'dedup_check',
@@ -656,7 +657,7 @@ describe('dispatch upgrade-policy', () => {
         'content_length',
         'secret_detection',
       ]);
-      expect(details.previouslyDormant).toHaveLength(7);
+      expect(details.previouslyDormant).toHaveLength(8);
       expect(details.fromVersion).toBe(1);
       expect(details.toVersion).toBe(2);
     } finally {
@@ -734,7 +735,7 @@ describe('dispatch upgrade-policy', () => {
     expect(parsed['dry_run']).toBe(true);
     expect(parsed['outcome']).toBe('upgraded');
     expect(parsed['written']).toBe(false);
-    expect((parsed['dormantRules'] as string[]).length).toBe(7);
+    expect((parsed['dormantRules'] as string[]).length).toBe(8);
 
     const verifyDb = createDatabase({ path: dbPath });
     try {
