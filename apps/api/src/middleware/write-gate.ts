@@ -13,7 +13,15 @@ import type { FastifyInstance } from 'fastify';
  * `request.role`. Client-side tool gating (the MCP server hiding write tools
  * from members) is a UX nicety; this is the real boundary.
  */
-const ADMIN_WRITE_PREFIXES = ['/api/memories', '/api/policies', '/api/import', '/api/auth'];
+const ADMIN_WRITE_PREFIXES = [
+  '/api/memories',
+  '/api/policies',
+  '/api/import',
+  '/api/auth',
+  // Human-escalation holds (K6): recommending on or resolving a hold is an
+  // admin act. The GET listing is locked to admin in the route itself.
+  '/api/holds',
+];
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**

@@ -22,6 +22,8 @@ function makeBatchResult(overrides?: Partial<CurationBatchResult>): CurationBatc
     rejected: 0,
     flagged: 0,
     duplicates: 0,
+    held: 0,
+    holdCapBlocked: 0,
     results: [],
     ...overrides,
   };

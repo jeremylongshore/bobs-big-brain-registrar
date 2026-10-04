@@ -9,9 +9,11 @@ import {
   ImportBatchRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
-import type { BrainignoreRuleset } from '@qmd-team-intent-kb/curator';
+import { holdLimitsFromEnv } from '@qmd-team-intent-kb/curator';
+import type { BrainignoreRuleset, HoldLimits } from '@qmd-team-intent-kb/curator';
 import { CandidateService } from './services/candidate-service.js';
 import { PromotionService } from './services/promotion-service.js';
+import { HoldService } from './services/hold-service.js';
 import { MemoryService } from './services/memory-service.js';
 import { PolicyService } from './services/policy-service.js';
 import { HealthService } from './services/health-service.js';
@@ -19,6 +21,7 @@ import { SearchService } from './services/search-service.js';
 import type { QmdQueryPort } from './services/search-service.js';
 import type { IndexRefresher } from './services/index-refresher.js';
 import { registerCandidateRoutes } from './routes/candidates.js';
+import { registerHoldRoutes } from './routes/holds.js';
 import { registerMemoryRoutes } from './routes/memories.js';
 import { registerPolicyRoutes } from './routes/policies.js';
 import { registerHealthRoutes } from './routes/health.js';
@@ -121,6 +124,12 @@ export interface AppDependencies {
    * the operator override.
    */
   importExclusions?: BrainignoreRuleset;
+  /**
+   * Bounds on the human-escalation hold queue (K6): days a hold stays open and
+   * open holds allowed per tenant. Left unset → read from `TEAMKB_HOLD_TTL_DAYS`
+   * / `TEAMKB_HOLD_MAX_ACTIVE`, else the defaults (14 days, 100 holds).
+   */
+  holdLimits?: HoldLimits;
 }
 
 /**
@@ -179,6 +188,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const healthService = new HealthService(deps.db);
   const searchService = new SearchService(memoryRepo, deps.qmdAdapter);
   const importService = new ImportService(candidateRepo, memoryRepo, batchRepo, linksRepo);
+  const holdLimits = deps.holdLimits ?? holdLimitsFromEnv();
   const promotionService = new PromotionService(
     candidateRepo,
     memoryRepo,
@@ -187,6 +197,17 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     linksRepo,
     deps.originSecret,
     deps.importExclusions,
+    holdLimits,
+  );
+  const holdService = new HoldService(
+    candidateRepo,
+    memoryRepo,
+    policyRepo,
+    auditRepo,
+    linksRepo,
+    deps.originSecret,
+    deps.importExclusions,
+    holdLimits,
   );
 
   // Routes are wrapped in an inner register() so they load AFTER the
@@ -196,6 +217,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   void app.register(async (scope) => {
     registerHealthRoutes(scope, healthService);
     registerCandidateRoutes(scope, candidateService, promotionService, deps.indexRefresher);
+    registerHoldRoutes(scope, holdService, deps.indexRefresher);
     registerMemoryRoutes(scope, memoryService, memoryRepo);
     registerPolicyRoutes(scope, policyService);
     registerAuditRoutes(scope, auditRepo);

@@ -155,6 +155,9 @@ describe('AuditAction', () => {
     'policy_upgraded',
     'audience_narrowed',
     'redacted',
+    'held',
+    'hold_recommended',
+    'hold_resolved',
   ];
   it.each(actions)('accepts "%s"', (val) => {
     expect(AuditAction.parse(val)).toBe(val);

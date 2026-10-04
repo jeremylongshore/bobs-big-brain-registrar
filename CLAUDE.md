@@ -130,6 +130,8 @@ Key enums: `MemoryLifecycleState` (active/deprecated/superseded/archived), `Sens
 
 **Governed narrowing and redaction** (K3, runbook `000-docs/054-OD-RNBK`): two post-promotion writes, each with a hash-chained receipt in the same transaction as the change. `narrowAudience` (`apps/curator/src/audience/`, `curator-cli narrow-audience`, `POST /api/memories/:id/narrow-audience`) moves a memory to a STRICTLY narrower tier and refuses widening (that is K4); the order is `validateAudienceNarrowing` in `packages/common/src/audience.ts`. `redactMemory` (`apps/curator/src/redaction/`, `curator-cli redact`) REPLACES the content of a memory that holds a secret, in `curated_memories` and every `candidates` copy, and writes `redacted` receipts with the old and new content hashes and pattern names, never the removed text. A redaction never edits an audit row, so the chain verifies as before. The CLI then runs the physical scrub (`packages/store/src/redaction-scrub.ts`: FTS rebuild, WAL truncate, `VACUUM`) and byte-scans the store files. Consequences to keep in mind: a redacted memory's id derives from its PRE-redaction hash (`provenance-walk` checks the receipts), and every dedup site must also refuse a redacted old hash (`AuditRepository.findRedactionByOldContentHash`, `CandidateRepository.isRedactedContent`). Redaction does not reach existing backups, the export tree, the indexes or spool/compile artifacts. The `audience_narrowing` policy rule only recommends a tier; it is flag-only and writes nothing.
 
+**Human-escalation hold** (K6, runbook `000-docs/055-OD-RNBK`): an audience or secret question the rules can detect but not decide puts a candidate on a BOUNDED hold in place of promoting or dropping it. It reuses the 014-AT-DECR recommend / pipeline-owns split and the existing `quarantined` status: a hold is `quarantined` plus a `held` audit receipt carrying the triggers and `expiresAt` (no new status, no migration). Entry is a deterministic rule outcome only (`evaluateHoldTriggers` in `packages/policy-engine/src/hold/`: an `audience_narrowing`, `sensitivity_gate` or flag-action `secret_detection` flag, or a `member` proposal declaring `admins`/`owner`), applied by `Curator.processSingle` (outcome `held`) and by `POST /api/candidates/:id/promote` (422 `held_for_review`). A model may attach a recommendation (`recommendOnHold`, `POST /api/holds/:id/recommend`), which writes one receipt and changes nothing. A PERSON with admin or owner standing resolves (`resolveHold` in `apps/curator/src/hold/`, `curator-cli holds resolve`, `POST /api/holds/:id/resolve`; agent tokens are refused): release re-runs the whole gate and promotes with the audience the person chose, reject retires the candidate. Bounds: 14 days then the hold closes UNPROMOTED (`TEAMKB_HOLD_TTL_DAYS`), 100 open holds per tenant then the gate fails closed (`TEAMKB_HOLD_MAX_ACTIVE`). Every change commits with its hash-chained receipt in one transaction. A release resolves only the flags a hold covers; any other flag still refuses it.
+
 **Lifecycle state machine** (`packages/schema/src/lifecycle.ts`):
 
 ```
@@ -151,7 +153,7 @@ SQLite via better-sqlite3 with 5 tables: `candidates`, `curated_memories`, `gove
 
 ### API (apps/api)
 
-Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware stack: rate-limiter → api-key-auth → input-sanitizer. Routes: `/api/candidates`, `/api/memories`, `/api/policies`, `/api/audit`, `/api/search`, `/health`.
+Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware stack: rate-limiter → api-key-auth → input-sanitizer. Routes: `/api/candidates`, `/api/holds`, `/api/memories`, `/api/policies`, `/api/audit`, `/api/search`, `/health`.
 
 #### Cited-query report (brain adoption KPI)
 
@@ -167,7 +169,7 @@ The aggregator (`cited-queries.ts`) is pure and source-agnostic; the CLI (`weekl
 
 ### Curator (apps/curator)
 
-Orchestrates the full promotion pipeline: spool intake → policy evaluation → dedup check (content hash) → supersession detection (Jaccard title similarity) → promote or reject. Supports dry-run mode.
+Orchestrates the full promotion pipeline: spool intake → policy evaluation → dedup check (content hash) → human-escalation hold (K6) → supersession detection (Jaccard title similarity) → promote or reject. Supports dry-run mode.
 
 **Secret sweep** (`curator-cli secret-sweep --db <path> --tenant <id> [--pattern <id>]... [--json]`, `apps/curator/src/secret-sweep/`): read-only whole-brain re-run of `scanTextForSecrets` (policy-engine — the same function the `secret_detection` rule calls) over every curated memory in every lifecycle state. Output is id, title, lifecycle, category and pattern names only — never matched text. Exit 0 clean · 3 findings · 2 usage · 1 I/O. Secret patterns live in `packages/claude-runtime/src/secrets/patterns.ts`; a pattern may carry an `accept` value predicate (placeholder exclusion) that the scanner and the redactor both honour.
 

@@ -130,5 +130,6 @@
 | 052 | AT-DECR | reference-import-flood-2026-08-02                     | Reference-import flood decision  |
 | 053 | AT-DECR | claim-level-audience-governance-k1                    | Audience governance decision     |
 | 054 | OD-RNBK | governed-redaction-and-audience-narrowing             | Redaction + narrowing runbook    |
+| 055 | OD-RNBK | human-escalation-hold                                 | Human-escalation hold runbook    |
 
-## Next Available Sequence: 055
+## Next Available Sequence: 056

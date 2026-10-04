@@ -42,6 +42,10 @@ export type MemoryLifecycleState = z.infer<typeof MemoryLifecycleState>;
  *   - `quarantined` — a MEMBER-authored proposal held back from auto-promotion for
  *                     admin digest-approval (the B1 member-quarantine gate); retired
  *                     from the sweep but never silently promoted.
+ *                     Also the status of a candidate on a K6 human-escalation
+ *                     HOLD: the same "awaiting a human" state, made bounded by
+ *                     a `held` audit receipt that carries the expiry (see
+ *                     `apps/curator/src/hold/`). No new status and no migration.
  *   - `flagged` / `rejected` — reserved terminal markers for an ADMIN disposing of a
  *                     candidate the sweep left in the inbox for review. The SWEEP
  *                     itself never sets these (it leaves policy-flagged/rejected
@@ -149,6 +153,23 @@ export const AuditAction = z.enum([
   // hashes and the secret-pattern names — never the removed text. `memoryId` is
   // the memory's id, or the candidate's id for the candidate-copy receipt.
   'redacted',
+  // Human-escalation HOLD (Epic K bead K6, decision `000-docs/053-AT-DECR`,
+  // reusing the 014-AT-DECR recommend / pipeline-owns split). Three receipts,
+  // all with `memoryId` = the CANDIDATE's id:
+  //   - `held`             — a deterministic rule outcome put the candidate on
+  //                          hold. `details` carries the triggers, the declared
+  //                          and recommended audience, pattern ids (never
+  //                          matched text) and `expiresAt`.
+  //   - `hold_recommended` — a reviewer (a model or a person) attached a
+  //                          recommendation. It records advice; it changes no
+  //                          state.
+  //   - `hold_resolved`    — the hold ended: `released` (promoted with a
+  //                          human-chosen audience), `rejected` (by a human) or
+  //                          `expired` (the bound elapsed; not promoted).
+  // The `action` column has no CHECK constraint, so these need no migration.
+  'held',
+  'hold_recommended',
+  'hold_resolved',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 

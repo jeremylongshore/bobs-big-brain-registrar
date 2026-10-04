@@ -4,9 +4,16 @@ import {
   assertDisclosureClean,
   DisclosureRejectedError,
 } from '@qmd-team-intent-kb/common';
-import { PolicyPipeline, type PipelineResult } from '@qmd-team-intent-kb/policy-engine';
+import {
+  PolicyPipeline,
+  evaluateHoldTriggers,
+  type PipelineResult,
+} from '@qmd-team-intent-kb/policy-engine';
 import {
   promote,
+  placeHold,
+  findActiveHold,
+  type HoldLimits,
   planSupersession,
   DEFAULT_SUPERSESSION_THRESHOLD,
   checkOriginAttestation,
@@ -67,6 +74,8 @@ export class PromotionService {
      * per-brain override file. Only import-source candidates are checked.
      */
     private readonly importExclusions?: BrainignoreRuleset,
+    /** Bounds on the human-escalation hold queue (K6). Omitted → the defaults. */
+    private readonly holdLimits?: HoldLimits,
   ) {}
 
   /**
@@ -81,7 +90,9 @@ export class PromotionService {
    * @throws 404 if the candidate does not exist.
    * @throws 400 if the candidate belongs to a different tenant than requested.
    * @throws 422 if the content carries a secret/PII (disclosure hard floor), is
-   *   already promoted, or policy rejects/flags it.
+   *   already promoted, or policy rejects/flags it. Code `held_for_review` when a
+   *   hold trigger fired (K6): the candidate is put on a bounded human-escalation
+   *   hold, which an approval cannot release.
    */
   promoteCandidate(
     candidateId: string,
@@ -221,6 +232,46 @@ export class PromotionService {
         `Candidate rejected by policy${rule ? ` rule '${rule}'` : ''} — left in the inbox for review.`,
       );
     }
+
+    // Human-escalation hold (K6): an audience or secret question the rules can
+    // detect but not decide. The same deterministic decision the batch curator
+    // makes — so an approval (a person's or the review agent's) can never
+    // promote such a candidate; it goes on a bounded hold that only a human
+    // with standing resolves, through `resolveHold`.
+    const holdDecision = evaluateHoldTriggers(candidate, pipelineResult, policy);
+    if (holdDecision !== null) {
+      const triggers = holdDecision.triggers.join(', ');
+      const placed = placeHold(
+        candidate,
+        holdDecision,
+        {
+          candidateRepo: this.candidateRepo,
+          memoryRepo: this.memoryRepo,
+          auditRepo: this.auditRepo,
+        },
+        { limits: this.holdLimits },
+      );
+      if (placed.status === 'held' || placed.status === 'already_held') {
+        throw unprocessable(
+          `Candidate is on hold for human review until ${placed.hold.expiresAt} (${triggers}). ` +
+            'A person with admin or owner standing resolves it; an approval cannot release it. Nothing was promoted.',
+          'held_for_review',
+        );
+      }
+      if (placed.status === 'cap_reached') {
+        throw unprocessable(
+          `Candidate needs human review (${triggers}) but the hold queue is full ` +
+            `(${placed.active}/${placed.max}). Resolve open holds first. Nothing was promoted.`,
+          'hold_cap_reached',
+        );
+      }
+      throw unprocessable(
+        `Candidate needs human review (${triggers}) and cannot be held: ` +
+          `${placed.status === 'not_holdable' ? placed.reason : 'no hold was placed'}. Nothing was promoted.`,
+        'needs_human_review',
+      );
+    }
+
     if (pipelineResult.outcome === 'flagged') {
       const flags = pipelineResult.flaggedBy ?? [];
       throw unprocessable(
@@ -280,6 +331,21 @@ export class PromotionService {
     }
     if (candidate.tenantId !== tenantId) {
       throw badRequest('Candidate does not belong to the requested tenant scope');
+    }
+
+    // A candidate on a human-escalation hold (K6) is resolved by a person
+    // through `resolveHold`, never by this reviewer path (which an agent uses).
+    const hold = findActiveHold(candidateId, tenantId, {
+      candidateRepo: this.candidateRepo,
+      memoryRepo: this.memoryRepo,
+      auditRepo: this.auditRepo,
+    });
+    if (hold !== null) {
+      throw unprocessable(
+        'Candidate is on hold for human review. A person with admin or owner standing resolves it; ' +
+          'a reviewer may attach a recommendation. Nothing was changed.',
+        'on_hold',
+      );
     }
 
     this.candidateRepo.updateStatus(candidateId, 'rejected', tenantId);

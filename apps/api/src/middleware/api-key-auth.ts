@@ -16,6 +16,11 @@ declare module 'fastify' {
      */
     owner?: boolean;
     /**
+     * True when the token belongs to an automated agent (K6): it may recommend
+     * on a human-escalation hold but never resolve one. Use {@link isAgentRequest}.
+     */
+    agent?: boolean;
+    /**
      * Tenant allowlist bound to the bearer token (undefined when the token is
      * unscoped / dev no-auth). The tenancy guard enforces that any
      * request-supplied tenantId is a member of this list — server-side, so a
@@ -32,6 +37,20 @@ declare module 'fastify' {
  */
 export function readerRoleOf(request: Pick<FastifyRequest, 'role' | 'owner'>): ReaderRole {
   return readerRoleFor(request.role, request.owner === true);
+}
+
+/**
+ * The 014-AT-DECR review agent's audit actor. A token with this actor is an
+ * agent even when its record carries no `agent` flag.
+ */
+export const REVIEW_AGENT_ACTOR = 'teamkb-review-agent';
+
+/**
+ * True when the request runs under an agent's token (K6). Such a caller may
+ * attach a recommendation to a hold; resolving one takes a person.
+ */
+export function isAgentRequest(request: Pick<FastifyRequest, 'agent' | 'actor'>): boolean {
+  return request.agent === true || request.actor === REVIEW_AGENT_ACTOR;
 }
 
 /** Options that shape the auth/no-auth decision at boot. */
@@ -101,6 +120,7 @@ export function registerApiKeyAuth(
   app.decorateRequest('actor', undefined);
   app.decorateRequest('role', undefined);
   app.decorateRequest('owner', undefined);
+  app.decorateRequest('agent', undefined);
   app.decorateRequest('tenants', undefined);
 
   if (registry.isEmpty()) {
@@ -178,6 +198,7 @@ export function registerApiKeyAuth(
     request.actor = identity.actor;
     request.role = identity.role;
     request.owner = identity.owner === true;
+    request.agent = identity.agent === true;
     request.tenants = identity.tenants;
   });
 }
