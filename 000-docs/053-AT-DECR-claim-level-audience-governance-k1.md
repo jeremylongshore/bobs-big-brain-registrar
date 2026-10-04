@@ -2,9 +2,9 @@
 
 **Date:** 2026-10-04
 
-**Status:** PROPOSED — awaiting owner sign-off. Nothing in K2 through K6 starts until the owner
-changes this status to ACCEPTED (or tells the CTO session to). Drafted by the CTO session on the owner's
-"do everything still open" delegation; a build-gating architecture decision stays the owner's to ratify.
+**Status:** ACCEPTED 2026-10-04 — the owner approved it by instruction to the CTO session ("merge #358 and
+finish everything"). Drafted by the CTO session on the owner's "do everything still open" delegation; K2, K3 and K6
+may start, in that order. To change any call, edit the table row and re-record the decision.
 
 **Primary bead:** `compile-then-govern-dgr` (K1) · parent epic `compile-then-govern-ca6`
 
@@ -61,7 +61,7 @@ plainly in its acceptance notes.
 - **Rollback:** every K bead ships behind its own PR and is reverted independently; K2's default keeps
   behavior unchanged for all existing rows.
 
-## To accept
+## Acceptance record
 
-Owner changes **Status** to `ACCEPTED` (with date) and closes bead `compile-then-govern-dgr`. K2, K3, K6 then
-unblock in that order; K8 can be written immediately. To change a call, edit the table row and re-sign.
+Accepted 2026-10-04 by the owner's instruction in the CTO session. Bead `compile-then-govern-dgr` closes with this
+merge. K2, K3, K6 unblock in that order; K8 is written as a doc note; K4/K5 stay deferred on demand; K7 stays deferred R&D.
