@@ -37,7 +37,19 @@ export {
   isSearchVisibleSensitivity,
   SEARCH_HIDDEN_SENSITIVITY,
 } from './freshness.js';
-export type { CitedHitMetadata } from './freshness.js';
+export type { CitedHitMetadata, RerankOptions } from './freshness.js';
+export {
+  LIFECYCLE_DEPRECATED_FACTOR,
+  LIFECYCLE_ARCHIVED_FACTOR,
+  HISTORICAL_RECORD_FACTOR,
+  HISTORICAL_TITLE_PATTERN,
+  HISTORY_INTENT_PATTERN,
+  hasHistoryIntent,
+  isHistoricalRecordTitle,
+  lifecycleFactor,
+  computeRerankPolicyFactors,
+} from './rerank-policy.js';
+export type { RerankPolicyInput, RerankPolicyFactors } from './rerank-policy.js';
 export {
   scanForDisclosure,
   scanDisclosureFields,
