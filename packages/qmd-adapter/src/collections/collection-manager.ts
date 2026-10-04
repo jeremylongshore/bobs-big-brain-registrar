@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Result } from '@qmd-team-intent-kb/common';
 import type { QmdError } from '../types.js';
 import type { QmdExecutor } from '../executor/executor.js';
+import { QMD_NOT_FOUND_EXIT_CODE } from '../executor/resolve-binary.js';
 import { getExportableCollections } from './collection-registry.js';
 
 /** Manage qmd collections (add, remove, list) */
@@ -46,6 +47,16 @@ export class CollectionManager {
   /** List existing collections */
   async listCollections(): Promise<Result<string[], QmdError>> {
     const result = await this.executor.execute(['collection', 'list']);
+    if (result.exitCode === QMD_NOT_FOUND_EXIT_CODE) {
+      return {
+        ok: false,
+        error: {
+          code: 'not_available',
+          message: result.stderr,
+          command: 'qmd collection list',
+        },
+      };
+    }
     if (result.exitCode !== 0) {
       return {
         ok: false,
@@ -77,6 +88,11 @@ export class CollectionManager {
    */
   async ensureCollections(exportBaseDir: string): Promise<Result<string[], QmdError>> {
     const listResult = await this.listCollections();
+    // A missing binary is fatal and must surface as itself; any other list
+    // failure is tolerated (treated as "no collections yet") as before.
+    if (!listResult.ok && listResult.error.code === 'not_available') {
+      return { ok: false, error: listResult.error };
+    }
     const existing = listResult.ok ? listResult.value : [];
 
     const created: string[] = [];

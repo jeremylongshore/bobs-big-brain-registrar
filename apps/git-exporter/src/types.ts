@@ -7,6 +7,26 @@ export interface ExportConfig {
   targetId: string;
   /** Optional tenant filter */
   tenantId?: string;
+  /**
+   * Reconcile mode: ignore the incremental `lastExportedAt` filter and converge
+   * the whole export tree on the DB. Writes missing/changed files, archives
+   * retired ones, and removes stale copies (wrong directory, restricted
+   * sensitivity, or memories no longer in the DB). Default false (incremental).
+   */
+  reconcile?: boolean;
+  /**
+   * Reconcile only: refuse to remove orphan files (ids absent from the DB) when
+   * more than this many would go. A mirror reports green fastest when the
+   * source is empty or wrong, so mass deletion needs an explicit ceiling.
+   * Default 50. Ignored in incremental mode.
+   */
+  maxOrphanRemovals?: number;
+}
+
+/** Orphan removals refused by the reconcile mass-delete guard. */
+export interface RemovalBlocked {
+  orphans: number;
+  limit: number;
 }
 
 /**
@@ -39,6 +59,8 @@ export interface ExportResult {
   /** Count of files that didn't need updating */
   unchanged: number;
   totalProcessed: number;
+  /** Reconcile only: orphan removals were refused because they exceeded the cap. */
+  removalBlocked?: RemovalBlocked;
 }
 
 export interface FrontmatterData {
@@ -65,4 +87,6 @@ export interface ExportChangeset {
   toRemove: string[];
   /** Memories that could not be mapped to a path and were set aside (5bm.12). */
   quarantined: QuarantinedMemory[];
+  /** Reconcile only: set when the orphan-removal guard refused the removals. */
+  removalBlocked?: RemovalBlocked;
 }

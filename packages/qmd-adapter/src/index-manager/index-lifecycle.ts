@@ -1,6 +1,7 @@
 import type { Result } from '@qmd-team-intent-kb/common';
 import type { QmdError } from '../types.js';
 import type { QmdExecutor } from '../executor/executor.js';
+import { QMD_NOT_FOUND_EXIT_CODE } from '../executor/resolve-binary.js';
 
 /** Manage qmd index lifecycle operations */
 export class IndexLifecycleManager {
@@ -9,6 +10,14 @@ export class IndexLifecycleManager {
   /** Update the qmd index (re-index all collections) */
   async update(): Promise<Result<void, QmdError>> {
     const result = await this.executor.execute(['update']);
+    if (result.exitCode === QMD_NOT_FOUND_EXIT_CODE) {
+      // No qmd binary at all: surface the executor's actionable message
+      // (what was searched, how to fix) rather than an opaque "Failed to update".
+      return {
+        ok: false,
+        error: { code: 'not_available', message: result.stderr, command: 'qmd update' },
+      };
+    }
     if (result.exitCode !== 0) {
       return {
         ok: false,

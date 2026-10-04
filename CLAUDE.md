@@ -167,7 +167,11 @@ Orchestrates the full promotion pipeline: spool intake → policy evaluation →
 
 ### Git Exporter (apps/git-exporter)
 
-Incremental export of curated memories to `kb-export/` as Markdown with YAML frontmatter. Category-based directory routing (decisions/, curated/, guides/, archive/). Tracks last export timestamp via `ExportStateRepository`.
+Incremental export of curated memories to `kb-export/` as Markdown with YAML frontmatter. Category-based directory routing (decisions/, curated/, guides/, archive/). Tracks last export timestamp via `ExportStateRepository`. **Reconcile mode** (`runExport` config `reconcile: true`, `exporter-cli export --reconcile`) ignores that watermark and converges the whole tree on the DB — it is how lifecycle changes made outside a promotion (curator `batch-transition`) reach disk. Content-compared (idempotent, repairs torn/deleted files); orphan removals are capped (`maxOrphanRemovals`, default 50) and only touch files whose frontmatter tenant matches. The plugin's `brain_govern` uses it every run.
+
+### qmd binary discovery (packages/qmd-adapter)
+
+`RealQmdExecutor` with no explicit `binary` resolves qmd via `resolveQmdBinary`: `qmdBinary` config → `TEAMKB_QMD_BIN` → `PATH` → `~/.bun/bin/qmd`. A pinned path that is not executable is an error (never a silent fallback). Nothing found → exit 127 whose stderr names everything searched; `ensureCollections()`/`update()` return `not_available` with that message.
 
 ## Monorepo Layout
 

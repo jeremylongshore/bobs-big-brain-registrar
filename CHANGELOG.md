@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **git-exporter reconcile mode (`runExport({ reconcile: true })`, `exporter-cli export --reconcile`).**
+  Converges the whole export tree on the DB instead of exporting only memories changed since the
+  last run: lifecycle changes made outside a promotion (curator `batch-transition`) land in
+  `archive/`, files deleted or torn mid-write are rewritten, and stale copies (wrong directory,
+  newly restricted sensitivity, memories no longer in the DB) are removed. Orphan removals are
+  capped (`maxOrphanRemovals`, default 50, `--max-orphan-removals`) so an empty or wrong DB cannot
+  wipe a healthy tree; other tenants' files and files without attributable frontmatter are never
+  touched. Archive moves are now content-compared like writes, so a re-run reports `unchanged`
+  instead of rewriting.
+- **qmd binary discovery (`resolveQmdBinary`, `TEAMKB_QMD_BIN`).** The default `RealQmdExecutor`
+  now resolves qmd as: explicit `qmdBinary` config, then `TEAMKB_QMD_BIN`, then `PATH`, then
+  `~/.bun/bin/qmd`. A pinned path that is not executable is an error rather than a silent fallback.
+  The binary's directory is prepended to the child `PATH`. When nothing is found, the executor
+  returns exit 127 and `ensureCollections()` / `update()` report `not_available` with a message
+  naming every searched location and the fix, instead of the opaque `Failed to update index`.
+
 - Authenticated `GET /api/audit/receipt-tip` exposes the content-safe global governance-receipt chain head and can resolve a previously observed SHA-256 tip after the chain advances. It verifies the chain before answering, fails closed on tamper signatures, reports legacy unverified rows and benign ordering forks separately, and does not claim to identify the exact search results an agent read. This completes the registrar half of AGP's `gsb_receipt_tip_hash` pointer contract. The chain-boundary documentation now also names the canonical shared spool at `~/.teamkb/spool` rather than the retired `brain/spool` location.
 
 - **Receipted governance-policy upgrade (`curator-cli upgrade-policy`, epic

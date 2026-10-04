@@ -1,14 +1,6 @@
 import type { MemoryRepository, ExportStateRepository } from '@qmd-team-intent-kb/store';
-import { Sensitivity } from '@qmd-team-intent-kb/schema';
 import type { ExportConfig, ExportResult } from './types.js';
-
-/** Sensitivity threshold: memories at or above 'confidential' are skipped */
-const CONFIDENTIAL_INDEX = Sensitivity.options.indexOf('confidential');
-
-function isSensitivityRestricted(level: string): boolean {
-  const idx = Sensitivity.options.indexOf(level as (typeof Sensitivity.options)[number]);
-  return idx >= CONFIDENTIAL_INDEX;
-}
+import { isSensitivityRestricted } from './sensitivity.js';
 import { detectChanges } from './diff/change-detector.js';
 import { formatMemoryAsMarkdown } from './formatter/markdown-formatter.js';
 import { writeFile, archiveFile, removeFile } from './writer/file-writer.js';
@@ -23,6 +15,14 @@ import { readFileSync, existsSync } from 'node:fs';
  * 3. Archive superseded/archived files to `archive/`
  * 4. Remove deleted files (changeset `toRemove`)
  * 5. Record the current timestamp as the new export state
+ *
+ * With `config.reconcile` the incremental `updatedAt` filter is dropped and the
+ * export tree is reconciled against the DB as a whole (see `detectChanges`):
+ * missing, stale, mis-filed and orphaned files are all converged, which is what
+ * makes lifecycle changes made outside a promotion (batch-transition,
+ * recategorize) land on disk. Every step is content-compared, so a crash at any
+ * point leaves a tree the next reconcile run repairs, and a clean re-run
+ * changes nothing.
  *
  * Idempotent: re-running when there are no changes produces no file writes.
  * Does NOT run `git commit` or `git push` — file generation only.
@@ -84,6 +84,16 @@ export function runExport(
     }
     try {
       const content = formatMemoryAsMarkdown(item.memory);
+      // Idempotency guard (mirrors the toWrite path): already archived with
+      // identical bytes and no stale active-dir copy -> nothing to do.
+      if (
+        !existsSync(item.fromPath) &&
+        existsSync(item.toPath) &&
+        readFileSync(item.toPath, 'utf8') === content
+      ) {
+        unchanged++;
+        continue;
+      }
       archiveFile(item.fromPath, item.toPath, content);
       archived.push(item.toPath);
     } catch (err) {
@@ -112,5 +122,6 @@ export function runExport(
     unchanged,
     totalProcessed:
       changeset.toWrite.length + changeset.toArchive.length + changeset.toRemove.length,
+    ...(changeset.removalBlocked !== undefined ? { removalBlocked: changeset.removalBlocked } : {}),
   };
 }
