@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { SECRET_PATTERNS, PII_PATTERNS } from '../secrets/patterns.js';
 
 describe('SECRET_PATTERNS', () => {
-  it('has 15 patterns', () => {
-    expect(SECRET_PATTERNS).toHaveLength(15);
+  it('has 17 patterns', () => {
+    expect(SECRET_PATTERNS).toHaveLength(17);
   });
 
   it('each pattern has required fields', () => {

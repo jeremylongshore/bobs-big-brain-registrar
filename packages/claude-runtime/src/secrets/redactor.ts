@@ -17,10 +17,25 @@ export function redactSecrets(
     if (pattern.requiresContext && !pattern.requiresContext.test(result)) {
       continue;
     }
-    result = result.replace(
-      new RegExp(pattern.regex.source, pattern.regex.flags + 'g'),
-      `[REDACTED:${pattern.id}]`,
-    );
+    const flags = pattern.regex.flags.includes('g')
+      ? pattern.regex.flags
+      : pattern.regex.flags + 'g';
+    const replacement = `[REDACTED:${pattern.id}]`;
+    const { accept } = pattern;
+    if (!accept) {
+      result = result.replace(new RegExp(pattern.regex.source, flags), replacement);
+      continue;
+    }
+    // Same agreement rule for a value predicate: only a match the scanner would
+    // COUNT is redacted, so a documentation placeholder (which the scanner does
+    // not flag) is left readable. `replace` passes `(match, ...groups, offset,
+    // input[, namedGroups])`; everything before the numeric offset is the
+    // `[fullMatch, ...captureGroups]` tuple `accept` expects.
+    result = result.replace(new RegExp(pattern.regex.source, flags), (...args: unknown[]) => {
+      const offsetIndex = args.findIndex((arg) => typeof arg === 'number');
+      const groups = args.slice(0, offsetIndex) as (string | undefined)[];
+      return accept(groups) ? replacement : (groups[0] ?? '');
+    });
   }
   return result;
 }

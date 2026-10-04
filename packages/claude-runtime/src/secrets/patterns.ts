@@ -1,4 +1,5 @@
 import type { SecretPattern } from '../types.js';
+import { isPathLikeValue, isPlaceholderSecretValue } from './placeholder.js';
 
 /** Named secret detection patterns for v1 */
 export const SECRET_PATTERNS: SecretPattern[] = [
@@ -108,6 +109,50 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     name: 'PostgreSQL Connection String',
     regex: /postgres(?:ql)?:\/\/[^:]+:[^@]+@[^\s]+/,
     description: 'PostgreSQL connection string with embedded password',
+  },
+  {
+    id: 'prose-password',
+    name: 'Password Stated in Prose',
+    // A password written as a SENTENCE, which no key=value or token-shaped rule
+    // sees: "The sudo password for the migration is `…`", "the recommended sudo
+    // password for <user> is `…`", `"password": "…"`. Shape: the keyword, at most
+    // 40 same-line characters, then `is` / `was` / `:` / `=`, then a quoted or
+    // backticked value of 6–128 non-whitespace characters (group 1).
+    //
+    // Precision comes from three places. (1) The value must be QUOTED — the bare
+    // word "password", `password: <your password>` and `password = os.environ[…]`
+    // have no quoted value and never match. (2) The value has no whitespace — a
+    // quoted phrase ("not stored anywhere") is prose. (3) `accept` rejects
+    // stand-ins, env-var references and file paths. The whitespace-stripped view
+    // is skipped because it would glue such a phrase into a password-shaped token.
+    //
+    // Linear time: one bounded lazy window (≤40) per keyword, bounded value class.
+    regex:
+      /(?:password|passwd|passphrase)[^\n]{0,40}?(?:\b(?:is|was)\b\s*[:=]?|[:=])\s*[*_]{0,3}[`"'“‘]([^\s`"'“”‘’]{6,128})[`"'”’]/i,
+    description:
+      'Password stated in a sentence or key/value pair with a quoted or backticked value',
+    accept: (match) => {
+      const value = match[1] ?? '';
+      return !isPlaceholderSecretValue(value) && !isPathLikeValue(value);
+    },
+    skipWhitespaceStrippedView: true,
+  },
+  {
+    id: 'url-embedded-credentials',
+    name: 'URL with Embedded Credentials',
+    // `scheme://user:secret@host` for ANY scheme (the scheme-specific rules above
+    // only know five). Group 1 = user, group 2 = secret. The secret class
+    // excludes `/ ? # @` and whitespace — in a real URL those are percent-encoded
+    // inside userinfo — so `http://host:8080/path@x` and
+    // `http://host:3000?email=a@b` (a PORT, not a password) never match.
+    //
+    // `accept` rejects documentation placeholders: `username:password`,
+    // `user:pass`, `<password>`, `${DB_PASSWORD}`, `{password}`, `changeme`, …
+    // Linear time: every quantified class is bounded and mutually delimited.
+    regex: /\b[a-z][a-z0-9+.-]{1,31}:\/\/([^\s:@/?#]{0,128}):([^\s@/?#]{3,256})@[^\s@/?#:]/i,
+    description: 'URL of any scheme carrying user:secret@ credentials (placeholders excluded)',
+    accept: (match) => !isPlaceholderSecretValue(match[2] ?? ''),
+    skipWhitespaceStrippedView: true,
   },
 ];
 
