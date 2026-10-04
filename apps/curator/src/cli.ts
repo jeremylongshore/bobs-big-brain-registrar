@@ -76,6 +76,8 @@ import {
 import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
 
 import { cmdNarrowAudience } from './audience/narrow-cli.js';
+import { holdLimitsFromEnv } from './hold/hold.js';
+import { cmdHolds } from './hold/holds-cli.js';
 import { Curator } from './curator.js';
 import { cmdRedact } from './redaction/redact-cli.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
@@ -161,6 +163,15 @@ Subcommands:
     and new content hashes, pattern names — never the removed text). Then
     rebuilds FTS, truncates the WAL, VACUUMs and byte-scans the store files.
     Run with no arguments for the full option list.
+
+  holds <list|resolve|expire> --db <path> --tenant <id> [...] [--dry-run] [--json]
+    The human-escalation hold queue (K6). A candidate whose audience or secret
+    question the rules can detect but not decide is held, not promoted and not
+    dropped. 'list' shows open holds; 'resolve' releases one (promote with a
+    chosen --audience, after the whole gate re-runs) or rejects it; 'expire'
+    closes holds past their expiry, unpromoted. Each change writes a
+    hash-chained receipt in the same transaction. A model may only recommend.
+    Run 'holds' with no arguments for the full option list.
 
   merge-govern <cloneA-db> <cloneB-db> --db <target> --tenant <id>
                [--dry-run] [--json] [--anchor <path>] [--commit <sha>]
@@ -304,6 +315,8 @@ export async function dispatch(argv: string[], deps: CuratorCliDeps): Promise<nu
       return cmdNarrowAudience(argv.slice(1), deps);
     case 'redact':
       return cmdRedact(argv.slice(1), deps);
+    case 'holds':
+      return cmdHolds(argv.slice(1), deps);
     case 'merge-govern':
       return cmdMergeGovern(argv.slice(1), deps);
     case 'upgrade-policy':
@@ -462,7 +475,7 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     });
     const curator = new Curator(
       { candidateRepo, memoryRepo, policyRepo, auditRepo, linksRepo },
-      { tenantId, originSecret, importExclusions },
+      { tenantId, originSecret, importExclusions, holdLimits: holdLimitsFromEnv() },
     );
     const batch = curator.processBatch(candidates);
 
@@ -491,7 +504,12 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           `Promoted:  ${batch.promoted}\n` +
           `Rejected:  ${batch.rejected}\n` +
           `Flagged:   ${batch.flagged}\n` +
-          `Duplicates: ${batch.duplicates}\n`,
+          `Duplicates: ${batch.duplicates}\n` +
+          `Held:      ${batch.held}` +
+          (batch.holdCapBlocked > 0
+            ? ` (+${batch.holdCapBlocked} not held: hold queue full, not promoted)`
+            : '') +
+          '\n',
       );
       if (tampered.length > 0) {
         process.stderr.write(

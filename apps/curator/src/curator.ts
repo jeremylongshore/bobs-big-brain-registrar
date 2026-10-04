@@ -1,7 +1,11 @@
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
-import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
-import type { MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import {
+  PolicyPipeline,
+  evaluateHoldTriggers,
+  unresolvedFlagsAfterRelease,
+} from '@qmd-team-intent-kb/policy-engine';
+import type { HoldDecision, PipelineResult } from '@qmd-team-intent-kb/policy-engine';
+import type { Author, GovernancePolicy, MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import type {
   CandidateRepository,
   MemoryRepository,
@@ -26,9 +30,24 @@ import { promote } from './promotion/promoter.js';
 import { reject } from './rejection/rejector.js';
 import { checkOriginAttestation } from './origin/origin-gate.js';
 import { checkImportExclusion } from './import-exclusion/import-exclusion-gate.js';
+import { placeHold } from './hold/hold.js';
+import type { PlaceHoldResult } from './hold/hold.js';
 
 /** Default per-run budget of subject-key retirements (see CuratorConfig.maxSupersedesPerRun). */
 const DEFAULT_MAX_SUPERSEDES_PER_RUN = 200;
+
+/**
+ * A human's release of a held candidate (K6), passed to
+ * {@link Curator.processSingle} by `resolveHold` only. The candidate goes
+ * through the WHOLE deterministic gate again; the release resolves the audience
+ * and secret-scan flags the hold covered and nothing else.
+ */
+export interface HoldRelease {
+  /** The releasing human, recorded as the promoter. */
+  promotedBy: Author;
+  /** The human's reason, folded into the `promoted` receipt. */
+  promotionReason: string;
+}
 
 /** Repository dependencies required by the Curator */
 export interface CuratorDependencies {
@@ -47,8 +66,11 @@ export interface CuratorDependencies {
  *   2. Exact-hash duplicate check against curated memories
  *   3. Load the first enabled governance policy for the tenant
  *   4. Run policy pipeline (secret detection, length, trust, relevance, dedup, tenant match)
- *   5. On rejection/flagging: record audit and return outcome
- *   6. On approval: plan subject-keyed (then title-fallback) supersession, then promote
+ *   5. On rejection: record audit and return outcome
+ *   6. On a hold trigger (K6 — an audience or secret question the rules can detect
+ *      but not decide): put the candidate on a bounded human-escalation hold
+ *   7. On any other flag: record audit and return outcome
+ *   8. On approval: plan subject-keyed (then title-fallback) supersession, then promote
  *
  * All operations are synchronous. Only `ingestFromSpool` (file I/O) is async.
  */
@@ -59,6 +81,13 @@ export class Curator {
    * digestion batch must not emit 17k identical warnings.
    */
   private readonly warnedDormantPolicies = new Set<string>();
+
+  /**
+   * Set once the hold queue is found full in this run (K6). The cap frees up
+   * only when a person resolves a hold, which no run does, so later candidates
+   * skip the count: a bulk digestion past the cap stays cheap and fails closed.
+   */
+  private holdCapReached?: { active: number; max: number };
 
   /** Subject-key retirements applied so far by this instance (the per-run budget meter). */
   private subjectSupersessionsApplied = 0;
@@ -73,9 +102,16 @@ export class Curator {
    *
    * @param existingHashes - Pre-loaded set of content hashes (hoisted from batch).
    *                         When provided, avoids N+1 queries against the store.
+   * @param release - Set ONLY by `resolveHold`: a human released this candidate
+   *                  from a hold. The gate runs in full; hold triggers are not
+   *                  re-applied and no per-candidate reject receipt is written.
    * @returns A CurationResult describing the outcome.
    */
-  processSingle(candidate: MemoryCandidate, existingHashes?: Set<string>): CurationResult {
+  processSingle(
+    candidate: MemoryCandidate,
+    existingHashes?: Set<string>,
+    release?: HoldRelease,
+  ): CurationResult {
     const contentHash = computeContentHash(candidate.content);
 
     // Tenant-scoped dedup (B1): never treat another tenant's memory as a duplicate.
@@ -115,7 +151,9 @@ export class Curator {
     // outcome still returns, only the audit write is skipped (see
     // CuratorConfig.suppressRejectionReceipts). `dryRun` also suppresses it.
     const suppressReject =
-      this.config.dryRun === true || this.config.suppressRejectionReceipts === true;
+      this.config.dryRun === true ||
+      this.config.suppressRejectionReceipts === true ||
+      release !== undefined;
 
     // Write-time provenance gate (GSB Wave-2 H1) — STRUCTURAL, before the
     // configurable policy pipeline, so a candidate claiming an origin that does
@@ -165,14 +203,56 @@ export class Curator {
     const policies = this.deps.policyRepo.findByTenant(this.config.tenantId);
     const policy = policies.find((p) => p.enabled);
 
-    if (policy === undefined) {
-      return this.promoteCandidate(candidate, contentHash, {
+    const pipelineResult: PipelineResult =
+      policy === undefined
+        ? { candidateId: candidate.id, outcome: 'approved', evaluations: [] }
+        : this.evaluatePolicy(candidate, policy, existingHashes);
+
+    if (pipelineResult.outcome === 'rejected') {
+      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
+      return {
         candidateId: candidate.id,
-        outcome: 'approved',
-        evaluations: [],
-      });
+        outcome: 'rejected',
+        pipelineResult,
+        reason,
+      };
     }
 
+    // Human-escalation hold (K6): an audience or secret question the rules can
+    // detect but not decide. Checked with or without a policy (the proposer
+    // clearance trigger is structural), and never for a human's release.
+    if (release === undefined) {
+      const decision = evaluateHoldTriggers(candidate, pipelineResult, policy);
+      if (decision !== null) {
+        return this.holdCandidate(candidate, decision, pipelineResult, suppressReject);
+      }
+    }
+
+    // A release resolves the flags the hold covered, and only those.
+    const releasedFlags =
+      release !== undefined && unresolvedFlagsAfterRelease(pipelineResult).length === 0
+        ? (pipelineResult.flaggedBy ?? [])
+        : undefined;
+
+    if (pipelineResult.outcome === 'flagged' && releasedFlags === undefined) {
+      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
+      return {
+        candidateId: candidate.id,
+        outcome: 'flagged',
+        pipelineResult,
+        reason,
+      };
+    }
+
+    return this.promoteCandidate(candidate, contentHash, pipelineResult, release, releasedFlags);
+  }
+
+  /** Run the tenant's policy pipeline over one candidate (tenant-scoped context). */
+  private evaluatePolicy(
+    candidate: MemoryCandidate,
+    policy: GovernancePolicy,
+    existingHashes?: Set<string>,
+  ): PipelineResult {
     const pipeline = new PolicyPipeline(policy);
     // Runtime completeness check (5bm.2): fire the anti-dormancy gate against the
     // LIVE policy, not only in CI. Warn (never throw — a throw here would refuse
@@ -192,7 +272,7 @@ export class Curator {
     const hashSet =
       existingHashes ??
       new Set(this.deps.memoryRepo.getContentHashesByTenant(this.config.tenantId));
-    const pipelineResult = pipeline.evaluate(candidate, {
+    return pipeline.evaluate(candidate, {
       existingHashes: hashSet,
       tenantId: this.config.tenantId,
       // contradiction_check lookup (E1): tenant-scoped ACTIVE memories filtered
@@ -205,28 +285,68 @@ export class Curator {
           .findByTenantAndLifecycleAndCategory(this.config.tenantId, 'active', category)
           .map((m) => ({ id: m.id, content: m.content })),
     });
+  }
 
-    if (pipelineResult.outcome === 'rejected') {
-      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
-      return {
-        candidateId: candidate.id,
-        outcome: 'rejected',
-        pipelineResult,
-        reason,
-      };
+  /**
+   * Put a candidate on a human-escalation hold (K6), or report why it could not
+   * be held. Either way it is NOT promoted: a full queue or an unholdable row
+   * fails closed to `flagged`.
+   */
+  private holdCandidate(
+    candidate: MemoryCandidate,
+    decision: HoldDecision,
+    pipelineResult: PipelineResult,
+    suppressReject: boolean,
+  ): CurationResult {
+    const placed: PlaceHoldResult =
+      this.holdCapReached !== undefined
+        ? { status: 'cap_reached', ...this.holdCapReached }
+        : placeHold(
+            candidate,
+            decision,
+            {
+              candidateRepo: this.deps.candidateRepo,
+              memoryRepo: this.deps.memoryRepo,
+              auditRepo: this.deps.auditRepo,
+            },
+            {
+              limits: this.config.holdLimits,
+              dryRun: this.config.dryRun,
+              ...(this.config.now !== undefined ? { now: this.config.now() } : {}),
+            },
+          );
+    if (placed.status === 'cap_reached') {
+      this.holdCapReached = { active: placed.active, max: placed.max };
     }
+    const triggers = decision.triggers;
+    const report = { triggers, recommendedAudience: decision.recommendedAudience };
 
-    if (pipelineResult.outcome === 'flagged') {
-      const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
+    if (placed.status === 'cap_reached' || placed.status === 'not_holdable') {
+      // Keep the existing flagged receipt when the pipeline itself flagged.
+      if (pipelineResult.outcome === 'flagged') {
+        reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
+      }
+      const why =
+        placed.status === 'cap_reached'
+          ? `the hold queue is full (${placed.active}/${placed.max}); resolve open holds and re-run`
+          : placed.reason;
       return {
         candidateId: candidate.id,
         outcome: 'flagged',
         pipelineResult,
-        reason,
+        hold: { status: placed.status, ...report },
+        reason: `Needs human review (${triggers.join(', ')}) but was not held: ${why}. Not promoted.`,
       };
     }
 
-    return this.promoteCandidate(candidate, contentHash, pipelineResult);
+    const expiresAt = placed.status === 'would_hold' ? placed.expiresAt : placed.hold.expiresAt;
+    return {
+      candidateId: candidate.id,
+      outcome: 'held',
+      pipelineResult,
+      hold: { status: placed.status, ...report, expiresAt },
+      reason: `Held for human review until ${expiresAt}: ${triggers.join(', ')}`,
+    };
   }
 
   /**
@@ -242,6 +362,8 @@ export class Curator {
     let rejected = 0;
     let flagged = 0;
     let duplicates = 0;
+    let held = 0;
+    let holdCapBlocked = 0;
 
     // Tenant-scoped (B1): the batch's pre-existing-hash set is this tenant's only.
     const existingHashes = new Set(
@@ -262,9 +384,13 @@ export class Curator {
           break;
         case 'flagged':
           flagged++;
+          if (result.hold?.status === 'cap_reached') holdCapBlocked++;
           break;
         case 'duplicate':
           duplicates++;
+          break;
+        case 'held':
+          held++;
           break;
       }
     }
@@ -275,6 +401,8 @@ export class Curator {
       rejected,
       flagged,
       duplicates,
+      held,
+      holdCapBlocked,
       results,
     };
   }
@@ -283,6 +411,8 @@ export class Curator {
     candidate: MemoryCandidate,
     contentHash: string,
     pipelineResult: PipelineResult,
+    release?: HoldRelease,
+    releasedFlags?: readonly string[],
   ): CurationResult {
     const plan = planSupersession(candidate, this.deps.memoryRepo, {
       threshold: this.config.supersessionThreshold ?? DEFAULT_SUPERSESSION_THRESHOLD,
@@ -324,6 +454,10 @@ export class Curator {
         contentHash,
         pipelineResult,
         supersessions: toApply,
+        ...(release !== undefined
+          ? { promotedBy: release.promotedBy, promotionReason: release.promotionReason }
+          : {}),
+        ...(releasedFlags !== undefined ? { humanResolvedFlags: releasedFlags } : {}),
       },
       this.deps.memoryRepo,
       this.deps.auditRepo,

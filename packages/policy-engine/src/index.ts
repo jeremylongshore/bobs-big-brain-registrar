@@ -27,6 +27,15 @@ export type {
   AudienceRecommendation,
   AudienceRecommendationBasis,
 } from './rules/audience-narrowing-rule.js';
+export {
+  evaluateHoldTriggers,
+  isAudienceAboveProposerClearance,
+  unresolvedFlagsAfterRelease,
+  HOLD_TRIGGER_RULE_TYPES,
+} from './hold/hold-triggers.js';
+export type { HoldDecision, HoldTrigger } from './hold/hold-triggers.js';
+export { measureHoldEscalation } from './hold/hold-escalation.js';
+export type { HoldEscalationReport } from './hold/hold-escalation.js';
 export { PolicyPipeline } from './pipeline.js';
 export {
   detectSupersession,

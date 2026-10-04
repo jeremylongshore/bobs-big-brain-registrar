@@ -167,7 +167,11 @@ export function registerCandidateRoutes(
         return reply.status(200).send({ ok: true, candidateId: id, status: 'rejected' });
       } catch (err) {
         if (err instanceof ApiError) {
-          return reply.status(err.statusCode).send({ error: err.message });
+          // `code` carries the stable refusal class (`on_hold` for a candidate
+          // that only a human may resolve — K6).
+          return reply
+            .status(err.statusCode)
+            .send({ error: err.message, ...(err.code !== undefined ? { code: err.code } : {}) });
         }
         throw err;
       }

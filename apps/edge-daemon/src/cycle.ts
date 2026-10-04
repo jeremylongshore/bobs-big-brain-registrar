@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import {
   ingestFromSpoolDetailed,
   Curator,
+  holdLimitsFromEnv,
   loadBrainignoreRuleset,
 } from '@qmd-team-intent-kb/curator';
 import {
@@ -192,12 +193,14 @@ function curateStep(
         // committed defaults. An unreadable override warns and degrades to
         // defaults — the gate itself is always on for import sources.
         importExclusions: loadBrainignoreRuleset({ onWarn: (m) => logger.warn(m) }),
+        // Human-escalation hold bounds (K6): TEAMKB_HOLD_TTL_DAYS / TEAMKB_HOLD_MAX_ACTIVE.
+        holdLimits: holdLimitsFromEnv(),
       },
     );
 
     result.curation = curator.processBatch(candidates);
     logger.info(
-      `Curation: ${result.curation.promoted} promoted, ${result.curation.rejected} rejected, ${result.curation.duplicates} duplicates`,
+      `Curation: ${result.curation.promoted} promoted, ${result.curation.rejected} rejected, ${result.curation.duplicates} duplicates, ${result.curation.held} held for human review`,
     );
 
     // Write rejection feedback for MCP status visibility

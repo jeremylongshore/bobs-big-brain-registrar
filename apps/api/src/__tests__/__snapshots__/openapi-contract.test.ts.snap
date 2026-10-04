@@ -50,6 +50,21 @@ exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] =
         "get",
       ],
     },
+    "/api/holds": {
+      "methods": [
+        "get",
+      ],
+    },
+    "/api/holds/{candidateId}/recommend": {
+      "methods": [
+        "post",
+      ],
+    },
+    "/api/holds/{candidateId}/resolve": {
+      "methods": [
+        "post",
+      ],
+    },
     "/api/import": {
       "methods": [
         "post",

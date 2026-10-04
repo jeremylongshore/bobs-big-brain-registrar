@@ -29,6 +29,14 @@ export interface TokenIdentity {
    * Absent = not the owner (least privilege).
    */
   owner?: boolean;
+  /**
+   * Marks a token that an automated agent runs under (K6 human-escalation
+   * hold). An agent token keeps its role's authority everywhere else, but it
+   * may NOT resolve a hold: it can only attach a recommendation. Absent = a
+   * person's token. The 014-AT-DECR review agent (`teamkb-review-agent`) is
+   * treated as an agent whether or not its record carries the flag.
+   */
+  agent?: boolean;
 }
 
 /**
@@ -181,6 +189,7 @@ export class InMemoryTokenRegistry implements TokenRegistry {
       // Owner standing needs BOTH the admin role and an explicit `owner: true`
       // (K2) — an owner flag on a member record is dropped, never honored.
       if (rec.owner === true && rec.role === 'admin') identity.owner = true;
+      if (rec.agent === true) identity.agent = true;
       const expiresAtMs = rec.expiresAt !== undefined ? Date.parse(rec.expiresAt) : undefined;
       return {
         salt,
@@ -263,7 +272,7 @@ export interface TokenSourceOptions {
   apiKey?: string;
   /** Explicit records (highest precedence). */
   records?: TokenRecord[];
-  /** JSON array string: [{ "token","actor","role","owner"?,"tenants"?,"expiresAt"? }]. */
+  /** JSON array string: [{ "token","actor","role","owner"?,"agent"?,"tenants"?,"expiresAt"? }]. */
   tokensJson?: string;
   /** Path to a JSON file of the same shape. */
   tokensFile?: string;
@@ -343,6 +352,8 @@ function parseRecords(raw: string): TokenRecord[] {
     const base: TokenRecord = { token, actor, role };
     // Strict `=== true`: a truthy string ("yes", "true") never grants owner.
     if (rec['owner'] === true && role === 'admin') base.owner = true;
+    // Strict `=== true`, like owner. The flag only ever REMOVES an ability.
+    if (rec['agent'] === true) base.agent = true;
     if (tenants !== undefined) base.tenants = tenants;
     if (expiresAt !== undefined) base.expiresAt = expiresAt;
     out.push(base);

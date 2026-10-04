@@ -3,9 +3,10 @@ export type {
   CurationBatchResult,
   CuratorConfig,
   SupersessionReport,
+  HoldReport,
 } from './types.js';
 export { Curator } from './curator.js';
-export type { CuratorDependencies } from './curator.js';
+export type { CuratorDependencies, HoldRelease } from './curator.js';
 export { ingestFromSpool, ingestFromSpoolDetailed } from './intake/spool-intake.js';
 export type {
   IngestFromSpoolOptions,
@@ -98,3 +99,38 @@ export type {
   RedactionRefusalCode,
   RedactionDependencies,
 } from './redaction/redact-memory.js';
+export {
+  placeHold,
+  recommendOnHold,
+  findActiveHold,
+  listActiveHolds,
+  expireHolds,
+  holdLimitsFromEnv,
+  resolveMaxActiveHolds,
+  HOLD_STATUS,
+  DEFAULT_HOLD_TTL_DAYS,
+  DEFAULT_MAX_ACTIVE_HOLDS,
+  MAX_RECOMMENDATIONS_PER_HOLD,
+  HOLD_TTL_DAYS_ENV,
+  HOLD_MAX_ACTIVE_ENV,
+} from './hold/hold.js';
+export type {
+  ActiveHold,
+  ExpiredHold,
+  HoldLimits,
+  HoldRecommendation,
+  HoldRepos,
+  HoldRecommendRefusalCode,
+  PlaceHoldOptions,
+  PlaceHoldResult,
+  RecommendOnHoldInput,
+  RecommendOnHoldResult,
+} from './hold/hold.js';
+export { resolveHold } from './hold/resolve-hold.js';
+export type {
+  ResolveHoldDeps,
+  ResolveHoldInput,
+  ResolveHoldOptions,
+  ResolveHoldRefusalCode,
+  ResolveHoldResult,
+} from './hold/resolve-hold.js';

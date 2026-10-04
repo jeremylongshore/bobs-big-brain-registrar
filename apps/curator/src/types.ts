@@ -1,5 +1,6 @@
 import type { PipelineResult, SupersessionMatch } from '@qmd-team-intent-kb/policy-engine';
 import type { BrainignoreRuleset } from './import-exclusion/brainignore.js';
+import type { HoldLimits } from './hold/hold.js';
 
 /** Dry-run / blocked supersession outcome attached to a {@link CurationResult}. */
 export interface SupersessionReport {
@@ -16,7 +17,11 @@ export interface SupersessionReport {
 /** Result of curating a single candidate */
 export interface CurationResult {
   candidateId: string;
-  outcome: 'promoted' | 'rejected' | 'flagged' | 'duplicate';
+  /**
+   * `held` (K6): a deterministic rule outcome put the candidate on a bounded
+   * human-escalation hold. It is neither promoted nor dropped; see `hold`.
+   */
+  outcome: 'promoted' | 'rejected' | 'flagged' | 'duplicate' | 'held';
   /** Set when the candidate was promoted to a curated memory */
   memoryId?: string;
   /** memoryId of the curated memory that was superseded by this promotion */
@@ -31,7 +36,23 @@ export interface CurationResult {
    */
   supersessionReport?: SupersessionReport;
   pipelineResult?: PipelineResult;
+  /**
+   * Set when a hold trigger fired (K6). `status` says what happened:
+   * `held` / `already_held` / `would_hold` (dry-run) go with outcome `held`;
+   * `cap_reached` and `not_holdable` go with outcome `flagged` — the candidate
+   * was NOT held and NOT promoted (fail closed).
+   */
+  hold?: HoldReport;
   reason: string;
+}
+
+/** What the hold gate did with one candidate (K6). Trigger names only, never content. */
+export interface HoldReport {
+  status: 'held' | 'already_held' | 'would_hold' | 'cap_reached' | 'not_holdable';
+  triggers: string[];
+  recommendedAudience: string;
+  /** When the hold expires (absent when nothing was held). */
+  expiresAt?: string;
 }
 
 /** Aggregate result of a batch curation run */
@@ -41,6 +62,10 @@ export interface CurationBatchResult {
   rejected: number;
   flagged: number;
   duplicates: number;
+  /** Candidates put (or already) on a human-escalation hold (K6). */
+  held: number;
+  /** Candidates a hold trigger fired on that could NOT be held (cap reached); counted in `flagged`. */
+  holdCapBlocked: number;
   results: CurationResult[];
 }
 
@@ -111,4 +136,11 @@ export interface CuratorConfig {
    * to enable the protection.
    */
   importExclusions?: BrainignoreRuleset;
+  /**
+   * Bounds on the human-escalation hold queue (K6): how long a hold stays open
+   * and how many may be open per tenant. Defaults: 14 days, 100 holds.
+   */
+  holdLimits?: HoldLimits;
+  /** Injected clock (ISO-8601) for hold timestamps. Defaults to the wall clock. */
+  now?: () => string;
 }

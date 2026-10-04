@@ -51,10 +51,28 @@ export interface PromotionInput {
    * the agent's verdict + reasoning is on the append-only chain (014-AT-DECR).
    */
   promotionReason?: string;
+  /**
+   * Ids of the rules whose flags a HUMAN resolved by releasing a hold (K6). When
+   * present the receipt says so plainly, in place of "passed all governance
+   * rules": the flag stood and a person with standing decided the question.
+   */
+  humanResolvedFlags?: readonly string[];
 }
 
 /** The default promoter identity for the batch/merge paths that name no actor. */
 const CURATOR_ACTOR: Author = { type: 'system', id: 'curator' };
+
+/** The `promoted` receipt's reason: the reviewer's justification plus what the gate found. */
+function promotionReceiptReason(input: PromotionInput): string {
+  const resolved = input.humanResolvedFlags ?? [];
+  const verdict =
+    resolved.length > 0
+      ? `flags resolved by a human releasing a hold: ${resolved.join(', ')}; every other governance rule passed`
+      : 'passed all governance rules';
+  return input.promotionReason !== undefined && input.promotionReason.trim().length > 0
+    ? `${input.promotionReason} (${verdict})`
+    : `${verdict.charAt(0).toUpperCase()}${verdict.slice(1)}`;
+}
 
 /**
  * Verdict shape an {@link EvalCallback} may return — a structurally-minimal
@@ -312,10 +330,7 @@ export function promote(
             memoryId,
             tenantId: input.candidate.tenantId,
             actor: input.promotedBy ?? CURATOR_ACTOR,
-            reason:
-              input.promotionReason !== undefined && input.promotionReason.trim().length > 0
-                ? `${input.promotionReason} (passed all governance rules)`
-                : 'Passed all governance rules',
+            reason: promotionReceiptReason(input),
             // Write-time provenance on the receipt (GSB Wave-2 H2): the origin
             // CHANNEL plus a TRUNCATED SHA-256 of the token HMAC — never the
             // token itself, so surfaced audit details can identify an
@@ -325,6 +340,9 @@ export function promote(
             // cross-clone entry_hash reproducibility (8da.5/8da.6) holds.
             details: {
               candidateId: input.candidate.id,
+              ...(input.humanResolvedFlags !== undefined && input.humanResolvedFlags.length > 0
+                ? { humanResolvedFlags: [...input.humanResolvedFlags] }
+                : {}),
               originChannel: input.candidate.origin?.channel ?? UNATTESTED_CHANNEL,
               ...(input.candidate.origin !== undefined
                 ? {

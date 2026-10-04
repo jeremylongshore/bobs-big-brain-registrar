@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bounded human-escalation hold for ambiguous audience and secret decisions (Epic K bead K6,
+  decision `053-AT-DECR`, reusing the `014-AT-DECR` recommend / pipeline-owns split).** A candidate
+  whose audience or secret question the rules can detect but not decide is now put on a hold; it is
+  no longer left in the inbox with no exit, and it is neither promoted nor dropped. Entry is a
+  deterministic rule outcome only: an `audience_narrowing`, `sensitivity_gate` or flag-action
+  `secret_detection` flag, or a `member` proposal that declares `admins` or `owner`. A hold reuses
+  the existing `quarantined` candidate status plus a `held` audit receipt that carries the triggers
+  and the expiry, so there is no new status and no store migration. Bounds: a hold closes
+  UNPROMOTED after 14 days (`TEAMKB_HOLD_TTL_DAYS`), and past 100 open holds per tenant
+  (`TEAMKB_HOLD_MAX_ACTIVE`) the gate fails closed and reports it. A reviewer, a model included, may
+  attach a recommendation (`POST /api/holds/:candidateId/recommend`), which writes one receipt and
+  changes no state. A person with admin or owner standing resolves it: `curator-cli holds
+  <list|resolve|expire> --db --tenant [...] [--dry-run] [--json]`, `GET /api/holds` and
+  `POST /api/holds/:candidateId/resolve`. A release re-runs the whole deterministic gate and
+  promotes with the audience the person chose; an audience wider than the recommended tier needs an
+  explicit acknowledgment. Each change commits with its hash-chained receipt in one transaction.
+  Runbook: `000-docs/055-OD-RNBK-human-escalation-hold.md`.
+  **Behavior changes:** `Curator.processSingle` returns a new outcome `held`, and
+  `CurationBatchResult` gains `held` and `holdCapBlocked`. `POST /api/candidates/:id/promote` on
+  such a candidate now answers 422 with code `held_for_review` (it answered 422 "flagged" before)
+  and `POST /api/candidates/:id/reject` on a held candidate answers 422 `on_hold`. `AuditAction`
+  gains `held`, `hold_recommended` and `hold_resolved`. A token record in `tokens.json` may carry
+  `"agent": true`; such a token, and the `teamkb-review-agent` actor, cannot resolve a hold.
+  Measured escalation rate: 9 of 29 on the K3 hand-labeled audience fixture, 3 of 33 on the
+  govern-decision adversarial set.
+
 - **Secret scan catches passwords stated in prose and credentials in any-scheme URLs.** Two new
   deterministic patterns join the governance secret scan (capture-time redaction and the
   promote-time `secret_detection` rule): `prose-password` (`password` / `passwd` / `passphrase`,
