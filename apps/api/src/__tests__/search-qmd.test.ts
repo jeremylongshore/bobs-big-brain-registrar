@@ -242,6 +242,77 @@ describe('POST /api/search — qmd path freshness/category rerank', () => {
     for (const h of body.hits) expect(h.citation).toMatch(/^qmd:\/\//);
   });
 
+  describe('rerank policy wiring (lifecycle + historical-record demotion)', () => {
+    const AAR_ID = '33333333-3333-4333-8333-333333333333';
+    const DEPRECATED_ID = '44444444-4444-4444-8444-444444444444';
+
+    function seed(): void {
+      const repo = new MemoryRepository(db);
+      const now = new Date().toISOString();
+      repo.insert(
+        makeMemory({
+          id: AAR_ID,
+          title: 'GCP exodus AAR',
+          category: 'decision',
+          updatedAt: now,
+          content: 'aar content',
+        }),
+      );
+      repo.insert(
+        makeMemory({
+          id: FRESH_ID,
+          title: 'GCP fully exited, all hosting on the VPS',
+          category: 'decision',
+          updatedAt: now,
+          content: 'current decision',
+        }),
+      );
+      repo.insert(
+        makeMemory({
+          id: DEPRECATED_ID,
+          title: 'Old GCP hosting guide',
+          category: 'decision',
+          lifecycle: 'deprecated',
+          updatedAt: now,
+          content: 'deprecated guide',
+        }),
+      );
+    }
+
+    async function order(query: string): Promise<string[]> {
+      // qmd lists the AAR and the deprecated memory first with equal raw scores.
+      const qmd = new FakeQmd([
+        hit(`qmd://kb-curated/${AAR_ID}.md`, 5),
+        hit(`qmd://kb-curated/${DEPRECATED_ID}.md`, 5),
+        hit(`qmd://kb-curated/${FRESH_ID}.md`, 5),
+      ]);
+      app = buildApp({ db, qmdAdapter: qmd });
+      await app.ready();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/search',
+        payload: { query, scope: 'curated' },
+      });
+      return res.json().hits.map((h: { memoryId: string }) => h.memoryId);
+    }
+
+    it('ranks the current decision above the historical AAR and the deprecated memory', async () => {
+      seed();
+      const ids = await order('deploy to production');
+      expect(ids[0]).toBe(FRESH_ID);
+      expect(ids.indexOf(DEPRECATED_ID)).toBeGreaterThan(ids.indexOf(FRESH_ID));
+    });
+
+    it('keeps the AAR on top-tier when the query asks for history', async () => {
+      seed();
+      const ids = await order('gcp exodus AAR');
+      // historical demotion bypassed: AAR keeps its qmd-order lead over the decision
+      expect(ids.indexOf(AAR_ID)).toBeLessThan(ids.indexOf(FRESH_ID));
+      // lifecycle demotion is NOT bypassed
+      expect(ids[ids.length - 1]).toBe(DEPRECATED_ID);
+    });
+  });
+
   it('leaves unresolvable citations in qmd order without enrichment', async () => {
     const qmd = new FakeQmd([
       hit('qmd://kb-curated/not-a-row.md', 0.9),

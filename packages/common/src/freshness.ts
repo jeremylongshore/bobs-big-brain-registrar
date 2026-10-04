@@ -1,3 +1,5 @@
+import { computeRerankPolicyFactors } from './rerank-policy.js';
+
 /**
  * Compute a freshness multiplier (0.0–1.0) based on memory age.
  * Uses exponential decay: score = e^(-lambda * ageDays)
@@ -26,21 +28,40 @@ export const CATEGORY_BOOST: Record<string, number> = {
   reference: 0.9,
 };
 
+/** Optional rerank inputs. Absent = pre-policy behavior. */
+export interface RerankOptions {
+  /** The user's query text; enables the historical-record demotion (and its
+   * history-intent bypass). Without it only the lifecycle factor can apply. */
+  query?: string;
+}
+
 /**
- * Rerank search hits by combining raw score with freshness and category boost.
- * finalScore = rawScore * freshnessMultiplier * categoryBoost
- * Returns hits sorted by finalScore descending.
+ * Rerank search hits by combining raw score with freshness, category boost and
+ * the rerank policy (lifecycle + historical-record demotion, see rerank-policy.ts).
+ * finalScore = rawScore * freshness * categoryBoost * lifecycleFactor * historicalFactor
+ * A hit's optional `title` / `lifecycle` feed the policy; absent = factor 1.
+ * Returns hits sorted by finalScore descending (stable on ties).
  */
-export function rerankSearchHits<T extends { score: number; category: string; updatedAt: string }>(
+export function rerankSearchHits<
+  T extends {
+    score: number;
+    category: string;
+    updatedAt: string;
+    title?: string;
+    lifecycle?: string;
+  },
+>(
   hits: T[],
   nowIso: string,
   halfLifeDays: number = 90,
+  options: RerankOptions = {},
 ): Array<T & { finalScore: number }> {
   return hits
     .map((hit) => {
       const freshness = computeFreshnessScore(hit.updatedAt, nowIso, halfLifeDays);
       const categoryBoost = CATEGORY_BOOST[hit.category] ?? 1.0;
-      const finalScore = Math.round(hit.score * freshness * categoryBoost * 1000) / 1000;
+      const policy = computeRerankPolicyFactors(hit, options.query).product;
+      const finalScore = Math.round(hit.score * freshness * categoryBoost * policy * 1000) / 1000;
       return { ...hit, finalScore };
     })
     .sort((a, b) => b.finalScore - a.finalScore);
@@ -66,6 +87,10 @@ export interface CitedHitMetadata {
    * sensitivity-filtered at read time. Optional: a resolver that doesn't supply
    * it (e.g. a rank-only caller) leaves the hit search-visible ('public'). */
   sensitivity?: string;
+  /** Memory title; feeds the historical-record demotion. Optional (fail-open). */
+  title?: string;
+  /** Memory lifecycle state; feeds the lifecycle demotion. Missing = active. */
+  lifecycle?: string;
 }
 
 /**
@@ -99,6 +124,7 @@ export function rerankCitedHits<T extends { file: string; score: number }>(
   resolveMetadata: (memoryId: string) => CitedHitMetadata | null,
   nowIso: string,
   halfLifeDays: number = 90,
+  options: RerankOptions = {},
 ): Array<
   T & {
     finalScore: number;
@@ -119,7 +145,11 @@ export function rerankCitedHits<T extends { file: string; score: number }>(
       // Unresolvable hit (orphaned citation) is not an identifiable sensitive
       // memory — treat as public/searchable; a resolved hit carries its real level.
       sensitivity: meta?.sensitivity ?? 'public',
+      // Policy inputs; undefined (unresolved hit / resolver omits) = no demotion.
+      // Note: these ride along on the returned hit objects (consumers pick fields).
+      title: meta?.title,
+      lifecycle: meta?.lifecycle,
     };
   });
-  return rerankSearchHits(enriched, nowIso, halfLifeDays);
+  return rerankSearchHits(enriched, nowIso, halfLifeDays, options);
 }

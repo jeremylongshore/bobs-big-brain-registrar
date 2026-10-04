@@ -126,9 +126,13 @@ export class SearchService {
               category: memory.category,
               updatedAt: memory.updatedAt,
               sensitivity: memory.sensitivity,
+              title: memory.title,
+              lifecycle: memory.lifecycle,
             };
       },
       nowIso,
+      undefined,
+      { query: query.query },
     );
 
     // Read-time sensitivity enforcement (5bm.11): drop confidential/restricted
@@ -189,11 +193,12 @@ export class SearchService {
         score: rawScore,
         category: memory.category,
         updatedAt: memory.updatedAt,
+        lifecycle: memory.lifecycle,
         matchedAt: nowIso,
       };
     });
 
-    const reranked = rerankSearchHits(rawHits, nowIso);
+    const reranked = rerankSearchHits(rawHits, nowIso, undefined, { query: query.query });
 
     const page = query.pagination.page;
     const pageSize = query.pagination.pageSize;
