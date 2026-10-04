@@ -71,6 +71,20 @@ export class RealQmdExecutor implements QmdExecutor {
       });
       return { stdout, stderr, exitCode: 0 };
     } catch (e: unknown) {
+      // A pinned `binary` option skips discovery, so a bad path only shows up as a
+      // spawn error here. Give it the same actionable shape as a failed discovery
+      // instead of an empty-stderr exit 1.
+      const spawnCode =
+        e && typeof e === 'object' && 'code' in e ? (e as { code: unknown }).code : undefined;
+      if (spawnCode === 'ENOENT' || spawnCode === 'EACCES') {
+        return {
+          stdout: '',
+          stderr:
+            `qmd binary "${binary}" cannot be executed (${spawnCode}). Fix the qmdBinary option ` +
+            `or TEAMKB_QMD_BIN, or omit it to search PATH and ~/.bun/bin/qmd.`,
+          exitCode: QMD_NOT_FOUND_EXIT_CODE,
+        };
+      }
       if (e && typeof e === 'object' && 'stdout' in e && 'stderr' in e && 'code' in e) {
         const err = e as { stdout: string; stderr: string; code: number | string };
         return {

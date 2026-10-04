@@ -145,6 +145,29 @@ describe('resolveQmdBinary + RealQmdExecutor (real fs, fake qmd)', () => {
     expect(r.stdout).toContain(`path:${join(dir, '.bun', 'bin')}:`);
   });
 
+  it('a pinned executor binary that cannot be spawned gets the actionable 127 shape, not an empty exit 1', async () => {
+    const missing = await new RealQmdExecutor({ binary: join(dir, 'nope') }).execute(['update']);
+    expect(missing.exitCode).toBe(QMD_NOT_FOUND_EXIT_CODE);
+    expect(missing.stderr).toMatch(/cannot be executed \(ENOENT\)/);
+    expect(missing.stderr).toContain('TEAMKB_QMD_BIN');
+
+    const plain = join(dir, 'plain');
+    writeFileSync(plain, '#!/bin/sh\nexit 0\n');
+    chmodSync(plain, 0o644);
+    const denied = await new RealQmdExecutor({ binary: plain }).execute(['update']);
+    expect(denied.exitCode).toBe(QMD_NOT_FOUND_EXIT_CODE);
+    expect(denied.stderr).toMatch(/cannot be executed \(EACCES\)/);
+  });
+
+  it('a binary that runs and fails keeps its own exit code', async () => {
+    const failing = join(dir, 'failing');
+    writeFileSync(failing, '#!/bin/sh\necho boom >&2\nexit 3\n');
+    chmodSync(failing, 0o755);
+    const r = await new RealQmdExecutor({ binary: failing }).execute(['update']);
+    expect(r.exitCode).toBe(3);
+    expect(r.stderr).toContain('boom');
+  });
+
   describe('with nothing resolvable', () => {
     let savedPath: string | undefined;
     let savedBin: string | undefined;
