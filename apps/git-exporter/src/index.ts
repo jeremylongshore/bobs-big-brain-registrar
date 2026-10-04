@@ -1,4 +1,10 @@
-export type { ExportConfig, ExportResult, FrontmatterData, ExportChangeset } from './types.js';
+export type {
+  ExportConfig,
+  ExportResult,
+  FrontmatterData,
+  ExportChangeset,
+  RemovalBlocked,
+} from './types.js';
 export { extractFrontmatter, renderFrontmatter } from './formatter/frontmatter.js';
 export { formatMemoryAsMarkdown, getFilename } from './formatter/markdown-formatter.js';
 export {

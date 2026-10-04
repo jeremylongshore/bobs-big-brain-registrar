@@ -25,6 +25,17 @@ export {
 export type { QmdExecutor } from './executor/executor.js';
 export { RealQmdExecutor } from './executor/real-executor.js';
 export { MockQmdExecutor } from './executor/mock-executor.js';
+export type {
+  ResolvedQmdBinary,
+  ResolveQmdBinaryOptions,
+  QmdBinarySource,
+} from './executor/resolve-binary.js';
+export {
+  resolveQmdBinary,
+  QmdBinaryNotFoundError,
+  QMD_BIN_ENV,
+  QMD_NOT_FOUND_EXIT_CODE,
+} from './executor/resolve-binary.js';
 
 // Collections
 export type { CollectionDef } from './collections/collection-registry.js';

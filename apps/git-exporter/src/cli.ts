@@ -51,6 +51,14 @@ Options for 'export':
   --out <dir>     Output directory for the kb-export markdown tree (required).
   --tenant <id>   Restrict export to one tenant (optional).
   --json          Emit a machine-readable JSON envelope to stdout.
+  --reconcile     Converge the whole tree on the DB instead of exporting only
+                  memories changed since the last run: picks up lifecycle changes
+                  (batch-transition), re-files moved memories and removes stale
+                  copies. Idempotent; orphan removals are capped (see
+                  --max-orphan-removals).
+  --max-orphan-removals <n>
+                  Reconcile only: refuse to delete orphan files when more than
+                  <n> would go (default 50).
 `;
 
 export async function dispatch(argv: string[], deps: ExporterCliDeps): Promise<number> {
@@ -77,6 +85,8 @@ interface ExportOpts {
   outDir: string;
   tenantId?: string;
   json: boolean;
+  reconcile: boolean;
+  maxOrphanRemovals?: number;
 }
 
 function parseExportArgs(
@@ -86,6 +96,8 @@ function parseExportArgs(
   let outDir: string | undefined;
   let tenantId: string | undefined;
   let json = false;
+  let reconcile = false;
+  let maxOrphanRemovals: number | undefined;
 
   let i = 0;
   while (i < args.length) {
@@ -107,6 +119,20 @@ function parseExportArgs(
         json = true;
         i += 1;
         break;
+      case '--reconcile':
+        reconcile = true;
+        i += 1;
+        break;
+      case '--max-orphan-removals': {
+        const raw = args[i + 1];
+        const n = raw === undefined ? NaN : Number(raw);
+        if (raw === undefined || raw.trim() === '' || !Number.isInteger(n) || n < 0) {
+          return { ok: false, message: '--max-orphan-removals requires a non-negative integer' };
+        }
+        maxOrphanRemovals = n;
+        i += 2;
+        break;
+      }
       default:
         return { ok: false, message: `unknown flag: ${arg}` };
     }
@@ -118,7 +144,7 @@ function parseExportArgs(
   if (outDir === undefined || outDir.trim() === '') {
     return { ok: false, message: 'missing required flag: --out <dir>' };
   }
-  return { ok: true, opts: { dbPath, outDir, tenantId, json } };
+  return { ok: true, opts: { dbPath, outDir, tenantId, json, reconcile, maxOrphanRemovals } };
 }
 
 async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number> {
@@ -127,7 +153,7 @@ async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number>
     process.stderr.write(`exporter-cli export: ${parsed.message}\n\n${USAGE}`);
     return 2;
   }
-  const { dbPath, outDir, tenantId, json } = parsed.opts;
+  const { dbPath, outDir, tenantId, json, reconcile, maxOrphanRemovals } = parsed.opts;
 
   const db = deps.createDb({ dbPath });
   try {
@@ -138,6 +164,8 @@ async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number>
       outputDir: outDir,
       targetId: 'demo-export',
       ...(tenantId !== undefined ? { tenantId } : {}),
+      ...(reconcile ? { reconcile: true } : {}),
+      ...(maxOrphanRemovals !== undefined ? { maxOrphanRemovals } : {}),
     });
 
     if (json) {
@@ -154,6 +182,9 @@ async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number>
           // Full quarantine detail so a cron wrapper can alert + name the rows.
           quarantined_memories: result.quarantined,
           unchanged: result.unchanged,
+          ...(result.removalBlocked !== undefined
+            ? { removal_blocked: result.removalBlocked }
+            : {}),
         }) + '\n',
       );
     } else {
@@ -170,6 +201,13 @@ async function cmdExport(args: string[], deps: ExporterCliDeps): Promise<number>
     // Quarantine is a partial-success signal, not a failure (the run still
     // exported every healthy memory) — but make it LOUD on stderr so a cron
     // wrapper or operator notices the set-aside rows and can fix them at source.
+    if (result.removalBlocked !== undefined) {
+      process.stderr.write(
+        `⚠ reconcile refused to remove ${result.removalBlocked.orphans} orphan file(s): ` +
+          `over the --max-orphan-removals cap of ${result.removalBlocked.limit}. ` +
+          `Check that --db points at the right store, or raise the cap.\n`,
+      );
+    }
     if (result.quarantined.length > 0) {
       process.stderr.write(
         `⚠ ${result.quarantined.length} memory(ies) quarantined (not exported):\n` +

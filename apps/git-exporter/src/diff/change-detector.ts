@@ -3,12 +3,18 @@ import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
 import type { ExportChangeset, ExportConfig } from '../types.js';
 import { getRelativePath, getActiveDirectory } from '../formatter/directory-mapper.js';
 import { join } from 'node:path';
+import { findStaleFiles } from './stale-files.js';
+
+/** Default ceiling on orphan removals per reconcile run (mass-delete guard). */
+export const DEFAULT_MAX_ORPHAN_REMOVALS = 50;
 
 /**
  * Detect what has changed since the last export and build a changeset.
  *
  * - First run (no export state): returns all memories across all lifecycle states.
  * - Subsequent runs: only memories whose `updatedAt` is strictly after `lastExportedAt`.
+ * - Reconcile mode (`config.reconcile`): every memory, regardless of export state,
+ *   plus `toRemove` for stale files on disk (see `findStaleFiles`).
  *
  * Active / deprecated memories → `toWrite`
  * Archived / superseded memories → `toArchive` (move from category dir to archive/)
@@ -38,7 +44,12 @@ export function detectChanges(
     readFailures.push(...parts.flatMap((p) => p.failures));
   }
 
-  if (exportState !== null) {
+  // The full set, before any incremental filtering — reconcile mode compares the
+  // whole tree against it; incremental mode never reads it past this point.
+  const allMemories = memories;
+  const reconcile = config.reconcile === true;
+
+  if (exportState !== null && !reconcile) {
     memories = memories.filter((m) => m.updatedAt > exportState.lastExportedAt);
   }
 
@@ -79,5 +90,23 @@ export function detectChanges(
     }
   }
 
-  return { toWrite, toArchive, toRemove: [], quarantined };
+  if (!reconcile) {
+    return { toWrite, toArchive, toRemove: [], quarantined };
+  }
+
+  // Reconcile: also find files the DB no longer justifies (see findStaleFiles).
+  const stale = findStaleFiles(
+    config.outputDir,
+    allMemories,
+    new Set(quarantined.map((q) => q.id)),
+    config.tenantId,
+    config.maxOrphanRemovals ?? DEFAULT_MAX_ORPHAN_REMOVALS,
+  );
+  return {
+    toWrite,
+    toArchive,
+    toRemove: stale.toRemove,
+    quarantined,
+    ...(stale.removalBlocked !== undefined ? { removalBlocked: stale.removalBlocked } : {}),
+  };
 }
