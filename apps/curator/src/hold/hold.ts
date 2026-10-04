@@ -296,6 +296,13 @@ export interface PlaceHoldOptions {
   dryRun?: boolean;
   /** Injected clock (ISO-8601). Defaults to the wall clock. */
   now?: string;
+  /**
+   * The caller whose request caused this evaluation, when there is one (the
+   * token behind `POST /api/candidates/:id/promote`). Recorded on the receipt so
+   * the chain answers "whose approval ran into the hold". It is NOT the actor:
+   * the rule outcome places the hold, whoever asked. Absent for a batch sweep.
+   */
+  triggeredBy?: Author;
 }
 
 /**
@@ -364,6 +371,7 @@ export function placeHold(
         otherFlags: decision.otherFlags,
         ttlDays,
         expiresAt,
+        ...(options.triggeredBy !== undefined ? { triggeredBy: options.triggeredBy } : {}),
       },
       timestamp: now,
     });

@@ -118,6 +118,12 @@ describe('human-escalation hold API', { timeout: 30_000 }, () => {
       expect(statusOf(candidate.id)).toBe('quarantined');
       expect(memoryRepo.count()).toBe(0);
       expect(actionsFor(candidate.id)).toEqual(['held']);
+      // The rule placed the hold (the actor); the receipt also names whose
+      // approval ran into it.
+      expect(auditRepo.findByMemory(candidate.id)[0]).toMatchObject({
+        actor: { type: 'system', id: 'hold-gate' },
+        details: { triggeredBy: { type: 'ai', id: 'teamkb-review-agent' } },
+      });
     });
 
     it('approving again is idempotent: still held, no second receipt', async () => {

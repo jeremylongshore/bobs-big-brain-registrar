@@ -249,7 +249,11 @@ export class PromotionService {
           memoryRepo: this.memoryRepo,
           auditRepo: this.auditRepo,
         },
-        { limits: this.holdLimits },
+        {
+          limits: this.holdLimits,
+          // Whose approval ran into the hold. The actor stays the hold gate.
+          ...(promotedBy !== undefined ? { triggeredBy: promotedBy } : {}),
+        },
       );
       if (placed.status === 'held' || placed.status === 'already_held') {
         throw unprocessable(

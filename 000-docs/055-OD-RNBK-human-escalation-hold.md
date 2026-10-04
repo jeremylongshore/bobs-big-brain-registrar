@@ -46,7 +46,9 @@ A candidate is on hold when both are true:
 2. the audit chain carries a `held` receipt for it and no `hold_resolved` receipt.
 
 The `held` receipt is what bounds the hold. It records the triggers, the declared and recommended
-audience, the pattern ids that fired (never the matched text) and `expiresAt`. A member-quarantined
+audience, the pattern ids that fired (never the matched text) and `expiresAt`. Its actor is the
+hold gate, because the rule outcome places the hold. When an approval request ran into the hold
+(`POST /api/candidates/:id/promote`), `details.triggeredBy` names that caller. A member-quarantined
 candidate with no `held` receipt is not a K6 hold and has no expiry; that queue is unchanged.
 
 The three new `AuditAction` values (`held`, `hold_recommended`, `hold_resolved`) live in the
@@ -89,6 +91,10 @@ held at most once: a resolved or expired hold is never reopened.
 **Past the cap the gate fails closed.** A candidate that would be held is left in the inbox,
 unpromoted, and the run reports it (`holdCapBlocked` in the batch result, `hold_cap_reached` from
 the API). Resolve open holds and the next run holds it.
+
+Within one curator run the cap is read once after it is first reached. A slot that a person
+frees while that run is still going is picked up by the next run, not the current one. This errs
+toward not holding, never toward promoting.
 
 An unset or unparseable environment value falls back to the default; it never widens a bound. A
 cap of `0` holds nothing and promotes nothing that would have been held.

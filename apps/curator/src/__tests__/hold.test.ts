@@ -190,6 +190,8 @@ describe('hold entry — a deterministic rule outcome', () => {
         expiresAt: EXPIRY,
       },
     });
+    // A batch sweep has no requesting caller to name.
+    expect(events[0]!.details['triggeredBy']).toBeUndefined();
     // The receipt names patterns, never the text that matched.
     expect(JSON.stringify(events[0])).not.toContain('dana.whitfield');
     expect(verifyAuditChain(audit).breaks).toEqual([]);
@@ -253,9 +255,16 @@ describe('hold entry — a deterministic rule outcome', () => {
       ttlDays: 7,
       maxActiveHolds: 25,
     });
-    expect(
-      holdLimitsFromEnv({ TEAMKB_HOLD_TTL_DAYS: '-1', TEAMKB_HOLD_MAX_ACTIVE: 'lots' }),
-    ).toEqual({});
+    // A bad value never widens a bound: it is dropped, so the default applies.
+    for (const ttl of ['-1', '0', 'forever', 'Infinity', ' ', '']) {
+      for (const max of ['lots', '-5', '2.5', 'Infinity', ' ', '']) {
+        expect(
+          holdLimitsFromEnv({ TEAMKB_HOLD_TTL_DAYS: ttl, TEAMKB_HOLD_MAX_ACTIVE: max }),
+        ).toEqual({});
+      }
+    }
+    // A cap of zero is a real setting: hold nothing, promote nothing held.
+    expect(holdLimitsFromEnv({ TEAMKB_HOLD_MAX_ACTIVE: '0' })).toEqual({ maxActiveHolds: 0 });
   });
 });
 
