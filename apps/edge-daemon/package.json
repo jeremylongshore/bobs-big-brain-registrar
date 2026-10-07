@@ -27,7 +27,7 @@
     "@qmd-team-intent-kb/git-exporter": "workspace:*",
     "@qmd-team-intent-kb/qmd-adapter": "workspace:*",
     "@qmd-team-intent-kb/repo-resolver": "workspace:*",
-    "pino": "^10.3.1",
+    "pino": "^10.4.0",
     "pino-pretty": "^13.0.0"
   },
   "devDependencies": {
