@@ -157,11 +157,13 @@ Subcommands:
   redact --db <path> --tenant <id> --memory-id <id|prefix> --actor <id>
          --reason <text> (--replacement-text <text> | --replacement-file <path>
          | --lines <ranges> | --scan) [--replacement-title <text>]
-         [--dry-run] [--json] [--skip-scrub]
+         [--dry-run] [--json] [--skip-scrub] [--skip-index-scrub]
+         [--index-dir <path>] [--export-dir <path>]
     Replace the content of a promoted memory that holds a secret, in the memory
     row and every candidate copy, with a hash-chained 'redacted' receipt (old
     and new content hashes, pattern names — never the removed text). Then
-    rebuilds FTS, truncates the WAL, VACUUMs and byte-scans the store files.
+    rebuilds FTS, truncates the WAL, VACUUMs and byte-scans the store files,
+    and scrubs + byte-scans every tenant's derived search index.
     Run with no arguments for the full option list.
 
   holds <list|resolve|expire> --db <path> --tenant <id> [...] [--dry-run] [--json]

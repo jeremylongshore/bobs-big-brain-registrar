@@ -5,6 +5,10 @@
  *   node dist/cli.js reindex            # rebuild the derived qmd-index from kb-export (idempotent)
  *   node dist/cli.js canary             # run known-positive controls; exit 1 if any returns 0 hits
  *   node dist/cli.js canary --heal      # canary; on failure, reindex once and re-check
+ *   node dist/cli.js scrub-index [--dry-run] [--json] [--scan-fragments-file <path>]
+ *                                       # remove text that is no longer exported (e.g. after a
+ *                                       # governed redaction) from EVERY tenant's derived index
+ *                                       # under <base>/qmd-index — see scrub-index-cli.ts
  *   node dist/cli.js canary --max-staleness-seconds 86400
  *                                       # ALSO fail if a promotion has waited longer than the
  *                                       # threshold to become searchable (D2 staleness gate;
@@ -39,6 +43,7 @@ import { getDefaultDenseConfig } from './config.js';
 import type { StalenessProbe } from './types.js';
 import { reindex } from './reindex/reindex.js';
 import { runSearchCanary, formatCanaryReport } from './canary/search-canary.js';
+import { runScrubIndex } from './scrub/scrub-index-cli.js';
 
 /** Default tenant — the live brain's tenant (matches apps/api and the nightly MCP config). */
 export const DEFAULT_CLI_TENANT = 'intent-solutions';
@@ -115,6 +120,14 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
 
   const [command, ...rest] = argv;
   const { tenantId, exportDir } = resolveCliContext(env);
+
+  // Before any adapter exists: constructing one opens (and may create) the
+  // native index read-write, which a dry run must not do and a scrub must not
+  // compete with.
+  if (command === 'scrub-index') {
+    return runScrubIndex(rest, { exportDir, log, errLog });
+  }
+
   const adapter = makeAdapter(tenantId, exportDir);
 
   if (command === 'reindex') {
@@ -165,7 +178,9 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
     return report.healthy ? 0 : 1;
   }
 
-  errLog('usage: qmd-index <reindex|canary [--heal] [--max-staleness-seconds <seconds>]>');
+  errLog(
+    'usage: qmd-index <reindex|canary [--heal] [--max-staleness-seconds <seconds>]|scrub-index [--dry-run] [--json] [--scan-fragments-file <path>]>',
+  );
   return 2;
 }
 

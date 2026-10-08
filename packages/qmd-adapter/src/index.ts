@@ -170,3 +170,26 @@ export type {
   SearchCanaryReport,
   SearchCanaryOptions,
 } from './canary/search-canary.js';
+
+// Index scrub — remove redacted text from every tenant's derived indexes (39z.19)
+export {
+  scrubIndexes,
+  formatIndexScrub,
+  indexScrubJson,
+  readFragmentsFile,
+  PINNED_QMD_VERSION,
+  QMD_INDEX_SCHEMA,
+  NATIVE_INDEX_SCHEMA,
+  DENSE_INDEX_SCHEMA,
+  checkSchema,
+} from './scrub/index.js';
+export type {
+  IndexScrubOptions,
+  IndexScrubReport,
+  IndexFileReport,
+  IndexFileStatus,
+  IndexFragmentScan,
+  TenantScrubReport,
+  RemovalCounts,
+  TableShape,
+} from './scrub/index.js';
