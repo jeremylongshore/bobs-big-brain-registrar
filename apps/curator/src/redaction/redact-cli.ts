@@ -438,8 +438,17 @@ function indexScrubFileLines(report: Record<string, unknown>): string[] {
 }
 
 function emitIndexScrubText(outcome: IndexScrubOutcome): void {
-  const verdict = outcome.complete ? 'complete' : 'INCOMPLETE';
+  const verdict = outcome.complete ? 'complete for this memory' : 'INCOMPLETE';
   const lines = [`Index scrub: ${verdict}${outcome.ran ? '' : ' (not run)'}`];
+  if (outcome.ran && outcome.complete) {
+    // Redact-time scope: this memory's rows are gone and every index file was
+    // byte-scanned, but a fragment another memory still exports is reported,
+    // not failed, and the export of THIS memory is not reconciled yet.
+    lines.push(
+      '  Confirm after export --reconcile and reindex with `qmd-index scrub-index`',
+      '  (add --scan-fragments-file to byte-check the removed text).',
+    );
+  }
   lines.push(`  index dir: ${outcome.indexDir}`);
   if (outcome.note !== null) lines.push(`  ${outcome.note}`);
   if (outcome.report !== null) lines.push(...indexScrubFileLines(outcome.report));

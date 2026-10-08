@@ -163,7 +163,10 @@ same command again: it reports `unchanged`, writes no new receipt, and retries t
 still committed and receipted and the command exits `0`, but **the old text is still in the database
 files** and nothing has checked otherwise. Use it only to defer the scrub to a quiet window, and
 finish by running the same command again without the flag. A redaction is not done until a run
-reports `Physical scrub: complete` and `Index scrub: complete`.
+reports `Physical scrub: complete` and `Index scrub: complete for this memory`, and a standalone
+`qmd-index scrub-index` after the exporter reconcile and reindex reports `Index scrub: complete`.
+The redact-time verdict covers the redacted memory's rows only: a fragment that another memory
+still exports is reported there, not counted as a failure.
 
 `--skip-index-scrub` skips only the derived-index scrub. Use it when you are about to delete and
 rebuild the indexes anyway; the indexes keep the old text until you do. `--index-dir` and

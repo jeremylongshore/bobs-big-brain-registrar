@@ -354,6 +354,29 @@ describe.skipIf(!existsSync(resolveIndexScrubCli({})))(
       });
       expect(indexFilesHolding(SECRET)).toEqual([]);
       expect(indexFilesHolding('heliotrope').length).toBeGreaterThan(0);
+
+      // The text report scopes its verdict to this memory and points at the confirming run.
+      const textRc = await dispatch(
+        [
+          'redact',
+          '--db',
+          dbPath,
+          '--tenant',
+          TENANT,
+          '--memory-id',
+          memoryId,
+          '--actor',
+          'jeremy',
+          '--reason',
+          'credential in prose',
+          '--replacement-text',
+          REPLACEMENT,
+        ],
+        deps,
+      );
+      expect(textRc).toBe(0);
+      expect(text(stdoutSpy)).toMatch(/Index scrub: complete for this memory/);
+      expect(text(stdoutSpy)).toMatch(/Confirm after export --reconcile/);
     }, 60_000);
   },
 );
