@@ -131,6 +131,13 @@ describe('scrubIndexes — the 2026-10-04 incident shape', () => {
         ftsRows: 1,
         cacheRows: 1,
       });
+      expect(file(report, tenant, 'native')).toMatchObject({
+        status: 'scrubbed',
+        ftsRebuilt: true,
+        vacuumed: true,
+        walTruncated: true,
+      });
+      expect(file(report, tenant, 'dense')).toMatchObject({ status: 'scrubbed', vacuumed: true });
       expect(file(report, tenant, 'native').removed).toMatchObject({
         staleDocuments: 1,
         fileRows: 1,
@@ -180,8 +187,11 @@ describe('scrubIndexes — the 2026-10-04 incident shape', () => {
 
   it('dry-run reports per tenant and file and writes nothing', () => {
     buildLeakedBrain();
+    // Every fixture db is closed, so no -wal/-shm exists: the in-memory-copy path.
+    expect(Object.keys(fingerprint(indexDir)).some((f) => /-(wal|shm)$/.test(f))).toBe(false);
     const before = fingerprint(indexDir);
     const report = scrubIndexes({ indexDir, exportDir, dryRun: true, fragments: [SECRET] });
+    // Same files (none created), same bytes, same mtimes.
     expect(fingerprint(indexDir)).toEqual(before);
     expect(report.dryRun).toBe(true);
     expect(report.complete).toBe(true);
