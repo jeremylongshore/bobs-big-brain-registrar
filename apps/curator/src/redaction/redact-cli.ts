@@ -4,11 +4,14 @@
  *
  * Replaces the memory's content (and every candidate copy), writes hash-chained
  * `redacted` receipts, then removes the freed bytes from the database files and
- * byte-scans the files to confirm it. Output — text, JSON, errors — carries ids,
- * hashes and pattern names only, never the removed text.
+ * byte-scans the files to confirm it. Then it scrubs every tenant's derived
+ * search index (bead 39z.19, `index-scrub-runner.ts`) and byte-scans those
+ * files with the same removed fragments. Output — text, JSON, errors — carries
+ * ids, hashes, paths, counts and pattern names only, never the removed text.
  *
  * Exit: 0 redacted / would redact / already redacted · 3 refused ·
- * 4 redacted but the physical scrub is incomplete · 2 usage error · 1 I/O failure.
+ * 4 redacted but the physical or index scrub is incomplete · 2 usage error ·
+ * 1 I/O failure.
  *
  * @module redaction/redact-cli
  */
@@ -30,6 +33,8 @@ import type { FragmentRowHit } from '@qmd-team-intent-kb/store';
 
 import { closeQuietly, requireFlags, resolveMemoryId, tokenizeFlags } from '../cli-args.js';
 import type { CliDatabase, CliDbDeps, Parsed } from '../cli-args.js';
+import { defaultIndexDirs, runIndexScrub } from './index-scrub-runner.js';
+import type { IndexScrubOutcome } from './index-scrub-runner.js';
 import { redactMemory } from './redact-memory.js';
 import type { RedactMemoryResult, RedactionMode, RedactionSpan } from './redact-memory.js';
 
@@ -37,6 +42,7 @@ const REDACT_USAGE = `Usage: curator-cli redact --db <path> --tenant <id> --memo
          --actor <id> --reason <text>
          (--replacement-text <text> | --replacement-file <path> | --lines <ranges> | --scan)
          [--replacement-title <text>] [--show-title] [--dry-run] [--json] [--skip-scrub]
+         [--index-dir <path>] [--export-dir <path>] [--skip-index-scrub]
 
   --db <path>               SQLite path (required — refuses an implicit in-memory store).
   --tenant <id>             Tenant scope (required).
@@ -59,12 +65,21 @@ const REDACT_USAGE = `Usage: curator-cli redact --db <path> --tenant <id> --memo
   --json                    Emit a JSON envelope in place of the summary.
   --skip-scrub              Do not rebuild FTS / truncate the WAL / VACUUM afterwards.
                             The old bytes then remain in the files until you do.
+  --index-dir <path>        Derived search indexes, one subdirectory per tenant
+                            (default: qmd-index beside the --db file).
+  --export-dir <path>       kb-export tree (default: kb-export beside the --db file).
+  --skip-index-scrub        Do not scrub the derived indexes (use when you are about to
+                            delete and rebuild them anyway). They keep the old text.
 
 Every mode re-scans the result and refuses if a secret pattern still fires.
 Output never contains the removed text.
 
-Exit: 0 done · 3 refused · 4 redacted but physical scrub incomplete ·
-      2 usage error · 1 I/O failure.
+Every tenant's index under --index-dir is scrubbed: the memory's rows are
+removed from the qmd cache, native FTS5 and dense sidecar until the exporter
+rewrites its file, then every index file is byte-scanned for the removed text.
+
+Exit: 0 done · 3 refused · 4 redacted but the physical or index scrub is
+      incomplete · 2 usage error · 1 I/O failure.
 `;
 
 const VALUE_FLAGS = new Set([
@@ -77,8 +92,17 @@ const VALUE_FLAGS = new Set([
   '--replacement-file',
   '--lines',
   '--replacement-title',
+  '--index-dir',
+  '--export-dir',
 ]);
-const BOOL_FLAGS = new Set(['--scan', '--dry-run', '--json', '--skip-scrub', '--show-title']);
+const BOOL_FLAGS = new Set([
+  '--scan',
+  '--dry-run',
+  '--json',
+  '--skip-scrub',
+  '--show-title',
+  '--skip-index-scrub',
+]);
 
 const REFUSED_EXIT = 3;
 const SCRUB_INCOMPLETE_EXIT = 4;
@@ -86,8 +110,8 @@ const SCRUB_INCOMPLETE_EXIT = 4;
 /** What the operator must still do after a redaction. Printed on every live run. */
 const REDACTION_NEXT_STEPS: readonly string[] = [
   'Rotate the credential. Redaction removes the text from this store; it does not un-leak it.',
-  'Run the exporter in reconcile mode so the exported Markdown file is rewritten.',
-  'Reindex (qmd and the dense index) — both still hold the old text until rebuilt.',
+  'Run the exporter in reconcile mode so the exported Markdown file is rewritten. Until then the memory is missing from search, and a reindex would re-add the old text.',
+  'Reindex (qmd and the dense index) for every tenant, then run `qmd-index scrub-index` (with --scan-fragments-file if you kept the removed text in a 0600 file) to confirm.',
   'Take a fresh backup, then let older backups age out: every existing backup (local, VPS, R2, borg, B2) still holds the old text.',
 ];
 
@@ -109,6 +133,9 @@ interface RedactOpts {
   json: boolean;
   skipScrub: boolean;
   showTitle: boolean;
+  skipIndexScrub: boolean;
+  indexDir: string;
+  exportDir: string;
 }
 
 function parseModeSource(
@@ -140,6 +167,7 @@ function parseArgs(args: readonly string[]): Parsed<{ opts: RedactOpts }> {
   if (!required.ok) return required;
   const mode = parseModeSource(values, bools);
   if (!mode.ok) return mode;
+  const dirs = defaultIndexDirs(values.get('--db')!);
   return {
     ok: true,
     opts: {
@@ -154,6 +182,9 @@ function parseArgs(args: readonly string[]): Parsed<{ opts: RedactOpts }> {
       json: bools.has('--json'),
       skipScrub: bools.has('--skip-scrub'),
       showTitle: bools.has('--show-title'),
+      skipIndexScrub: bools.has('--skip-index-scrub'),
+      indexDir: values.get('--index-dir') ?? dirs.indexDir,
+      exportDir: values.get('--export-dir') ?? dirs.exportDir,
     },
   };
 }
@@ -307,10 +338,24 @@ function scrubJson(scrub: ScrubSummary | null): Record<string, unknown> | null {
   };
 }
 
+function indexScrubJson(outcome: IndexScrubOutcome | null): Record<string, unknown> | null {
+  if (outcome === null) return null;
+  return {
+    ran: outcome.ran,
+    complete: outcome.complete,
+    index_dir: outcome.indexDir,
+    export_dir: outcome.exportDir,
+    note: outcome.note,
+    exit_code: outcome.exitCode,
+    report: outcome.report,
+  };
+}
+
 function emitJson(
   opts: RedactOpts,
   result: RedactMemoryResult,
   scrub: ScrubSummary | null,
+  indexScrub: IndexScrubOutcome | null,
   title: string | null,
 ): void {
   const body = result.ok
@@ -330,6 +375,7 @@ function emitJson(
         candidate_ids: result.candidateIds,
         audit_event_ids: result.auditEventIds,
         physical_scrub: scrubJson(scrub),
+        index_scrub: indexScrubJson(indexScrub),
         next_steps: opts.dryRun ? [] : REDACTION_NEXT_STEPS,
       }
     : {
@@ -368,10 +414,58 @@ function emitScrubText(scrub: ScrubSummary): void {
   }
 }
 
+/** Pull the per-file lines out of the child's JSON envelope for the text report. */
+function indexScrubFileLines(report: Record<string, unknown>): string[] {
+  const tenants = Array.isArray(report['tenants']) ? report['tenants'] : [];
+  const lines: string[] = [];
+  for (const tenant of tenants as Array<{ tenant?: unknown; files?: unknown }>) {
+    const files = Array.isArray(tenant.files) ? tenant.files : [];
+    for (const file of files as Array<{ file?: unknown; status?: unknown; errors?: unknown }>) {
+      lines.push(`    ${String(file.file)} [${String(file.status)}]`);
+      const errors = Array.isArray(file.errors) ? file.errors : [];
+      for (const error of errors) lines.push(`      ${String(error)}`);
+    }
+  }
+  const scan = report['fragment_scan'] as Record<string, unknown> | null | undefined;
+  if (scan !== null && scan !== undefined) {
+    lines.push(
+      `    byte scan: ${String(scan['fragments_checked'])} fragment(s) in ` +
+        `${String(scan['files_scanned'])} file(s); ${String(scan['residual_fragments'])} still ` +
+        `present, ${String(scan['unexplained_residual_fragments'])} unexplained`,
+    );
+  }
+  return lines;
+}
+
+function emitIndexScrubText(outcome: IndexScrubOutcome): void {
+  const verdict = outcome.complete ? 'complete for this memory' : 'INCOMPLETE';
+  const lines = [`Index scrub: ${verdict}${outcome.ran ? '' : ' (not run)'}`];
+  if (outcome.ran && outcome.complete) {
+    // Redact-time scope: this memory's rows are gone and every index file was
+    // byte-scanned, but a fragment another memory still exports is reported,
+    // not failed, and the export of THIS memory is not reconciled yet.
+    lines.push(
+      '  Confirm after export --reconcile and reindex with `qmd-index scrub-index`',
+      '  (add --scan-fragments-file to byte-check the removed text).',
+    );
+  }
+  lines.push(`  index dir: ${outcome.indexDir}`);
+  if (outcome.note !== null) lines.push(`  ${outcome.note}`);
+  if (outcome.report !== null) lines.push(...indexScrubFileLines(outcome.report));
+  if (!outcome.complete) {
+    lines.push(
+      '  The redaction is committed and receipted, but an index may still hold the old text.',
+      '  Stop the brain API and MCP-using sessions, then run `qmd-index scrub-index`.',
+    );
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
 function emitText(
   opts: RedactOpts,
   result: RedactMemoryResult,
   scrub: ScrubSummary | null,
+  indexScrub: IndexScrubOutcome | null,
   title: string | null,
 ): void {
   if (!result.ok) {
@@ -400,6 +494,7 @@ function emitText(
   }
   for (const id of result.auditEventIds) process.stdout.write(`  receipt=${id}\n`);
   if (scrub !== null) emitScrubText(scrub);
+  if (indexScrub !== null) emitIndexScrubText(indexScrub);
   if (!opts.dryRun) {
     process.stdout.write('\nStill to do:\n');
     REDACTION_NEXT_STEPS.forEach((step, i) => process.stdout.write(`  ${i + 1}. ${step}\n`));
@@ -460,13 +555,26 @@ export async function cmdRedact(args: string[], deps: CliDbDeps): Promise<number
 
     const runScrub = result.ok && !opts.dryRun && !opts.skipScrub;
     const scrub = runScrub ? scrubAndVerify(db, opts.dbPath, secureDelete, removedFragments) : null;
+    // After the DB scrub, with the same in-memory fragments. An `unchanged`
+    // re-run has no fragments to scan for but still scrubs (that is the retry).
+    const runIndex = result.ok && !opts.dryRun && !opts.skipIndexScrub;
+    const indexScrub = runIndex
+      ? runIndexScrub({
+          indexDir: opts.indexDir,
+          exportDir: opts.exportDir,
+          memoryId: result.memoryId,
+          fragments: removedFragments,
+        })
+      : null;
 
     const title = displayTitle(opts, existing === null ? null : existing.title);
-    if (opts.json) emitJson(opts, result, scrub, title);
-    else emitText(opts, result, scrub, title);
+    if (opts.json) emitJson(opts, result, scrub, indexScrub, title);
+    else emitText(opts, result, scrub, indexScrub, title);
 
     if (!result.ok) return REFUSED_EXIT;
-    return scrub !== null && !scrub.complete ? SCRUB_INCOMPLETE_EXIT : 0;
+    const dbIncomplete = scrub !== null && !scrub.complete;
+    const indexIncomplete = indexScrub !== null && !indexScrub.complete;
+    return dbIncomplete || indexIncomplete ? SCRUB_INCOMPLETE_EXIT : 0;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (opts.json) {

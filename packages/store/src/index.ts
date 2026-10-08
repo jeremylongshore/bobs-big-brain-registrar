@@ -29,9 +29,16 @@ export {
   scrubFreedPages,
   storeFilesOf,
   scanStoreFilesForFragments,
+  scanFilesForFragments,
   findRowsContaining,
 } from './redaction-scrub.js';
-export type { PhysicalScrubReport, FragmentScanReport, FragmentRowHit } from './redaction-scrub.js';
+export type {
+  PhysicalScrubReport,
+  FragmentScanReport,
+  FragmentRowHit,
+  FilesFragmentScanReport,
+  FragmentFileHit,
+} from './redaction-scrub.js';
 export { verifyAuditChain, type AuditVerifyResult, type AuditChainBreak } from './audit-verify.js';
 export { computeEntryHash, canonicalRowJson, CURRENT_AUDIT_HASH_VERSION } from './audit-chain.js';
 export type { CanonicalAuditRow, AuditHashVersion } from './audit-chain.js';

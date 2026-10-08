@@ -116,13 +116,17 @@ export interface FragmentScanReport {
 
 const SCAN_CHUNK_BYTES = 4 * 1024 * 1024;
 
-/** Scan one file for every needle, in chunks that overlap by the longest needle. */
-function scanFile(path: string, needles: Buffer[], found: Set<number>): boolean {
+/**
+ * Scan one file for every needle, in chunks that overlap by the longest needle.
+ * Adds each needle index found to `found`; returns how many distinct needles
+ * this file holds.
+ */
+function scanFile(path: string, needles: Buffer[], found: Set<number>): number {
   const overlap = Math.max(0, ...needles.map((n) => n.length)) - 1;
   const size = statSync(path).size;
   const buffer = Buffer.alloc(SCAN_CHUNK_BYTES + Math.max(overlap, 0));
+  const inFile = new Set<number>();
   const fd = openSync(path, 'r');
-  let hit = false;
   try {
     let position = 0;
     let carried = 0;
@@ -131,10 +135,8 @@ function scanFile(path: string, needles: Buffer[], found: Set<number>): boolean 
       if (read <= 0) break;
       const window = buffer.subarray(0, carried + read);
       needles.forEach((needle, index) => {
-        if (window.indexOf(needle) !== -1) {
-          found.add(index);
-          hit = true;
-        }
+        if (needle.length === 0 || inFile.has(index)) return;
+        if (window.indexOf(needle) !== -1) inFile.add(index);
       });
       position += read;
       carried = Math.min(Math.max(overlap, 0), window.length);
@@ -143,7 +145,57 @@ function scanFile(path: string, needles: Buffer[], found: Set<number>): boolean 
   } finally {
     closeSync(fd);
   }
-  return hit;
+  for (const index of inFile) found.add(index);
+  return inFile.size;
+}
+
+/** One file that still holds removed text: its path and how many fragments. Never the text. */
+export interface FragmentFileHit {
+  file: string;
+  /** Distinct fragments found in this file. */
+  fragments: number;
+}
+
+/** Result of a byte scan of an arbitrary file list for removed text. */
+export interface FilesFragmentScanReport {
+  /** Files that existed and were scanned. */
+  filesScanned: string[];
+  /** How many fragments were searched for. */
+  fragmentCount: number;
+  /** Indexes (into the caller's fragment list) of fragments found anywhere. Never text. */
+  residualFragmentIndexes: number[];
+  /** Files holding at least one fragment, with a per-file count. */
+  hits: FragmentFileHit[];
+}
+
+/**
+ * Byte-scan any list of files for each fragment's UTF-8 bytes. Missing files are
+ * skipped (not an error). The report carries file paths, counts and fragment
+ * INDEXES only, so it can be logged without disclosing what it looked for.
+ * Same blind spot as {@link scanStoreFilesForFragments}: only contiguous bytes
+ * are found.
+ */
+export function scanFilesForFragments(
+  files: readonly string[],
+  fragments: readonly string[],
+): FilesFragmentScanReport {
+  const needles = fragments.map((f) => Buffer.from(f, 'utf8'));
+  const found = new Set<number>();
+  const filesScanned: string[] = [];
+  const hits: FragmentFileHit[] = [];
+  for (const file of files) {
+    if (!existsSync(file)) continue;
+    filesScanned.push(file);
+    if (needles.length === 0) continue;
+    const count = scanFile(file, needles, found);
+    if (count > 0) hits.push({ file, fragments: count });
+  }
+  return {
+    filesScanned,
+    fragmentCount: fragments.length,
+    residualFragmentIndexes: [...found].sort((a, b) => a - b),
+    hits,
+  };
 }
 
 /**
@@ -161,20 +213,12 @@ export function scanStoreFilesForFragments(
   dbPath: string,
   fragments: readonly string[],
 ): FragmentScanReport {
-  const needles = fragments.map((f) => Buffer.from(f, 'utf8'));
-  const found = new Set<number>();
-  const filesScanned: string[] = [];
-  const residualFiles: string[] = [];
-  for (const file of storeFilesOf(dbPath)) {
-    if (!existsSync(file)) continue;
-    filesScanned.push(file);
-    if (needles.length > 0 && scanFile(file, needles, found)) residualFiles.push(file);
-  }
+  const scan = scanFilesForFragments(storeFilesOf(dbPath), fragments);
   return {
-    filesScanned,
-    fragmentCount: fragments.length,
-    residualFragmentIndexes: [...found].sort((a, b) => a - b),
-    residualFiles,
+    filesScanned: scan.filesScanned,
+    fragmentCount: scan.fragmentCount,
+    residualFragmentIndexes: scan.residualFragmentIndexes,
+    residualFiles: scan.hits.map((hit) => hit.file),
   };
 }
 

@@ -4,8 +4,9 @@
 **Date:** 2026-10-04
 **Status:** Active
 **Scope:** the `curator-cli narrow-audience` and `curator-cli redact` subcommands, the
-`audience_narrowing` policy rule, and `POST /api/memories/:id/narrow-audience` (Epic K bead K3,
-expanded scope).
+`audience_narrowing` policy rule, `POST /api/memories/:id/narrow-audience` (Epic K bead K3,
+expanded scope), and the derived-index scrub `qmd-index scrub-index` (umbrella bead
+`compile-then-govern-39z.19`, section 4.7).
 **Decision record:** [`053-AT-DECR`](053-AT-DECR-claim-level-audience-governance-k1.md).
 
 ---
@@ -111,7 +112,9 @@ documentation placeholder connection string are false alarms.
 
 Steps 1 to 4 are one transaction. Then, outside the transaction, the command rebuilds the FTS5
 index, truncates the write-ahead log, runs `VACUUM`, truncates the log again, and byte-scans the
-database, `-wal` and `-shm` files for the removed text. The report says what each step did.
+database, `-wal` and `-shm` files for the removed text. Last, it scrubs every tenant's derived
+search index and byte-scans those files with the same removed text (section 4.7). The report says
+what each step did.
 
 ### 4.2 What the receipt holds
 
@@ -147,9 +150,11 @@ replaces the title as well.
 ### 4.5 Exit codes
 
 `0` redacted, would redact, or already redacted · `3` refused · `4` redacted and receipted, but the
-physical scrub is incomplete · `2` usage error · `1` I/O failure.
+physical scrub or the index scrub is incomplete · `2` usage error · `1` I/O failure.
 
-Exit `4` means another process held the store while the scrub ran. The redaction is committed and
+Exit `4` means another process held the store or an index while the scrub ran, or the index scrub
+could not finish (section 4.7 lists why: a busy index, an unexpected qmd schema, a refused mass
+removal, removed text still in an index file, or the scrub tool not found). The redaction is committed and
 its receipts are on the chain, so the chain verifies the same on the exit `0` and exit `4` paths;
 only the removal of the old bytes from the files is unfinished. Stop the other process and run the
 same command again: it reports `unchanged`, writes no new receipt, and retries the scrub.
@@ -158,13 +163,21 @@ same command again: it reports `unchanged`, writes no new receipt, and retries t
 still committed and receipted and the command exits `0`, but **the old text is still in the database
 files** and nothing has checked otherwise. Use it only to defer the scrub to a quiet window, and
 finish by running the same command again without the flag. A redaction is not done until a run
-reports `Physical scrub: complete`.
+reports `Physical scrub: complete` and `Index scrub: complete for this memory`, and a standalone
+`qmd-index scrub-index` after the exporter reconcile and reindex reports `Index scrub: complete`.
+The redact-time verdict covers the redacted memory's rows only: a fragment that another memory
+still exports is reported there, not counted as a failure.
+
+`--skip-index-scrub` skips only the derived-index scrub. Use it when you are about to delete and
+rebuild the indexes anyway; the indexes keep the old text until you do. `--index-dir` and
+`--export-dir` default to `qmd-index/` and `kb-export/` beside the `--db` file, which is the
+`~/.teamkb` layout.
 
 ### 4.6 Procedure
 
-Stop the processes that hold the store open (the brain API service, any running govern or compile
-job) so the scrub is not blocked, and confirm there is free disk for `VACUUM` (up to the size of the
-database).
+Stop the processes that hold the store or the indexes open (the brain API service, Claude Code
+sessions using the brain MCP server, any running govern, compile or reindex job) so the scrubs are
+not blocked, and confirm there is free disk for `VACUUM` (up to the size of the largest database).
 
 ```bash
 # 1. Preview. Read-only. --show-title prints the title so you can confirm the target.
@@ -186,11 +199,98 @@ Then, in this order:
 1. **Rotate the credential.** Redaction removes the text from this store. It does not un-leak it.
 2. **Exporter reconcile**, so the exported Markdown file is rewritten:
    `node apps/git-exporter/dist/main.js export --db <path> --out <kb-export dir> --tenant <id> --reconcile`.
-3. **Reindex** qmd and the dense index. Both still hold the old text until rebuilt. For the dense
-   sidecar, deleting it and reindexing is always safe ([`051-AT-RNBK`](051-AT-RNBK-embedder-service-and-dense-index-runbook.md)).
+3. **Reindex every tenant**, then **scrub the indexes again** to confirm. There is one index
+   directory per tenant (section 4.7) and a reindex touches only the tenant it runs for:
+   `TEAMKB_TENANT_ID=<tenant> node packages/qmd-adapter/dist/cli.js reindex` for each directory
+   under `~/.teamkb/qmd-index/`, then `node packages/qmd-adapter/dist/cli.js scrub-index` (add
+   `--scan-fragments-file` if you kept the removed text in a 0600 file).
 4. **Take a fresh backup.**
 5. **Let older backups age out**, or delete them deliberately. See section 5.
 6. Restart the processes you stopped.
+
+### 4.7 The derived-index scrub
+
+**Why it exists.** On 2026-10-04, after `curator redact`, `git-exporter export --reconcile` and
+`qmd-adapter reindex`, the redacted text was still under `~/.teamkb/qmd-index/`, for three
+reasons:
+
+1. **qmd's own BM25 cache** (`<tenant>/cache/qmd/index.sqlite`) keys content by hash. When a file
+   changes or moves, qmd marks the old `documents` row inactive (`active = 0`) and keeps its
+   `content` row; `qmd cleanup` removes inactive rows but leaves orphaned `content` rows, and the
+   FTS5 segments keep the old tokens until a rebuild.
+2. **The native FTS5 index** (`<tenant>/native-fts5.sqlite`) kept the moved document's old row, and
+   its `-wal` held the text until a checkpoint truncated it.
+3. **There is one index directory per tenant.** `intent-solutions` is the API and CLI tenant;
+   `local` is the plugin's default tenant when `TEAMKB_TENANT_ID` is unset. `local` is live: the
+   plugin's local-mode `brain_govern` updates it. A reindex touches only the tenant it runs for.
+
+The dense sidecar (`<tenant>/dense-vec.sqlite`) also stores plaintext: the first 160 characters
+of each document as its snippet, plus the embedding of the first 2000 characters.
+
+**What it does, per tenant directory it finds** (tenants are discovered, not named):
+
+- Reconciles each index file against `kb-export`, the source of truth for what should be indexed.
+  A row goes when its document is not exported at that path with that content: qmd rows by path
+  and SHA-256, native FTS5 rows by id and exact text, dense rows by id and the hash of the embedded
+  text.
+- Removes qmd's inactive rows, orphaned `content` rows, orphaned vector rows and its derived LLM
+  cache, and native FTS5 bookkeeping rows for removed documents.
+- Rebuilds and optimizes both FTS5 indexes.
+- With `secure_delete` on, truncates the WAL, runs `VACUUM` and truncates the WAL again.
+- Optionally byte-scans every file under the index directory (databases, `-wal`, `-shm`, anything
+  else) for removed fragments. The report names files and counts, never the text.
+
+Removed rows come back from `kb-export` at the next reindex or native refresh, so the scrub costs
+recall only for documents whose export is stale.
+
+**Inside `curator-cli redact`.** At redaction time the export has not been reconciled yet, so the
+redact run also removes the redacted memory's rows from every tenant's index outright, and keeps
+the native index's bookkeeping row so a live refresh does not re-read the old export file. The
+memory is missing from search until the exporter rewrites its file and the next refresh or reindex
+adds it back. If you reindex before running the exporter, the old text comes back: follow the order
+in section 4.6. The curator runs the scrub as a child process (`qmd-index scrub-index`), because the
+govern core must build without the retrieval package; the removed text goes to it on stdin, never
+in its arguments and never on disk. Point `TEAMKB_QMD_INDEX_CLI` at the CLI if it is not at
+`packages/qmd-adapter/dist/cli.js`.
+
+**Standalone.**
+
+```bash
+# Preview: read only. Per tenant and file, what would be removed (counts only).
+node packages/qmd-adapter/dist/cli.js scrub-index --dry-run --json
+
+# Scrub. Optionally prove a removed value is gone (file must be mode 0600; delete it after).
+node packages/qmd-adapter/dist/cli.js scrub-index --scan-fragments-file /dev/shm/removed.txt
+shred -u /dev/shm/removed.txt
+```
+
+`--index-dir` defaults to `<TEAMKB_BASE_PATH>/qmd-index`; `--export-dir` to `TEAMKB_EXPORT_DIR` or
+`<TEAMKB_BASE_PATH>/kb-export`. A fragments file holds one fragment per line.
+
+**Exit codes:** `0` complete (a dry run: every file was read) · `4` incomplete: a database was busy,
+a step failed, a mass removal was refused, or (live) removed text is still in an index file · `5`
+refused: an index file has an unexpected table layout and was not touched · `2` usage error · `1`
+I/O failure. Inside `curator-cli redact`, every index-scrub failure is reported as exit `4`, since
+the redaction itself is committed.
+
+**Guards.**
+
+- **Schema pin.** The scrub compares the tables and columns it depends on with the layout recorded
+  for the pinned qmd version (`PINNED_QMD_VERSION` in `packages/qmd-adapter/src/scrub/schema-guard.ts`;
+  a test fails if the root `package.json` pins a different `@tobilu/qmd`). Any difference refuses
+  that file. After a qmd upgrade, re-check the layout before scrubbing.
+- **Busy databases.** Each database is opened with a two-second busy wait
+  (`--busy-timeout-ms`). A database another process holds is reported by name as `busy` and the run
+  exits `4`. Stop the brain API and the MCP-using sessions, or run during a quiet window, and run it
+  again. Re-running is safe: the scrub is idempotent.
+- **Mass removal.** A reconcile that would remove more than a quarter of a file's documents (and
+  more than 50) is refused for that file. That catches a wrong `--export-dir`, and also an index
+  that has not been reindexed in a long time: reindex that tenant first, or pass
+  `--allow-mass-removal`. A missing or empty export tree disables reconciliation; only targeted,
+  inactive and orphan rows are removed then.
+- **Dry run.** Writes nothing. A database whose WAL is empty is read from an in-memory copy; one
+  whose WAL holds frames is opened read-only in place, which leaves the database and WAL bytes
+  unchanged but updates read-lock slots in its existing `-shm`, as every reader does.
 
 ## 5. What redaction cannot reach
 
@@ -202,8 +302,11 @@ Stated plainly, because a redaction that claims more than it does is worse than 
   touch any of them. They age out on their retention schedule or are deleted by hand.
 - **The exported tree and its history.** `kb-export/` holds a Markdown copy until the exporter
   reconciles. If that tree is committed to git, the old text stays in git history.
-- **The search indexes.** The qmd index and the dense vector sidecar are derived copies and hold the
-  old text until reindexed.
+- **The search indexes, partly.** The index scrub (section 4.7) removes the text from every tenant's
+  qmd cache, native FTS5 index and dense sidecar under the index directory. An index somewhere
+  else (another machine, a copied directory, a personal `~/.cache/qmd`) is not reached. The dense
+  sidecar's vectors were computed from the old text; the scrub removes the vectors of changed
+  documents, but a vector is not text and the byte scan cannot check one.
 - **Compile-side and spool artifacts.** A memory that came from a spool file or a compiled wiki page
   has its source text in `spool/`, `brain/raw/` and `brain/wiki/`. Redaction does not edit those.
 - **Other rows.** Redaction rewrites one memory and its candidate copies. If the same text is in
@@ -220,7 +323,9 @@ Two more limits worth knowing:
   guesses against that hash. This is a second reason rotation is step 1.
 - **The byte scan is evidence, with a stated blind spot.** It finds a removed fragment only where its
   bytes are contiguous in a file. A row larger than a database page spills into overflow pages, so a
-  fragment that straddled a page boundary in the old row can be missed.
+  fragment that straddled a page boundary in the old row can be missed. FTS5 segments store
+  stemmed, prefix-compressed tokens, not the text, so the byte scan cannot see a token there; the
+  FTS rebuild is what removes them.
 
 ## 6. What still works after a redaction
 

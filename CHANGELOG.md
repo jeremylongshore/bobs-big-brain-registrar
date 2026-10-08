@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Governed redaction now scrubs every tenant's derived search index (umbrella bead
+  `compile-then-govern-39z.19`, runbook `000-docs/054-OD-RNBK` §4.7).** On 2026-10-04 the redacted
+  text survived `curator redact` + `export --reconcile` + `reindex` in `~/.teamkb/qmd-index/`:
+  qmd's BM25 cache keeps inactive rows and orphaned `content` rows, the native FTS5 index kept the
+  moved row and its `-wal` the text, and the plugin's `local` tenant index was never reindexed. New
+  `qmd-index scrub-index [--dry-run] [--json] [--scan-fragments-file <path>]` discovers every tenant
+  directory, reconciles the qmd cache, native FTS5 index and dense sidecar (whose snippet column is
+  plaintext) against kb-export, rebuilds and optimizes both FTS5 indexes, and runs
+  `secure_delete` + WAL truncate + `VACUUM`; an optional byte scan of every file under the index
+  directory reports file names and counts, never the text. It refuses an index file whose layout
+  differs from the pinned qmd 2.5.3 schema (exit `5`), reports a busy database by name (exit `4`),
+  and refuses a reconcile that would remove more than a quarter of a file's documents unless
+  `--allow-mass-removal`. `curator-cli redact` runs it after the database scrub (as a child process,
+  removed text on stdin) and byte-scans the indexes with the same removed text; new flags
+  `--index-dir`, `--export-dir` (default: beside `--db`) and `--skip-index-scrub`. An incomplete
+  index scrub makes `redact` exit `4`. `@qmd-team-intent-kb/store` adds `scanFilesForFragments`.
+
 - **Bounded human-escalation hold for ambiguous audience and secret decisions (Epic K bead K6,
   decision `053-AT-DECR`, reusing the `014-AT-DECR` recommend / pipeline-owns split).** A candidate
   whose audience or secret question the rules can detect but not decide is now put on a hold; it is
