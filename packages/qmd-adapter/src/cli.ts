@@ -225,10 +225,16 @@ export function resolveCliTimeout(
 ): { ok: true; value: number | undefined } | { ok: false; message: string } {
   const idx = args.indexOf('--timeout-ms');
   if (idx !== -1) {
-    const v = parseTimeoutMs(args[idx + 1]);
-    return v === null
-      ? { ok: false, message: 'usage: --timeout-ms <positive integer milliseconds>' }
-      : { ok: true, value: v };
+    const raw = args[idx + 1];
+    const v = parseTimeoutMs(raw);
+    if (v !== null) return { ok: true, value: v };
+    return {
+      ok: false,
+      message:
+        raw === undefined
+          ? 'usage: --timeout-ms <positive integer milliseconds> (missing value after --timeout-ms)'
+          : `usage: --timeout-ms <positive integer milliseconds> (got "${raw}")`,
+    };
   }
   const raw = env[QMD_TIMEOUT_ENV];
   if (raw === undefined || raw.trim() === '') return { ok: true, value: undefined };

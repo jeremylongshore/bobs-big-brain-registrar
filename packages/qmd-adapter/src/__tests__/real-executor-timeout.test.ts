@@ -162,7 +162,11 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
 
   it('output beyond the cap terminates the group and is reported', async () => {
     const fake = script('chatty-qmd', 'head -c 11000000 /dev/zero\nsleep 300');
-    const r = await new RealQmdExecutor({ binary: fake, killGraceMs: 500 }).execute(['update']);
+    const started = Date.now();
+    // A long grace that a flooding process would otherwise get: overflow
+    // must skip it and SIGKILL straight away.
+    const r = await new RealQmdExecutor({ binary: fake, killGraceMs: 10_000 }).execute(['update']);
+    expect(Date.now() - started).toBeLessThan(8_000);
     expect(r.failure).toMatchObject({ kind: 'output_overflow' });
     expect(describeQmdFailure(['update'], r).message).toContain('process group was terminated');
   }, 15_000);
@@ -174,11 +178,9 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
     expect(liveGroupCount()).toBe(0);
   });
 
-  it('a SIGINT to the host process still takes the detached qmd group down', async () => {
-    // Detaching qmd into its own group means a terminal Ctrl-C no longer
-    // reaches it; the executor must forward it, or interrupting `reindex`
-    // would recreate the orphan. Drive a real host process to prove it.
-    const fake = script('slow-qmd', `sleep 300 &\necho $! > "${pidFile}"\nwait`);
+  async function sigintHost(
+    fake: string,
+  ): Promise<{ exitSignal: NodeJS.Signals | null; grandchild: number }> {
     const host = join(dir, 'host.mts');
     const executorPath = resolve(HERE, '../executor/real-executor.ts');
     writeFileSync(
@@ -191,14 +193,31 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
     const loader = pathToFileURL(resolve(HERE, '../../../../node_modules/tsx/dist/loader.mjs'));
     const child = spawn(process.execPath, ['--import', loader.href, host], { stdio: 'ignore' });
     const exited = new Promise<NodeJS.Signals | null>((r) => child.on('exit', (_c, sig) => r(sig)));
-
     const grandchild = Number(await waitForFile(pidFile, 10_000));
     expect(alive(grandchild)).toBe(true);
     child.kill('SIGINT');
+    return { exitSignal: await exited, grandchild };
+  }
 
+  it('a SIGINT to the host process still takes the detached qmd group down', async () => {
+    // Detaching qmd into its own group means a terminal Ctrl-C no longer
+    // reaches it; the executor must forward it, or interrupting `reindex`
+    // would recreate the orphan. Drive a real host process to prove it.
+    const fake = script('slow-qmd', `sleep 300 &\necho $! > "${pidFile}"\nwait`);
+    const { exitSignal, grandchild } = await sigintHost(fake);
     // The executor signals the qmd group, then re-raises SIGINT (no other
     // listener) so the host still dies of it — with no survivor left behind.
-    expect(await exited).toBe('SIGINT');
+    expect(exitSignal).toBe('SIGINT');
+    expect(await waitGone(grandchild)).toBe(true);
+  }, 30_000);
+
+  it('a SIGINT to the host SIGKILLs a qmd group that ignores SIGTERM', async () => {
+    const fake = script(
+      'stubborn-qmd',
+      `sh -c 'trap "" TERM; echo $$ > "${pidFile}"; while :; do sleep 1; done' &\nwait`,
+    );
+    const { exitSignal, grandchild } = await sigintHost(fake);
+    expect(exitSignal).toBe('SIGINT');
     expect(await waitGone(grandchild)).toBe(true);
   }, 30_000);
 });

@@ -61,7 +61,6 @@ function signalGroup(pid: number, signal: NodeJS.Signals): void {
 
 /** Poll until the group is gone or `ms` elapses; returns whether it is gone. */
 async function waitGroupGone(pid: number, ms: number): Promise<boolean> {
-  if (!USE_PROCESS_GROUP) return true;
   const deadline = Date.now() + ms;
   while (groupAlive(pid)) {
     if (Date.now() >= deadline) return false;
@@ -186,12 +185,22 @@ export class RealQmdExecutor implements QmdExecutor {
       const pid = child.pid;
       if (pid !== undefined && USE_PROCESS_GROUP) trackGroup(pid);
 
-      const terminate = (): Promise<boolean> => {
+      // `hard` skips the SIGTERM grace: a process flooding its pipes is not
+      // going to honour a polite request.
+      const terminate = (hard = false): Promise<boolean> => {
         if (terminating !== null) return terminating;
         if (pid === undefined) return (terminating = Promise.resolve(true));
         terminating = (async () => {
-          signalGroup(pid, 'SIGTERM');
-          if (await waitGroupGone(pid, this.killGraceMs)) return true;
+          if (!USE_PROCESS_GROUP) {
+            // No process groups (Windows): only the direct child can be
+            // signalled, so its descendants can never be confirmed gone.
+            signalGroup(pid, 'SIGKILL');
+            return false;
+          }
+          if (!hard) {
+            signalGroup(pid, 'SIGTERM');
+            if (await waitGroupGone(pid, this.killGraceMs)) return true;
+          }
           signalGroup(pid, 'SIGKILL');
           const gone = await waitGroupGone(pid, POST_KILL_WAIT_MS);
           // Release our pipe ends so 'close' fires even if something outside
@@ -214,7 +223,7 @@ export class RealQmdExecutor implements QmdExecutor {
                 limitBytes: MAX_OUTPUT_BYTES,
                 elapsedMs: Date.now() - startedAt,
               };
-              void terminate();
+              void terminate(true);
             }
             return;
           }

@@ -174,6 +174,7 @@ describe('run', () => {
         });
         expect(code).toBe(2);
         expect(errs.join('\n')).toMatch(/--timeout-ms|TEAMKB_QMD_TIMEOUT_MS/);
+        expect(errs.join('\n')).toMatch(/missing value after --timeout-ms|\(got "/);
         expect(c.seen).toEqual([]); // no adapter built, nothing ran
       }
     });
