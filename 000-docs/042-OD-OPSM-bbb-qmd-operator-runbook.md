@@ -43,6 +43,31 @@ pnpm reindex
 
 Tenant default: `TEAMKB_TENANT_ID=intent-solutions`.
 
+### Reindex time limit and failure messages
+
+Index-maintenance qmd calls (`update`, `embed`, `cleanup`, `collection add`)
+are limited to **10 minutes** by default; search and other interactive calls
+keep 30 s. A cold `qmd update` of the ~18k-document corpus took 130 s at load
+~3.5 on the 8-core dev box (2026-10-11), and runs past a minute at load ~12.
+Raise the limit with `TEAMKB_QMD_TIMEOUT_MS=<ms>` or
+`pnpm reindex -- --timeout-ms <ms>` (the flag wins; `canary --heal` accepts
+it too). A malformed value exits 2 instead of silently using the default.
+
+On a timeout the adapter terminates qmd's whole process group (SIGTERM, then
+SIGKILL after 5 s) and waits for it to exit **before** it reports, so no
+orphaned `qmd update` keeps writing the index after `reindex FAILED`. If the
+group is still not confirmed gone 2 s after SIGKILL, the timeout message says
+so (`WARNING: its process group could not be confirmed gone`) — check for a
+stray `qmd` process before re-running. A Ctrl-C, SIGTERM or SIGHUP to the CLI
+SIGTERMs any live qmd group before the CLI itself exits.
+Failures now say what happened:
+
+- `timeout: qmd update timed out after 600.2s (limit 600000 ms); …` — raise the limit.
+- `command_failed: qmd update exited with code N; stderr: <last lines>` — read the stderr tail.
+- `command_failed: qmd update was killed by SIGKILL …` — something outside the adapter killed it (OOM?).
+- `command_failed: qmd update produced more than … bytes of output …` — runaway output; the group was terminated.
+- `not_available: …` — the binary could not be found or started; the message names the fix.
+
 ## Scheduled reindex and self-heal
 
 The qmd index is derived state. A successful compile is not enough to prove

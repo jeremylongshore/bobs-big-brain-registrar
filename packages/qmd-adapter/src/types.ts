@@ -10,8 +10,34 @@ export interface QmdError {
 export interface CommandResult {
   stdout: string;
   stderr: string;
+  /**
+   * Process exit code. When qmd did not exit on its own the executor uses a
+   * shell convention: 127 = could not be found/spawned, 124 = timed out
+   * (coreutils `timeout`), 128+N = killed by signal N.
+   */
   exitCode: number;
+  /**
+   * Why the run did not finish normally — absent when qmd ran to an exit code
+   * of its own. Lets callers report the REAL outcome instead of collapsing a
+   * timeout, a crash and a spawn error into one opaque "failed".
+   */
+  failure?: CommandFailure;
 }
+
+/** How a qmd run ended when it did not end with its own exit code. */
+export type CommandFailure =
+  | {
+      kind: 'timeout';
+      /** Wall time until the run was given up on. */
+      elapsedMs: number;
+      /** The configured limit that was exceeded. */
+      timeoutMs: number;
+      /** True once the whole process group was confirmed gone. */
+      groupTerminated: boolean;
+    }
+  | { kind: 'signal'; signal: string; elapsedMs: number }
+  | { kind: 'spawn'; code: string; message: string }
+  | { kind: 'output_overflow'; limitBytes: number; elapsedMs: number };
 
 /** Health status of the qmd installation and index */
 export interface QmdHealthStatus {
