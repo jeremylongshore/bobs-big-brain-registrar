@@ -4,6 +4,7 @@ import type { QmdError, QmdSearchResult } from '../types.js';
 import type { QmdExecutor } from '../executor/executor.js';
 import { getDefaultSearchCollections } from '../collections/collection-registry.js';
 import { parseQueryOutput } from './result-parser.js';
+import { describeQmdFailure } from '../executor/describe-failure.js';
 
 /** Search client with curated-only default scope enforcement */
 export class SearchClient {
@@ -23,13 +24,16 @@ export class SearchClient {
     const result = await this.executor.execute(args);
 
     if (result.exitCode !== 0) {
+      // Callers fail open on any !ok (the adapter serves the native/dense
+      // arms); the detail only makes the degraded arm diagnosable.
+      const detail = describeQmdFailure(args, result);
       return {
         ok: false,
         error: {
-          code: 'command_failed',
-          message: `Search failed for query "${query}"`,
+          ...detail,
+          code: detail.code === 'timeout' ? 'timeout' : 'command_failed',
+          message: `Search failed for query "${query}": ${detail.message}`,
           command: `qmd search ${query}`,
-          stderr: result.stderr,
         },
       };
     }

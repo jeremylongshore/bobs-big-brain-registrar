@@ -76,6 +76,7 @@ export class QmdAdapter {
       new RealQmdExecutor({
         binary: config.qmdBinary,
         timeout: config.timeout,
+        maintenanceTimeout: config.maintenanceTimeout,
         // Per-tenant isolation via XDG_* env, not the nonexistent --data-dir.
         env: getQmdTenantEnv(config.tenantId),
       });

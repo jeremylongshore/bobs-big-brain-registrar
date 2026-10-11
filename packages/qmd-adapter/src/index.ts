@@ -2,6 +2,7 @@
 export type {
   QmdError,
   CommandResult,
+  CommandFailure,
   QmdHealthStatus,
   QmdSearchResult,
   StalenessProbe,
@@ -19,11 +20,21 @@ export {
   getDefaultDenseConfig,
   DEFAULT_QMD_BINARY,
   DEFAULT_TIMEOUT,
+  DEFAULT_MAINTENANCE_TIMEOUT,
+  QMD_TIMEOUT_ENV,
+  parseTimeoutMs,
+  resolveMaintenanceTimeoutMs,
 } from './config.js';
 
 // Executor
 export type { QmdExecutor } from './executor/executor.js';
-export { RealQmdExecutor } from './executor/real-executor.js';
+export {
+  RealQmdExecutor,
+  isMaintenanceCommand,
+  QMD_TIMEOUT_EXIT_CODE,
+  DEFAULT_KILL_GRACE_MS,
+} from './executor/real-executor.js';
+export { describeQmdFailure, stderrTail } from './executor/describe-failure.js';
 export { MockQmdExecutor } from './executor/mock-executor.js';
 export type {
   ResolvedQmdBinary,

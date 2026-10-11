@@ -109,7 +109,14 @@ export interface QmdAdapterConfig {
    */
   exportDir: string;
   qmdBinary?: string;
+  /** Limit for interactive qmd commands (default {@link DEFAULT_TIMEOUT}). */
   timeout?: number;
+  /**
+   * Limit for index-maintenance qmd commands — update / embed / cleanup /
+   * collection add (default: {@link QMD_TIMEOUT_ENV}, else
+   * {@link DEFAULT_MAINTENANCE_TIMEOUT}).
+   */
+  maintenanceTimeout?: number;
   /**
    * Override for the native FTS5 fusion index file (tests use `:memory:`).
    * Defaults to `<qmd-index>/<tenantId>/native-fts5.sqlite` — derived data
@@ -167,4 +174,50 @@ export interface QmdAdapterConfig {
 
 /** Default configuration values */
 export const DEFAULT_QMD_BINARY = 'qmd';
+/**
+ * Per-call limit for interactive qmd commands (search, `collection list`,
+ * `status`, `--version`). Unchanged by the maintenance timeout below: a query
+ * that cannot answer in 30 s should fail (and fall open to the other arms)
+ * rather than hold a request.
+ */
 export const DEFAULT_TIMEOUT = 30_000;
+
+/**
+ * Per-call limit for index-MAINTENANCE qmd commands (`update`, `embed`,
+ * `cleanup`, `collection add`) — the reindex path.
+ *
+ * Why 10 minutes (bead compile-then-govern-39z.20): measured 2026-10-11 on the
+ * dev box (8 cores, load ~3.5), a cold `qmd update` of the 18,046-document
+ * kb-export took 130 s and a warm (no-change) one took 4 s; on 2026-10-08 at
+ * load ~12 a routine update ran past a minute. The old 30 s query budget
+ * killed those updates mid-write. 600 s gives a cold rebuild ~4.5x headroom
+ * for contention and matches the eval anchor's measured `collection add`
+ * budget (ANCHOR_QMD_TIMEOUT_MS), while still bounding a genuinely hung qmd.
+ */
+export const DEFAULT_MAINTENANCE_TIMEOUT = 600_000;
+
+/** Env var overriding {@link DEFAULT_MAINTENANCE_TIMEOUT} (milliseconds, positive integer). */
+export const QMD_TIMEOUT_ENV = 'TEAMKB_QMD_TIMEOUT_MS';
+
+/**
+ * Parse a timeout in milliseconds. Returns `null` for anything that is not a
+ * positive integer, so callers decide whether bad input is a usage error (the
+ * CLI) or falls back to the default (library construction).
+ */
+export function parseTimeoutMs(raw: string | undefined): number | null {
+  const v = raw?.trim();
+  if (v === undefined || !/^\d+$/.test(v)) return null;
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * Resolve the maintenance timeout from {@link QMD_TIMEOUT_ENV}. An unset or
+ * invalid value yields the default — library construction must never throw on
+ * a typo'd env var (the CLI validates it strictly and exits 2 instead).
+ */
+export function resolveMaintenanceTimeoutMs(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): number {
+  return parseTimeoutMs(env[QMD_TIMEOUT_ENV]) ?? DEFAULT_MAINTENANCE_TIMEOUT;
+}

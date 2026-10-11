@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { Result } from '@qmd-team-intent-kb/common';
 import type { QmdError } from '../types.js';
 import type { QmdExecutor } from '../executor/executor.js';
-import { QMD_NOT_FOUND_EXIT_CODE } from '../executor/resolve-binary.js';
+import { describeQmdFailure } from '../executor/describe-failure.js';
 import { getExportableCollections } from './collection-registry.js';
 
 /** Manage qmd collections (add, remove, list) */
@@ -12,61 +12,31 @@ export class CollectionManager {
 
   /** Add a collection pointing to a directory */
   async addCollection(name: string, path: string): Promise<Result<void, QmdError>> {
-    const result = await this.executor.execute(['collection', 'add', path, '--name', name]);
+    const args = ['collection', 'add', path, '--name', name];
+    const result = await this.executor.execute(args);
     if (result.exitCode !== 0) {
-      return {
-        ok: false,
-        error: {
-          code: 'command_failed',
-          message: `Failed to add collection "${name}"`,
-          command: `qmd collection add ${path} --name ${name}`,
-          stderr: result.stderr,
-        },
-      };
+      return { ok: false, error: describeQmdFailure(args, result) };
     }
     return { ok: true, value: undefined };
   }
 
   /** Remove a collection */
   async removeCollection(name: string): Promise<Result<void, QmdError>> {
-    const result = await this.executor.execute(['collection', 'remove', name]);
+    const args = ['collection', 'remove', name];
+    const result = await this.executor.execute(args);
     if (result.exitCode !== 0) {
-      return {
-        ok: false,
-        error: {
-          code: 'command_failed',
-          message: `Failed to remove collection "${name}"`,
-          command: `qmd collection remove ${name}`,
-          stderr: result.stderr,
-        },
-      };
+      return { ok: false, error: describeQmdFailure(args, result) };
     }
     return { ok: true, value: undefined };
   }
 
   /** List existing collections */
   async listCollections(): Promise<Result<string[], QmdError>> {
-    const result = await this.executor.execute(['collection', 'list']);
-    if (result.exitCode === QMD_NOT_FOUND_EXIT_CODE) {
-      return {
-        ok: false,
-        error: {
-          code: 'not_available',
-          message: result.stderr,
-          command: 'qmd collection list',
-        },
-      };
-    }
+    const args = ['collection', 'list'];
+    const result = await this.executor.execute(args);
     if (result.exitCode !== 0) {
-      return {
-        ok: false,
-        error: {
-          code: 'command_failed',
-          message: 'Failed to list collections',
-          command: 'qmd collection list',
-          stderr: result.stderr,
-        },
-      };
+      // A missing binary maps to `not_available`, which ensureCollections treats as fatal.
+      return { ok: false, error: describeQmdFailure(args, result) };
     }
     const collections = result.stdout
       .trim()

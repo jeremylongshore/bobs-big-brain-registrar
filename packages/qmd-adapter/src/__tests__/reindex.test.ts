@@ -82,7 +82,11 @@ describe('reindex', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.message).toContain('Failed to update index');
+      // The real outcome, not an opaque "Failed to update index" (39z.20).
+      expect(result.error.code).toBe('command_failed');
+      expect(result.error.message).toBe(
+        'qmd update exited with code 1; stderr: qmd update crashed',
+      );
     }
   });
 

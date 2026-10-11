@@ -88,6 +88,97 @@ describe('run', () => {
     expect(errs.join('\n')).toContain('reindex FAILED');
   });
 
+  it('reindex reports a timeout with its real cause, not "Failed to update index"', async () => {
+    const { mock, makeAdapter } = makeInjected();
+    mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive\nkb-bulk');
+    mock.queueResponse({
+      stdout: '',
+      stderr: '',
+      exitCode: 124,
+      failure: { kind: 'timeout', elapsedMs: 600_250, timeoutMs: 600_000, groupTerminated: true },
+    });
+    const errs: string[] = [];
+
+    const code = await run(['reindex'], { env, makeAdapter, errLog: (m) => errs.push(m) });
+
+    expect(code).toBe(1);
+    expect(errs.join('\n')).toMatch(
+      /^reindex FAILED \(tenant=test-tenant\): timeout: qmd update timed out after 600\.3s \(limit 600000 ms\)/,
+    );
+    expect(errs.join('\n')).not.toContain('Failed to update index');
+  });
+
+  describe('maintenance timeout (--timeout-ms / TEAMKB_QMD_TIMEOUT_MS)', () => {
+    function capture(): {
+      seen: Array<number | undefined>;
+      makeAdapter: (t: string, e: string, o?: { maintenanceTimeout?: number }) => QmdAdapter;
+      mock: MockQmdExecutor;
+    } {
+      const { mock, makeAdapter: inner } = makeInjected();
+      const seen: Array<number | undefined> = [];
+      return {
+        seen,
+        mock,
+        makeAdapter: (t, e, o) => {
+          seen.push(o?.maintenanceTimeout);
+          return inner(t, e);
+        },
+      };
+    }
+    const queueReindex = (mock: MockQmdExecutor): void => {
+      mock.queueSuccess('kb-curated\nkb-decisions\nkb-guides\nkb-archive\nkb-bulk');
+      mock.queueSuccess('Updated');
+    };
+
+    it('passes undefined (adapter default) when neither is set', async () => {
+      const c = capture();
+      queueReindex(c.mock);
+      expect(await run(['reindex'], { env, makeAdapter: c.makeAdapter, log: () => {} })).toBe(0);
+      expect(c.seen).toEqual([undefined]);
+    });
+
+    it('honours the env var', async () => {
+      const c = capture();
+      queueReindex(c.mock);
+      const e = { ...env, TEAMKB_QMD_TIMEOUT_MS: '900000' };
+      expect(await run(['reindex'], { env: e, makeAdapter: c.makeAdapter, log: () => {} })).toBe(0);
+      expect(c.seen).toEqual([900_000]);
+    });
+
+    it('the flag beats the env var', async () => {
+      const c = capture();
+      queueReindex(c.mock);
+      const e = { ...env, TEAMKB_QMD_TIMEOUT_MS: '900000' };
+      const code = await run(['reindex', '--timeout-ms', '1200000'], {
+        env: e,
+        makeAdapter: c.makeAdapter,
+        log: () => {},
+      });
+      expect(code).toBe(0);
+      expect(c.seen).toEqual([1_200_000]);
+    });
+
+    it('a malformed flag or env value is a usage error (exit 2), not a silent default', async () => {
+      for (const [argv, e] of [
+        [['reindex', '--timeout-ms'], env],
+        [['reindex', '--timeout-ms', '10m'], env],
+        [['reindex'], { ...env, TEAMKB_QMD_TIMEOUT_MS: '0' }],
+        [['canary', '--heal'], { ...env, TEAMKB_QMD_TIMEOUT_MS: 'ten minutes' }],
+      ] as const) {
+        const c = capture();
+        const errs: string[] = [];
+        const code = await run([...argv], {
+          env: e,
+          makeAdapter: c.makeAdapter,
+          errLog: (m) => errs.push(m),
+        });
+        expect(code).toBe(2);
+        expect(errs.join('\n')).toMatch(/--timeout-ms|TEAMKB_QMD_TIMEOUT_MS/);
+        expect(c.seen).toEqual([]); // no adapter built, nothing ran
+      }
+    });
+  });
+
   it('canary returns 0 when healthy', async () => {
     const { mock, makeAdapter } = makeInjected();
     for (const _ of DEFAULT_CANARY_CONTROLS) mock.queueSuccess(hitsJson(3));

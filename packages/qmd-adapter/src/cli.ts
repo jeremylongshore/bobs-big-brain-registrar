@@ -3,6 +3,10 @@
  * CLI: reindex + search-health canary for a tenant's governed qmd index.
  *
  *   node dist/cli.js reindex            # rebuild the derived qmd-index from kb-export (idempotent)
+ *   node dist/cli.js reindex --timeout-ms 1200000
+ *                                       # per-call limit for qmd update / collection add
+ *                                       # (also accepted by `canary --heal`; overrides
+ *                                       # TEAMKB_QMD_TIMEOUT_MS; default 600000 = 10 min)
  *   node dist/cli.js canary             # run known-positive controls; exit 1 if any returns 0 hits
  *   node dist/cli.js canary --heal      # canary; on failure, reindex once and re-check
  *   node dist/cli.js scrub-index [--dry-run] [--json] [--scan-fragments-file <path>]
@@ -21,6 +25,10 @@
  *   TEAMKB_BASE_PATH  (default: ~/.teamkb)         → exportDir = <base>/kb-export
  *   TEAMKB_EXPORT_DIR (overrides exportDir)
  *   TEAMKB_DENSE_ENABLED (default: true; set false only for emergency rollback)
+ *   TEAMKB_QMD_TIMEOUT_MS (default: 600000) — limit for index-maintenance qmd
+ *                     calls. On expiry the whole qmd process group is
+ *                     terminated (SIGTERM, SIGKILL after 5 s) before the CLI
+ *                     reports, so no orphaned `qmd update` keeps writing.
  *
  * Why (bead compile-then-govern-e06.13 / risk register R11 / umbrella #27):
  * `brain_search` degrades to an EMPTY result on a missing/misrouted index
@@ -39,7 +47,7 @@ import Database from 'better-sqlite3';
 import { getTeamKbBasePath } from '@qmd-team-intent-kb/common';
 import { IndexStateRepository } from '@qmd-team-intent-kb/store';
 import { QmdAdapter } from './adapter.js';
-import { getDefaultDenseConfig } from './config.js';
+import { getDefaultDenseConfig, parseTimeoutMs, QMD_TIMEOUT_ENV } from './config.js';
 import type { StalenessProbe } from './types.js';
 import { reindex } from './reindex/reindex.js';
 import { runSearchCanary, formatCanaryReport } from './canary/search-canary.js';
@@ -67,8 +75,16 @@ export interface CliDeps {
   env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
   errLog?: (msg: string) => void;
-  /** Adapter factory — defaults to the real `QmdAdapter`; tests inject a fake. */
-  makeAdapter?: (tenantId: string, exportDir: string) => QmdAdapter;
+  /**
+   * Adapter factory — defaults to the real `QmdAdapter`; tests inject a fake.
+   * `maintenanceTimeout` is the resolved `--timeout-ms` / TEAMKB_QMD_TIMEOUT_MS
+   * value (undefined = the adapter default).
+   */
+  makeAdapter?: (
+    tenantId: string,
+    exportDir: string,
+    opts?: { maintenanceTimeout?: number },
+  ) => QmdAdapter;
   /**
    * Staleness-probe factory for the canary's D2 gate — defaults to
    * {@link makeStoreStalenessProbe} (reads the live brain DB read-only); tests
@@ -115,8 +131,13 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
   const errLog = deps.errLog ?? console.error;
   const makeAdapter =
     deps.makeAdapter ??
-    ((tenantId: string, exportDir: string) =>
-      new QmdAdapter({ tenantId, exportDir, dense: getDefaultDenseConfig(env) }));
+    ((tenantId: string, exportDir: string, opts?: { maintenanceTimeout?: number }) =>
+      new QmdAdapter({
+        tenantId,
+        exportDir,
+        dense: getDefaultDenseConfig(env),
+        maintenanceTimeout: opts?.maintenanceTimeout,
+      }));
 
   const [command, ...rest] = argv;
   const { tenantId, exportDir } = resolveCliContext(env);
@@ -128,7 +149,17 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
     return runScrubIndex(rest, { exportDir, log, errLog });
   }
 
-  const adapter = makeAdapter(tenantId, exportDir);
+  // qmd maintenance-call limit: --timeout-ms beats TEAMKB_QMD_TIMEOUT_MS beats
+  // the 10-minute default. A malformed value is a usage error (exit 2), never
+  // a silent fallback — an operator who raised the limit must get that limit.
+  const timeout = resolveCliTimeout(rest, env);
+  if (!timeout.ok) {
+    errLog(timeout.message);
+    return 2;
+  }
+  const adapter = makeAdapter(tenantId, exportDir, {
+    maintenanceTimeout: timeout.value,
+  });
 
   if (command === 'reindex') {
     const result = await reindex(adapter);
@@ -179,9 +210,35 @@ export async function run(argv: string[], deps: CliDeps = {}): Promise<number> {
   }
 
   errLog(
-    'usage: qmd-index <reindex|canary [--heal] [--max-staleness-seconds <seconds>]|scrub-index [--dry-run] [--json] [--scan-fragments-file <path>]>',
+    'usage: qmd-index <reindex [--timeout-ms <ms>]|canary [--heal] [--timeout-ms <ms>] [--max-staleness-seconds <seconds>]|scrub-index [--dry-run] [--json] [--scan-fragments-file <path>]>',
   );
   return 2;
+}
+
+/**
+ * Resolve the maintenance timeout from `--timeout-ms <ms>` (wins) or
+ * TEAMKB_QMD_TIMEOUT_MS. `value: undefined` means neither was given.
+ */
+export function resolveCliTimeout(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv,
+): { ok: true; value: number | undefined } | { ok: false; message: string } {
+  const idx = args.indexOf('--timeout-ms');
+  if (idx !== -1) {
+    const v = parseTimeoutMs(args[idx + 1]);
+    return v === null
+      ? { ok: false, message: 'usage: --timeout-ms <positive integer milliseconds>' }
+      : { ok: true, value: v };
+  }
+  const raw = env[QMD_TIMEOUT_ENV];
+  if (raw === undefined || raw.trim() === '') return { ok: true, value: undefined };
+  const v = parseTimeoutMs(raw);
+  return v === null
+    ? {
+        ok: false,
+        message: `${QMD_TIMEOUT_ENV} must be a positive integer number of milliseconds (got "${raw}")`,
+      }
+    : { ok: true, value: v };
 }
 
 /** Entry point — resolves the exit code and terminates the process. */
