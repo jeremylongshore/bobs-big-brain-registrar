@@ -54,13 +54,18 @@ Raise the limit with `TEAMKB_QMD_TIMEOUT_MS=<ms>` or
 it too). A malformed value exits 2 instead of silently using the default.
 
 On a timeout the adapter terminates qmd's whole process group (SIGTERM, then
-SIGKILL after 5 s) **before** it reports, so no orphaned `qmd update` keeps
-writing the index after `reindex FAILED`. A Ctrl-C or SIGTERM to the CLI is
-forwarded to that group too. Failures now say what happened:
+SIGKILL after 5 s) and waits for it to exit **before** it reports, so no
+orphaned `qmd update` keeps writing the index after `reindex FAILED`. If the
+group is still not confirmed gone 2 s after SIGKILL, the timeout message says
+so (`WARNING: its process group could not be confirmed gone`) — check for a
+stray `qmd` process before re-running. A Ctrl-C, SIGTERM or SIGHUP to the CLI
+SIGTERMs any live qmd group before the CLI itself exits.
+Failures now say what happened:
 
 - `timeout: qmd update timed out after 600.2s (limit 600000 ms); …` — raise the limit.
 - `command_failed: qmd update exited with code N; stderr: <last lines>` — read the stderr tail.
 - `command_failed: qmd update was killed by SIGKILL …` — something outside the adapter killed it (OOM?).
+- `command_failed: qmd update produced more than … bytes of output …` — runaway output; the group was terminated.
 - `not_available: …` — the binary could not be found or started; the message names the fix.
 
 ## Scheduled reindex and self-heal
