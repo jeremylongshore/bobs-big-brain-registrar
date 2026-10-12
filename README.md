@@ -156,6 +156,10 @@ pnpm validate
 
 ## Contributing
 
+For changes to the standalone signed-evidence emitter, follow the
+[canonical evidence runbook](000-docs/056-OD-RNBK-canonical-dashboard-evidence.md)
+and run `pnpm test:evidence` after installing its separate frozen dependencies.
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for branching model, commit conventions, PR expectations, and development workflow.
 
 ## Security

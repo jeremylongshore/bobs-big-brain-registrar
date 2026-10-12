@@ -13,7 +13,7 @@
 #      gate-result/v1 row per gate (honest: the ratchet's documented exit 2 =
 #      qmd unavailable becomes gate_decision:"error", never a fake verdict),
 #      wrapped in kernel EvidenceBundles validated against
-#      @intentsolutions/core@0.9.0 — the EXACT version the labs dashboard
+#      @intentsolutions/core@0.10.0 — the EXACT version the labs dashboard
 #      verifies with (ci/emit-evidence/);
 #   3. keyless-signs each bundle's canonical bytes with cosign (Fulcio OIDC +
 #      production Rekor), then verifies every signature back in-repo;
@@ -86,6 +86,9 @@ jobs:
 
       - name: Emit-evidence self-check (kernel-valid + canonical-stable)
         run: node --experimental-strip-types ci/emit-evidence/emit-evidence.ts --self-check
+
+      - name: Canonical payload and manifest mutation contracts
+        run: node --experimental-strip-types --test ci/emit-evidence/*.contract.mjs
 
       - name: Run the three CI evals and emit gate-result/v1 EvidenceBundles
         run: node --experimental-strip-types ci/emit-evidence/emit-evidence.ts --out build/evidence --ref "${GITHUB_REF}"
