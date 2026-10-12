@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Dashboard evidence now carries kernel-valid in-toto statement arrays. Signed
+  metadata binds the complete payload, and manifest assembly rejects changes to
+  payloads, metadata or the legacy gate-result projection. The standalone CI
+  emitter pins `@intentsolutions/core@0.10.0`; signing identity and publication
+  triggers are unchanged. Refs bead `bd_000-projects-0s2a`.
+
 ### Added
 
 - **Governed redaction now scrubs every tenant's derived search index (umbrella bead

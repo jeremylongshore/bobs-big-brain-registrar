@@ -23,6 +23,7 @@
     "build:check": "tsc -b --noEmit",
     "clean": "rm -rf node_modules dist coverage **/dist **/node_modules **/*.tsbuildinfo",
     "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "test:evidence": "node --experimental-strip-types --test ci/emit-evidence/*.contract.mjs",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:mutation": "stryker run",
