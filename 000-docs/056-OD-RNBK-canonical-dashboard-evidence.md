@@ -33,6 +33,14 @@ measurements or cryptographic verification. The PR workflow runs these contracts
 in the `Canonical evidence payload contracts` job; the emitter repeats them before
 running real gates and signing artifacts.
 
+The repository's `pnpm harness-pin` checks the eight policy artifacts listed in
+`scripts/harness-pin.sh`; it is not a digest inventory of every source file.
+That list and its manifest are unchanged. CI-emitter behavior is checked by the
+contract job, while its dependency payloads are pinned by the standalone frozen
+lockfile. For a staged diff scan, pair the repository hash verifier with the
+generic scanner's diff-only mode; its default hash verifier uses a different file
+set and cannot validate this repository's custom manifest.
+
 ## Publication and transition
 
 The existing main-only `emit-evidence.yml` workflow signs canonical bundle metadata

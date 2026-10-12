@@ -43,7 +43,9 @@ test('metadata matches the shared marketplace/dashboard interoperability vector'
   const fixture = JSON.parse(
     readFileSync(new URL('./canonical-payload.fixture.json', import.meta.url)),
   );
-  assert.deepEqual(buildEvidenceBundle(fixture.row.evidencePayload, context), fixture.row.bundle);
+  const bundle = buildEvidenceBundle(fixture.row.evidencePayload, context);
+  assert.deepEqual(bundle, fixture.row.bundle);
+  assert.equal(stableStringify(bundle), fixture.row.canonicalBundle);
 });
 
 test('pass, fail and unavailable rows bind complete canonical statement bytes', (t) => {
