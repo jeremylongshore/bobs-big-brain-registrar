@@ -38,6 +38,26 @@ describe('runEval', () => {
     expect(report.meanNdcgAtK).toBe(0.5);
   });
 
+  it('reports FAMA@k and obsolete exposure from the obsolete labels', async () => {
+    const dataset: EvalDataset = {
+      name: 'fama',
+      idSpace: 'id',
+      queries: [
+        { id: 'stale', query: 'q-s', relevant: ['new'], obsolete: ['old'] }, // both served
+        { id: 'clean', query: 'q-c', relevant: ['d1'], obsolete: ['gone'] }, // stale kept out
+        { id: 'plain', query: 'q-p', relevant: ['d2'] }, // no labels: FAMA = recall
+      ],
+    };
+    const retrieve = mockBackend({ 'q-s': ['old', 'new'], 'q-c': ['d1'], 'q-p': ['d2'] });
+    const report = await runEval(dataset, retrieve, { k: 10 });
+
+    expect(report.perQuery.map((r) => r.famaAtK)).toEqual([0.5, 1, 1]);
+    expect(report.perQuery[0]?.obsoleteRetrieved).toEqual(['old']);
+    expect(report.meanRecallAtK).toBe(1);
+    expect(report.meanFamaAtK).toBeCloseTo(2.5 / 3, 10);
+    expect(report.obsoleteExposureRate).toBeCloseTo(1 / 3, 10);
+  });
+
   it('passes the k cutoff through to the backend', async () => {
     const seen: number[] = [];
     const retrieve: RetrievalFn = (_q, k) => {

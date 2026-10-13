@@ -65,6 +65,52 @@ export function ndcgAtK(
   return idcg === 0 ? 0 : dcg / idcg;
 }
 
+/** FAMA@k and its parts for one query (bead compile-then-govern-39z.5). */
+export interface FamaScore {
+  /** Memory Presence Accuracy: fraction of the valid gold docs in the top-k (Recall@k). */
+  mpa: number;
+  /** Forgetting Absence Accuracy: fraction of the obsolete docs kept OUT of the top-k. */
+  faa: number;
+  /** Penalty weight: |obsolete| / (|valid| + |obsolete|); 0 when no obsolete docs are labeled. */
+  lambda: number;
+  /** max(0, mpa − lambda·(1 − faa)), in [0, 1]. */
+  fama: number;
+  /** Obsolete docs that did appear in the top-k, best rank first. */
+  obsoleteRetrieved: string[];
+}
+
+/**
+ * FAMA@k — Forgetting-Aware Memory Accuracy (Memora, arXiv:2604.20006), applied
+ * to a ranked retrieval list instead of a generated answer:
+ *
+ *   FAMA = max(0, MPA − λ·(1 − FAA)),  λ = N_forget / (N_presence + N_forget)
+ *
+ * The paper's "presence criteria" become the valid gold docs (MPA is Recall@k
+ * over them) and its "forgetting-absence criteria" become the docs labeled
+ * obsolete for this query (FAA is the fraction that stay out of the top-k).
+ * Recall alone cannot see a brain that ranks a torn-down platform's runbook
+ * beside the current one; FAMA subtracts for it. With no obsolete docs labeled,
+ * λ = 0 and FAMA equals Recall@k. A query with neither list scores 0, the same
+ * as Recall@k.
+ */
+export function famaAtK(
+  retrieved: readonly string[],
+  valid: ReadonlySet<string>,
+  obsolete: ReadonlySet<string>,
+  k: number,
+): FamaScore {
+  const mpa = recallAtK(retrieved, valid, k);
+  const obsoleteRetrieved: string[] = [];
+  for (const [i, id] of retrieved.entries()) {
+    if (i >= k) break;
+    if (obsolete.has(id) && !obsoleteRetrieved.includes(id)) obsoleteRetrieved.push(id);
+  }
+  const faa = obsolete.size === 0 ? 1 : 1 - obsoleteRetrieved.length / obsolete.size;
+  const total = valid.size + obsolete.size;
+  const lambda = total === 0 ? 0 : obsolete.size / total;
+  return { mpa, faa, lambda, fama: Math.max(0, mpa - lambda * (1 - faa)), obsoleteRetrieved };
+}
+
 /**
  * Reciprocal Rank — 1 / (rank of the first relevant doc), or 0 if none is
  * retrieved. (Mean over a dataset is MRR.) A useful "how high is the first good
