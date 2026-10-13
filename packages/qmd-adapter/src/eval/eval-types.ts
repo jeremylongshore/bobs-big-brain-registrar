@@ -13,6 +13,13 @@ export interface EvalQuery {
   query: string;
   /** Gold-relevant doc identifiers (same id space as RetrievalFn output). */
   relevant: string[];
+  /**
+   * Docs that USED to answer this query but are now obsolete or invalidated
+   * (a torn-down platform, a renamed repo, a superseded decision). Ranking one
+   * in the top-k costs FAMA@k (bead compile-then-govern-39z.5). Omit when none
+   * are known.
+   */
+  obsolete?: string[];
   /** Which class this query stresses — lexical (exact terms) vs semantic (paraphrase). */
   kind?: 'lexical' | 'semantic' | 'tokenization';
   notes?: string;
@@ -37,6 +44,10 @@ export interface QueryEvalResult {
   retrieved: string[];
   recallAtK: number;
   ndcgAtK: number;
+  /** Forgetting-aware accuracy; equals recallAtK when the query has no obsolete labels. */
+  famaAtK?: number;
+  /** Labeled-obsolete docs that made the top-k. */
+  obsoleteRetrieved?: string[];
 }
 
 /** Aggregate eval report for one backend over one dataset. */
@@ -47,5 +58,9 @@ export interface EvalReport {
   queryCount: number;
   meanRecallAtK: number;
   meanNdcgAtK: number;
+  /** Mean FAMA@k over all queries (bead compile-then-govern-39z.5). */
+  meanFamaAtK?: number;
+  /** Fraction of queries with at least one labeled-obsolete doc in the top-k. */
+  obsoleteExposureRate?: number;
   perQuery: QueryEvalResult[];
 }

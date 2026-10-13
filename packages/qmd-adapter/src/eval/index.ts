@@ -1,4 +1,5 @@
-export { recallAtK, ndcgAtK, reciprocalRank } from './metrics.js';
+export { recallAtK, ndcgAtK, reciprocalRank, famaAtK } from './metrics.js';
+export type { FamaScore } from './metrics.js';
 export {
   runEval,
   formatReport,
@@ -17,6 +18,11 @@ export { stratify, formatStratifiedReport } from './stratified-report.js';
 export type { StratumMetrics, StratifiedReport } from './stratified-report.js';
 export { qmdRetrievalFn } from './qmd-retrieval.js';
 export { GOVERNED_BRAIN_V1_DATASET } from './datasets/governed-brain-v1.js';
+export {
+  ESTATE_ONBOARDING_V1_DATASET,
+  ESTATE_ONBOARDING_V1_GAPS,
+} from './datasets/estate-onboarding-v1.js';
+export type { EstateGap } from './datasets/estate-onboarding-v1.js';
 export {
   SYNTHETIC_V1_DATASET,
   SYNTHETIC_V1_BASELINE,

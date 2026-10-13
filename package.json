@@ -33,6 +33,7 @@
     "bbb-qmd": "bash scripts/bbb-qmd",
     "eval:onboarding": "bash scripts/eval-onboarding-qbank.sh",
     "eval:retrieval": "tsx scripts/eval-retrieval.ts",
+    "eval:estate": "tsx scripts/eval-estate-onboarding.ts",
     "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
     "crap": "tsx scripts/crap-score.ts",
     "harness-pin": "bash scripts/harness-pin.sh --verify",

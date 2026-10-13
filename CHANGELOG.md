@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Forgetting-aware retrieval eval (umbrella bead `compile-then-govern-39z.5`).** `famaAtK`
+  (Memora's FAMA, applied to a ranked list) joins Recall/nDCG in the eval harness, and
+  `EvalQuery.obsolete` labels docs that used to answer a query but are now wrong. New
+  `estate-onboarding-v1` set: 45 scored new-hire questions (23 with obsolete labels) plus 5
+  documentation holes. `pnpm eval:estate` runs it live and read-only through the team-API search
+  path and prints `DEGRADED` when the dense arm fails open. First run: Recall@10 0.4815, FAMA@10
+  0.4577, obsolete docs served on 7 of 45 questions.
 - **Governed redaction now scrubs every tenant's derived search index (umbrella bead
   `compile-then-govern-39z.19`, runbook `000-docs/054-OD-RNBK` §4.7).** On 2026-10-04 the redacted
   text survived `curator redact` + `export --reconcile` + `reindex` in `~/.teamkb/qmd-index/`:

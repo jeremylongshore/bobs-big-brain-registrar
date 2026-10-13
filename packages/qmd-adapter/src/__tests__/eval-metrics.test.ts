@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recallAtK, ndcgAtK, reciprocalRank } from '../eval/metrics.js';
+import { recallAtK, ndcgAtK, reciprocalRank, famaAtK } from '../eval/metrics.js';
 
 const S = (...ids: string[]): Set<string> => new Set(ids);
 
@@ -73,5 +73,50 @@ describe('reciprocalRank', () => {
 
   it('is 0 when no relevant doc is retrieved', () => {
     expect(reciprocalRank(['x', 'y'], S('a'))).toBe(0);
+  });
+});
+
+describe('famaAtK', () => {
+  it('equals Recall@k when no obsolete docs are labeled', () => {
+    const r = famaAtK(['a', 'x', 'b'], S('a', 'c'), S(), 3);
+    expect(r).toEqual({ mpa: 0.5, faa: 1, lambda: 0, fama: 0.5, obsoleteRetrieved: [] });
+  });
+
+  it('is 1.0 when the valid doc is found and every obsolete doc is kept out', () => {
+    expect(famaAtK(['a', 'x'], S('a'), S('old'), 2).fama).toBe(1);
+  });
+
+  it('subtracts lambda for each obsolete doc in the top-k', () => {
+    // valid a found (MPA 1); obsolete o1 retrieved, o2 not (FAA 0.5); lambda 2/3.
+    const r = famaAtK(['o1', 'a', 'z'], S('a'), S('o1', 'o2'), 3);
+    expect(r.mpa).toBe(1);
+    expect(r.faa).toBe(0.5);
+    expect(r.lambda).toBeCloseTo(2 / 3, 10);
+    expect(r.fama).toBeCloseTo(1 - (2 / 3) * 0.5, 10);
+    expect(r.obsoleteRetrieved).toEqual(['o1']);
+  });
+
+  it('clamps at 0 when only obsolete docs are retrieved', () => {
+    const r = famaAtK(['o1', 'o2'], S('a'), S('o1'), 2);
+    expect(r.fama).toBe(0);
+    expect(r.mpa).toBe(0);
+  });
+
+  it('ignores obsolete docs ranked below the k cutoff', () => {
+    expect(famaAtK(['a', 'b', 'o1'], S('a'), S('o1'), 2).fama).toBe(1);
+  });
+
+  it('counts a repeated obsolete doc once', () => {
+    const r = famaAtK(['o1', 'o1', 'a'], S('a'), S('o1', 'o2'), 3);
+    expect(r.obsoleteRetrieved).toEqual(['o1']);
+    expect(r.faa).toBe(0.5);
+  });
+
+  it('scores a recall-perfect brain below 1 when it also serves the stale doc', () => {
+    // The failure Recall@k cannot see: the right answer AND the torn-down one.
+    const recall = recallAtK(['gcp-runbook', 'vps-runbook'], S('vps-runbook'), 10);
+    const fama = famaAtK(['gcp-runbook', 'vps-runbook'], S('vps-runbook'), S('gcp-runbook'), 10);
+    expect(recall).toBe(1);
+    expect(fama.fama).toBe(0.5);
   });
 });

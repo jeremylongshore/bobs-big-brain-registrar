@@ -1,4 +1,4 @@
-import { ndcgAtK, recallAtK } from './metrics.js';
+import { famaAtK, ndcgAtK, recallAtK } from './metrics.js';
 import type { EvalDataset, EvalReport, QueryEvalResult, RetrievalFn } from './eval-types.js';
 
 /**
@@ -19,6 +19,7 @@ export async function runEval(
   for (const q of dataset.queries) {
     const retrieved = await retrieve(q.query, k);
     const relevant = new Set(q.relevant);
+    const fama = famaAtK(retrieved, relevant, new Set(q.obsolete ?? []), k);
     perQuery.push({
       id: q.id,
       query: q.query,
@@ -26,6 +27,8 @@ export async function runEval(
       retrieved,
       recallAtK: recallAtK(retrieved, relevant, k),
       ndcgAtK: ndcgAtK(retrieved, relevant, k),
+      famaAtK: fama.fama,
+      obsoleteRetrieved: fama.obsoleteRetrieved,
     });
   }
 
@@ -40,6 +43,8 @@ export async function runEval(
     queryCount: n,
     meanRecallAtK: mean((r) => r.recallAtK),
     meanNdcgAtK: mean((r) => r.ndcgAtK),
+    meanFamaAtK: mean((r) => r.famaAtK ?? 0),
+    obsoleteExposureRate: mean((r) => ((r.obsoleteRetrieved ?? []).length > 0 ? 1 : 0)),
     perQuery,
   };
 }
@@ -50,6 +55,12 @@ export function formatReport(report: EvalReport): string {
     `eval "${report.dataset}" · backend=${report.backend} · ${report.queryCount} queries @k=${report.k}`,
     `  mean Recall@${report.k} = ${report.meanRecallAtK.toFixed(4)}`,
     `  mean nDCG@${report.k}   = ${report.meanNdcgAtK.toFixed(4)}`,
+    ...(report.meanFamaAtK === undefined
+      ? []
+      : [
+          `  mean FAMA@${report.k}   = ${report.meanFamaAtK.toFixed(4)}`,
+          `  obsolete exposure = ${(report.obsoleteExposureRate ?? 0).toFixed(4)}`,
+        ]),
   ].join('\n');
 }
 
