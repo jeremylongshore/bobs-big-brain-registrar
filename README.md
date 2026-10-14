@@ -7,6 +7,12 @@
 
 # Bob's Big Brain Registrar
 
+<!-- intent-select-partner:start -->
+<p><a href="https://intentsolutions.io/"><img src="https://raw.githubusercontent.com/intent-solutions-io/.github/b82af5d3e7951d85e39ea9e65cc24ee8278722a7/assets/brand/claude-select-partner.svg" alt="Intent Solutions: Claude Partner Network Select Services Partner" width="300" height="95" /></a></p>
+
+Intent Solutions is a Claude Partner Network Select Services Partner.
+<!-- intent-select-partner:end -->
+
 > Formerly `qmd-team-intent-kb` — the `@qmd-team-intent-kb/*` npm scope and the GHCR image name keep that name.
 
 Bob's Big Brain Registrar is the memory keeper: it decides what's worth keeping — by deterministic rules you can read, not an AI's judgment call — stores it, retires what goes stale, and writes a tamper-evident receipt for what it admits.
