@@ -1,0 +1,10 @@
+[Unit]
+Description=Every 15 min: bbb-embedder health (weights, unit, /health, real embedding round-trip)
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

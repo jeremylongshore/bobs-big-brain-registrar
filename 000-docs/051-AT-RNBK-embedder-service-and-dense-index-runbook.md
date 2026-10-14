@@ -158,7 +158,7 @@ the lexical-only deterministic fusion used by baselines and fixtures.
 - **Resilience (load-bearing):** the indexer survives two failure classes so a
   multi-hour unattended build completes. (1) A failed batch is RETRIED with
   bounded exponential backoff (~45 s window), bridging a transient embedder
-  crash + `Restart=on-failure` auto-restart. (2) When retries are exhausted, a
+  crash + `Restart=always` auto-restart. (2) When retries are exhausted, a
   health probe decides: service down → durable outage → abort the remainder as a
   stale index (fail-open); service UP → the batch is DATA-POISON (an input the
   server rejects) → skip just those docs and keep building. One bad doc can never
@@ -177,8 +177,16 @@ the lexical-only deterministic fusion used by baselines and fixtures.
 
 ## 6. Fail-open semantics (operator view)
 
-- **Service down / crashed:** searches keep working on the lexical fusion.
-  Fix at leisure; nothing pages.
+- **Service down / crashed:** searches keep working on the lexical fusion, but
+  this is a quality outage, not a cosmetic one: on the estate-onboarding-v1
+  eval, Recall@10 fell from 0.48 to 0.08 during the 2026-10-10..13 outage.
+  The unit runs `Restart=always` (a clean exit from an outside SIGTERM is what
+  kept it down that time), at most 5 starts in 5 min. `bbb-embedder-health.timer`
+  (every 15 min; source `scripts/bbb-embedder-health.sh`) pages Buzz
+  `sys-automation` when the outage starts, every 6 hours while it lasts, and
+  once when it recovers. `systemctl --user stop bbb-embedder` stops it for good
+  and the health check will page; to turn dense off on purpose, set
+  `TEAMKB_DENSE_ENABLED=false` instead.
 - **Slow query-embed (timeout):** each affected query pays up to `timeoutMs`
   (default 5 s) and then serves the lexical fusion. A single query embed is
   ~50 ms warm, so a timeout means the service is wedged — restart it.
