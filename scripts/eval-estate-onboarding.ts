@@ -113,8 +113,22 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  // Holes filled since labeling: where the answer now ranks (1-based, null = not in the top K).
+  // Reported, not scored, so the scored set stays comparable across runs.
+  const gaps = [];
+  for (const g of ESTATE_ONBOARDING_V1_GAPS) {
+    const answeredBy = g.answeredBy ?? [];
+    let answerRank: number | null = null;
+    if (answeredBy.length > 0) {
+      const got = await retrieve(g.query, K);
+      const ranks = answeredBy.map((c) => got.indexOf(c)).filter((i) => i >= 0);
+      answerRank = ranks.length > 0 ? Math.min(...ranks) + 1 : null;
+    }
+    gaps.push({ ...g, answerRank });
+  }
+
   if (args.includes('--json')) {
-    console.log(JSON.stringify({ ...report, gaps: ESTATE_ONBOARDING_V1_GAPS }, null, 2));
+    console.log(JSON.stringify({ ...report, gaps }, null, 2));
     return;
   }
 
@@ -138,11 +152,18 @@ async function main(): Promise<void> {
     console.log(`\n--- current answer not in the top ${K} (${misses.length}) ---`);
     for (const r of misses) console.log(`  ${r.id} "${r.query}"`);
   }
-  if (ESTATE_ONBOARDING_V1_GAPS.length > 0) {
-    console.log(
-      `\n--- documentation holes: no current doc answers these (${ESTATE_ONBOARDING_V1_GAPS.length}) ---`,
-    );
-    for (const g of ESTATE_ONBOARDING_V1_GAPS) console.log(`  ${g.id} "${g.query}" — ${g.notes}`);
+  const open = gaps.filter((g) => (g.answeredBy ?? []).length === 0);
+  const filled = gaps.filter((g) => (g.answeredBy ?? []).length > 0);
+  if (filled.length > 0) {
+    console.log(`\n--- documentation holes filled since labeling (${filled.length}) ---`);
+    for (const g of filled) {
+      const where = g.answerRank === null ? `NOT in the top ${K}` : `rank ${g.answerRank}`;
+      console.log(`  ${g.id} "${g.query}" — answer at ${where}`);
+    }
+  }
+  if (open.length > 0) {
+    console.log(`\n--- documentation holes: no current doc answers these (${open.length}) ---`);
+    for (const g of open) console.log(`  ${g.id} "${g.query}" — ${g.notes}`);
   }
 }
 

@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documentation holes. `pnpm eval:estate` runs it live and read-only through the team-API search
   path and prints `DEGRADED` when the dense arm fails open. First run: Recall@10 0.4815, FAMA@10
   0.4577, obsolete docs served on 7 of 45 questions.
+- **Estate eval reports filled documentation holes by rank (umbrella bead
+  `compile-then-govern-39z.26`).** `EstateGap.answeredBy` names the doc captured to fill a
+  hole; `pnpm eval:estate` prints where it ranks (and `answerRank` in `--json`) without
+  scoring it, so the 45 scored questions stay comparable. After archiving 34 obsolete docs and
+  capturing five missing facts: obsolete exposure 0.1556 → 0.0222, all five holes answered at
+  rank 1–2, Recall@10 0.4741 → 0.4333 (recent notes embedded by the same reindex displaced
+  three canonical answers; see the dataset README).
 - **Governed redaction now scrubs every tenant's derived search index (umbrella bead
   `compile-then-govern-39z.19`, runbook `000-docs/054-OD-RNBK` §4.7).** On 2026-10-04 the redacted
   text survived `curator redact` + `export --reconcile` + `reindex` in `~/.teamkb/qmd-index/`:

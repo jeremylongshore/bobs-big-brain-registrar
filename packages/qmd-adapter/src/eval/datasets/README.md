@@ -104,6 +104,24 @@ The lexical-only row is what teammates got while the embedder was stopped
 2026-10-10..13. Not frozen and not a gate: the corpus changes daily, and this set
 exists to show whether retiring stale knowledge moves the number.
 
+**After the first cleanup (2026-10-14, bead `compile-then-govern-39z.26`).** 34
+wholly obsolete docs archived through `curator batch-transition` (one receipt each),
+then export + reindex; five missing facts captured and governed. Partly stale docs that
+are also the correct answer elsewhere were left for a corrected rewrite (bead
+`compile-then-govern-39z.28`), since archiving them would cost recall.
+
+| Run (dense + lexical)    | Recall@10 | nDCG@10 | FAMA@10 | Obsolete exposure |
+| ------------------------ | --------- | ------- | ------- | ----------------- |
+| before cleanup, same day | 0.4741    | 0.3609  | 0.4503  | 0.1556 (7 of 45)  |
+| after cleanup + reindex  | 0.4333    | 0.2912  | 0.4296  | 0.0222 (1 of 45)  |
+
+Obsolete exposure fell from 7 questions to 1 (the remaining one, `d92c5eea`, is in
+39z.28). Recall fell because three questions (e02, e31, e36) lost their answer to recent
+short notes; no archived doc was a relevant one. The reindex embedded 141 docs the
+dense index had been missing, and those recent, narrow notes now outrank the canonical
+docs, so the "before" row was measured against a stale dense index. Gaps are reported
+by rank, not scored: all five filled holes rank 1 or 2.
+
 **Known limit.** Labels were drawn while the embedder was down, so an obsolete doc
 that only dense retrieval surfaces may still be unlabeled; review the dense top-10
 before treating obsolete exposure as complete.

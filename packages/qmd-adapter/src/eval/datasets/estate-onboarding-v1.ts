@@ -632,6 +632,11 @@ export interface EstateGap {
   notes: string;
   /** Obsolete docs seen answering it, for the curator. */
   obsoleteSeen?: string[];
+  /**
+   * Docs captured later to fill the hole. Reported by rank, not scored: the 45
+   * scored queries stay fixed so FAMA stays comparable across runs.
+   */
+  answeredBy?: string[];
 }
 
 export const ESTATE_ONBOARDING_V1_GAPS: EstateGap[] = [
@@ -641,6 +646,7 @@ export const ESTATE_ONBOARDING_V1_GAPS: EstateGap[] = [
     notes:
       'No doc mentions ~/bin/safe-merge / merge-guard (merge only through it; never gh pr merge directly). PR-discipline docs (#2 013-OD-STND) only say squash-merge when green.',
     obsoleteSeen: ['qmd://kb-curated/5c22589c-4c5c-516f-83b4-94ce828790f6.md'],
+    answeredBy: ['qmd://kb-curated/cd7be698-96d6-5478-ad33-e6f58c9b69fa.md'], // captured 2026-10-14 (bead 39z.26)
   },
   {
     id: 'e16',
@@ -651,23 +657,27 @@ export const ESTATE_ONBOARDING_V1_GAPS: EstateGap[] = [
       'qmd://kb-guides/3c6562e3-1083-5e98-a69d-ee2e0f312456.md',
       'qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md',
     ],
+    answeredBy: ['qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md'], // captured 2026-10-14 (bead 39z.26)
   },
   {
     id: 'e18',
     query: 'what video meeting tool do we use',
     notes:
       'Jitsi Meet at meet.intentsolutions.io (owner decision 2026-10-12, intent-os ops/meet) \u2014 not in the corpus yet. Probe returned zero results. Only Google Meet mention is a client-call note (KombiLife), not company tooling.',
+    answeredBy: ['qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md'], // captured 2026-10-14 (bead 39z.26)
   },
   {
     id: 'e47',
     query: "what is the company's business mailing address",
     notes:
       'No in-scope doc states the business mailing address (canonical record is intent-os business-plan/company-details.md, not ingested). cbc05dcb gives the legal entity (IntentSolutions.io LLC, Delaware) but no mailing address. Probe hits are Catalyst applicant-address decisions (noise).',
+    answeredBy: ['qmd://kb-guides/bae800ff-d00d-5752-b99e-9fea8353f42d.md'], // captured 2026-10-14 (bead 39z.26)
   },
   {
     id: 'e50',
     query: 'where are the LLM provider API keys stored',
     notes:
       'No doc names the intent-eval-lab .env.sops store for Anthropic/OpenAI/Groq/NVIDIA/DeepSeek keys. 6243141f (SOPS+age standard) gives the general rule only. Probe top 10 is generic LLM/provider noise.',
+    answeredBy: ['qmd://kb-guides/cf7bfdac-c3f5-548f-bffb-79b710c1e999.md'], // captured 2026-10-14 (bead 39z.26)
   },
 ];
