@@ -71,6 +71,9 @@
 
 [Unit]
 Description=Bob's Big Brain embedder (llama-server + EmbeddingGemma-300M, loopback :8098)
+# At most 5 starts in 5 min, then the unit stays failed and the health check pages.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -91,7 +94,13 @@ ExecStart=%h/.local/lib/bbb/llama-server/current/llama-server \
 # ~334 MB model + KV + a 2048-token compute buffer; measured cgroup peak ~1.5G.
 # 3G leaves ~1.5G headroom, bounded (the box has 11 GiB+ free but OOM history).
 MemoryMax=3G
-Restart=on-failure
+# Restart=always, not on-failure (bead compile-then-govern-39z.25). On 2026-10-10 21:00 something
+# outside systemd sent llama-server SIGTERM; it cleaned up and exited 0, which on-failure treats as
+# a deliberate stop, so search ran lexical-only for 2.5 days. `systemctl --user stop` still stops
+# it for good; the kill switch for dense retrieval is TEAMKB_DENSE_ENABLED=false, not this unit.
+# A missing or wrong weight file fails ExecStartPre and hits the start limit in [Unit], so it
+# cannot crash-loop forever.
+Restart=always
 RestartSec=5
 
 [Install]

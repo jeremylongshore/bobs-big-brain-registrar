@@ -1,0 +1,10 @@
+# Install: cp scripts/bbb-embedder-health.{service,timer} ~/.config/systemd/user/ &&
+#   install -m 755 scripts/bbb-embedder-health.sh ~/bin/ && systemctl --user daemon-reload &&
+#   systemctl --user enable --now bbb-embedder-health.timer
+[Unit]
+Description=Bob's Big Brain — embedder health check; pages Buzz sys-automation if dense retrieval is down (beads 39z.15, 39z.25)
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/bbb-embedder-health.sh
+Nice=10
