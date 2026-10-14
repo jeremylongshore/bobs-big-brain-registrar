@@ -34,4 +34,13 @@ describe('estate-onboarding-v1 dataset', () => {
   it('gives every gap a note saying what is missing', () => {
     for (const g of ESTATE_ONBOARDING_V1_GAPS) expect(g.notes.length, g.id).toBeGreaterThan(10);
   });
+
+  it('cites gap answers as qmd:// docs and never as one of its own obsolete docs', () => {
+    for (const g of ESTATE_ONBOARDING_V1_GAPS) {
+      for (const c of g.answeredBy ?? []) {
+        expect(c, g.id).toMatch(/^qmd:\/\/kb-[a-z]+\/[0-9a-f-]{36}\.md$/);
+        expect(g.obsoleteSeen ?? [], g.id).not.toContain(c);
+      }
+    }
+  });
 });
