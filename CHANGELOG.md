@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Estate eval labels follow the corrected rewrites (umbrella bead
+  `compile-then-govern-39z.28`).** Eleven partly stale brain docs were recaptured with their
+  one wrong claim fixed and the originals archived, and the admin-bypass merge note was archived
+  by owner decision; `estate-onboarding-v1` now points at the rewrites and drops the obsolete
+  labels on the archived originals. Live after relabel: Recall@10 0.5389, FAMA@10 0.5389,
+  obsolete exposure 0 of 45 (was 2); see the dataset README.
+
 ### Added
 
 - **Forgetting-aware retrieval eval (umbrella bead `compile-then-govern-39z.5`).** `famaAtK`

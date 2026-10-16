@@ -31,34 +31,34 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       relevant: [
         'qmd://kb-guides/8bb364ff-b970-5736-a173-5af5b0051e2f.md',
         'qmd://kb-guides/87f17c55-94ae-5be9-b68f-bf536e9b8190.md',
+        'qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md',
       ],
-      obsolete: ['qmd://kb-guides/33d02760-01b3-415a-9d5d-ea3d188fdb1e.md'],
       notes:
-        "Relevant not in top 10 (probe returns only 4 hits: #1 deploy-vps.sh reset-only decision 5ff7ac4a is true but narrow \u2014 now-lms/intent-os box updates, not the general pipeline; #2-4 LangGraph/web-app noise). Correct answer = GitHub Actions -> Tailscale OIDC -> per-repo force-command on the VPS (ops/deploy). 4ffcb275 not used as relevant: it says callers use `secrets: inherit`, which the current runbook says does not forward cross-repo. Obsolete (not in top 10): coastal-realty-ops CLAUDE.md says 'Cloud Run deployment with Cloud Scheduler'.",
+        'Relevant not in top 10 (probe returns only 4 hits: #1 deploy-vps.sh reset-only decision 5ff7ac4a is true but narrow \u2014 now-lms/intent-os box updates, not the general pipeline; #2-4 LangGraph/web-app noise). Correct answer = GitHub Actions -> Tailscale OIDC -> per-repo force-command on the VPS (ops/deploy). 39z.28 (2026-10-16): 4ffcb275 (said `secrets: inherit`) rewritten as dce1f285 with the explicit-secrets rule and added as relevant; the coastal-realty-ops CLAUDE.md (Cloud Run) was rewritten as b1484cf6 and the original archived, so the obsolete label is gone.',
     },
     {
       id: 'e02',
       kind: 'semantic',
       query: 'where is production hosted',
       relevant: [
-        'qmd://kb-guides/e945e2cc-a33b-5b42-8b66-b718912287c0.md',
+        'qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md',
         'qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md',
         'qmd://kb-guides/ec4be0fe-fb06-5808-ad93-77764983d5cd.md',
       ],
       obsolete: ['qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md'],
       notes:
-        "Relevant not in top 10; probe top 10 is LangGraph 'Deployment Options', DiagnosticPro CLAUDE.md, Hustle summary etc. \u2014 noise. e945e2cc correct on host (its Slack-alerting line is stale, irrelevant here). Obsolete (not in top 10): Domain audit 26fad4c1 says 11 domains pending migration and jeremylongshore.com stays on Netlify/Firebase.",
+        "Relevant not in top 10; probe top 10 is LangGraph 'Deployment Options', DiagnosticPro CLAUDE.md, Hustle summary etc. \u2014 noise. e945e2cc (correct on host, stale Slack line) rewritten as f1abddca in 39z.28. Obsolete (not in top 10): Domain audit 26fad4c1 says 11 domains pending migration and jeremylongshore.com stays on Netlify/Firebase.",
     },
     {
       id: 'e03',
       kind: 'semantic',
       query: 'how do I get SSH access to the production server',
       relevant: [
-        'qmd://kb-guides/2a8fee37-6b95-5e25-afbf-ada3215d2584.md',
+        'qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md',
         'qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md',
       ],
       notes:
-        'Probe returned ZERO results. Ope onboarding packet: tailnet join is the prerequisite, no public SSH; security posture: SSH tailnet-only, pubkey-only. No obsolete doc found.',
+        'Probe returned ZERO results. Ope onboarding packet (2a8fee37, rewritten as 9ac7783e in 39z.28): tailnet join is the prerequisite, no public SSH; security posture: SSH tailnet-only, pubkey-only. No obsolete doc found.',
     },
     {
       id: 'e04',
@@ -89,16 +89,12 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       relevant: [
         'qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md',
         'qmd://kb-curated/b4c91d39-52d7-5e5f-962e-86824c26cce1.md',
+        'qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md',
+        'qmd://kb-guides/42247e58-6791-5c1e-9307-98c59ac1cd16.md',
       ],
-      obsolete: [
-        'qmd://kb-guides/dad34032-e92d-5d64-85ff-3c4caf20de16.md',
-        'qmd://kb-curated/4ffcb275-55af-4682-82dd-e62c8510048c.md',
-        'qmd://kb-guides/2a8fee37-6b95-5e25-afbf-ada3215d2584.md',
-        'qmd://kb-guides/df3f0840-f859-5551-b15c-52c2f65f12bd.md',
-        'qmd://kb-guides/e945e2cc-a33b-5b42-8b66-b718912287c0.md',
-      ],
+      obsolete: ['qmd://kb-guides/dad34032-e92d-5d64-85ff-3c4caf20de16.md'],
       notes:
-        "Relevant at #1 (Catalyst monitor -> estate alert shim -> Buzz, never Slack, only high/urgent page) and #2 (estate alerting is delivered through Buzz). Both are indirect; no doc states the VPS notify.sh -> alert-floor -> Buzz sys-* channel map. Obsolete: #5 'Alert routing \u2014 intentsolutions VPS' (Slack-only); not in top 10: 4ffcb275, Ope onboarding, System Map (#prod-incident Slack), e945e2cc ('Slack-oriented') all say Slack.",
+        "Relevant at #1 (Catalyst monitor -> estate alert shim -> Buzz, never Slack, only high/urgent page) and #2 (estate alerting is delivered through Buzz). Both are indirect. 39z.28 (2026-10-16): the four Slack-era docs (4ffcb275, Ope onboarding, System Map, e945e2cc) were rewritten with the notify.sh -> alert-floor -> Buzz sys-* channel map and archived; the infra doc dce1f285 and system map 42247e58 are now relevant. Obsolete: #5 'Alert routing \u2014 intentsolutions VPS' (Slack-only).",
     },
     {
       id: 'e07',
@@ -108,27 +104,27 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md',
         'qmd://kb-decisions/0c047fd4-2be6-5fcb-83c7-9be788c1c226.md',
         'qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md',
+        'qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md',
       ],
       obsolete: [
         'qmd://kb-guides/0b44b9ea-60d5-5158-a94c-28d999ceb4d3.md',
-        'qmd://kb-guides/f658703a-305e-5984-9ea3-5944051f6f2e.md',
         'qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md',
         'qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md',
         'qmd://kb-guides/9b7de37e-9c00-52a1-9336-e52d4c433d1d.md',
       ],
       notes:
-        "Probe returned ZERO results. Relevant: three-tier borg (dev box / home server / B2 Object Lock), B2 provisioned with trimmed keys, Borg+rclone ADR. Obsolete: ops/backup summary 0b44b9ea ('B2 is not provisioned'), VPS recovery procedure (off-site 'still pending'), both runbook summaries (off-site deferred to a Hetzner Storage Box), 067-AACR (Epic 1.1 not implemented). Also stale: alert-routing doc claim 13.",
+        "Probe returned ZERO results. Relevant: three-tier borg (dev box / home server / B2 Object Lock), B2 provisioned with trimmed keys, Borg+rclone ADR; 39z.28 added the rewritten VPS recovery procedure 1f35d737 (replica, home server and B2 all live). Obsolete: ops/backup summary 0b44b9ea ('B2 is not provisioned'), the old VPS recovery procedure f658703a (off-site 'still pending', archived 2026-10-16), both runbook summaries (off-site deferred to a Hetzner Storage Box), 067-AACR (Epic 1.1 not implemented). Also stale: alert-routing doc claim 13.",
     },
     {
       id: 'e08',
       kind: 'semantic',
       query: 'how do I restore from a backup',
       relevant: [
-        'qmd://kb-guides/f658703a-305e-5984-9ea3-5944051f6f2e.md',
+        'qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md',
         'qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md',
       ],
       notes:
-        'Relevant not in top 10 (probe: Mission Control KPIs, Zava DB lab, Hustle status \u2014 noise). VPS recovery procedure gives borg repo/passphrase locations + restore drill (its off-site-pending line is stale); off-estate doc shows full borg extract from the off-site copy. No doc covers restore-from-b2.sh. No obsolete flagged.',
+        'Relevant not in top 10 (probe: Mission Control KPIs, Zava DB lab, Hustle status \u2014 noise). VPS recovery procedure (f658703a, rewritten as 1f35d737 in 39z.28) gives borg repo/passphrase locations + restore drill; off-estate doc shows full borg extract from the off-site copy. No doc covers restore-from-b2.sh. No obsolete flagged.',
     },
     {
       id: 'e09',
@@ -147,14 +143,11 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       query: 'do we use Google Cloud',
       relevant: [
         'qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md',
-        'qmd://kb-guides/947ef8b5-ea6a-5bcf-8e49-afec94c53e16.md',
+        'qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md',
       ],
-      obsolete: [
-        'qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md',
-        'qmd://kb-guides/33d02760-01b3-415a-9d5d-ea3d188fdb1e.md',
-      ],
+      obsolete: ['qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md'],
       notes:
-        "Probe returned ZERO results (query says 'Google Cloud', docs say 'GCP'). Relevant: GCP fully-exited decision + 'GCP exodus complete' onboarding note (its 'Google Workspace still used' line is stale but off-question). Obsolete: VPS Runbook Summary ('GCP exodus partially complete, ~27 zombie projects'); coastal-realty-ops CLAUDE.md (Cloud Run deployment).",
+        "Probe returned ZERO results (query says 'Google Cloud', docs say 'GCP'). Relevant: GCP fully-exited decision + 'GCP exodus complete' onboarding note (947ef8b5, rewritten as 00655222 in 39z.28 with Workspace retired too). Obsolete: VPS Runbook Summary ('GCP exodus partially complete, ~27 zombie projects'); the coastal-realty-ops CLAUDE.md (Cloud Run) was rewritten as b1484cf6 and archived.",
     },
     {
       id: 'e11',
@@ -189,11 +182,11 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       query: 'how do Plane, Twenty and Umami get updated',
       relevant: [
         'qmd://kb-guides/79f4778a-8eaf-5255-8c95-55a4b97e236e.md',
-        'qmd://kb-curated/4ffcb275-55af-4682-82dd-e62c8510048c.md',
+        'qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md',
         'qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md',
       ],
       notes:
-        'Probe returned ZERO results. All three state Watchtower auto-updates Plane/Twenty/Umami and no custom CI/CD for them. No obsolete.',
+        'Probe returned ZERO results. All three state Watchtower auto-updates Plane/Twenty/Umami and no custom CI/CD for them (4ffcb275 rewritten as dce1f285 in 39z.28). No obsolete.',
     },
     {
       id: 'e15',
@@ -202,7 +195,7 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       relevant: [
         'qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md',
         'qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md',
-        'qmd://kb-guides/2a8fee37-6b95-5e25-afbf-ada3215d2584.md',
+        'qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md',
       ],
       notes:
         "Relevant not in top 10 (probe top 10 is Catalyst/automations/intent-os changelog noise). Relevant docs are 'contradiction' records that still state current facts: zero production containers on the dev box, Caddy only for demos static files; Ope packet gives the dev box vs prod VPS topology. No doc names it 'team-server' or lists Dolt/MCP/Claude sessions.",
@@ -214,15 +207,14 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       relevant: [
         'qmd://kb-guides/f66d24d8-30ab-5d63-b37a-dba8efbf6fea.md',
         'qmd://kb-decisions/ffbd1e78-270c-5364-a770-46545d23376a.md',
+        'qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md',
       ],
       obsolete: [
         'qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md',
-        'qmd://kb-guides/947ef8b5-ea6a-5bcf-8e49-afec94c53e16.md',
-        'qmd://kb-guides/ca5bbd29-1c8a-5b50-812d-74f3e725668c.md',
         'qmd://kb-guides/9bb2091e-cce3-5b6e-9730-2d66695a2745.md',
       ],
       notes:
-        "Relevant not in top 10 (only hit: #1 StartAI Tools CLAUDE.md \u2014 noise). Relevant docs are indirect: 'the Intent Solutions MXroute mailboxes are for 1:1 correspondence' + the Google->MXroute hard-switch decision; none says flatly 'company email is MXroute since 2026-07-31'. Obsolete (not in top 10): intentsolutions-vps-runbook ('email handled via Google Workspace'), 'GCP exodus complete' note + Workspace CLAUDE.md ('Google Workspace (Gmail) still used/active'), Email Authentication doc (Google Workspace DKIM).",
+        "Relevant not in top 10 (only hit: #1 StartAI Tools CLAUDE.md \u2014 noise). Relevant docs: 'the Intent Solutions MXroute mailboxes are for 1:1 correspondence' + the Google->MXroute hard-switch decision, and since 39z.28 the rewritten exodus note 00655222 ('Company email is MXroute'). Obsolete (not in top 10): intentsolutions-vps-runbook ('email handled via Google Workspace'), Email Authentication doc (Google Workspace DKIM). The two 'Google Workspace still used' docs (947ef8b5, ca5bbd29) were rewritten and archived 2026-10-16.",
     },
     {
       id: 'e19',
@@ -277,10 +269,12 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       id: 'e23',
       kind: 'lexical',
       query: 'how do I join the tailnet',
-      relevant: ['qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md'],
-      obsolete: ['qmd://kb-guides/668bb4ee-8667-5639-b5a0-73b476b30e08.md'],
+      relevant: [
+        'qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md',
+        'qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md',
+      ],
       notes:
-        "Relevant not in top 10 (only hit: internal testing dashboard DR-RFC \u2014 noise). f8322014: accept the invite with passkey/current IdP and pick the Intent Solutions tailnet; Workspace identity is retired. Obsolete (not in top 10): 'Bob's Big Brain team vs local install' prereq 'Tailscale signed in with @intentsolutions.io'.",
+        "Relevant not in top 10 (only hit: internal testing dashboard DR-RFC \u2014 noise). f8322014: accept the invite with passkey/current IdP and pick the Intent Solutions tailnet; Workspace identity is retired. 39z.28: the install guide 668bb4ee (prereq 'Tailscale signed in with the Workspace identity') was rewritten as 323b8b4a (join from the team invite, any login) and archived, so it moved from obsolete to relevant.",
     },
     {
       id: 'e24',
@@ -301,9 +295,8 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/8bb364ff-b970-5736-a173-5af5b0051e2f.md',
         'qmd://kb-guides/87f17c55-94ae-5be9-b68f-bf536e9b8190.md',
       ],
-      obsolete: ['qmd://kb-curated/4ffcb275-55af-4682-82dd-e62c8510048c.md'],
       notes:
-        "Relevant not in top 10 (probe: LangGraph Cloud SaaS, MCP blog posts, Phase 5 AAR \u2014 noise). Onboard-a-repo procedure (per-repo OIDC trust, deploy key, 4 secrets, Caddy block, vps-deploy.yml). Obsolete (not in top 10): 4ffcb275 says callers use `secrets: inherit` \u2014 current runbook says pass the 4 secrets explicitly because inherit doesn't forward cross-repo.",
+        'Relevant not in top 10 (probe: LangGraph Cloud SaaS, MCP blog posts, Phase 5 AAR \u2014 noise). Onboard-a-repo procedure (per-repo OIDC trust, deploy key, 4 secrets, Caddy block, vps-deploy.yml). 39z.28: 4ffcb275 (`secrets: inherit`) was rewritten as dce1f285 with the explicit-secrets rule and archived; the rewrite states the deploy pattern, not the onboarding steps, so it is not labeled relevant here.',
     },
     {
       id: 'e26',
@@ -385,7 +378,7 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'semantic',
       query: 'how do I install the brain plugin',
       relevant: [
-        'qmd://kb-guides/668bb4ee-8667-5639-b5a0-73b476b30e08.md',
+        'qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md',
         'qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md',
         'qmd://kb-curated/b05e4cfc-b97a-52cc-a55f-2bfbdef19676.md',
       ],
@@ -396,20 +389,20 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md',
       ],
       notes:
-        '2960262f #5; 668bb4ee and b05e4cfc not in top 10. Obsolete (none in top 10 for this phrasing): 02e42c1d intent-brain plugin v0.4.0; 37ed4b2c private intent-solutions-marketplace with intent-brain entry; 1167e3f2 private internal catalog with @intent-solutions-io install suffix; 0b197d62 011-RNBK requires GitHub org membership + env vars in shell profile.',
+        '2960262f #5; 668bb4ee (rewritten as 323b8b4a in 39z.28) and b05e4cfc not in top 10. Obsolete (none in top 10 for this phrasing): 02e42c1d intent-brain plugin v0.4.0; 37ed4b2c private intent-solutions-marketplace with intent-brain entry; 1167e3f2 private internal catalog with @intent-solutions-io install suffix; 0b197d62 011-RNBK requires GitHub org membership + env vars in shell profile.',
     },
     {
       id: 'e33',
       kind: 'semantic',
       query: 'how do I search the brain',
       relevant: [
-        'qmd://kb-guides/7a25e42e-30fa-57db-b8fd-e45eb3a16c89.md',
+        'qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md',
         'qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md',
         'qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md',
       ],
       obsolete: ['qmd://kb-guides/87d86da8-4f48-5bb5-a12a-0e17c7a71cbe.md'],
       notes:
-        "7a25e42e #4; e25bccbd and ac51988a not in top 10. 7a25e42e describes brain_search as 'qmd search --json' (retrieval internals stale) but usage advice is current. Obsolete: 87d86da8 tells you to use the old teamkb_search MCP tool (now brain_search); not in top 10 here.",
+        "7a25e42e #4; e25bccbd and ac51988a not in top 10. 7a25e42e described brain_search as 'qmd search --json'; rewritten as 28604f29 with the fused BM25/FTS5/dense stack in 39z.28. Obsolete: 87d86da8 tells you to use the old teamkb_search MCP tool (now brain_search); not in top 10 here.",
     },
     {
       id: 'e34',
@@ -502,14 +495,14 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md',
         'qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md',
         'qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md',
+        'qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md',
       ],
       obsolete: [
         'qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md',
-        'qmd://kb-guides/d92c5eea-b3b5-5989-96cb-e9f18aa27391.md',
         'qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md',
       ],
       notes:
-        "Probe returned 0 hits; 'brain access token' ranks 2960262f #3, 0b197d62 #4 (OBSOLETE), 1167e3f2 #7 (OBSOLETE), 37ed4b2c #8. Obsolete: 0b197d62 export TEAMKB_API_TOKEN in shell profile; d92c5eea says tokens stored plaintext (now scrypt-hashed); 1167e3f2 private catalog install path.",
+        "Probe returned 0 hits; 'brain access token' ranks 2960262f #3, 0b197d62 #4 (OBSOLETE), 1167e3f2 #7 (OBSOLETE), 37ed4b2c #8. Obsolete: 0b197d62 export TEAMKB_API_TOKEN in shell profile; 1167e3f2 private catalog install path. 39z.28: the API runbook d92c5eea (tokens plaintext) was rewritten as d6649d32 (scrypt-hashed, how to issue one) and archived, so it moved from obsolete to relevant.",
     },
     {
       id: 'e41',
@@ -519,15 +512,15 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-decisions/5c98d93b-770f-56c3-ac3e-8a2a39dd75f7.md',
         'qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md',
         'qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md',
+        'qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md',
       ],
       obsolete: [
         'qmd://kb-guides/4f61a0c4-f91e-5ae0-8e31-959ec5233ec6.md',
         'qmd://kb-decisions/872fa0b4-d60e-5dde-b3fd-d5cc3e054e28.md',
-        'qmd://kb-guides/7a25e42e-30fa-57db-b8fd-e45eb3a16c89.md',
         'qmd://kb-curated/5d756bb0-fba6-5267-952f-eb9211feae2c.md',
       ],
       notes:
-        "Probe returned 0 hits (also 'brain retrieval search technology'). Relevant: dense on-by-default decision + RRF qmd BM25/FTS5 + measured dense win. Obsolete: 4f61a0c4 'BM25 is the only wired path'; 872fa0b4 044-DECR defers dense and drops EmbeddingGemma (later reversed); 7a25e42e says brain_search runs qmd search --json; 5d756bb0 native backend only 'proposed'.",
+        "Probe returned 0 hits (also 'brain retrieval search technology'). Relevant: dense on-by-default decision + RRF qmd BM25/FTS5 + measured dense win, and since 39z.28 the rewritten how-to-use guide 28604f29 (fused stack). Obsolete: 4f61a0c4 'BM25 is the only wired path'; 872fa0b4 044-DECR defers dense and drops EmbeddingGemma (later reversed); 5d756bb0 native backend only 'proposed'. 7a25e42e ('qmd search --json') was superseded and archived 2026-10-16.",
     },
     {
       id: 'e42',
@@ -644,7 +637,7 @@ export const ESTATE_ONBOARDING_V1_GAPS: EstateGap[] = [
     id: 'e12',
     query: 'how do I merge a pull request',
     notes:
-      'No doc mentions ~/bin/safe-merge / merge-guard (merge only through it; never gh pr merge directly). PR-discipline docs (#2 013-OD-STND) only say squash-merge when green.',
+      'No doc mentions ~/bin/safe-merge / merge-guard (merge only through it; never gh pr merge directly). PR-discipline docs (#2 013-OD-STND) only say squash-merge when green. The admin-bypass note 5c22589c was archived 2026-10-16 by owner decision (bead 39z.28): safe-merge only.',
     obsoleteSeen: ['qmd://kb-curated/5c22589c-4c5c-516f-83b4-94ce828790f6.md'],
     answeredBy: ['qmd://kb-curated/cd7be698-96d6-5478-ad33-e6f58c9b69fa.md'], // captured 2026-10-14 (bead 39z.26)
   },
