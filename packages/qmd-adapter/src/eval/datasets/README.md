@@ -142,6 +142,28 @@ hold-out 7 gained and none lost. The second obsolete doc served (`7a25e42e`, ran
 is, like `d92c5eea`, a partly stale doc queued for rewrite in 39z.28. e02 "where is production
 hosted" still misses: its canonical doc ranks just outside the top 10, behind generic "production" reference docs with a higher fused score and Catalyst production notes.
 
+**Corrected rewrites (2026-10-16, bead `compile-then-govern-39z.28`).** The eleven docs that
+were mostly current but carried one stale claim (Slack alerting, `secrets: inherit`, off-site
+backup "still pending", Google Workspace still used, a Workspace login for Tailscale, brain_search as
+`qmd search --json`, plaintext API tokens, Cloud Run) were each recaptured through
+`brain_capture` + `brain_govern` with the claim corrected, and the originals archived (nine by
+`curator batch-transition`, two auto-superseded by title). The admin-bypass merge note
+(`5c22589c`) was archived by owner decision: merges go through `safe-merge` only. Labels moved
+with the docs: the rewrite replaces its original wherever it was relevant, obsolete labels on
+the archived originals are gone, and a rewrite that now answers a question it used to answer
+wrongly (alerts, offsite backup, email host, tailnet join, access token, search stack) is
+relevant there. Measured on a quiet box; under Catalyst CI load (load 23 on 8 cores) the 5 s
+dense timeout fails on every query and the run reports `DEGRADED`.
+
+| Run (dense + lexical)    | Recall@10 | nDCG@10 | FAMA@10 | Obsolete exposure |
+| ------------------------ | --------- | ------- | ------- | ----------------- |
+| before rewrites (39z.29) | 0.5370    | 0.3884  | 0.5302  | 0.0444 (2 of 45)  |
+| after rewrites + relabel | 0.5389    | 0.3981  | 0.5389  | 0.0000 (0 of 45)  |
+
+Nine questions still miss (e01, e03, e09, e14, e17, e25, e38, e43, e48); e02 "where is
+production hosted" now hits. The two numbers are not strictly comparable because the labels
+changed with the corpus; the obsolete-exposure column is the one this bead was for.
+
 **Known limit.** Labels were drawn while the embedder was down, so an obsolete doc
 that only dense retrieval surfaces may still be unlabeled; review the dense top-10
 before treating obsolete exposure as complete.
