@@ -122,6 +122,26 @@ dense index had been missing, and those recent, narrow notes now outrank the can
 docs, so the "before" row was measured against a stale dense index. Gaps are reported
 by rank, not scored: all five filled holes rank 1 or 2.
 
+**Bounded freshness (2026-10-16, bead `compile-then-govern-39z.29`).** The three lost answers
+were in the fused top 10 before the rerank: an unbounded 90-day decay of `updatedAt` (import
+time for every doc bulk-imported 2026-07-15/16) halved their score against last week's notes.
+Freshness now multiplies by at most [0.8, 1]. To avoid tuning on these 45 questions, the
+candidates (no freshness, 365-day half-life, floors 0.5–0.9) were also scored on the held-out
+`governed-brain-v1` set through the same rerank; both sets were flat for floors 0.8–1.0, and
+0.8 keeps freshness as a tiebreaker.
+
+| Run (dense + lexical)            | Recall@10 | nDCG@10 | FAMA@10 | Obsolete exposure |
+| -------------------------------- | --------- | ------- | ------- | ----------------- |
+| unbounded freshness, same day    | 0.4259    | 0.2882  | 0.4222  | 0.0222 (1 of 45)  |
+| freshness floor 0.8              | 0.5370    | 0.3884  | 0.5302  | 0.0444 (2 of 45)  |
+| held-out governed-brain-v1, then | 0.8214    | 0.5768  | —       | —                 |
+| held-out governed-brain-v1, now  | 0.9881    | 0.8570  | —       | —                 |
+
+Per question: 15 estate questions gained recall and 4 lost some (e22, e30, e48, e49); on the
+hold-out 7 gained and none lost. The second obsolete doc served (`7a25e42e`, rank 10 for e41)
+is, like `d92c5eea`, a partly stale doc queued for rewrite in 39z.28. e02 "where is production
+hosted" still misses: its canonical doc ranks just outside the top 10, behind generic "production" reference docs with a higher fused score and Catalyst production notes.
+
 **Known limit.** Labels were drawn while the embedder was down, so an obsolete doc
 that only dense retrieval surfaces may still be unlabeled; review the dense top-10
 before treating obsolete exposure as complete.

@@ -201,6 +201,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Recent narrow notes no longer push canonical answers out of the top 10 (umbrella bead
+  `compile-then-govern-39z.29`).** The rerank multiplied every hit by an unbounded 90-day
+  freshness decay of `updatedAt`, which is the import or edit time, not when the fact became
+  true. Every doc bulk-imported 2026-07-15/16 sat at ~0.49 against ~0.95 for this month's notes,
+  so a short lesson from last week outranked the testing SOP or the brain's topology doc at half
+  their fused score. Freshness is now bounded to [0.8, 1] (`FRESHNESS_FLOOR`,
+  `freshnessRerankFactor` in `packages/common/src/freshness.ts`), a tiebreaker rather than a
+  relevance signal. Live brain, 2026-10-16: estate-onboarding-v1 Recall@10 0.4259 → 0.5370,
+  FAMA@10 0.4222 → 0.5302; the held-out governed-brain-v1 set through the same rerank 0.8214 →
+  0.9881 (nDCG 0.5768 → 0.8570). Obsolete exposure 1 → 2 of 45: both docs are queued for rewrite
+  in `compile-then-govern-39z.28`.
 - **The embedder no longer stays down after an outside stop, and its outage keeps paging (umbrella
   bead `compile-then-govern-39z.25`).** On 2026-10-10 21:00 CST something outside systemd sent
   llama-server SIGTERM; it exited 0, `Restart=on-failure` treated that as deliberate, and every

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeFreshnessScore,
+  freshnessRerankFactor,
+  FRESHNESS_FLOOR,
   CATEGORY_BOOST,
   rerankSearchHits,
   extractMemoryIdFromCitation,
@@ -114,6 +116,32 @@ describe('rerankSearchHits', () => {
   it('returns an empty array when given an empty input', () => {
     const result = rerankSearchHits([], NOW);
     expect(result).toEqual([]);
+  });
+
+  // 39z.29: the canonical runbook (bulk-imported months ago) lost to a short
+  // note from last week at a fused score half its own.
+  it('keeps a clearly more relevant old doc above a fresh narrow note', () => {
+    const hits = [
+      { score: 0.6, category: 'architecture', updatedAt: daysAgo(3) },
+      { score: 1.0, category: 'reference', updatedAt: daysAgo(400) },
+    ];
+    const result = rerankSearchHits(hits, NOW);
+    expect(result[0]!.updatedAt).toBe(daysAgo(400));
+  });
+});
+
+describe('freshnessRerankFactor (39z.29)', () => {
+  it('is 1 for same-day content', () => {
+    expect(freshnessRerankFactor(NOW, NOW)).toBe(1);
+  });
+
+  it('never drops below FRESHNESS_FLOOR however old the memory is', () => {
+    expect(FRESHNESS_FLOOR).toBe(0.8);
+    expect(freshnessRerankFactor(daysAgo(3650), NOW)).toBeCloseTo(0.8, 6);
+  });
+
+  it('sits halfway between the floor and 1 at the half-life', () => {
+    expect(freshnessRerankFactor(daysAgo(90), NOW)).toBeCloseTo(0.9, 6);
   });
 });
 

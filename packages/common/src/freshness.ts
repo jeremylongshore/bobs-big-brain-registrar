@@ -18,6 +18,29 @@ export function computeFreshnessScore(
   return Math.exp(-lambda * ageDays);
 }
 
+/**
+ * Lowest rerank multiplier freshness can apply (bead compile-then-govern-39z.29).
+ * Freshness is a tiebreaker, not a relevance signal: a memory's `updatedAt` is
+ * its import or last-edit time, not when its fact became true. Unbounded, the
+ * 90-day decay put every doc bulk-imported 2026-07-15/16 at ~0.49 against ~0.95
+ * for this month's notes, so short recent lessons pushed the canonical runbook
+ * and standard out of the top 10. Measured on the live brain 2026-10-16:
+ * estate-onboarding-v1 Recall@10 0.43 -> 0.54 and the held-out governed-brain-v1
+ * 0.82 -> 0.99, flat for floors 0.8-1.0. Stale facts are retired by lifecycle
+ * (archive/supersede), not by age.
+ */
+export const FRESHNESS_FLOOR = 0.8;
+
+/** Freshness rerank multiplier in [FRESHNESS_FLOOR, 1]: the decay, bounded. */
+export function freshnessRerankFactor(
+  updatedAt: string,
+  nowIso: string,
+  halfLifeDays: number = 90,
+): number {
+  const decay = computeFreshnessScore(updatedAt, nowIso, halfLifeDays);
+  return FRESHNESS_FLOOR + (1 - FRESHNESS_FLOOR) * decay;
+}
+
 /** Category importance weights for search ranking */
 export const CATEGORY_BOOST: Record<string, number> = {
   decision: 1.2,
@@ -37,9 +60,10 @@ export interface RerankOptions {
 }
 
 /**
- * Rerank search hits by combining raw score with freshness, category boost and
- * the rerank policy (lifecycle + historical-record demotion, see rerank-policy.ts).
- * finalScore = rawScore * freshness * categoryBoost * lifecycleFactor * historicalFactor
+ * Rerank search hits by combining raw score with bounded freshness, category
+ * boost and the rerank policy (lifecycle + historical-record demotion, see
+ * rerank-policy.ts).
+ * finalScore = rawScore * freshnessRerankFactor * categoryBoost * lifecycleFactor * historicalFactor
  * A hit's optional `title` / `lifecycle` feed the policy; absent = factor 1.
  * Returns hits sorted by finalScore descending (stable on ties).
  */
@@ -59,7 +83,7 @@ export function rerankSearchHits<
 ): Array<T & { finalScore: number }> {
   return hits
     .map((hit) => {
-      const freshness = computeFreshnessScore(hit.updatedAt, nowIso, halfLifeDays);
+      const freshness = freshnessRerankFactor(hit.updatedAt, nowIso, halfLifeDays);
       const categoryBoost = CATEGORY_BOOST[hit.category] ?? 1.0;
       const policy = computeRerankPolicyFactors(hit, options.query).product;
       const finalScore = Math.round(hit.score * freshness * categoryBoost * policy * 1000) / 1000;

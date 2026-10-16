@@ -123,8 +123,10 @@ function doc(id: string, score: number, meta: CitedHitMetadata): Doc {
   return { id, file: `qmd://kb-curated/${id}.md`, score, meta };
 }
 
-/** Imported AAR/audit docs carry import-time updatedAt (recent) and a strong lexical match. */
-const DECISION = doc('decision', 0.9, {
+/** Imported AAR/audit docs carry import-time updatedAt (recent) and a strong lexical match.
+ * The decision trails at 0.8: with freshness bounded (39z.29) a closer gap no longer
+ * shows the AAR winning before the policy applies. */
+const DECISION = doc('decision', 0.8, {
   category: 'decision',
   updatedAt: daysAgo(30),
   title: 'GCP fully exited: estate torn down 2026-07-09, all hosting on the Contabo VPS',
@@ -212,7 +214,7 @@ describe('fail-open and unchanged behavior', () => {
     expect(h!.finalScore).toBe(0.5);
   });
 
-  it('rerankSearchHits without title/lifecycle/query is numerically identical to the old formula', () => {
+  it('rerankSearchHits without title/lifecycle/query matches the bounded-freshness formula', () => {
     const hits = [
       { score: 0.9, category: 'decision', updatedAt: daysAgo(30) },
       { score: 0.6, category: 'reference', updatedAt: daysAgo(200) },
@@ -222,7 +224,7 @@ describe('fail-open and unchanged behavior', () => {
       (h) =>
         Math.round(
           h.score *
-            Math.exp((-Math.LN2 / 90) * (h.category === 'decision' ? 30 : 200)) *
+            (0.8 + 0.2 * Math.exp((-Math.LN2 / 90) * (h.category === 'decision' ? 30 : 200))) *
             (h.category === 'decision' ? 1.2 : 0.9) *
             1000,
         ) / 1000,
