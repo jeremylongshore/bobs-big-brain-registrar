@@ -30,6 +30,8 @@ export { isPathSafe } from './path-safety.js';
 export type { PathSafetyResult } from './path-safety.js';
 export {
   computeFreshnessScore,
+  freshnessRerankFactor,
+  FRESHNESS_FLOOR,
   CATEGORY_BOOST,
   rerankSearchHits,
   extractMemoryIdFromCitation,
