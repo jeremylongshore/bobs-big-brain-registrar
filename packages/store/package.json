@@ -22,7 +22,7 @@
     "@qmd-team-intent-kb/common": "workspace:*",
     "@qmd-team-intent-kb/schema": "workspace:*",
     "better-sqlite3": "^13.0.3",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
