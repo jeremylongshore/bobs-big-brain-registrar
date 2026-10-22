@@ -795,8 +795,16 @@ describe('curator-cli holds', () => {
   };
 
   beforeEach(() => {
+    // Fixtures are held at T0. Keep the CLI's wall clock inside their TTL;
+    // fake only Date so asynchronous I/O and timers continue to run normally.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(at(DAY_MS));
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const text = (spy: ReturnType<typeof vi.spyOn>): string =>
@@ -919,26 +927,39 @@ describe('curator-cli holds', () => {
   });
 
   it('expire closes nothing while holds are inside their bound', async () => {
-    const candidate = seed(pii(1));
-    // Held against the wall clock, so the 14-day bound has not elapsed.
-    new Curator(repos(), { tenantId: TENANT }).processSingle(candidate);
+    const candidate = seedHeld();
+    vi.setSystemTime(at(DEFAULT_HOLD_TTL_DAYS * DAY_MS - 1));
+    const before = auditCount();
+    expect(await cli('list', '--json')).toBe(0);
+    expect(lastJson()).toMatchObject({ count: 1, expired: 0 });
     expect(await cli('expire', '--dry-run', '--json')).toBe(0);
     expect(lastJson()).toMatchObject({ ok: true, dry_run: true, expired: 0 });
     expect(await cli('expire')).toBe(0);
     expect(text(stdoutSpy)).toContain('Expired: 0 (none promoted)');
     expect(statusOf(candidate.id)).toBe('quarantined');
+    expect(auditCount()).toBe(before);
   });
 
-  it('expire closes a hold past its bound, unpromoted', async () => {
-    // Held at T0 (2026-10-04) with a 14-day bound: long past by the wall clock.
-    const candidate = seed(pii(1));
-    curator({ now: () => '2020-01-01T00:00:00.000Z' }).processSingle(candidate);
+  it('expire closes a hold exactly at its bound, unpromoted and receipted', async () => {
+    const candidate = seedHeld();
+    vi.setSystemTime(EXPIRY);
+    const before = auditCount();
     expect(await cli('list', '--json')).toBe(0);
     expect(lastJson()).toMatchObject({ count: 1, expired: 1 });
+    expect(await cli('expire', '--dry-run', '--json')).toBe(0);
+    expect(lastJson()).toMatchObject({ ok: true, dry_run: true, expired: 1 });
+    expect(statusOf(candidate.id)).toBe('quarantined');
+    expect(auditCount()).toBe(before);
     expect(await cli('expire', '--json')).toBe(0);
     expect(lastJson()).toMatchObject({ ok: true, expired: 1 });
     expect(statusOf(candidate.id)).toBe('rejected');
     expect(memories.count()).toBe(0);
+    const receipt = audit.findByMemory(candidate.id).find((e) => e.action === 'hold_resolved')!;
+    expect(receipt).toMatchObject({
+      timestamp: EXPIRY,
+      details: { resolution: 'expired', expiresAt: EXPIRY },
+    });
+    expect(verifyAuditChain(audit).breaks).toEqual([]);
   });
 
   it('reports usage errors with exit 2', async () => {
