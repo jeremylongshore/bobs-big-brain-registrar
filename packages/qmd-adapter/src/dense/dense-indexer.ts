@@ -64,7 +64,13 @@ export interface DenseIndexReport {
  * (the content hash changes) — deliberate.
  */
 export const DEFAULT_DENSE_MAX_DOC_CHARS = 2000;
-export const DEFAULT_DENSE_BATCH_SIZE = 16;
+/**
+ * Start with single-document requests so embedders with limited request
+ * capacity can accept the default unit of work. Successful responses are
+ * indexed before the next request; the existing deadline still bounds each
+ * request. Operators with measured capacity can explicitly batch more.
+ */
+export const DEFAULT_DENSE_BATCH_SIZE = 1;
 
 export interface DenseIndexerOptions {
   index: DenseVecIndex;
@@ -80,7 +86,7 @@ export interface DenseIndexerOptions {
    * hashes, hence triggers a full re-embed on the next sweep — deliberate.
    */
   maxDocChars?: number;
-  /** Docs per /v1/embeddings request (default 16). */
+  /** Docs per /v1/embeddings request (default 1). */
   batchSize?: number;
   /**
    * How many times to RE-ATTEMPT a failed batch before concluding the service
