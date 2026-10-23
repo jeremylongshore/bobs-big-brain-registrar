@@ -1,12 +1,18 @@
 {
   "schemaVersion": 1,
-  "scope": "Author-reported local selective correction and captured-list replay; no private memory bodies, deployment or HTTP authorization acceptance",
+  "scope": "Author-reported local selective correction and captured-list replay;17 memory retirements/15 accepted corrections,14 corrections used as gold; no private memory bodies, deployment or HTTP authorization acceptance",
   "observedAt": "2026-10-23T21:54:16.379Z",
   "source": {
     "evaluationBase": "7bcdf94b63d89dff045f051ac0d5e566b8a9e3df",
     "canonicalRegistrar": "904a077dc460ef8dfc9bf43ca725047ea0c5eae4",
     "datasetSha256": "e02a90c93bee007920d70ab67428b20e14b45fd6d86466933170ca3cb84202dd",
-    "labelsFixedBeforeNewRetrieval": true
+    "labelsFixedBeforeNewRetrieval": true,
+    "labelFreezeEvidence": {
+      "scope": "Author-reported local freeze record, not a publicly timestamped preregistration",
+      "localValidationFileMtime": "2026-10-23T21:51:16.319214+00:00",
+      "validationSha256": "eb3bcf94fc427877a10d57e53f73d3c7c438645e7db4d3b5a604f30bfcd69b7a",
+      "frozenCorrectedLabelsSha256": "c35b508fe2f11711d8439ae1596d865d25ae6428c9138b7c8fb11a4022bb2d4a"
+    }
   },
   "queryCount": 45,
   "k": 10,
@@ -2065,7 +2071,8 @@
             "qmd://kb-curated/cd7e31b5-2971-5099-a796-ccde5cf51e79.md"
           ]
         }
-      ]
+      ],
+      "slots": 450
     },
     "new": {
       "citationListSha256": "620829f1c3adf6c05bc6ae69ac965d359308f2c9a9e10f57665541911880ffd5",
@@ -2730,10 +2737,11 @@
         "atomicAcrossSources": false,
         "sourceSqliteCoordination": "readonly backup may create empty WAL/SHM files and update SHM reader marks"
       },
-      "backend": "local SearchService retrieval · DEGRADED: dense arm failed 5 time(s) (query-failure:5); qmd snapshot present; native snapshot present",
+      "backend": "local SearchService retrieval \u00b7 DEGRADED: dense arm failed 5 time(s) (query-failure:5); qmd snapshot present; native snapshot present",
       "denseFailureCategories": {
         "query-failure": 5
-      }
+      },
+      "slots": 425
     }
   },
   "matrix": {
@@ -2773,5 +2781,260 @@
     "Configured audience-narrowing and contradiction-check rules were reported dormant, not proven enforced",
     "Independent SQLite snapshots plus original export tree are not an atomic ensemble",
     "No deployed HTTP, release, bundle or marketplace acceptance"
+  ],
+  "questions": [
+    {
+      "id": "e01",
+      "kind": "semantic",
+      "query": "how do I deploy to production"
+    },
+    {
+      "id": "e02",
+      "kind": "semantic",
+      "query": "where is production hosted"
+    },
+    {
+      "id": "e03",
+      "kind": "semantic",
+      "query": "how do I get SSH access to the production server"
+    },
+    {
+      "id": "e04",
+      "kind": "semantic",
+      "query": "where are secrets stored and how do I decrypt them"
+    },
+    {
+      "id": "e05",
+      "kind": "semantic",
+      "query": "how do I add a new secret to a repo"
+    },
+    {
+      "id": "e06",
+      "kind": "semantic",
+      "query": "where do monitoring alerts go"
+    },
+    {
+      "id": "e07",
+      "kind": "semantic",
+      "query": "how are backups done and where is the offsite copy"
+    },
+    {
+      "id": "e08",
+      "kind": "semantic",
+      "query": "how do I restore from a backup"
+    },
+    {
+      "id": "e09",
+      "kind": "semantic",
+      "query": "how do I change the reverse proxy config for a site"
+    },
+    {
+      "id": "e10",
+      "kind": "semantic",
+      "query": "do we use Google Cloud"
+    },
+    {
+      "id": "e11",
+      "kind": "lexical",
+      "query": "do we use Netlify for websites"
+    },
+    {
+      "id": "e13",
+      "kind": "lexical",
+      "query": "what CI checks must pass before merging"
+    },
+    {
+      "id": "e14",
+      "kind": "lexical",
+      "query": "how do Plane, Twenty and Umami get updated"
+    },
+    {
+      "id": "e15",
+      "kind": "semantic",
+      "query": "what is the dev box and what runs on it"
+    },
+    {
+      "id": "e17",
+      "kind": "semantic",
+      "query": "where is company email hosted"
+    },
+    {
+      "id": "e19",
+      "kind": "lexical",
+      "query": "where is the shared calendar"
+    },
+    {
+      "id": "e20",
+      "kind": "lexical",
+      "query": "how do I access the CRM"
+    },
+    {
+      "id": "e21",
+      "kind": "semantic",
+      "query": "how is DNS managed"
+    },
+    {
+      "id": "e22",
+      "kind": "semantic",
+      "query": "how does the jeremylongshore.com website deploy"
+    },
+    {
+      "id": "e23",
+      "kind": "lexical",
+      "query": "how do I join the tailnet"
+    },
+    {
+      "id": "e24",
+      "kind": "semantic",
+      "query": "the dev box disk is full, what can I safely delete"
+    },
+    {
+      "id": "e25",
+      "kind": "semantic",
+      "query": "how do I add a new app to the production server"
+    },
+    {
+      "id": "e26",
+      "kind": "semantic",
+      "query": "what is the commit message standard"
+    },
+    {
+      "id": "e27",
+      "kind": "semantic",
+      "query": "what has to be in a pull request description"
+    },
+    {
+      "id": "e28",
+      "kind": "semantic",
+      "query": "how do I track my tasks"
+    },
+    {
+      "id": "e29",
+      "kind": "lexical",
+      "query": "how do I mirror a task to GitHub and Plane"
+    },
+    {
+      "id": "e30",
+      "kind": "semantic",
+      "query": "how should I name a bead"
+    },
+    {
+      "id": "e31",
+      "kind": "semantic",
+      "query": "what is the testing standard for our repos"
+    },
+    {
+      "id": "e32",
+      "kind": "semantic",
+      "query": "how do I install the brain plugin"
+    },
+    {
+      "id": "e33",
+      "kind": "semantic",
+      "query": "how do I search the brain"
+    },
+    {
+      "id": "e34",
+      "kind": "lexical",
+      "query": "how does the brain decide what knowledge to keep (compile then govern)"
+    },
+    {
+      "id": "e35",
+      "kind": "semantic",
+      "query": "how do I verify the brain's audit trail"
+    },
+    {
+      "id": "e36",
+      "kind": "semantic",
+      "query": "where does the brain's data live"
+    },
+    {
+      "id": "e37",
+      "kind": "semantic",
+      "query": "how is the brain backed up"
+    },
+    {
+      "id": "e38",
+      "kind": "semantic",
+      "query": "what are the brain's repositories called"
+    },
+    {
+      "id": "e39",
+      "kind": "semantic",
+      "query": "how do teammates connect to the shared brain"
+    },
+    {
+      "id": "e40",
+      "kind": "semantic",
+      "query": "how do I get a brain access token"
+    },
+    {
+      "id": "e41",
+      "kind": "semantic",
+      "query": "what search technology does the brain use"
+    },
+    {
+      "id": "e42",
+      "kind": "semantic",
+      "query": "how do I name and file a document"
+    },
+    {
+      "id": "e43",
+      "kind": "semantic",
+      "query": "what project tracker do we use"
+    },
+    {
+      "id": "e44",
+      "kind": "semantic",
+      "query": "how do I add something to the brain"
+    },
+    {
+      "id": "e45",
+      "kind": "semantic",
+      "query": "what are the rules for branches and worktrees"
+    },
+    {
+      "id": "e46",
+      "kind": "semantic",
+      "query": "how do multiple Claude sessions coordinate on one machine"
+    },
+    {
+      "id": "e48",
+      "kind": "semantic",
+      "query": "where do I see what work is open across the company"
+    },
+    {
+      "id": "e49",
+      "kind": "semantic",
+      "query": "how does the brain retire knowledge that is no longer true"
+    }
+  ],
+  "exposedObsoleteInNewTop10": [
+    {
+      "id": "e21",
+      "citations": ["qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md"]
+    },
+    {
+      "id": "e22",
+      "citations": [
+        "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+        "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md"
+      ]
+    },
+    {
+      "id": "e28",
+      "citations": [
+        "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+        "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md"
+      ]
+    },
+    {
+      "id": "e38",
+      "citations": ["qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md"]
+    },
+    {
+      "id": "e42",
+      "citations": ["qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md"]
+    }
   ]
 }

@@ -291,6 +291,7 @@ try {
     fs.writeFileSync(file, source, { mode: 0o600 });
     const { ESTATE_ONBOARDING_V1_DATASET: dataset } = await import(pathToFileURL(file).href);
     const ids = new Map(dataset.queries.map(q => [q.query, q.id]));
+    if (ids.size !== 45) throw new Error('Expected unique scored query text');
     const report = await runEval(dataset, async query => {
       const hits = rows.get(ids.get(query));
       if (!hits) throw new Error('Captured question missing');
@@ -330,7 +331,7 @@ The residual `39z.33.3` review admitted three narrowly scoped additions: the
 Compiler's model-backed passes versus deterministic linking, the estate
 search-first convention with code-first exceptions, and Claude-specific commit
 attribution. These preserve unique facts while reusing the accepted architecture,
-command/intake and PR guides. The combined label disposition covers **seventeen
+command/intake and PR guides. The local corpus disposition covers **seventeen
 originals using fifteen accepted corrections**; it does not create another generic
 architecture or PR guide. A Claude attribution setting is not a claim that Codex
 or an ordinary Git command supplies the same footer. No configured footer or
@@ -343,7 +344,10 @@ and the three residual distinctions above. Source configuration and dated
 operations records are distinguished from current service health.
 
 The same **45 scored question ids, kinds and literal queries** are retained.
-Seventeen questions receive corrected labels. Relevant labels change from **117
+Seventeen questions receive corrected labels: sixteen replace relevant citations;
+e03 only gains a query-specific obsolete label. Fourteen accepted corrections
+are used as gold; the fifteenth is an emergency-access reference verified during
+the corpus repair, not added as gold for e03. Relevant labels change from **117
 to 113**: the two old task guides collapse to one replacement, four occurrences
 of the old PR guide duplicate an existing accepted citation, and one unique
 attribution citation is added **only to e26**, the commit-standard question.
@@ -385,7 +389,9 @@ compensate for it.
 
 The [correction receipt](estate-onboarding-corrections-2026-10-23.json) publishes
 IDs, content hashes, frozen labels and ordered citation lists, without private
-memory bodies. The operator reports seventeen originals reversibly deprecated
+memory bodies. This PR records an operator-run local corpus change; it neither performs nor
+independently verifies that change, and no hosted or remote state is established.
+The operator reports seventeen originals reversibly deprecated
 through canonical lifecycle writes with per-record receipts, after replacement
 admission and private retirement/restore rehearsals. All fifteen accepted
 corrections remained active. Export preserved the originals in archive; readonly
@@ -395,7 +401,11 @@ old paths and skipped zero. Local anchor commits are recorded; publication to a
 remote witness is not established.
 
 The isolated local `SearchService` run retained all 45 literal scored questions
-and used the final labels fixed before retrieval. No retired original appeared
+and used the final labels reported fixed before retrieval. The receipt records
+the local validation timestamp and label/source hashes; this is not an
+independently timestamped public preregistration. The original capture has 450
+citation slots; the later capture has 425 because some queries return fewer than
+ten hits. No padding or duplicate hits are introduced. No retired original appeared
 in its scored top 10. The two-by-two replay separates annotation effects from
 observed list changes:
 
@@ -407,8 +417,8 @@ observed list changes:
 | After retirement | Corrected |  0.438889 | 0.339036 | 0.421481 |              5/45 |
 
 At fixed corrected labels, current-answer recall and forgetting-aware scores
-improved in this observation, and obsolete exposure fell from twelve to five
-questions. This is **not a controlled pure-hybrid comparison**: the new run
+were higher in the later capture, with fewer questions exposing labeled obsolete
+answers (five versus twelve). This is **not a controlled pure-hybrid comparison**: the new run
 reported **five dense `query-failure` events** and failed open to lexical results
 for those events. The existing counter combines scored questions and unscored
 gap probes, so it cannot assign all five events to scored queries. Generic
@@ -426,7 +436,10 @@ ensemble; readonly backup may still create WAL/SHM files and update reader marks
 
 Run this offline from the repository root; it needs no live store, index, embedder
 or private memory text. It replays both captured lists against both frozen label
-sets, checks their projection hashes and verifies all four recorded metric rows:
+sets, checks their projection hashes and slot counts, binds corrected labels
+and question identities to the checked-in dataset, and verifies all four metric
+rows. The TypeScript dataset is canonical for current gold; the JSON stores
+historical evidence rather than a second editable label authority:
 
 ```bash
 node --import tsx --input-type=module <<'JS'
@@ -435,9 +448,21 @@ import { createHash } from 'node:crypto';
 import { runEval } from './packages/qmd-adapter/src/eval/run-eval.ts';
 import { ESTATE_ONBOARDING_V1_DATASET as base } from './packages/qmd-adapter/src/eval/datasets/estate-onboarding-v1.ts';
 const receipt = JSON.parse(fs.readFileSync('./packages/qmd-adapter/src/eval/datasets/estate-onboarding-corrections-2026-10-23.json', 'utf8'));
+const canonicalOriginalSha256 = '4327d237dc93981237b911775caf5774a5f433048b90203385d83684ad262366';
+const normalizedLabels = rows => rows.map(({ id, relevant, obsolete = [] }) => ({ id, relevant, obsolete }));
+if (JSON.stringify(normalizedLabels(base.queries)) !== JSON.stringify(receipt.labelSets.corrected)) {
+  throw new Error('Corrected labels do not match the checked-in dataset');
+}
+const questions = base.queries.map(({ id, kind, query }) => ({ id, kind, query }));
+if (JSON.stringify(questions) !== JSON.stringify(receipt.questions)) throw new Error('Question identity mismatch');
+if (receipt.captures.old.citationListSha256 !== canonicalOriginalSha256) throw new Error('Canonical original digest mismatch');
+
 for (const [captureName, capture] of Object.entries(receipt.captures)) {
   const hash = createHash('sha256').update(JSON.stringify(capture.orderedResults)).digest('hex');
   if (hash !== capture.citationListSha256) throw new Error('Projection hash mismatch');
+  const expectedSlots = captureName === 'old' ? 450 : 425;
+  if (capture.orderedResults.reduce((n, row) => n + row.retrieved.length, 0) !== expectedSlots ||
+      capture.slots !== expectedSlots) throw new Error('Citation slot-count mismatch');
   const rows = new Map(capture.orderedResults.map(r => [r.id, r.retrieved]));
   if (rows.size !== 45) throw new Error('Expected 45 unique captured questions');
   for (const [labelName, labels] of Object.entries(receipt.labelSets)) {
@@ -449,6 +474,7 @@ for (const [captureName, capture] of Object.entries(receipt.captures)) {
       return { ...q, relevant: label.relevant, obsolete: label.obsolete };
     }) };
     const ids = new Map(dataset.queries.map(q => [q.query, q.id]));
+    if (ids.size !== 45) throw new Error('Expected unique scored query text');
     const report = await runEval(dataset, async query => {
       const hits = rows.get(ids.get(query));
       if (!hits) throw new Error('Captured question missing');
@@ -458,7 +484,8 @@ for (const [captureName, capture] of Object.entries(receipt.captures)) {
       fama: report.meanFamaAtK, exposure: report.obsoleteExposureRate };
     const expected = receipt.matrix[`${captureName}Lists`][`${labelName}Labels`];
     for (const name of Object.keys(metrics)) {
-      if (Math.abs(metrics[name] - expected[name]) > 1e-12) throw new Error('Metric mismatch');
+      if (!Number.isFinite(metrics[name]) || !Number.isFinite(expected?.[name]) ||
+          Math.abs(metrics[name] - expected[name]) > 1e-12) throw new Error('Metric mismatch');
     }
     console.log(captureName, labelName, metrics);
   }
