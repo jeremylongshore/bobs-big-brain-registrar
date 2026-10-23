@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Arm qmd host-signal cleanup before spawning the launcher so SIGINT during
   spawn cannot leave a running detached child unregistered. Failed/no-PID
-  spawns release their reservation; qmd handlers are removed when no group or
-  spawn remains, and host handlers are never removed. A forced
+  spawns release their reservation; normal release/untrack removes qmd
+  handlers once no group or spawn remains. Signal teardown removes its own
+  listener separately before a re-raise; host handlers are never removed. A forced
   startup-race regression fails before the fix and passes after it (umbrella
   `compile-then-govern-1io.4`).
 

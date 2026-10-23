@@ -249,6 +249,8 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
         `  const pause = new Int32Array(new SharedArrayBuffer(4));\n` +
         `  const deadline = Date.now() + 5000;\n` +
         `  while ((!existsSync(${JSON.stringify(pidFile)}) || readFileSync(${JSON.stringify(pidFile)}, 'utf8').trim() === '') && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);\n` +
+        `  if (!existsSync(${JSON.stringify(pidFile)}) || readFileSync(${JSON.stringify(pidFile)}, 'utf8').trim() === '') throw new Error('fixture grandchild did not start before signal');\n` +
+        `  process.kill(Number(readFileSync(${JSON.stringify(pidFile)}, 'utf8').trim()), 0);\n` +
         `  process.kill(process.pid, 'SIGINT');\n` +
         `  Atomics.wait(pause, 0, 0, 50);\n` +
         `  return child;\n` +
