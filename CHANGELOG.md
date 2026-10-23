@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Dense query diagnostics retain fixed timeout, transport, HTTP and response-validation categories while preserving the existing vector/null and lexical fail-open contracts. Estate evaluation reports bounded events attributed to scored, gap or probe IDs, with complete aggregate counts and an explicit dropped-event counter; it does not publish query text, response bodies, URLs or raw errors. The earlier five generic failures cannot be classified retrospectively.
+- Dense query diagnostics retain fixed timeout, transport, HTTP and response-validation categories while preserving the existing vector/null and lexical fail-open contracts. Estate evaluation reports bounded events attributed to scored, gap or probe IDs, with complete aggregate counts and an explicit dropped-event counter; these diagnostic events omit query text, response bodies, URLs and raw errors (the evaluation report still includes its existing query and retrieval fields). The earlier five generic failures cannot be classified retrospectively.
 
 - Record seventeen local memory retirements and fifteen accepted corrections; update seventeen question labels (sixteen replace relevant citations, fourteen correction citations become gold), preserve all 45 scored questions, and publish frozen labels plus a two-by-two citation replay. On corrected labels, the later local run measured Recall@10 0.4389 and obsolete exposure 5/45 versus 0.3759 and 12/45 on the earlier lists. Five dense query failures make this degraded retrieval evidence, not a controlled pure-hybrid or deployed acceptance claim; remaining gaps stay tracked.
 

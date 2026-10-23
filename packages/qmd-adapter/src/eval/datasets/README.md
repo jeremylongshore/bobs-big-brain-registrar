@@ -387,18 +387,21 @@ compensate for it.
 
 ### Retrieval after selective retirement on 2026-10-23
 
-Later evaluator instrumentation adds `denseFailureEvents` to new reports. Each
+Later estate CLI instrumentation adds `denseFailureEvents` to its JSON output. Each
 event has a fixed category, a scored/gap/probe phase and a worker-controlled query
 id, or an explicit unattributed phase with a null id. HTTP failures may include
 a validated numeric status. Events omit query text, response bodies, URLs and
-raw errors. Storage is capped at 1,000 events; `denseFailureEventsDropped` reports
+raw errors; the overall report retains its existing query and retrieval fields.
+`runEval` supplies scored query IDs; the estate worker supplies gap and probe IDs.
+Storage is capped at 1,000 events; `denseFailureEventsDropped` reports
 overflow while aggregate counts remain complete. Existing vector/null returns,
 fail-open retrieval, timeouts and model pins are unchanged. This instrumentation
 does not recover the causes of the five generic events in the receipt below.
 
 The [correction receipt](estate-onboarding-corrections-2026-10-23.json) publishes
 IDs, content hashes, frozen labels and ordered citation lists, without private
-memory bodies. This PR records an operator-run local corpus change; it neither performs nor
+memory bodies. The earlier PR387 change records an operator-run local corpus
+change; it neither performs nor
 independently verifies that change, and no hosted or remote state is established.
 The operator reports seventeen originals reversibly deprecated
 through canonical lifecycle writes with per-record receipts, after replacement
