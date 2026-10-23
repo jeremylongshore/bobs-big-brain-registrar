@@ -98,6 +98,29 @@ describe('bounded natural-question lexical fallback', () => {
     }
   });
 
+  it('evaluates coverage before the cutoff even with more than200 weak high-BM25 matches', () => {
+    backend.clear();
+    backend.index([
+      ...['access', 'tokens', 'stored'].flatMap((term) =>
+        Array.from({ length: 250 }, (_, i) => ({
+          id: `${term}-${i}`,
+          collection: 'kb-curated',
+          content: term,
+        })),
+      ),
+      {
+        id: 'complete',
+        collection: 'kb-curated',
+        content: 'access tokens stored ' + 'padding '.repeat(10000),
+      },
+    ]);
+    expect(
+      backend
+        .searchQuestionFallback('where are access tokens stored', 1, ['kb-curated'])
+        .map((h) => h.id),
+    ).toEqual(['complete']);
+  });
+
   it('prioritizes actual term coverage before BM25 and retains the requested cutoff', () => {
     backend.index([
       {

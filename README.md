@@ -124,10 +124,13 @@ Highlights:
 - **OpenAPI Documentation** — Generated OpenAPI 3.1 spec at `/openapi.json` and Swagger UI at `/docs` (Phase 10)
 - **Supply-Chain Security** — Cosign keyless signing + SLSA Level 3 provenance for container images (Phase 10)
 - **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (semantic sqlite-vec path deferred behind the eval gate)
-  If all strict and dense lists are empty, unquoted natural questions can use a
-  bounded native fallback: up to12 distinct topical terms,200 candidates within
+  If all strict and dense arms yield no usable hits (including qmd failure),
+  unquoted English question-shaped queries can use a
+  bounded native fallback: up to12 distinct topical terms,200 returned candidates within
   the requested collections, and at least60% term coverage (both terms required
-  for two-term questions). Existing nonempty lists are unchanged. This fallback
+  for two-term questions). The fallback does not augment nonempty lists. Separately, applying native scope
+  before top-k can change strict result membership, including keyword/quoted searches.
+  No timeout configuration changes or new wall-time guarantee are introduced. This fallback
   does not establish semantic correctness or live retrieval acceptance.
 
 - **MCP Server** — local + team-brain tool surface for Claude Code; read tools always register, write tools are admin-gated, team mode proxies the remote brain over the tailnet

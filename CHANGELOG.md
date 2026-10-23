@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Retain useful native lexical candidates for natural questions when every
-  strict and dense retrieval arm returns empty. The fallback uses at most12
+- Add native lexical candidates for English question-shaped queries when strict
+  and dense retrieval arms yield no usable hits (including qmd failure). The fallback uses at most12
   distinct topical terms, up to200 collection-scoped candidates and a minimum
-  term-coverage threshold. Existing nonempty retrieval lists, query deadlines,
-  tenant guards and keyword/quoted searches retain their behavior. Apply native
+  term-coverage threshold. The fallback does not augment existing nonempty lists; quoted inputs do not
+  broaden. Unquoted inputs beginning with a recognized question word can broaden,
+  including operator-style inputs; operators remain literal, not executable.
+  Timeout configuration and tenant guards are unchanged; no new wall-time bound
+  is established for synchronous SQLite work. Apply native
   collection scope before the result cutoff (`compile-then-govern-39z.33.5`).
 
 - Default dense indexing to one document per request for embedders with

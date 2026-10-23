@@ -82,7 +82,6 @@ export class Fts5Backend {
   private readonly deleteStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
   private readonly scopedSearchStmt: Database.Statement;
-  private readonly coverageStmt: Database.Statement;
   private readonly countStmt: Database.Statement;
 
   constructor(opts: { path?: string; db?: Database.Database } = {}) {
@@ -102,9 +101,6 @@ export class Fts5Backend {
     this.searchStmt = this.db.prepare(selectHits + ' ORDER BY rank LIMIT ?');
     this.scopedSearchStmt = this.db.prepare(
       selectHits + ' AND collection IN (SELECT value FROM json_each(?)) ORDER BY rank LIMIT ?',
-    );
-    this.coverageStmt = this.db.prepare(
-      'SELECT rowid AS rowId FROM docs WHERE docs MATCH ? AND rowid IN (SELECT value FROM json_each(?))',
     );
     this.countStmt = this.db.prepare('SELECT count(*) AS n FROM docs');
   }
@@ -177,27 +173,40 @@ export class Fts5Backend {
   ): Fts5SearchHit[] {
     const terms = questionTerms(query);
     if (terms.length === 0 || !Number.isSafeInteger(k) || k <= 0) return [];
-    const match = terms.map((term) => `"${term}"`).join(' OR ');
-    const rows = this.searchRows(match, Math.min(200, Math.max(64, k * 4)), allowedCollections);
-    const coverage = this.countCoverage(terms, rows);
     const minimum = terms.length <= 2 ? terms.length : Math.ceil(terms.length * 0.6);
-    return rows
-      .filter((row) => (coverage.get(row.rowId) ?? 0) >= minimum)
-      .sort(
-        (a, b) => (coverage.get(b.rowId) ?? 0) - (coverage.get(a.rowId) ?? 0) || a.rank - b.rank,
-      )
-      .slice(0, k)
-      .map((row) => this.toHit(row));
+    return this.questionRows(terms, minimum, Math.min(k, 200), allowedCollections).map((row) =>
+      this.toHit(row),
+    );
   }
 
-  private countCoverage(terms: readonly string[], rows: readonly SearchRow[]): Map<number, number> {
-    const coverage = new Map<number, number>();
-    const ids = JSON.stringify(rows.map((row) => row.rowId));
-    for (const term of terms) {
-      const matches = this.coverageStmt.all(`"${term}"`, ids) as { rowId: number }[];
-      for (const row of matches) coverage.set(row.rowId, (coverage.get(row.rowId) ?? 0) + 1);
-    }
-    return coverage;
+  /** Count distinct literal matches inside SQLite before any candidate cutoff. */
+  private questionRows(
+    terms: readonly string[],
+    minimum: number,
+    k: number,
+    allowedCollections: readonly string[],
+  ): SearchRow[] {
+    const scope =
+      allowedCollections.length === 0 ? '' : ' AND collection IN (SELECT value FROM json_each(?))';
+    const perTerm = 'SELECT rowid AS docRowId FROM docs WHERE docs MATCH ?' + scope;
+    const params = terms.flatMap((term) =>
+      allowedCollections.length === 0
+        ? [`"${term}"`]
+        : [`"${term}"`, JSON.stringify(allowedCollections)],
+    );
+    const match = terms.map((term) => `"${term}"`).join(' OR ');
+    // SQL text depends only on bounded term count and the presence of scope;
+    // user terms and collection names are always bound values. FTS5 tokenization
+    // supplies accent semantics without loading document bodies into JS.
+    const statement = this.db.prepare(
+      'WITH term_matches AS (' +
+        terms.map(() => perTerm).join(' UNION ALL ') +
+        '), coverage AS (SELECT docRowId, count(*) AS covered FROM term_matches GROUP BY docRowId HAVING count(*) >= ?) ' +
+        "SELECT docs.rowid AS rowId, id, collection, snippet(docs, 2, '', '', '…', 16) AS snippet, bm25(docs) AS rank " +
+        'FROM docs JOIN coverage ON docs.rowid = coverage.docRowId WHERE docs MATCH ? ' +
+        'ORDER BY coverage.covered DESC, rank, docs.rowid LIMIT ?',
+    );
+    return statement.all(...params, minimum, match, k) as SearchRow[];
   }
 
   count(): number {
