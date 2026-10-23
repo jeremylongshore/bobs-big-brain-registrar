@@ -39,9 +39,9 @@ import {
   ESTATE_ONBOARDING_V1_DATASET,
   ESTATE_ONBOARDING_V1_GAPS,
 } from '../packages/qmd-adapter/src/eval/index.js';
-import type { RetrievalFn } from '../packages/qmd-adapter/src/eval/index.js';
+import type { RetrievalFn, RetrievalContext } from '../packages/qmd-adapter/src/eval/index.js';
 import { SearchService } from '../apps/api/src/services/search-service.js';
-import { classifyDenseFailure } from './lib/estate-eval-diagnostics.js';
+import { EstateDenseDiagnostics } from './lib/estate-eval-diagnostics.js';
 
 const K = 10;
 
@@ -63,8 +63,8 @@ async function main(): Promise<void> {
   // a word, which is how a stopped embedder went unnoticed 2026-10-10..13. A
   // report must say which retrieval it measured.
   const dense = getDefaultDenseConfig();
-  let denseDegraded = 0;
-  const denseFailureCategories: Record<string, number> = {};
+  const diagnostics = new EstateDenseDiagnostics();
+  const denseFailureCategories = diagnostics.categories;
   const executor = new RealQmdExecutor({ env: getQmdTenantEnv(tenantId) });
   const adapter = new QmdAdapter(
     {
@@ -73,9 +73,7 @@ async function main(): Promise<void> {
       dense: {
         ...dense,
         onQueryDegraded: (reason) => {
-          denseDegraded++;
-          const category = classifyDenseFailure(reason);
-          denseFailureCategories[category] = (denseFailureCategories[category] ?? 0) + 1;
+          diagnostics.observe(reason);
         },
       },
     },
@@ -93,13 +91,17 @@ async function main(): Promise<void> {
     process.exit(2);
   }
   const search = new SearchService(memoryRepo, adapter);
-  const ask = async (q: string) =>
-    (
-      await search.search(
-        { query: q, scope: 'curated', tenantId, pagination: { page: 1, pageSize: K } },
-        'member', // a new hire's standing
-      )
-    ).hits;
+  const ask = async (q: string, context?: RetrievalContext) =>
+    diagnostics.run(
+      context,
+      async () =>
+        (
+          await search.search(
+            { query: q, scope: 'curated', tenantId, pagination: { page: 1, pageSize: K } },
+            'member', // a new hire's standing
+          )
+        ).hits,
+    );
 
   const snapshot = JSON.parse(process.env['TEAMKB_EVAL_SNAPSHOT'] ?? '{}') as {
     indexes?: { qmd?: boolean; native?: boolean; dense?: boolean };
@@ -111,8 +113,8 @@ async function main(): Promise<void> {
       ? 'lexical only (TEAMKB_DENSE_ENABLED off)'
       : snapshot.indexes?.dense !== true
         ? 'DEGRADED: dense index missing in source snapshot'
-        : denseDegraded > 0
-          ? `DEGRADED: dense arm failed ${denseDegraded} time(s) (${Object.entries(
+        : diagnostics.total > 0
+          ? `DEGRADED: dense arm failed ${diagnostics.total} time(s) (${Object.entries(
               denseFailureCategories,
             )
               .map(([name, count]) => `${name}:${count}`)
@@ -137,9 +139,11 @@ async function main(): Promise<void> {
 
   const probeAt = args.indexOf('--probe');
   if (probeAt !== -1) {
-    for (const q of args.slice(probeAt + 1)) {
+    for (const [probeIndex, q] of args.slice(probeAt + 1).entries()) {
       console.log(`\n=== ${q}`);
-      for (const [i, hit] of (await ask(q)).entries()) {
+      for (const [i, hit] of (
+        await ask(q, { phase: 'probe', queryId: `probe-${probeIndex + 1}` })
+      ).entries()) {
         const m = hit.memoryId === undefined ? null : memoryRepo.findById(hit.memoryId);
         console.log(
           `${String(i + 1).padStart(2)}. ${hit.citation}  [${m?.lifecycle ?? '?'} · ${m?.category ?? '?'} · ` +
@@ -148,13 +152,19 @@ async function main(): Promise<void> {
       }
     }
     console.log(`\nretrieval: ${mode()}`);
+    console.log(
+      JSON.stringify({
+        denseFailureEvents: diagnostics.events,
+        denseFailureEventsDropped: diagnostics.droppedEvents,
+      }),
+    );
     console.log(`isolation: ${isolation.mode}; not an atomic corpus snapshot`);
     console.log(`SQLite coordination: ${isolation.sourceSqliteCoordination}`);
     return;
   }
 
-  const retrieve: RetrievalFn = async (q, k) =>
-    (await ask(q)).slice(0, k).map((h) => h.citation ?? '');
+  const retrieve: RetrievalFn = async (q, k, context) =>
+    (await ask(q, context)).slice(0, k).map((h) => h.citation ?? '');
   const dataset = ESTATE_ONBOARDING_V1_DATASET;
   const report = await runEval(dataset, retrieve, {
     k: K,
@@ -172,7 +182,7 @@ async function main(): Promise<void> {
     const answeredBy = g.answeredBy ?? [];
     let answerRank: number | null = null;
     if (answeredBy.length > 0) {
-      const got = await retrieve(g.query, K);
+      const got = await retrieve(g.query, K, { phase: 'gap', queryId: g.id });
       const ranks = answeredBy.map((c) => got.indexOf(c)).filter((i) => i >= 0);
       answerRank = ranks.length > 0 ? Math.min(...ranks) + 1 : null;
     }
@@ -181,7 +191,20 @@ async function main(): Promise<void> {
 
   report.backend = `local SearchService retrieval · ${mode()}`;
   if (args.includes('--json')) {
-    console.log(JSON.stringify({ ...report, gaps, isolation, denseFailureCategories }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          ...report,
+          gaps,
+          isolation,
+          denseFailureCategories,
+          denseFailureEvents: diagnostics.events,
+          denseFailureEventsDropped: diagnostics.droppedEvents,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
@@ -189,6 +212,12 @@ async function main(): Promise<void> {
   console.log(`tenant: ${tenantId}\nisolation: ${isolation.mode}; not an atomic corpus snapshot\n`);
   console.log(`SQLite coordination: ${isolation.sourceSqliteCoordination}`);
   console.log(formatReport(report));
+  console.log(
+    JSON.stringify({
+      denseFailureEvents: diagnostics.events,
+      denseFailureEventsDropped: diagnostics.droppedEvents,
+    }),
+  );
   const stale = report.perQuery.filter((r) => (r.obsoleteRetrieved ?? []).length > 0);
   if (stale.length > 0) {
     console.log(`\n--- obsolete docs served (${stale.length} of ${report.queryCount} queries) ---`);

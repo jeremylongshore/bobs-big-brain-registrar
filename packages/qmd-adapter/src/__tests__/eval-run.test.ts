@@ -58,6 +58,25 @@ describe('runEval', () => {
     expect(report.obsoleteExposureRate).toBeCloseTo(1 / 3, 10);
   });
 
+  it('passes stable scored query IDs without deriving them from text or call order', async () => {
+    const seen: unknown[] = [];
+    const retrieve: RetrievalFn = async (_query, _k, context) => {
+      seen.push(context);
+      return [];
+    };
+    await runEval(
+      {
+        ...DATASET,
+        queries: DATASET.queries.map((query) => ({ ...query, query: 'same private text' })),
+      },
+      retrieve,
+    );
+    expect(seen).toEqual([
+      { phase: 'scored', queryId: 'a' },
+      { phase: 'scored', queryId: 'b' },
+    ]);
+  });
+
   it('passes the k cutoff through to the backend', async () => {
     const seen: number[] = [];
     const retrieve: RetrievalFn = (_q, k) => {

@@ -57,6 +57,20 @@ interface EmbeddingsApiResponse {
   data?: Array<{ index?: number; embedding?: number[] }>;
 }
 
+/** Fixed diagnostic values only: never copy HTTP bodies, URLs or input text. */
+export type EmbedFailureCategory =
+  'timeout' | 'transport-failure' | 'http-error' | 'invalid-json' | 'invalid-response';
+
+export class EmbedFailure extends Error {
+  constructor(
+    readonly category: EmbedFailureCategory,
+    readonly httpStatus?: number,
+  ) {
+    super(category);
+    this.name = 'EmbedFailure';
+  }
+}
+
 export class EmbedClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -72,8 +86,20 @@ export class EmbedClient {
    * Returns `null` on ANY failure — the caller MUST treat that as
    * "no dense signal available", never as an error to surface.
    */
-  async embed(texts: readonly string[], role: EmbedRole): Promise<Float32Array[] | null> {
+  async embed(
+    texts: readonly string[],
+    role: EmbedRole,
+    onFailure?: (failure: EmbedFailure) => void,
+  ): Promise<Float32Array[] | null> {
     if (texts.length === 0) return [];
+    const fail = (category: EmbedFailureCategory, httpStatus?: number): null => {
+      try {
+        onFailure?.(new EmbedFailure(category, httpStatus));
+      } catch {
+        // Diagnostic observers cannot change the fail-open return contract.
+      }
+      return null;
+    };
     const prefix = role === 'query' ? EMBEDDINGGEMMA_QUERY_PREFIX : EMBEDDINGGEMMA_DOCUMENT_PREFIX;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -84,9 +110,21 @@ export class EmbedClient {
         body: JSON.stringify({ model: 'embedding', input: texts.map((t) => prefix + t) }),
         signal: controller.signal,
       });
-      if (!response.ok) return null;
-      const parsed = (await response.json()) as EmbeddingsApiResponse;
-      if (!Array.isArray(parsed.data) || parsed.data.length !== texts.length) return null;
+      if (!response.ok) return fail('http-error', response.status);
+      let parsed: EmbeddingsApiResponse;
+      try {
+        parsed = (await response.json()) as EmbeddingsApiResponse;
+      } catch (error: unknown) {
+        return fail(
+          controller.signal.aborted
+            ? 'timeout'
+            : error instanceof SyntaxError
+              ? 'invalid-json'
+              : 'transport-failure',
+        );
+      }
+      if (!Array.isArray(parsed?.data) || parsed.data.length !== texts.length)
+        return fail('invalid-response');
       const vectors: Float32Array[] = new Array<Float32Array>(texts.length);
       let dims = -1;
       for (const entry of parsed.data) {
@@ -98,22 +136,21 @@ export class EmbedClient {
           entry.embedding.length === 0 ||
           entry.embedding.some((v) => typeof v !== 'number' || !Number.isFinite(v))
         ) {
-          return null; // malformed row — distrust the whole response
+          return fail('invalid-response'); // malformed row — distrust the whole response
         }
         if (dims === -1) dims = entry.embedding.length;
-        else if (entry.embedding.length !== dims) return null; // ragged dims
+        else if (entry.embedding.length !== dims) return fail('invalid-response'); // ragged dims
         vectors[entry.index] = Float32Array.from(entry.embedding);
       }
       // Every slot must be filled exactly once (duplicate indexes leave
       // holes). NOTE: an indexed for-loop, not `.some()` — Array#some skips
       // the empty slots of a sparse array, which is exactly what a hole is.
       for (let i = 0; i < vectors.length; i++) {
-        if (vectors[i] === undefined) return null;
+        if (vectors[i] === undefined) return fail('invalid-response');
       }
       return vectors;
     } catch {
-      // Connection refused, abort/timeout, DNS, bad JSON body — all fail open.
-      return null;
+      return fail(controller.signal.aborted ? 'timeout' : 'transport-failure');
     } finally {
       clearTimeout(timer);
     }

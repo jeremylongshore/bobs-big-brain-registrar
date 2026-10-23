@@ -17,7 +17,7 @@ export async function runEval(
 
   const perQuery: QueryEvalResult[] = [];
   for (const q of dataset.queries) {
-    const retrieved = await retrieve(q.query, k);
+    const retrieved = await retrieve(q.query, k, { phase: 'scored', queryId: q.id });
     const relevant = new Set(q.relevant);
     const fama = famaAtK(retrieved, relevant, new Set(q.obsolete ?? []), k);
     perQuery.push({

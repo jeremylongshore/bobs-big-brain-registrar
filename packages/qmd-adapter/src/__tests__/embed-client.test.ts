@@ -1,10 +1,11 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   EmbedClient,
+  EmbedFailure,
   EMBEDDINGGEMMA_DOCUMENT_PREFIX,
   EMBEDDINGGEMMA_QUERY_PREFIX,
 } from '../dense/embed-client.js';
@@ -32,6 +33,8 @@ describe('EmbedClient (B4) — fail-open HTTP client for the local embedder', ()
   let server: Server | null = null;
 
   afterEach(() => {
+    vi.unstubAllGlobals();
+    server?.closeAllConnections();
     server?.close();
     server = null;
   });
@@ -168,6 +171,97 @@ describe('EmbedClient (B4) — fail-open HTTP client for the local embedder', ()
       expect(await client.embed(['a', 'b'], 'document')).toBeNull();
     });
   }
+
+  it.each([
+    ['http-error', 503, 'PRIVATE-BODY', 503],
+    ['invalid-json', 200, 'PRIVATE-NOT-JSON', undefined],
+    ['invalid-response', 200, JSON.stringify({ data: [] }), undefined],
+    ['invalid-response', 200, JSON.stringify({ data: [null] }), undefined],
+    ['invalid-response', 200, JSON.stringify({ data: ['PRIVATE-PRIMITIVE'] }), undefined],
+    ['invalid-response', 200, JSON.stringify({ data: [42] }), undefined],
+  ] as const)(
+    'reports sanitized %s without changing the null API',
+    async (category, status, body, httpStatus) => {
+      server = createServer((_req, res) => {
+        res.writeHead(status);
+        res.end(body);
+      });
+      const failures: EmbedFailure[] = [];
+      const client = new EmbedClient({ url: await listen(server) });
+      expect(
+        await client.embed(['PRIVATE-QUERY'], 'query', (failure) => failures.push(failure)),
+      ).toBeNull();
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toBeInstanceOf(EmbedFailure);
+      expect(failures[0]?.category).toBe(category);
+      expect(failures[0]?.httpStatus).toBe(httpStatus);
+      expect(JSON.stringify(failures)).not.toMatch(/PRIVATE|127\.0\.0\.1/);
+    },
+  );
+
+  it('distinguishes request timeout from transport failure and ignores observer throws', async () => {
+    server = createServer(() => {});
+    const failures: EmbedFailure[] = [];
+    const client = new EmbedClient({ url: await listen(server), timeoutMs: 30 });
+    expect(
+      await client.embed(['private'], 'query', (failure) => {
+        failures.push(failure);
+        throw new Error('private');
+      }),
+    ).toBeNull();
+    expect(failures.map((failure) => failure.category)).toEqual(['timeout']);
+    const disconnected = new EmbedClient({ url: 'http://127.0.0.1:1', timeoutMs: 500 });
+    expect(
+      await disconnected.embed(['private'], 'query', (failure) => failures.push(failure)),
+    ).toBeNull();
+    expect(failures.map((failure) => failure.category)).toEqual(['timeout', 'transport-failure']);
+  });
+
+  it('reports timeout while reading the response body without leaking partial data', async () => {
+    server = createServer((_req, res) => {
+      res.writeHead(200);
+      res.write('PRIVATE-PARTIAL-JSON');
+    });
+    const failures: EmbedFailure[] = [];
+    const client = new EmbedClient({ url: await listen(server), timeoutMs: 30 });
+    expect(
+      await client.embed(['private'], 'query', (failure) => failures.push(failure)),
+    ).toBeNull();
+    expect(failures.map((failure) => failure.category)).toEqual(['timeout']);
+    expect(JSON.stringify(failures)).not.toContain('PRIVATE');
+  });
+
+  it('keeps concurrent and subsequent diagnostic state local to each invocation', async () => {
+    let finishFailure!: () => void;
+    const failureGate = new Promise<Response>((resolve) => {
+      finishFailure = () => resolve(new Response('PRIVATE', { status: 503 }));
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockReturnValueOnce(failureGate)
+        .mockResolvedValue(new Response(JSON.stringify({ data: [{ index: 0, embedding: [1] }] }))),
+    );
+    const client = new EmbedClient({ url: 'http://127.0.0.1:1' });
+    const failed: EmbedFailure[] = [],
+      successful: EmbedFailure[] = [];
+    const pending = client.embed(['private-fail'], 'query', (reason) => failed.push(reason));
+    expect(
+      await client.embed(['private-ok'], 'query', (reason) => successful.push(reason)),
+    ).toHaveLength(1);
+    finishFailure();
+    expect(await pending).toBeNull();
+    expect(failed.map((reason) => reason.category)).toEqual(['http-error']);
+    expect(successful).toEqual([]);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ index: 0, embedding: [1] }] })),
+    );
+    expect(
+      await client.embed(['private-next'], 'query', (reason) => successful.push(reason)),
+    ).toHaveLength(1);
+    expect(successful).toEqual([]);
+  });
 
   it('healthy() is true against a 200 /health', async () => {
     server = createServer((req, res) => {
