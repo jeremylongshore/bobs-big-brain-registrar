@@ -126,9 +126,13 @@ Highlights:
 - **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (semantic sqlite-vec path deferred behind the eval gate)
   If all strict and dense arms yield no usable hits (including qmd failure),
   unquoted English question-shaped queries can use a
-  bounded native fallback: up to12 distinct topical terms,200 returned candidates within
-  the requested collections, and at least60% term coverage (both terms required
-  for two-term questions). The fallback does not augment nonempty lists. Separately, applying native scope
+  native fallback for 2–12 distinct topical terms, with up to 200 returned candidates within
+  the requested collections and at least 60% term coverage (both terms required
+  for two-term questions). It refuses fallback when the native index exceeds 25,000 documents,
+  any term exceeds 2,000 scoped postings, or total term postings exceed 10,000. Bounded probes
+  and ranking share one read snapshot; scope and coverage eligibility precede the cutoff.
+  These are row/posting refusal limits, not document-size or index-refresh limits.
+  The fallback does not augment nonempty lists. Separately, applying native scope
   before top-k can change strict result membership, including keyword/quoted searches.
   No timeout configuration changes or new wall-time guarantee are introduced. This fallback
   does not establish semantic correctness or live retrieval acceptance.

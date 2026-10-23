@@ -10,11 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Add native lexical candidates for English question-shaped queries when strict
-  and dense retrieval arms yield no usable hits (including qmd failure). The fallback uses at most12
-  distinct topical terms, up to200 collection-scoped candidates and a minimum
+  and dense retrieval arms yield no usable hits (including qmd failure). The fallback uses 2–12
+  distinct topical terms, up to 200 collection-scoped candidates and a minimum
   term-coverage threshold. The fallback does not augment existing nonempty lists; quoted inputs do not
   broaden. Unquoted inputs beginning with a recognized question word can broaden,
   including operator-style inputs; operators remain literal, not executable.
+  Refuse fallback above 25,000 native documents, 2,000 scoped postings per term or 10,000
+  total term postings. Bounded probes and coverage-before-cutoff ranking use one deferred
+  read transaction. These caps do not bound document size or index-refresh work.
   Timeout configuration and tenant guards are unchanged; no new wall-time bound
   is established for synchronous SQLite work. Apply native
   collection scope before the result cutoff (`compile-then-govern-39z.33.5`).

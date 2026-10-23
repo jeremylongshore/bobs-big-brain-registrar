@@ -44,6 +44,9 @@ export function buildFts5MatchQuery(query: string): string {
 const QUESTION_STARTERS = new Set(
   'what where when which who why how can could do does is are should would tell explain'.split(' '),
 );
+const QUESTION_MAX_DOCS = 25000;
+const QUESTION_MAX_TERM_POSTINGS = 2000;
+const QUESTION_MAX_TOTAL_POSTINGS = 10000;
 const QUESTION_FUNCTION_WORDS = new Set(
   (
     'a an the and or of to for from in on at by with without about as into through ' +
@@ -83,6 +86,9 @@ export class Fts5Backend {
   private readonly searchStmt: Database.Statement;
   private readonly scopedSearchStmt: Database.Statement;
   private readonly countStmt: Database.Statement;
+  private readonly boundedDocCountStmt: Database.Statement;
+  private readonly boundedTermCountStmt: Database.Statement;
+  private readonly scopedBoundedTermCountStmt: Database.Statement;
 
   constructor(opts: { path?: string; db?: Database.Database } = {}) {
     // An injected db lets a caller (NativeIndexManager) share one SQLite file
@@ -103,6 +109,14 @@ export class Fts5Backend {
       selectHits + ' AND collection IN (SELECT value FROM json_each(?)) ORDER BY rank LIMIT ?',
     );
     this.countStmt = this.db.prepare('SELECT count(*) AS n FROM docs');
+    this.boundedDocCountStmt = this.db.prepare(
+      'SELECT count(*) AS n FROM (SELECT rowid FROM docs LIMIT ?)',
+    );
+    const termCount = 'SELECT count(*) AS n FROM (SELECT rowid FROM docs WHERE docs MATCH ?';
+    this.boundedTermCountStmt = this.db.prepare(termCount + ' LIMIT ?)');
+    this.scopedBoundedTermCountStmt = this.db.prepare(
+      termCount + ' AND collection IN (SELECT value FROM json_each(?)) LIMIT ?)',
+    );
   }
 
   /** Index documents (upsert by id — a re-indexed doc replaces its prior copy). */
@@ -172,11 +186,40 @@ export class Fts5Backend {
     allowedCollections: readonly string[] = [],
   ): Fts5SearchHit[] {
     const terms = questionTerms(query);
-    if (terms.length === 0 || !Number.isSafeInteger(k) || k <= 0) return [];
-    const minimum = terms.length <= 2 ? terms.length : Math.ceil(terms.length * 0.6);
-    return this.questionRows(terms, minimum, Math.min(k, 200), allowedCollections).map((row) =>
-      this.toHit(row),
-    );
+    if (terms.length < 2 || !Number.isSafeInteger(k) || k <= 0) return [];
+    const minimum = Math.ceil(terms.length * 0.6);
+    // Keep every probe and the final query on one WAL read snapshot. A second
+    // connection cannot grow the postings between our checks and ranking.
+    return this.db
+      .transaction(() => {
+        if (!this.questionWithinBounds(terms, allowedCollections)) return [];
+        return this.questionRows(terms, minimum, Math.min(k, 200), allowedCollections).map((row) =>
+          this.toHit(row),
+        );
+      })
+      .deferred();
+  }
+
+  /** Refuse broad fallback work; LIMIT is inside each aggregate's input. */
+  private questionWithinBounds(terms: readonly string[], collections: readonly string[]): boolean {
+    const docs = this.boundedDocCountStmt.get(QUESTION_MAX_DOCS + 1) as { n: number };
+    if (docs.n > QUESTION_MAX_DOCS) return false;
+    let total = 0;
+    for (const term of terms) {
+      const match = `"${term}"`;
+      const count = (
+        collections.length === 0
+          ? this.boundedTermCountStmt.get(match, QUESTION_MAX_TERM_POSTINGS + 1)
+          : this.scopedBoundedTermCountStmt.get(
+              match,
+              JSON.stringify(collections),
+              QUESTION_MAX_TERM_POSTINGS + 1,
+            )
+      ) as { n: number };
+      total += count.n;
+      if (count.n > QUESTION_MAX_TERM_POSTINGS || total > QUESTION_MAX_TOTAL_POSTINGS) return false;
+    }
+    return true;
   }
 
   /** Count distinct literal matches inside SQLite before any candidate cutoff. */

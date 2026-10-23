@@ -86,8 +86,8 @@ describe('bounded natural-question lexical fallback', () => {
     ).toEqual(['token-guide']);
   });
 
-  it('rejects oversized queries and invalid cutoffs while preserving one-topic questions', () => {
-    expect(backend.searchQuestionFallback('where are tokens', 1, ['kb-curated'])).toHaveLength(1);
+  it('rejects oversized queries, invalid cutoffs and single-topic questions', () => {
+    expect(backend.searchQuestionFallback('where are tokens', 1, ['kb-curated'])).toEqual([]);
     expect(
       backend.searchQuestionFallback('where ' + 'tokens '.repeat(600), 10, ['kb-curated']),
     ).toEqual([]);
