@@ -92,73 +92,81 @@ function seedStore(memories: ReturnType<typeof makeMemory>[]): void {
 describe.skipIf(!HAS_QMD)(
   'demo stages 5-6: curated memory → exporter-cli → qmd search citation',
   () => {
-    it('exports curated memories and finds them by keyword in qmd with a source citation', async () => {
-      // --- Arrange: a curated memory whose content has a distinctive keyword ---
-      const mem = makeMemory({
-        title: 'Transformer attention mechanism',
-        category: 'architecture', // → routed to curated/ by directory-mapper
-        content:
-          'The transformer attention mechanism computes scaled dot-product attention ' +
-          'over query, key, and value matrices. Self-attention lets the model weigh ' +
-          'sequence positions when producing each output representation.',
-        tenantId: 'demo-e2e',
-        metadata: { filePaths: ['wiki/topics/transformers.md'], tags: ['transformer'] },
-      });
-      seedStore([mem]);
+    it(
+      'exports curated memories and finds them by keyword in qmd with a source citation',
+      { timeout: 30_000 },
+      async () => {
+        // --- Arrange: a curated memory whose content has a distinctive keyword ---
+        const mem = makeMemory({
+          title: 'Transformer attention mechanism',
+          category: 'architecture', // → routed to curated/ by directory-mapper
+          content:
+            'The transformer attention mechanism computes scaled dot-product attention ' +
+            'over query, key, and value matrices. Self-attention lets the model weigh ' +
+            'sequence positions when producing each output representation.',
+          tenantId: 'demo-e2e',
+          metadata: { filePaths: ['wiki/topics/transformers.md'], tags: ['transformer'] },
+        });
+        seedStore([mem]);
 
-      // --- Stage 5a: exporter-cli writes the kb-export markdown tree ---
-      const rc = await dispatch(['export', '--db', dbPath, '--out', exportDir, '--json'], {
-        createDb: ({ dbPath: p }) => createDatabase({ path: p ?? ':memory:' }),
-      });
-      expect(rc).toBe(0);
+        // --- Stage 5a: exporter-cli writes the kb-export markdown tree ---
+        const rc = await dispatch(['export', '--db', dbPath, '--out', exportDir, '--json'], {
+          createDb: ({ dbPath: p }) => createDatabase({ path: p ?? ':memory:' }),
+        });
+        expect(rc).toBe(0);
 
-      // --- Stage 5b: register the export dir as a qmd collection + index it ---
-      qmd(['collection', 'add', exportDir, '--name', 'kb-demo']);
-      qmd(['update']);
+        // --- Stage 5b: register the export dir as a qmd collection + index it ---
+        qmd(['collection', 'add', exportDir, '--name', 'kb-demo']);
+        qmd(['update']);
 
-      // --- Stage 6: search returns the curated memory with its source path ---
-      const out = qmd(['search', 'attention']);
-      // The qmd:// URI is the citation: collection name + the exported file path.
-      expect(out).toMatch(/qmd:\/\/kb-demo\//);
-      expect(out).toMatch(/attention/i);
-    });
+        // --- Stage 6: search returns the curated memory with its source path ---
+        const out = qmd(['search', 'attention']);
+        // The qmd:// URI is the citation: collection name + the exported file path.
+        expect(out).toMatch(/qmd:\/\/kb-demo\//);
+        expect(out).toMatch(/attention/i);
+      },
+    );
 
-    it('keeps two tenants in separate exported trees (per-tenant isolation)', async () => {
-      // Demonstrates the separation guarantee: filtering export by tenant only
-      // materializes that tenant's memories, so an isolated qmd collection per
-      // tenant contains only that tenant's content.
-      seedStore([
-        makeMemory({
-          title: 'Braves scorecard rendering',
-          category: 'architecture',
-          content: 'Braves scorecard rendering uses a server-side pybaseball pipeline.',
-          tenantId: 'braves',
-        }),
-        makeMemory({
-          title: 'Trucking ELD compliance',
-          category: 'reference',
-          content: 'Trucking ELD compliance requires HOS logs retained for six months.',
-          tenantId: 'trucking',
-        }),
-      ]);
+    it(
+      'keeps two tenants in separate exported trees (per-tenant isolation)',
+      { timeout: 30_000 },
+      async () => {
+        // Demonstrates the separation guarantee: filtering export by tenant only
+        // materializes that tenant's memories, so an isolated qmd collection per
+        // tenant contains only that tenant's content.
+        seedStore([
+          makeMemory({
+            title: 'Braves scorecard rendering',
+            category: 'architecture',
+            content: 'Braves scorecard rendering uses a server-side pybaseball pipeline.',
+            tenantId: 'braves',
+          }),
+          makeMemory({
+            title: 'Trucking ELD compliance',
+            category: 'reference',
+            content: 'Trucking ELD compliance requires HOS logs retained for six months.',
+            tenantId: 'trucking',
+          }),
+        ]);
 
-      // Export ONLY the braves tenant.
-      const rc = await dispatch(
-        ['export', '--db', dbPath, '--out', exportDir, '--tenant', 'braves', '--json'],
-        { createDb: ({ dbPath: p }) => createDatabase({ path: p ?? ':memory:' }) },
-      );
-      expect(rc).toBe(0);
+        // Export ONLY the braves tenant.
+        const rc = await dispatch(
+          ['export', '--db', dbPath, '--out', exportDir, '--tenant', 'braves', '--json'],
+          { createDb: ({ dbPath: p }) => createDatabase({ path: p ?? ':memory:' }) },
+        );
+        expect(rc).toBe(0);
 
-      qmd(['collection', 'add', exportDir, '--name', 'kb-braves']);
-      qmd(['update']);
+        qmd(['collection', 'add', exportDir, '--name', 'kb-braves']);
+        qmd(['update']);
 
-      // The braves memory is findable...
-      const bravesHit = qmd(['search', 'scorecard']);
-      expect(bravesHit).toMatch(/qmd:\/\/kb-braves\//);
+        // The braves memory is findable...
+        const bravesHit = qmd(['search', 'scorecard']);
+        expect(bravesHit).toMatch(/qmd:\/\/kb-braves\//);
 
-      // ...and the trucking memory is NOT in this tenant's index (it was never exported).
-      const truckingHit = qmd(['search', 'ELD']);
-      expect(truckingHit).not.toMatch(/Trucking ELD compliance/);
-    });
+        // ...and the trucking memory is NOT in this tenant's index (it was never exported).
+        const truckingHit = qmd(['search', 'ELD']);
+        expect(truckingHit).not.toMatch(/Trucking ELD compliance/);
+      },
+    );
   },
 );

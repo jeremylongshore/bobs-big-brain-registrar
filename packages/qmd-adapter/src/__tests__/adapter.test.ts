@@ -1,9 +1,15 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MockQmdExecutor } from '../executor/mock-executor.js';
 import { QmdAdapter } from '../adapter.js';
+import { DenseVecIndex } from '../dense/dense-index.js';
+import { QMD_WEIGHTS_MANIFEST } from '../weights/weights-manifest.js';
+import {
+  EMBEDDINGGEMMA_QUERY_PREFIX,
+  EMBEDDINGGEMMA_DOCUMENT_PREFIX,
+} from '../dense/embed-client.js';
 
 describe('QmdAdapter', () => {
   let mock: MockQmdExecutor;
@@ -20,6 +26,7 @@ describe('QmdAdapter', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     rmSync(exportDir, { recursive: true, force: true });
   });
 
@@ -221,7 +228,9 @@ describe('QmdAdapter — native FTS5 fusion', () => {
 
   // ---- dense arm opt-in + fail-open (B4) ---------------------------------
 
-  function denseAdapter(extra: { onQueryDegraded?: (reason: unknown) => void } = {}): QmdAdapter {
+  function denseAdapter(
+    extra: { onQueryDegraded?: (reason: unknown) => void; indexPath?: string } = {},
+  ): QmdAdapter {
     return new QmdAdapter(
       {
         tenantId: 'test-tenant',
@@ -305,6 +314,108 @@ describe('QmdAdapter — native FTS5 fusion', () => {
 
     expect(result.ok).toBe(true);
   });
+
+  it('reports an unbuilt dense index rather than silently claiming a healthy arm', async () => {
+    const reasons: unknown[] = [];
+    mock.queueSuccess(
+      JSON.stringify([
+        {
+          file: 'qmd://kb-curated/lexical-floor.md',
+          collection: 'kb-curated',
+          score: 0.9,
+          snippet: 'retained lexical answer',
+        },
+      ]),
+    );
+    const result = await denseAdapter({ onQueryDegraded: (reason) => reasons.push(reason) }).query(
+      'fixture',
+      'curated',
+      'test-tenant',
+    );
+    expect(result.ok).toBe(true);
+    expect(String(reasons[0])).toContain('empty or unbuilt');
+    if (result.ok)
+      expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
+  });
+
+  it('reports dense construction failure and continues serving lexical results', async () => {
+    const reasons: unknown[] = [];
+    mock.queueSuccess(
+      JSON.stringify([
+        {
+          file: 'qmd://kb-curated/lexical-floor.md',
+          collection: 'kb-curated',
+          score: 0.9,
+          snippet: 'retained lexical answer',
+        },
+      ]),
+    );
+    const result = await denseAdapter({
+      indexPath: exportDir,
+      onQueryDegraded: (reason) => reasons.push(reason),
+    }).query('fixture', 'curated', 'test-tenant');
+    expect(result.ok).toBe(true);
+    expect(String(reasons[0])).toContain('unavailable after construction');
+    if (result.ok)
+      expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
+  });
+
+  it.each([
+    [[1, 0, 0], false],
+    [[1, 0], true],
+  ] as const)(
+    'observes mismatched vector dimensions without flagging healthy dense results (%j)',
+    async (vector, mismatch) => {
+      const pinned = QMD_WEIGHTS_MANIFEST.models.find((model) => model.id === 'embedding')!;
+      const path = join(exportDir, 'dense-fixture.sqlite');
+      const index = new DenseVecIndex({
+        path,
+        modelId: pinned.file,
+        modelVersion: `${pinned.sha256}|q:${EMBEDDINGGEMMA_QUERY_PREFIX}|d:${EMBEDDINGGEMMA_DOCUMENT_PREFIX}`,
+      });
+      index.upsert({
+        docId: 'qmd://kb-curated/dense.md',
+        collection: 'kb-curated',
+        contentHash: 'h',
+        snippet: 'fixture',
+        embedding: new Float32Array([1, 0, 0]),
+      });
+      index.close();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ data: [{ index: 0, embedding: vector }] }), {
+              status: 200,
+            }),
+        ),
+      );
+      const reasons: unknown[] = [];
+      mock.queueSuccess(
+        JSON.stringify([
+          {
+            file: 'qmd://kb-curated/lexical-floor.md',
+            collection: 'kb-curated',
+            score: 0.9,
+            snippet: 'retained lexical answer',
+          },
+        ]),
+      );
+      const result = await denseAdapter({
+        indexPath: path,
+        onQueryDegraded: (reason) => reasons.push(reason),
+      }).query('fixture', 'curated', 'test-tenant');
+      expect(result.ok).toBe(true);
+      expect(reasons).toHaveLength(mismatch ? 1 : 0);
+      if (mismatch) expect(String(reasons[0])).toContain('dimension');
+      if (result.ok)
+        expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
+      if (result.ok)
+        expect(result.value.some((hit) => hit.file === 'qmd://kb-curated/dense.md')).toBe(
+          !mismatch,
+        );
+    },
+  );
 
   it('denseSync() is null when dense is not configured (the default)', async () => {
     expect(await fusedAdapter().denseSync()).toBeNull();

@@ -56,6 +56,7 @@ export class QmdAdapter {
   private readonly native: NativeIndexManager | null;
   private readonly rerankStage: RerankStage | null;
   private readonly dense: DenseArm | null;
+  private readonly denseObserver: ((reason: unknown) => void) | undefined;
   private readonly exportDir: string;
   /** The single tenant this adapter's qmd registry + index are bound to. */
   private readonly tenantId: string;
@@ -112,6 +113,7 @@ export class QmdAdapter {
     // path is unwritable) or any runtime failure serves the lexical fusion
     // with no dense list. With dense absent/disabled this block is inert and
     // the query path is unchanged.
+    this.denseObserver = config.dense?.enabled === true ? config.dense.onQueryDegraded : undefined;
     this.dense = config.dense?.enabled === true ? buildDenseArm(config) : null;
   }
 
@@ -211,12 +213,28 @@ export class QmdAdapter {
    * the lexical fusion is always the floor the serving path stands on.
    */
   private async denseSearch(queryText: string, scope: SearchScope): Promise<DenseSearchHit[]> {
-    if (this.dense === null) return [];
+    if (this.dense === null) {
+      if (this.denseObserver !== undefined) {
+        this.notifyDenseDegraded(new Error('dense arm unavailable after construction'));
+      }
+      return [];
+    }
     try {
+      if (
+        this.denseObserver !== undefined &&
+        (this.dense.index.dimensions === null || this.dense.index.count() === 0)
+      ) {
+        this.notifyDenseDegraded(new Error('dense index is empty or unbuilt'));
+        return [];
+      }
       const vectors = await this.dense.queryClient.embed([queryText], 'query');
       const queryVec = vectors?.[0];
       if (queryVec === undefined) {
         this.notifyDenseDegraded(new Error('embedder returned no vector for the query'));
+        return [];
+      }
+      if (queryVec.length !== this.dense.index.dimensions) {
+        this.notifyDenseDegraded(new Error('query vector dimension does not match dense index'));
         return [];
       }
       // Scope is pushed INTO the KNN (vec0 partition key), not applied after —
@@ -243,7 +261,7 @@ export class QmdAdapter {
    */
   private notifyDenseDegraded(reason: unknown): void {
     try {
-      this.dense?.onQueryDegraded?.(reason);
+      this.denseObserver?.(reason);
     } catch {
       /* an observer that throws must not break the fail-open path */
     }

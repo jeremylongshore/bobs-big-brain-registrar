@@ -59,7 +59,8 @@ export interface DenseConfig {
   batchSize?: number;
   /**
    * Observer invoked when a QUERY's dense arm degrades — embed failure, embed
-   * timeout, or a missing query vector — immediately before the arm fails open
+   * timeout, unavailable construction, unbuilt/empty index, incompatible query
+   * dimensions, or a missing query vector — immediately before the arm fails open
    * and returns zero candidates.
    *
    * Production leaves this unset, and {@link getDefaultDenseConfig} never sets
