@@ -65,10 +65,10 @@ export interface DenseIndexReport {
  */
 export const DEFAULT_DENSE_MAX_DOC_CHARS = 2000;
 /**
- * The supported single-slot CPU service may take 10–14 s per document. A
- * 16-document request can exceed the 120 s indexing deadline and repeat the
- * same expired work without committing vectors. Commit one document at a time
- * by default; operators with measured capacity can explicitly batch more.
+ * Start with single-document requests so embedders with limited request
+ * capacity can accept the default unit of work. Successful responses are
+ * indexed before the next request; the existing deadline still bounds each
+ * request. Operators with measured capacity can explicitly batch more.
  */
 export const DEFAULT_DENSE_BATCH_SIZE = 1;
 

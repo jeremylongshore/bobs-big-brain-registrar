@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Default dense indexing to one document per request so the supported
-  single-slot CPU embedder can commit progress within the existing request
-  deadline. Explicit batch overrides, query timeouts, vector identity and
+- Default dense indexing to one document per request for embedders with
+  limited request capacity. Each request retains its existing deadline;
+  explicit batch overrides, query timeouts, vector identity rules and
   fail-open behavior are unchanged (`compile-then-govern-1io.6`).
 
 - Make the reranker canned HTTP test fixture reject malformed JSON/documents

@@ -171,7 +171,7 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
     expect(stub.embeddedTexts).toEqual([]); // zero model calls
   });
 
-  it('makes durable progress on a healthy single-document embedder without dropping a batch', async () => {
+  it('indexes through a one-document-capacity stub and reuses unchanged vectors', async () => {
     stub.maxDocumentsPerRequest = 1;
     const indexer = new DenseIndexer({
       index,
