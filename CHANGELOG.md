@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Add seven authority-checked, query-specific obsolete estate labels and a dated local observation/relabel receipt; expose known mixed-current gold awaiting selective repair. No retrieval ranking or corpus mutation.
+
 - **Estate eval labels follow the corrected rewrites (umbrella bead
   `compile-then-govern-39z.28`).** Eleven partly stale brain docs were recaptured with their
   one wrong claim fixed and the originals archived, and the admin-bypass merge note was archived

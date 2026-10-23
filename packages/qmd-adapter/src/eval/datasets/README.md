@@ -75,8 +75,8 @@ intent-os `ops/`, the umbrella `000-docs`), then the docs stating it were found 
 `kb-export` by reading them. `obsolete` holds only active, default-scope docs a
 new hire could act on wrongly (GCP or Netlify deploys, Slack alerts, "B2 not
 provisioned", pre-rename repo maps, the retired private marketplace); off-topic
-noise and docs framed as history are not obsolete. 45 questions are scored; 23
-carry obsolete labels (60 in all).
+noise and docs framed as history are not obsolete. 45 questions are scored; 21
+carry obsolete labels (54 in all after the 2026-10-23 audit).
 
 **Gaps are an output, not a failure.** Five questions have no current doc in the
 brain (`ESTATE_ONBOARDING_V1_GAPS`): merging through `safe-merge`, the tailnet
@@ -182,6 +182,66 @@ Nine questions still miss (e01, e03, e09, e14, e17, e25, e38, e43, e48); e02 "wh
 production hosted" now hits. The two numbers are not strictly comparable because the labels
 changed with the corpus; the obsolete-exposure column is the one this bead was for.
 
-**Known limit.** Labels were drawn while the embedder was down, so an obsolete doc
-that only dense retrieval surfaces may still be unlabeled; review the dense top-10
-before treating obsolete exposure as complete.
+**Dense top-10 audit (2026-10-23, bead `compile-then-govern-39z.27`).**
+An isolated local QmdAdapter/SearchService run at registrar
+`06a960a219928a9e2ca0e8309a08509f842fc4c6` captured all 45 unchanged questions
+with dense enabled, all three source indexes present and zero observed dense
+query failures. Backups ran 19:37:04–19:37:09UTC. All45 literal probes returned
+the same 450 result slots / 329 unique citations; their content was screened
+against current owning authorities. See the compact
+[observation and relabel receipt](./estate-onboarding-audit-2026-10-23.json).
+No private source content is included in that receipt.
+
+Seven query-specific obsolete labels were added after reading their actionable,
+current-tense claims and checking the authorities below. Historical records,
+contradiction proposals and off-topic cloud examples were not labeled solely for
+mentioning an old platform. Labels apply to these questions, not universally to
+every appearance of the document.
+
+| Query | Citation prefix / observed rank | Stale instruction                                                          | Current authority                                                                                                                                                                                                                                                                           |
+| ----- | ------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| e21   | `dd3f92bc` /10                  | Point Hustle www at Google hosting                                         | [VPS deployment target](https://github.com/jeremylongshore/hustle/blob/3aca65905492da30c7cd2eeb3042767280039fb1/.github/workflows/deploy.yml#L54); observed apex/www both 167.86.106.29, no www CNAME                                                                                       |
+| e22   | `2a1df12b` /2, `0d239fc3` /6    | Build Linkyee/static `_output/`                                            | [Next.js/Docker deployment](https://github.com/jeremylongshore/jeremylongshore.com/blob/36a8da81dace59c1e5d0718b7f5647984921c073/CLAUDE.md#L10), [content/deploy rules](https://github.com/jeremylongshore/jeremylongshore.com/blob/36a8da81dace59c1e5d0718b7f5647984921c073/CLAUDE.md#L51) |
+| e28   | `83567b00` /1, `41f458f7` /7    | Persist through `bd sync`, JSONL flush or SQLite/`beads-sync` branch       | [Dolt / refs/dolt/data; JSONL passive export](https://github.com/intent-solutions-io/intent-os/blob/32a67da3d141b7c8ed8038b7f63174012b473737/AGENTS.md#L72)                                                                                                                                 |
+| e38   | `174b389f` /7                   | Current repo is qmd-team-intent-kb, currently Phase 0                      | [Current registrar repository identity](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/db924dd3289df03841a5a5b9a3c8bff4d9e8e592/CLAUDE.md#L75); package/image/Bead aliases remain valid                                                                                |
+| e42   | `3c865bbb` /4                   | deployment-docs, four-digit numbering, feature folders/camelCase filenames | [v4.4 filing grammar and flat default](https://github.com/intent-solutions-io/intent-os/blob/32a67da3d141b7c8ed8038b7f63174012b473737/CLAUDE.md#L67)                                                                                                                                        |
+
+Replaying the **same captured retrieval lists** through `runEval` after adding
+only these seven obsolete labels gives:
+
+| Labels on identical captured results | Recall@10 | nDCG@10 | FAMA@10 | Obsolete exposure |
+| ------------------------------------ | --------- | ------- | ------- | ----------------- |
+| Previous labels                      | 0.5389    | 0.4001  | 0.5389  | 0/45              |
+| Seven additional obsolete labels     | 0.5389    | 0.4001  | 0.5151  | 5/45 (0.1111)     |
+
+This exposes a measurement gap; no ranking or source-memory improvement occurred.
+Recall/nDCG are identical because relevant labels and result lists are unchanged.
+The capture's original backend string said `team-api search`; that was an
+incorrect label for this local service invocation, narrowed in registrar PR 382.
+It never exercised the deployed HTTP endpoint, authentication or middleware.
+
+To take a new observation (requires the local brain, built indexes, working
+loopback embedder and temporary space proportional to the selected store/indexes):
+
+```sh
+TEAMKB_BASE_PATH="$HOME/.teamkb" TEAMKB_TENANT=intent-solutions \
+  TEAMKB_DENSE_ENABLED=1 TEAMKB_QMD_BIN="$PWD/node_modules/.bin/qmd" \
+  TMPDIR=/dev/shm pnpm eval:estate --json > /tmp/estate-current.json
+```
+
+`/dev/shm` was chosen for available space on this host, not as a requirement.
+A new capture can differ because the store, separate indexes and original export
+tree are not an atomic ensemble. The receipt fingerprints the original ordered
+query-id/retrieved-id projection with SHA-256, not the private corpus itself.
+Private full reports/probes were retained locally for this audit; they are not
+included as a public reproducible corpus or an external attestation.
+
+**Known limit.** All 329 observed unique citations were screened, but mixed-current
+**gold remains unresolved** under `compile-then-govern-39z.33`: calendar layout
+(e19), personal-site deployment (e22), Beads persistence (e28/e29), retrieval
+(e33/e41) and intake deduplication (e44), among other clauses. Gold citations are
+retained pending bounded corrected admission/replacement; this keeps the present
+score optimistic. No citation is both relevant and obsolete for one question.
+No capture, lifecycle transition, export refresh or source reindex was performed
+by this audit. The five exposed questions are a verified lower bound, not a claim
+that the remaining answers or future dense results are current.

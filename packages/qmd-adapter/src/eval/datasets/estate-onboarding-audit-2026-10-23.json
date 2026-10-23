@@ -1,0 +1,95 @@
+{
+  "capturedCode": "06a960a219928a9e2ca0e8309a08509f842fc4c6",
+  "capture": {
+    "mode": "temporary database/index snapshots; original export tree read only",
+    "sourceIndexes": {
+      "qmd": true,
+      "native": true,
+      "dense": true
+    },
+    "startedAt": "2026-10-23T19:37:04.062Z",
+    "completedAt": "2026-10-23T19:37:09.216Z",
+    "atomicAcrossSources": false,
+    "sourceSqliteCoordination": "readonly backup may create empty WAL/SHM files and update SHM reader marks"
+  },
+  "queryCount": 45,
+  "slots": 450,
+  "uniqueCitations": 329,
+  "citationListSha256": "4327d237dc93981237b911775caf5774a5f433048b90203385d83684ad262366",
+  "before": {
+    "recall": 0.538888888888889,
+    "ndcg": 0.4001241315604058,
+    "fama": 0.538888888888889,
+    "exposure": 0
+  },
+  "after": {
+    "recall": 0.538888888888889,
+    "ndcg": 0.4001241315604058,
+    "fama": 0.5151322751322752,
+    "exposure": 0.1111111111111111
+  },
+  "exposed": [
+    {
+      "id": "e21",
+      "fama": 0.6666666666666667,
+      "hits": [
+        {
+          "citation": "qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md",
+          "rank": 10
+        }
+      ]
+    },
+    {
+      "id": "e22",
+      "fama": 0.21428571428571425,
+      "hits": [
+        {
+          "citation": "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+          "rank": 2
+        },
+        {
+          "citation": "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+          "rank": 6
+        }
+      ]
+    },
+    {
+      "id": "e28",
+      "fama": 0.75,
+      "hits": [
+        {
+          "citation": "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+          "rank": 1
+        },
+        {
+          "citation": "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+          "rank": 7
+        }
+      ]
+    },
+    {
+      "id": "e38",
+      "fama": 0,
+      "hits": [
+        {
+          "citation": "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+          "rank": 7
+        }
+      ]
+    },
+    {
+      "id": "e42",
+      "fama": 0.30000000000000004,
+      "hits": [
+        {
+          "citation": "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+          "rank": 4
+        }
+      ]
+    }
+  ],
+  "labelCount": 54,
+  "labeledQueries": 21,
+  "scope": "Observed local QmdAdapter/SearchService snapshots, not deployed HTTP acceptance; after is an offline relabel of identical retrieved lists, not a retrieval rerun or corpus remediation.",
+  "remaining": "Mixed-current gold and other stale clauses are pending selective governed repair under umbrella compile-then-govern-39z.33; labels do not establish exhaustive currentness."
+}
