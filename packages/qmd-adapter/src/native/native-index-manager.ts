@@ -137,9 +137,17 @@ export class NativeIndexManager {
    */
   search(query: string, k: number, allowedCollections: readonly string[]): Fts5SearchHit[] {
     this.ensureFresh();
-    const hits = this.backend.search(query, k);
-    if (allowedCollections.length === 0) return hits;
-    return hits.filter((h) => allowedCollections.includes(h.collection));
+    return this.backend.search(query, k, allowedCollections);
+  }
+
+  /** Bounded fallback for questions whose strict retrieval lists were empty. */
+  searchQuestionFallback(
+    query: string,
+    k: number,
+    allowedCollections: readonly string[],
+  ): Fts5SearchHit[] {
+    this.ensureFresh();
+    return this.backend.searchQuestionFallback(query, k, allowedCollections);
   }
 
   count(): number {

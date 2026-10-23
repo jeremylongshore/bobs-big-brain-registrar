@@ -159,8 +159,16 @@ export class QmdAdapter {
     // path is identical to the lexical-only fusion.
     const effectiveScope: SearchScope = scope ?? 'curated';
     const qmdResult = await this.search.search(queryText, effectiveScope);
-    const nativeHits = this.nativeSearch(queryText, effectiveScope);
+    let nativeHits = this.nativeSearch(queryText, effectiveScope);
     const denseHits = await this.denseSearch(queryText, effectiveScope);
+
+    if (
+      nativeHits.length === 0 &&
+      denseHits.length === 0 &&
+      (!qmdResult.ok || qmdResult.value.length === 0)
+    ) {
+      nativeHits = this.nativeSearch(queryText, effectiveScope, true);
+    }
 
     if (!qmdResult.ok) {
       // qmd unavailable — the other lists alone still serve the query (this
@@ -199,10 +207,17 @@ export class QmdAdapter {
   }
 
   /** Native FTS5 half of the fused query. Any failure degrades to []. */
-  private nativeSearch(queryText: string, scope: SearchScope): Fts5SearchHit[] {
+  private nativeSearch(
+    queryText: string,
+    scope: SearchScope,
+    questionFallback = false,
+  ): Fts5SearchHit[] {
     if (this.native === null) return [];
     try {
-      return this.native.search(queryText, NATIVE_SEARCH_K, resolveScopeCollections(scope));
+      const collections = resolveScopeCollections(scope);
+      return questionFallback
+        ? this.native.searchQuestionFallback(queryText, NATIVE_SEARCH_K, collections)
+        : this.native.search(queryText, NATIVE_SEARCH_K, collections);
     } catch {
       return [];
     }

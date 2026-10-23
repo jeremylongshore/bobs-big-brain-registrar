@@ -96,6 +96,13 @@ describe('NativeIndexManager', () => {
     expect(curatedOnly[0]!.collection).toBe('kb-curated');
   });
 
+  it('scopes before top-k so archive matches cannot starve the allowed collection', () => {
+    for (let i = 0; i < 5; i++) write('archive', `old-${i}.md`, 'tokens tokens tokens');
+    write('curated', 'current.md', 'tokens policy with useful current context');
+    const hits = manager.search('tokens', 1, ['kb-curated']);
+    expect(hits.map((h) => h.id)).toEqual(['qmd://kb-curated/current.md']);
+  });
+
   it('tolerates a missing export dir (empty index, no throw)', () => {
     const empty = new NativeIndexManager({
       exportDir: join(exportDir, 'does-not-exist'),

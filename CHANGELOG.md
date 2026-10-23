@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Retain useful native lexical candidates for natural questions when every
+  strict and dense retrieval arm returns empty. The fallback uses at most12
+  distinct topical terms, up to200 collection-scoped candidates and a minimum
+  term-coverage threshold. Existing nonempty retrieval lists, query deadlines,
+  tenant guards and keyword/quoted searches retain their behavior. Apply native
+  collection scope before the result cutoff (`compile-then-govern-39z.33.5`).
+
 - Default dense indexing to one document per request for embedders with
   limited request capacity. Each request retains its existing deadline;
   explicit batch overrides, query timeouts and vector identity rules are retained.

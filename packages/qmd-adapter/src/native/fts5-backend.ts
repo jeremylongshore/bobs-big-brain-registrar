@@ -41,7 +41,35 @@ export function buildFts5MatchQuery(query: string): string {
   return tokens.map((t) => `"${t}"`).join(' ');
 }
 
+const QUESTION_STARTERS = new Set(
+  'what where when which who why how can could do does is are should would tell explain'.split(' '),
+);
+const QUESTION_FUNCTION_WORDS = new Set(
+  (
+    'a an the and or of to for from in on at by with without about as into through ' +
+    'what where when which who why how can could do does did is are was were be been being ' +
+    'should would will shall may might must have has had i me my we us our you your he she it its they them their ' +
+    'this that these those there here please tell explain'
+  ).split(' '),
+);
+
+/** Only broaden bounded, unquoted natural questions; every term remains literal. */
+function questionTerms(query: string): string[] {
+  if (query.length > 4096 || query.includes('"') || !/^\p{L}/u.test(query.trim())) return [];
+  const tokens =
+    query
+      .normalize('NFKC')
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (!QUESTION_STARTERS.has(tokens[0] ?? '')) return [];
+  const terms = [
+    ...new Set(tokens.filter((term) => term.length > 1 && !QUESTION_FUNCTION_WORDS.has(term))),
+  ];
+  return terms.length <= 12 ? terms : [];
+}
+
 interface SearchRow {
+  rowId: number;
   id: string;
   collection: string;
   snippet: string;
@@ -53,6 +81,8 @@ export class Fts5Backend {
   private readonly insertStmt: Database.Statement;
   private readonly deleteStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
+  private readonly scopedSearchStmt: Database.Statement;
+  private readonly coverageStmt: Database.Statement;
   private readonly countStmt: Database.Statement;
 
   constructor(opts: { path?: string; db?: Database.Database } = {}) {
@@ -66,9 +96,15 @@ export class Fts5Backend {
     );
     this.insertStmt = this.db.prepare('INSERT INTO docs(id, collection, content) VALUES (?, ?, ?)');
     this.deleteStmt = this.db.prepare('DELETE FROM docs WHERE id = ?');
-    this.searchStmt = this.db.prepare(
-      "SELECT id, collection, snippet(docs, 2, '', '', '…', 16) AS snippet, bm25(docs) AS rank " +
-        'FROM docs WHERE docs MATCH ? ORDER BY rank LIMIT ?',
+    const selectHits =
+      "SELECT rowid AS rowId, id, collection, snippet(docs, 2, '', '', '…', 16) AS snippet, bm25(docs) AS rank " +
+      'FROM docs WHERE docs MATCH ?';
+    this.searchStmt = this.db.prepare(selectHits + ' ORDER BY rank LIMIT ?');
+    this.scopedSearchStmt = this.db.prepare(
+      selectHits + ' AND collection IN (SELECT value FROM json_each(?)) ORDER BY rank LIMIT ?',
+    );
+    this.coverageStmt = this.db.prepare(
+      'SELECT rowid AS rowId FROM docs WHERE docs MATCH ? AND rowid IN (SELECT value FROM json_each(?))',
     );
     this.countStmt = this.db.prepare('SELECT count(*) AS n FROM docs');
   }
@@ -114,17 +150,54 @@ export class Fts5Backend {
     this.db.exec('DELETE FROM docs');
   }
 
-  /** BM25 keyword search → top-k hits, most relevant first. */
-  search(query: string, k = 10): Fts5SearchHit[] {
+  private searchRows(match: string, k: number, allowedCollections: readonly string[]): SearchRow[] {
+    return (
+      allowedCollections.length === 0
+        ? this.searchStmt.all(match, k)
+        : this.scopedSearchStmt.all(match, JSON.stringify(allowedCollections), k)
+    ) as SearchRow[];
+  }
+
+  private toHit(row: SearchRow): Fts5SearchHit {
+    return { id: row.id, collection: row.collection, snippet: row.snippet, score: -row.rank };
+  }
+
+  /** BM25 keyword search; apply collection scope before the top-k cutoff. */
+  search(query: string, k = 10, allowedCollections: readonly string[] = []): Fts5SearchHit[] {
     const match = buildFts5MatchQuery(query);
     if (match.length === 0) return [];
-    const rows = this.searchStmt.all(match, k) as SearchRow[];
-    return rows.map((r) => ({
-      id: r.id,
-      collection: r.collection,
-      snippet: r.snippet,
-      score: -r.rank, // FTS5 bm25() is negative (best = most negative); negate so higher = better
-    }));
+    return this.searchRows(match, k, allowedCollections).map((row) => this.toHit(row));
+  }
+
+  /** Last-resort question retrieval. Caller must first exhaust all strict/dense arms. */
+  searchQuestionFallback(
+    query: string,
+    k = 10,
+    allowedCollections: readonly string[] = [],
+  ): Fts5SearchHit[] {
+    const terms = questionTerms(query);
+    if (terms.length === 0 || !Number.isSafeInteger(k) || k <= 0) return [];
+    const match = terms.map((term) => `"${term}"`).join(' OR ');
+    const rows = this.searchRows(match, Math.min(200, Math.max(64, k * 4)), allowedCollections);
+    const coverage = this.countCoverage(terms, rows);
+    const minimum = terms.length <= 2 ? terms.length : Math.ceil(terms.length * 0.6);
+    return rows
+      .filter((row) => (coverage.get(row.rowId) ?? 0) >= minimum)
+      .sort(
+        (a, b) => (coverage.get(b.rowId) ?? 0) - (coverage.get(a.rowId) ?? 0) || a.rank - b.rank,
+      )
+      .slice(0, k)
+      .map((row) => this.toHit(row));
+  }
+
+  private countCoverage(terms: readonly string[], rows: readonly SearchRow[]): Map<number, number> {
+    const coverage = new Map<number, number>();
+    const ids = JSON.stringify(rows.map((row) => row.rowId));
+    for (const term of terms) {
+      const matches = this.coverageStmt.all(`"${term}"`, ids) as { rowId: number }[];
+      for (const row of matches) coverage.set(row.rowId, (coverage.get(row.rowId) ?? 0) + 1);
+    }
+    return coverage;
   }
 
   count(): number {
