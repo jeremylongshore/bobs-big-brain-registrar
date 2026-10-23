@@ -1,0 +1,2777 @@
+{
+  "schemaVersion": 1,
+  "scope": "Author-reported local selective correction and captured-list replay; no private memory bodies, deployment or HTTP authorization acceptance",
+  "observedAt": "2026-10-23T21:54:16.379Z",
+  "source": {
+    "evaluationBase": "7bcdf94b63d89dff045f051ac0d5e566b8a9e3df",
+    "canonicalRegistrar": "904a077dc460ef8dfc9bf43ca725047ea0c5eae4",
+    "datasetSha256": "e02a90c93bee007920d70ab67428b20e14b45fd6d86466933170ca3cb84202dd",
+    "labelsFixedBeforeNewRetrieval": true
+  },
+  "queryCount": 45,
+  "k": 10,
+  "labelCounts": {
+    "prior": {
+      "relevant": 117,
+      "obsolete": 54,
+      "obsoleteQueries": 21
+    },
+    "corrected": {
+      "relevant": 113,
+      "obsolete": 64,
+      "obsoleteQueries": 25
+    }
+  },
+  "labelSets": {
+    "prior": [
+      {
+        "id": "e01",
+        "relevant": [
+          "qmd://kb-guides/8bb364ff-b970-5736-a173-5af5b0051e2f.md",
+          "qmd://kb-guides/87f17c55-94ae-5be9-b68f-bf536e9b8190.md",
+          "qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e02",
+        "relevant": [
+          "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+          "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+          "qmd://kb-guides/ec4be0fe-fb06-5808-ad93-77764983d5cd.md"
+        ],
+        "obsolete": ["qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md"]
+      },
+      {
+        "id": "e03",
+        "relevant": [
+          "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+          "qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e04",
+        "relevant": [
+          "qmd://kb-guides/a6ede975-d7e8-5e40-b5c4-89178b6b0142.md",
+          "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e05",
+        "relevant": [
+          "qmd://kb-guides/a6ede975-d7e8-5e40-b5c4-89178b6b0142.md",
+          "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e06",
+        "relevant": [
+          "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md",
+          "qmd://kb-curated/b4c91d39-52d7-5e5f-962e-86824c26cce1.md",
+          "qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md",
+          "qmd://kb-guides/42247e58-6791-5c1e-9307-98c59ac1cd16.md"
+        ],
+        "obsolete": ["qmd://kb-guides/dad34032-e92d-5d64-85ff-3c4caf20de16.md"]
+      },
+      {
+        "id": "e07",
+        "relevant": [
+          "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+          "qmd://kb-decisions/0c047fd4-2be6-5fcb-83c7-9be788c1c226.md",
+          "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md",
+          "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0b44b9ea-60d5-5158-a94c-28d999ceb4d3.md",
+          "qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md",
+          "qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md",
+          "qmd://kb-guides/9b7de37e-9c00-52a1-9336-e52d4c433d1d.md"
+        ]
+      },
+      {
+        "id": "e08",
+        "relevant": [
+          "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md",
+          "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e09",
+        "relevant": [
+          "qmd://kb-guides/3f127438-735d-5ec8-9026-0930f4da63c7.md",
+          "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e10",
+        "relevant": [
+          "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+          "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md"
+        ],
+        "obsolete": ["qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md"]
+      },
+      {
+        "id": "e11",
+        "relevant": ["qmd://kb-decisions/d0ecdf22-ea24-5bd3-9aab-fcae3660cf25.md"],
+        "obsolete": [
+          "qmd://kb-guides/2ef53ed6-d55a-5ea6-bf32-a73cce3d596e.md",
+          "qmd://kb-guides/6b383bfa-1f20-5c60-9173-6b2ea7e62c8e.md",
+          "qmd://kb-guides/31cf8803-ef48-5ba3-b5db-e353d6deddbe.md",
+          "qmd://kb-guides/215d695b-e78b-5aab-95e1-6807d081c71a.md",
+          "qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md"
+        ]
+      },
+      {
+        "id": "e13",
+        "relevant": [
+          "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+          "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+          "qmd://kb-curated/004b9ba8-8db2-5a29-9a73-d875afa87dd3.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e14",
+        "relevant": [
+          "qmd://kb-guides/79f4778a-8eaf-5255-8c95-55a4b97e236e.md",
+          "qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md",
+          "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e15",
+        "relevant": [
+          "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+          "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+          "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e17",
+        "relevant": [
+          "qmd://kb-guides/f66d24d8-30ab-5d63-b37a-dba8efbf6fea.md",
+          "qmd://kb-decisions/ffbd1e78-270c-5364-a770-46545d23376a.md",
+          "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md",
+          "qmd://kb-guides/9bb2091e-cce3-5b6e-9730-2d66695a2745.md"
+        ]
+      },
+      {
+        "id": "e19",
+        "relevant": [
+          "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+          "qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e20",
+        "relevant": [
+          "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+          "qmd://kb-guides/e5ee0f94-59eb-52cc-9145-f80c1b44de7d.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e21",
+        "relevant": [
+          "qmd://kb-guides/c7c0f24a-03a8-5b3a-8e75-285145547bb7.md",
+          "qmd://kb-curated/4312ea30-5932-5e30-b5fd-0af93cf52cac.md"
+        ],
+        "obsolete": ["qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md"]
+      },
+      {
+        "id": "e22",
+        "relevant": [
+          "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+          "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+          "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+          "qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md",
+          "qmd://kb-guides/215d695b-e78b-5aab-95e1-6807d081c71a.md",
+          "qmd://kb-guides/31cf8803-ef48-5ba3-b5db-e353d6deddbe.md"
+        ]
+      },
+      {
+        "id": "e23",
+        "relevant": [
+          "qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md",
+          "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e24",
+        "relevant": [
+          "qmd://kb-guides/cfaa1f1b-d152-5e1e-86f3-ca11b8aa9a7c.md",
+          "qmd://kb-guides/43580937-2f25-4070-bad6-4d3faa35590e.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e25",
+        "relevant": [
+          "qmd://kb-guides/8bb364ff-b970-5736-a173-5af5b0051e2f.md",
+          "qmd://kb-guides/87f17c55-94ae-5be9-b68f-bf536e9b8190.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e26",
+        "relevant": [
+          "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+          "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e27",
+        "relevant": [
+          "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+          "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e28",
+        "relevant": [
+          "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+          "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md"
+        ],
+        "obsolete": [
+          "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+          "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+          "qmd://kb-curated/6dc4a43f-3b1e-577d-9b21-fffd78e35425.md",
+          "qmd://kb-curated/c680061a-c46c-54fa-b954-4cbe38515b6a.md",
+          "qmd://kb-curated/ae354749-eade-518b-81f9-13d954ff783f.md",
+          "qmd://kb-guides/5c201940-c1ac-527d-9fcc-2714ead434fe.md"
+        ]
+      },
+      {
+        "id": "e29",
+        "relevant": [
+          "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+          "qmd://kb-curated/273a0178-1240-5689-8e9e-7d5563ef1b1d.md",
+          "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e30",
+        "relevant": [
+          "qmd://kb-curated/3562ff70-7224-588a-b663-6bdac3d83183.md",
+          "qmd://kb-guides/6cb17bec-fa71-5796-baee-72dbdd72027f.md",
+          "qmd://kb-curated/81ced7c5-e8f0-53cd-b5d5-600251b76adc.md"
+        ],
+        "obsolete": ["qmd://kb-guides/f92788aa-996f-54f6-b649-4ff423d2f742.md"]
+      },
+      {
+        "id": "e31",
+        "relevant": [
+          "qmd://kb-guides/e983d20e-f43c-5e3f-8bae-a1342f881efa.md",
+          "qmd://kb-curated/a178f99a-940a-4e35-90bb-acddc5ddf068.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e32",
+        "relevant": [
+          "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+          "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+          "qmd://kb-curated/b05e4cfc-b97a-52cc-a55f-2bfbdef19676.md"
+        ],
+        "obsolete": [
+          "qmd://kb-curated/02e42c1d-7241-57ad-8e21-35cde6c23987.md",
+          "qmd://kb-guides/37ed4b2c-0e25-505a-8ff5-366b344c6c90.md",
+          "qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md",
+          "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md"
+        ]
+      },
+      {
+        "id": "e33",
+        "relevant": [
+          "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+          "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+          "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md"
+        ],
+        "obsolete": ["qmd://kb-guides/87d86da8-4f48-5bb5-a12a-0e17c7a71cbe.md"]
+      },
+      {
+        "id": "e34",
+        "relevant": [
+          "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+          "qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md",
+          "qmd://kb-guides/e1adedd1-9886-552f-a39a-aab1e0b30e1e.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e35",
+        "relevant": [
+          "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md",
+          "qmd://kb-guides/8237fc99-174f-57cb-b27e-5d2b9f80fa46.md",
+          "qmd://kb-curated/a8d881cb-288a-50e9-8714-f08548bc961e.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e36",
+        "relevant": [
+          "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+          "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+          "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e37",
+        "relevant": [
+          "qmd://kb-guides/e60ee3c7-8cef-51b0-8aa6-d7f0ff358d3e.md",
+          "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+          "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e38",
+        "relevant": [
+          "qmd://kb-curated/43dc743f-fe82-576d-8826-8aa9c651e57e.md",
+          "qmd://kb-curated/2b7ef292-a74d-531d-96d5-283476804365.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+          "qmd://kb-guides/9ab72519-611c-58d8-a24a-ff4dfe234d95.md",
+          "qmd://kb-curated/e65e4505-f169-509c-ab1c-0992707dcee8.md",
+          "qmd://kb-guides/28b15174-e241-5b09-9e4a-db4dbad0bada.md",
+          "qmd://kb-guides/d9c58178-8268-52e5-919f-a890d084c63d.md",
+          "qmd://kb-guides/aee3f27d-c59a-5dc2-87c4-3051f4ef7387.md"
+        ]
+      },
+      {
+        "id": "e39",
+        "relevant": [
+          "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+          "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+          "qmd://kb-decisions/a3c931ad-f613-5d31-b33e-1cbff0e0fc6a.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md",
+          "qmd://kb-guides/37ed4b2c-0e25-505a-8ff5-366b344c6c90.md",
+          "qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md"
+        ]
+      },
+      {
+        "id": "e40",
+        "relevant": [
+          "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+          "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+          "qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md",
+          "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md",
+          "qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md"
+        ]
+      },
+      {
+        "id": "e41",
+        "relevant": [
+          "qmd://kb-decisions/5c98d93b-770f-56c3-ac3e-8a2a39dd75f7.md",
+          "qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md",
+          "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+          "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/4f61a0c4-f91e-5ae0-8e31-959ec5233ec6.md",
+          "qmd://kb-decisions/872fa0b4-d60e-5dde-b3fd-d5cc3e054e28.md",
+          "qmd://kb-curated/5d756bb0-fba6-5267-952f-eb9211feae2c.md"
+        ]
+      },
+      {
+        "id": "e42",
+        "relevant": [
+          "qmd://kb-guides/d4e17454-b742-5e5f-b965-e7dd614e6a51.md",
+          "qmd://kb-curated/9507c16f-4ed7-508a-abba-97ddbd63309a.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+          "qmd://kb-guides/ab762ff1-7b16-52c6-aca3-ee8851666959.md",
+          "qmd://kb-guides/9a88a3eb-6bca-50a7-bdef-ef1da24782fc.md"
+        ]
+      },
+      {
+        "id": "e43",
+        "relevant": [
+          "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md",
+          "qmd://kb-guides/4ffce70d-cbee-58bf-ab0e-abd05df5ac69.md",
+          "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e44",
+        "relevant": [
+          "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+          "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+          "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/79b7c1bc-e3f7-53de-bd44-6722cafe51fa.md",
+          "qmd://kb-curated/02e42c1d-7241-57ad-8e21-35cde6c23987.md"
+        ]
+      },
+      {
+        "id": "e45",
+        "relevant": [
+          "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+          "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+          "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md"
+        ],
+        "obsolete": ["qmd://kb-guides/f92788aa-996f-54f6-b649-4ff423d2f742.md"]
+      },
+      {
+        "id": "e46",
+        "relevant": [
+          "qmd://kb-curated/3ff6d7c2-8ae2-5cfb-aa98-f00843d2b8ce.md",
+          "qmd://kb-curated/5627a882-42b3-5c70-a2b7-1f03fd77bc9a.md",
+          "qmd://kb-guides/166a4550-03b2-5336-8205-b4c0ecccb37f.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e48",
+        "relevant": [
+          "qmd://kb-guides/d5a1b288-854a-5098-af77-72eae2bba000.md",
+          "qmd://kb-guides/9c86a1d5-3d08-5dfb-ba59-38d241e831d6.md"
+        ],
+        "obsolete": ["qmd://kb-guides/cf7e3556-5e7e-5e28-9e17-8773c5ad1698.md"]
+      },
+      {
+        "id": "e49",
+        "relevant": [
+          "qmd://kb-guides/563ddbd3-9eac-5553-9b90-cb2d60d909f2.md",
+          "qmd://kb-decisions/f208172c-ed16-5d4f-b0d4-a4abf4181797.md",
+          "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md"
+        ],
+        "obsolete": ["qmd://kb-curated/ec76bd88-fc28-50ad-a6bc-20e5fcda47e7.md"]
+      }
+    ],
+    "corrected": [
+      {
+        "id": "e01",
+        "relevant": [
+          "qmd://kb-guides/8bb364ff-b970-5736-a173-5af5b0051e2f.md",
+          "qmd://kb-guides/87f17c55-94ae-5be9-b68f-bf536e9b8190.md",
+          "qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e02",
+        "relevant": [
+          "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+          "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+          "qmd://kb-guides/ec4be0fe-fb06-5808-ad93-77764983d5cd.md"
+        ],
+        "obsolete": ["qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md"]
+      },
+      {
+        "id": "e03",
+        "relevant": [
+          "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+          "qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md"
+        ],
+        "obsolete": ["qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md"]
+      },
+      {
+        "id": "e04",
+        "relevant": [
+          "qmd://kb-guides/a6ede975-d7e8-5e40-b5c4-89178b6b0142.md",
+          "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e05",
+        "relevant": [
+          "qmd://kb-guides/a6ede975-d7e8-5e40-b5c4-89178b6b0142.md",
+          "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e06",
+        "relevant": [
+          "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md",
+          "qmd://kb-curated/b4c91d39-52d7-5e5f-962e-86824c26cce1.md",
+          "qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md",
+          "qmd://kb-guides/42247e58-6791-5c1e-9307-98c59ac1cd16.md"
+        ],
+        "obsolete": ["qmd://kb-guides/dad34032-e92d-5d64-85ff-3c4caf20de16.md"]
+      },
+      {
+        "id": "e07",
+        "relevant": [
+          "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+          "qmd://kb-decisions/0c047fd4-2be6-5fcb-83c7-9be788c1c226.md",
+          "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md",
+          "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0b44b9ea-60d5-5158-a94c-28d999ceb4d3.md",
+          "qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md",
+          "qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md",
+          "qmd://kb-guides/9b7de37e-9c00-52a1-9336-e52d4c433d1d.md"
+        ]
+      },
+      {
+        "id": "e08",
+        "relevant": [
+          "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md",
+          "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e09",
+        "relevant": [
+          "qmd://kb-guides/3f127438-735d-5ec8-9026-0930f4da63c7.md",
+          "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e10",
+        "relevant": [
+          "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+          "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md"
+        ],
+        "obsolete": ["qmd://kb-guides/4303332f-6f6d-5874-a2ca-2d72d6db7f74.md"]
+      },
+      {
+        "id": "e11",
+        "relevant": ["qmd://kb-decisions/d0ecdf22-ea24-5bd3-9aab-fcae3660cf25.md"],
+        "obsolete": [
+          "qmd://kb-guides/2ef53ed6-d55a-5ea6-bf32-a73cce3d596e.md",
+          "qmd://kb-guides/6b383bfa-1f20-5c60-9173-6b2ea7e62c8e.md",
+          "qmd://kb-guides/31cf8803-ef48-5ba3-b5db-e353d6deddbe.md",
+          "qmd://kb-guides/215d695b-e78b-5aab-95e1-6807d081c71a.md",
+          "qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md"
+        ]
+      },
+      {
+        "id": "e13",
+        "relevant": [
+          "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+          "qmd://kb-curated/004b9ba8-8db2-5a29-9a73-d875afa87dd3.md"
+        ],
+        "obsolete": ["qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md"]
+      },
+      {
+        "id": "e14",
+        "relevant": [
+          "qmd://kb-guides/79f4778a-8eaf-5255-8c95-55a4b97e236e.md",
+          "qmd://kb-curated/dce1f285-471c-5a27-ace6-9458810c7b7d.md",
+          "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e15",
+        "relevant": [
+          "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+          "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+          "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e17",
+        "relevant": [
+          "qmd://kb-guides/f66d24d8-30ab-5d63-b37a-dba8efbf6fea.md",
+          "qmd://kb-decisions/ffbd1e78-270c-5364-a770-46545d23376a.md",
+          "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/cd58e9ab-5cff-5b0f-b940-06d158b73e58.md",
+          "qmd://kb-guides/9bb2091e-cce3-5b6e-9730-2d66695a2745.md"
+        ]
+      },
+      {
+        "id": "e19",
+        "relevant": [
+          "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+          "qmd://kb-curated/2a48c404-33f7-515f-881c-f1b703219c4a.md"
+        ],
+        "obsolete": ["qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md"]
+      },
+      {
+        "id": "e20",
+        "relevant": [
+          "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+          "qmd://kb-guides/9fa49f4a-cb1f-53c4-9c0f-d06a15079324.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e21",
+        "relevant": [
+          "qmd://kb-guides/c7c0f24a-03a8-5b3a-8e75-285145547bb7.md",
+          "qmd://kb-curated/4312ea30-5932-5e30-b5fd-0af93cf52cac.md"
+        ],
+        "obsolete": ["qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md"]
+      },
+      {
+        "id": "e22",
+        "relevant": [
+          "qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md",
+          "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+          "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+          "qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md",
+          "qmd://kb-guides/215d695b-e78b-5aab-95e1-6807d081c71a.md",
+          "qmd://kb-guides/31cf8803-ef48-5ba3-b5db-e353d6deddbe.md",
+          "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md"
+        ]
+      },
+      {
+        "id": "e23",
+        "relevant": [
+          "qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md",
+          "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e24",
+        "relevant": [
+          "qmd://kb-guides/cfaa1f1b-d152-5e1e-86f3-ca11b8aa9a7c.md",
+          "qmd://kb-guides/43580937-2f25-4070-bad6-4d3faa35590e.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e25",
+        "relevant": [
+          "qmd://kb-guides/8bb364ff-b970-5736-a173-5af5b0051e2f.md",
+          "qmd://kb-guides/87f17c55-94ae-5be9-b68f-bf536e9b8190.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e26",
+        "relevant": [
+          "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+          "qmd://kb-curated/e5270cbd-2422-5cfa-9689-53f40702cffc.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e27",
+        "relevant": ["qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md"],
+        "obsolete": []
+      },
+      {
+        "id": "e28",
+        "relevant": ["qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"],
+        "obsolete": [
+          "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+          "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+          "qmd://kb-curated/6dc4a43f-3b1e-577d-9b21-fffd78e35425.md",
+          "qmd://kb-curated/c680061a-c46c-54fa-b954-4cbe38515b6a.md",
+          "qmd://kb-curated/ae354749-eade-518b-81f9-13d954ff783f.md",
+          "qmd://kb-guides/5c201940-c1ac-527d-9fcc-2714ead434fe.md",
+          "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+          "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md"
+        ]
+      },
+      {
+        "id": "e29",
+        "relevant": [
+          "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+          "qmd://kb-curated/273a0178-1240-5689-8e9e-7d5563ef1b1d.md",
+          "qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e30",
+        "relevant": [
+          "qmd://kb-curated/3562ff70-7224-588a-b663-6bdac3d83183.md",
+          "qmd://kb-guides/6cb17bec-fa71-5796-baee-72dbdd72027f.md",
+          "qmd://kb-curated/81ced7c5-e8f0-53cd-b5d5-600251b76adc.md"
+        ],
+        "obsolete": ["qmd://kb-guides/f92788aa-996f-54f6-b649-4ff423d2f742.md"]
+      },
+      {
+        "id": "e31",
+        "relevant": [
+          "qmd://kb-guides/e983d20e-f43c-5e3f-8bae-a1342f881efa.md",
+          "qmd://kb-curated/a178f99a-940a-4e35-90bb-acddc5ddf068.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e32",
+        "relevant": [
+          "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+          "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+          "qmd://kb-curated/b05e4cfc-b97a-52cc-a55f-2bfbdef19676.md"
+        ],
+        "obsolete": [
+          "qmd://kb-curated/02e42c1d-7241-57ad-8e21-35cde6c23987.md",
+          "qmd://kb-guides/37ed4b2c-0e25-505a-8ff5-366b344c6c90.md",
+          "qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md",
+          "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md"
+        ]
+      },
+      {
+        "id": "e33",
+        "relevant": [
+          "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md",
+          "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+          "qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/87d86da8-4f48-5bb5-a12a-0e17c7a71cbe.md",
+          "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md"
+        ]
+      },
+      {
+        "id": "e34",
+        "relevant": [
+          "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md",
+          "qmd://kb-curated/66221efa-fad4-5d48-9ba2-6cc224677883.md",
+          "qmd://kb-guides/e1adedd1-9886-552f-a39a-aab1e0b30e1e.md"
+        ],
+        "obsolete": ["qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md"]
+      },
+      {
+        "id": "e35",
+        "relevant": [
+          "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md",
+          "qmd://kb-guides/8237fc99-174f-57cb-b27e-5d2b9f80fa46.md",
+          "qmd://kb-curated/a8d881cb-288a-50e9-8714-f08548bc961e.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e36",
+        "relevant": [
+          "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md",
+          "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+          "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e37",
+        "relevant": [
+          "qmd://kb-guides/e60ee3c7-8cef-51b0-8aa6-d7f0ff358d3e.md",
+          "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+          "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e38",
+        "relevant": [
+          "qmd://kb-curated/43dc743f-fe82-576d-8826-8aa9c651e57e.md",
+          "qmd://kb-curated/2b7ef292-a74d-531d-96d5-283476804365.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+          "qmd://kb-guides/9ab72519-611c-58d8-a24a-ff4dfe234d95.md",
+          "qmd://kb-curated/e65e4505-f169-509c-ab1c-0992707dcee8.md",
+          "qmd://kb-guides/28b15174-e241-5b09-9e4a-db4dbad0bada.md",
+          "qmd://kb-guides/d9c58178-8268-52e5-919f-a890d084c63d.md",
+          "qmd://kb-guides/aee3f27d-c59a-5dc2-87c4-3051f4ef7387.md"
+        ]
+      },
+      {
+        "id": "e39",
+        "relevant": [
+          "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+          "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+          "qmd://kb-decisions/a3c931ad-f613-5d31-b33e-1cbff0e0fc6a.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md",
+          "qmd://kb-guides/37ed4b2c-0e25-505a-8ff5-366b344c6c90.md",
+          "qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md"
+        ]
+      },
+      {
+        "id": "e40",
+        "relevant": [
+          "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+          "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+          "qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md",
+          "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/0b197d62-6651-522e-8c51-be1531b4a9f0.md",
+          "qmd://kb-guides/1167e3f2-f064-594a-9214-6491a01769d4.md"
+        ]
+      },
+      {
+        "id": "e41",
+        "relevant": [
+          "qmd://kb-decisions/5c98d93b-770f-56c3-ac3e-8a2a39dd75f7.md",
+          "qmd://kb-curated/cf735d0b-101f-5600-84f8-75b9f257974b.md",
+          "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+          "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/4f61a0c4-f91e-5ae0-8e31-959ec5233ec6.md",
+          "qmd://kb-decisions/872fa0b4-d60e-5dde-b3fd-d5cc3e054e28.md",
+          "qmd://kb-curated/5d756bb0-fba6-5267-952f-eb9211feae2c.md",
+          "qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md"
+        ]
+      },
+      {
+        "id": "e42",
+        "relevant": [
+          "qmd://kb-guides/d4e17454-b742-5e5f-b965-e7dd614e6a51.md",
+          "qmd://kb-curated/9507c16f-4ed7-508a-abba-97ddbd63309a.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+          "qmd://kb-guides/ab762ff1-7b16-52c6-aca3-ee8851666959.md",
+          "qmd://kb-guides/9a88a3eb-6bca-50a7-bdef-ef1da24782fc.md"
+        ]
+      },
+      {
+        "id": "e43",
+        "relevant": [
+          "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md",
+          "qmd://kb-guides/4ffce70d-cbee-58bf-ab0e-abd05df5ac69.md",
+          "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e44",
+        "relevant": [
+          "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+          "qmd://kb-curated/5284ce56-c8ce-5960-932d-179b16ba4c61.md",
+          "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md"
+        ],
+        "obsolete": [
+          "qmd://kb-guides/79b7c1bc-e3f7-53de-bd44-6722cafe51fa.md",
+          "qmd://kb-curated/02e42c1d-7241-57ad-8e21-35cde6c23987.md",
+          "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md"
+        ]
+      },
+      {
+        "id": "e45",
+        "relevant": [
+          "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+          "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md"
+        ],
+        "obsolete": ["qmd://kb-guides/f92788aa-996f-54f6-b649-4ff423d2f742.md"]
+      },
+      {
+        "id": "e46",
+        "relevant": [
+          "qmd://kb-curated/3ff6d7c2-8ae2-5cfb-aa98-f00843d2b8ce.md",
+          "qmd://kb-curated/5627a882-42b3-5c70-a2b7-1f03fd77bc9a.md",
+          "qmd://kb-guides/166a4550-03b2-5336-8205-b4c0ecccb37f.md"
+        ],
+        "obsolete": []
+      },
+      {
+        "id": "e48",
+        "relevant": [
+          "qmd://kb-guides/d5a1b288-854a-5098-af77-72eae2bba000.md",
+          "qmd://kb-guides/9c86a1d5-3d08-5dfb-ba59-38d241e831d6.md"
+        ],
+        "obsolete": ["qmd://kb-guides/cf7e3556-5e7e-5e28-9e17-8773c5ad1698.md"]
+      },
+      {
+        "id": "e49",
+        "relevant": [
+          "qmd://kb-guides/563ddbd3-9eac-5553-9b90-cb2d60d909f2.md",
+          "qmd://kb-decisions/f208172c-ed16-5d4f-b0d4-a4abf4181797.md",
+          "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md"
+        ],
+        "obsolete": ["qmd://kb-curated/ec76bd88-fc28-50ad-a6bc-20e5fcda47e7.md"]
+      }
+    ]
+  },
+  "labelChanges": [
+    {
+      "id": "e03",
+      "query": "how do I get SSH access to the production server",
+      "beforeRelevant": [
+        "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+        "qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+        "qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md"
+      ],
+      "addedObsolete": ["qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md"],
+      "rationale": "Old emergency guide recommends public SSH and local-only backup assumptions."
+    },
+    {
+      "id": "e13",
+      "query": "what CI checks must pass before merging",
+      "beforeRelevant": [
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-curated/004b9ba8-8db2-5a29-9a73-d875afa87dd3.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+        "qmd://kb-curated/004b9ba8-8db2-5a29-9a73-d875afa87dd3.md"
+      ],
+      "addedObsolete": ["qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md"],
+      "rationale": "Old merge standard says protection is absent and plugin lacks its current unit gate."
+    },
+    {
+      "id": "e19",
+      "query": "where is the shared calendar",
+      "beforeRelevant": [
+        "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+        "qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+        "qmd://kb-curated/2a48c404-33f7-515f-881c-f1b703219c4a.md"
+      ],
+      "addedObsolete": ["qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md"],
+      "rationale": "Old calendar summary prescribes two collections per user instead of the shared-team layout."
+    },
+    {
+      "id": "e20",
+      "query": "how do I access the CRM",
+      "beforeRelevant": [
+        "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+        "qmd://kb-guides/e5ee0f94-59eb-52cc-9145-f80c1b44de7d.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+        "qmd://kb-guides/9fa49f4a-cb1f-53c4-9c0f-d06a15079324.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only; no query-specific obsolete finding."
+    },
+    {
+      "id": "e22",
+      "query": "how does the jeremylongshore.com website deploy",
+      "beforeRelevant": [
+        "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+        "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md",
+        "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md"
+      ],
+      "addedObsolete": ["qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md"],
+      "rationale": "Old site guide prescribes the retired Linkyee/static build."
+    },
+    {
+      "id": "e26",
+      "query": "what is the commit message standard",
+      "beforeRelevant": [
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+        "qmd://kb-curated/e5270cbd-2422-5cfa-9689-53f40702cffc.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Reuse the accepted current PR guide, deduplicate its citation, and preserve the unique Claude-specific attribution convention as a separate relevant citation. This label was adjudicated before observing new retrieval ranks."
+    },
+    {
+      "id": "e27",
+      "query": "what has to be in a pull request description",
+      "beforeRelevant": [
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md"
+      ],
+      "afterRelevant": ["qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md"],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only; no query-specific obsolete finding."
+    },
+    {
+      "id": "e28",
+      "query": "how do I track my tasks",
+      "beforeRelevant": [
+        "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+        "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md"
+      ],
+      "afterRelevant": ["qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"],
+      "addedObsolete": [
+        "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+        "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md"
+      ],
+      "rationale": "Both old task guides prescribe pre-Dolt persistence/synchronization."
+    },
+    {
+      "id": "e29",
+      "query": "how do I mirror a task to GitHub and Plane",
+      "beforeRelevant": [
+        "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+        "qmd://kb-curated/273a0178-1240-5689-8e9e-7d5563ef1b1d.md",
+        "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+        "qmd://kb-curated/273a0178-1240-5689-8e9e-7d5563ef1b1d.md",
+        "qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only: the old mirroring procedure remains useful; stale background clauses do not justify an obsolete mirroring label."
+    },
+    {
+      "id": "e33",
+      "query": "how do I search the brain",
+      "beforeRelevant": [
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md",
+        "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+        "qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md"
+      ],
+      "addedObsolete": ["qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md"],
+      "rationale": "The old commands guide falsely restricts retrieval to keyword-AND rather than natural-language search; the other guide retains a useful search workflow and is not penalized for background index-location errors."
+    },
+    {
+      "id": "e34",
+      "query": "how does the brain decide what knowledge to keep (compile then govern)",
+      "beforeRelevant": [
+        "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+        "qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md",
+        "qmd://kb-guides/e1adedd1-9886-552f-a39a-aab1e0b30e1e.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md",
+        "qmd://kb-curated/66221efa-fad4-5d48-9ba2-6cc224677883.md",
+        "qmd://kb-guides/e1adedd1-9886-552f-a39a-aab1e0b30e1e.md"
+      ],
+      "addedObsolete": ["qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md"],
+      "rationale": "The old architecture centrally misstates six Compiler passes as deterministic; the accepted pass delta distinguishes five model-backed passes and deterministic linking, while the existing architecture gold retains the broader governance boundary."
+    },
+    {
+      "id": "e36",
+      "query": "where does the brain's data live",
+      "beforeRelevant": [
+        "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only; no query-specific obsolete finding."
+    },
+    {
+      "id": "e37",
+      "query": "how is the brain backed up",
+      "beforeRelevant": [
+        "qmd://kb-guides/e60ee3c7-8cef-51b0-8aa6-d7f0ff358d3e.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/e60ee3c7-8cef-51b0-8aa6-d7f0ff358d3e.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only; no query-specific obsolete finding."
+    },
+    {
+      "id": "e41",
+      "query": "what search technology does the brain use",
+      "beforeRelevant": [
+        "qmd://kb-decisions/5c98d93b-770f-56c3-ac3e-8a2a39dd75f7.md",
+        "qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md",
+        "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-decisions/5c98d93b-770f-56c3-ac3e-8a2a39dd75f7.md",
+        "qmd://kb-curated/cf735d0b-101f-5600-84f8-75b9f257974b.md",
+        "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+        "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md"
+      ],
+      "addedObsolete": ["qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md"],
+      "rationale": "The old retrieval architecture defers serving dense search. The guide already naming all three technologies is not penalized for background index-location errors."
+    },
+    {
+      "id": "e43",
+      "query": "what project tracker do we use",
+      "beforeRelevant": [
+        "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md",
+        "qmd://kb-guides/4ffce70d-cbee-58bf-ab0e-abd05df5ac69.md",
+        "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md",
+        "qmd://kb-guides/4ffce70d-cbee-58bf-ab0e-abd05df5ac69.md",
+        "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only: Plane remains a project tracker; its task-authority overclaim is corrected without penalizing this literal tracker question."
+    },
+    {
+      "id": "e44",
+      "query": "how do I add something to the brain",
+      "beforeRelevant": [
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+        "qmd://kb-curated/5284ce56-c8ce-5960-932d-179b16ba4c61.md",
+        "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md"
+      ],
+      "addedObsolete": ["qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md"],
+      "rationale": "The old intake convention falsely says intake never deduplicates. The commands guide correctly distinguishes local/team capture and receives no obsolete penalty for this question."
+    },
+    {
+      "id": "e45",
+      "query": "what are the rules for branches and worktrees",
+      "beforeRelevant": [
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md"
+      ],
+      "afterRelevant": [
+        "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+        "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md"
+      ],
+      "addedObsolete": [],
+      "rationale": "Gold replacement only; no query-specific obsolete finding."
+    }
+  ],
+  "dispositions": [
+    {
+      "oldMemoryId": "0a55ea2c-d00f-508c-8e66-b16243ca6fa7",
+      "oldCitation": "qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md",
+      "newCitation": "qmd://kb-curated/2a48c404-33f7-515f-881c-f1b703219c4a.md"
+    },
+    {
+      "oldMemoryId": "28bceea0-b471-59d3-86bd-e04f8ea2ec87",
+      "oldCitation": "qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md",
+      "newCitation": "qmd://kb-curated/cf735d0b-101f-5600-84f8-75b9f257974b.md"
+    },
+    {
+      "oldMemoryId": "3fc61a8d-4f89-5c05-aaa5-925bfb3710b0",
+      "oldCitation": "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+      "newCitation": "qmd://kb-curated/5284ce56-c8ce-5960-932d-179b16ba4c61.md"
+    },
+    {
+      "oldMemoryId": "cda0ce1e-17f6-4057-be6e-fa83200715f0",
+      "oldCitation": "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+      "newCitation": "qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"
+    },
+    {
+      "oldMemoryId": "e25bccbd-227a-58b8-b6fa-33449bbbd5be",
+      "oldCitation": "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+      "newCitation": "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md"
+    },
+    {
+      "oldMemoryId": "a2bc9ef3-666c-584e-859c-47e89c5dc5c1",
+      "oldCitation": "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+      "newCitation": "qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md"
+    },
+    {
+      "oldMemoryId": "9fd70dbb-8a7d-539a-9149-5e7a28963a00",
+      "oldCitation": "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+      "newCitation": "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md"
+    },
+    {
+      "oldMemoryId": "e5ee0f94-59eb-52cc-9145-f80c1b44de7d",
+      "oldCitation": "qmd://kb-guides/e5ee0f94-59eb-52cc-9145-f80c1b44de7d.md",
+      "newCitation": "qmd://kb-guides/9fa49f4a-cb1f-53c4-9c0f-d06a15079324.md"
+    },
+    {
+      "oldMemoryId": "99977978-f92e-547a-b772-2fb8a615a50c",
+      "oldCitation": "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md",
+      "newCitation": "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md"
+    },
+    {
+      "oldMemoryId": "96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca",
+      "oldCitation": "qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md",
+      "newCitation": "qmd://kb-guides/eacfaa6f-e60e-5795-bfbf-9e75ec2a6a82.md"
+    },
+    {
+      "oldMemoryId": "7203130b-1eff-576f-aa34-290c708a09b4",
+      "oldCitation": "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+      "newCitation": "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md"
+    },
+    {
+      "oldMemoryId": "28604f29-08be-5b86-9e9c-af8caef737e8",
+      "oldCitation": "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+      "newCitation": "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md"
+    },
+    {
+      "oldMemoryId": "b48e0ab0-1f9b-5105-b81c-701544c013ba",
+      "oldCitation": "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md",
+      "newCitation": "qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"
+    },
+    {
+      "oldMemoryId": "2d40ba32-8a2c-5883-b697-42b8c431f773",
+      "oldCitation": "qmd://kb-guides/2d40ba32-8a2c-5883-b697-42b8c431f773.md",
+      "newCitation": "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md"
+    },
+    {
+      "oldMemoryId": "081bce4f-1801-539d-a852-add50f441e50",
+      "oldCitation": "qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md",
+      "newCitation": "qmd://kb-curated/66221efa-fad4-5d48-9ba2-6cc224677883.md"
+    },
+    {
+      "oldMemoryId": "ac51988a-b99f-5b92-a15f-e88371dcb798",
+      "oldCitation": "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+      "newCitation": "qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md"
+    },
+    {
+      "oldMemoryId": "20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1",
+      "oldCitation": "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+      "newCitation": "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md"
+    }
+  ],
+  "acceptedCorrections": [
+    {
+      "memoryId": "2a48c404-33f7-515f-881c-f1b703219c4a",
+      "contentSha256": "42d45b356a48e62405ef4a98d67aa21d02a61b97dfb9370296cdf405bf89219a",
+      "citation": "qmd://kb-curated/2a48c404-33f7-515f-881c-f1b703219c4a.md"
+    },
+    {
+      "memoryId": "cf735d0b-101f-5600-84f8-75b9f257974b",
+      "contentSha256": "4e52dbeb60f707d02ac32ea63fe16e3de26576e8bb3e84229fcef391d83174b1",
+      "citation": "qmd://kb-curated/cf735d0b-101f-5600-84f8-75b9f257974b.md"
+    },
+    {
+      "memoryId": "5284ce56-c8ce-5960-932d-179b16ba4c61",
+      "contentSha256": "181400d0509012f40fa7b757cbc0dad8864cc70f8435f31c59b367ac33afe94d",
+      "citation": "qmd://kb-curated/5284ce56-c8ce-5960-932d-179b16ba4c61.md"
+    },
+    {
+      "memoryId": "88a6a863-a182-5fc5-8c69-ac221b511188",
+      "contentSha256": "e51ac3b091ff06ffb897b5b238261b1a13d436e1b204c8fe09956db2b5eddd1d",
+      "citation": "qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md"
+    },
+    {
+      "memoryId": "9b655bbf-dd7f-5d21-b693-64a63a729fb7",
+      "contentSha256": "c4a2dade6ca6bcf808dd18155ac57fa33858f55d1e5c3a43268a942b20bcc7a6",
+      "citation": "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md"
+    },
+    {
+      "memoryId": "41e58242-b3ee-53c5-af7b-bc4aa9e38a12",
+      "contentSha256": "1b12856fb25bef02493b0961708ccd882539d4e3ea17dee185be2dbf7f42a4b6",
+      "citation": "qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md"
+    },
+    {
+      "memoryId": "2b16bd66-200c-5afd-8472-ca89bdd146de",
+      "contentSha256": "655fb0623e11f4d08ac9924e43739a74f4e12e86d5234659c248ea1cc14331dc",
+      "citation": "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md"
+    },
+    {
+      "memoryId": "9fa49f4a-cb1f-53c4-9c0f-d06a15079324",
+      "contentSha256": "cb368ca297243272b925a8dcde55eeeaeb8edefdab5ae9236672cfec24bbd3f2",
+      "citation": "qmd://kb-guides/9fa49f4a-cb1f-53c4-9c0f-d06a15079324.md"
+    },
+    {
+      "memoryId": "de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3",
+      "contentSha256": "510ccedae730bfe663aafa39fb599da0fc1f03d40e22bb02c9fd0c89ff488c2d",
+      "citation": "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md"
+    },
+    {
+      "memoryId": "eacfaa6f-e60e-5795-bfbf-9e75ec2a6a82",
+      "contentSha256": "a2ddf649a38af87d037fbfce7afdf7f128fa54371f5bfce9a5b971f4141eb5f8",
+      "citation": "qmd://kb-guides/eacfaa6f-e60e-5795-bfbf-9e75ec2a6a82.md"
+    },
+    {
+      "memoryId": "b56108ee-cbc9-5794-b8ca-c14686bd199a",
+      "contentSha256": "0abf9822716b6978d8b42808b2fc1a7fa0e0e09e7f8ea6ae1aa60893d85840c9",
+      "citation": "qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md"
+    },
+    {
+      "memoryId": "95cd747a-564a-5a78-b855-5c00d9d8307c",
+      "contentSha256": "91c86a1844273f65acdfbb7a814a85465f601eae309ccf7c2665a9da74bf7550",
+      "citation": "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md"
+    },
+    {
+      "memoryId": "66221efa-fad4-5d48-9ba2-6cc224677883",
+      "contentSha256": "61b72f66f139d3e321cedd1c598c7ccc23f5a321cf97b714a535943fa4873447",
+      "citation": "qmd://kb-curated/66221efa-fad4-5d48-9ba2-6cc224677883.md"
+    },
+    {
+      "memoryId": "86a22878-b5a4-52bc-89cc-4452cd348151",
+      "contentSha256": "98421925161e010c84b3ec32edc52e23212cef2f6ac6bde454c46a2446033fa7",
+      "citation": "qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md"
+    },
+    {
+      "memoryId": "e5270cbd-2422-5cfa-9689-53f40702cffc",
+      "contentSha256": "8f94bfd527772f267c5e21e05e3dfeff27e138cb49d53422434ed082112b9152",
+      "citation": "qmd://kb-curated/e5270cbd-2422-5cfa-9689-53f40702cffc.md"
+    }
+  ],
+  "lifecycle": {
+    "deprecatedOriginals": 17,
+    "retainedAcceptedCorrections": 15,
+    "archiveContentPreserved": true,
+    "nonArchiveExportPaths": 0,
+    "archiveOnlyQmdEntries": 17,
+    "archiveOnlyNativeEntries": 17,
+    "archiveOnlyDenseEntries": 17,
+    "localAnchors": [
+      {
+        "chainHead": "bc6bb887a0833b4c35ec614a850ab950717a702ff46829a0da9b167cc216ae10",
+        "chainedRows": 33836,
+        "committed": true
+      },
+      {
+        "chainHead": "62286553fbaa171c0221ddf2b0e139d7f79b20e28dfec4e06ac498dbbf22dc39",
+        "chainedRows": 33842,
+        "committed": true
+      }
+    ],
+    "anchorPublication": "Local commits only; remote witness publication not established",
+    "rollbackRehearsal": {
+      "firstBatch": 14,
+      "residualBatch": 3,
+      "scope": "Private copies restored originals and removed stale archive paths; accepted corrections retained, not admission rollback"
+    },
+    "finalReconcile": {
+      "export": {
+        "written": 0,
+        "archived": 3,
+        "removed": 0,
+        "skipped": 0,
+        "quarantined": 0,
+        "unchanged": 18093
+      },
+      "index": {
+        "ok": true,
+        "value": {
+          "collectionsCreated": [],
+          "indexUpdated": true,
+          "dense": {
+            "embedded": 3,
+            "removed": 3,
+            "skipped": 0,
+            "totalDocs": 18164,
+            "serviceDown": false
+          }
+        }
+      },
+      "exactCitationReads": 15,
+      "diagnosticTargetsFound": true
+    }
+  },
+  "captures": {
+    "old": {
+      "citationListSha256": "4327d237dc93981237b911775caf5774a5f433048b90203385d83684ad262366",
+      "orderedResults": [
+        {
+          "id": "e01",
+          "retrieved": [
+            "qmd://kb-decisions/5ff7ac4a-248d-5a29-b434-2949023a143e.md",
+            "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+            "qmd://kb-curated/dc805bbd-3d24-5071-8edb-fd37d8c4834b.md",
+            "qmd://kb-curated/c478600e-b8f5-5538-be39-e44f8cb58c8e.md",
+            "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+            "qmd://kb-guides/d4c61580-91d8-5eb7-857d-b11c12da68eb.md",
+            "qmd://kb-guides/5142e7b7-ad1d-4a2f-b803-7e4900b3f322.md",
+            "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+            "qmd://kb-guides/e6be348d-0fbb-4032-afa8-bb81d2ed17f6.md",
+            "qmd://kb-guides/50ff6fdd-ec27-5302-b353-c5b5aed7191d.md"
+          ]
+        },
+        {
+          "id": "e02",
+          "retrieved": [
+            "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+            "qmd://kb-guides/06814f33-71c4-597b-9af4-8b275398d582.md",
+            "qmd://kb-guides/2ffa51ef-8521-5929-a349-ccc16741bc58.md",
+            "qmd://kb-guides/3896b501-3e1f-5c30-9b94-cca9b53c0983.md",
+            "qmd://kb-guides/8b6fbf19-590a-512a-b256-ae30f6133341.md",
+            "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+            "qmd://kb-guides/4a5a9fb1-dff6-5e50-88f6-0dedda7151d1.md",
+            "qmd://kb-guides/eca5b5be-d08c-568f-af1e-f803504c9ac4.md",
+            "qmd://kb-curated/dd648500-95cb-5203-a4ba-01fc4e150462.md",
+            "qmd://kb-curated/830fc56c-df93-564f-8688-aba3bd0a5504.md"
+          ]
+        },
+        {
+          "id": "e03",
+          "retrieved": [
+            "qmd://kb-curated/f6cb7fb3-ca7e-5d4c-97f7-dfc063f2b982.md",
+            "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+            "qmd://kb-guides/56cbd961-e6e5-5d6d-b6d6-e8921ce09cbe.md",
+            "qmd://kb-decisions/5ff7ac4a-248d-5a29-b434-2949023a143e.md",
+            "qmd://kb-guides/423d6de0-4511-57b8-8f55-0c09362b3bbf.md",
+            "qmd://kb-guides/6a3b0e05-479f-54e3-8b6e-7c42406e3a2d.md",
+            "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+            "qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md",
+            "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+            "qmd://kb-guides/d81c157e-864f-5596-8df0-d7e577cf1b27.md"
+          ]
+        },
+        {
+          "id": "e04",
+          "retrieved": [
+            "qmd://kb-curated/200bcca0-67ca-5e66-88bc-ca36f6627a74.md",
+            "qmd://kb-curated/1070ea01-d497-52a0-8af6-6c2708ba4c26.md",
+            "qmd://kb-decisions/3bd3fe9c-003b-57a5-967e-673c08264f38.md",
+            "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+            "qmd://kb-curated/02dd1443-f9af-5893-ba62-09992fbedade.md",
+            "qmd://kb-curated/eb8da174-c6e8-5201-894c-9f47a9d8c84a.md",
+            "qmd://kb-decisions/8e6bbb56-4324-56cb-a718-b2ce36b3d87f.md",
+            "qmd://kb-guides/cf7bfdac-c3f5-548f-bffb-79b710c1e999.md",
+            "qmd://kb-guides/a6ede975-d7e8-5e40-b5c4-89178b6b0142.md",
+            "qmd://kb-guides/ea45b88d-e820-572b-960a-64215deb47ed.md"
+          ]
+        },
+        {
+          "id": "e05",
+          "retrieved": [
+            "qmd://kb-curated/93a12c14-d0a7-5b9d-a60b-ab75336be7ad.md",
+            "qmd://kb-decisions/3bd3fe9c-003b-57a5-967e-673c08264f38.md",
+            "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+            "qmd://kb-curated/2e015fff-5a9c-5e6f-be97-2e8ad95c524d.md",
+            "qmd://kb-curated/08810932-c4a3-5281-b3f0-942bf6334ccd.md",
+            "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+            "qmd://kb-guides/074bd575-3b6a-5bb9-952e-85a25097eeaf.md",
+            "qmd://kb-guides/1086c833-5edb-5282-97da-4954f0e6fd72.md",
+            "qmd://kb-guides/cc91447f-c354-5ba2-9626-85a6feb54ea5.md",
+            "qmd://kb-curated/636d1601-db58-5ad2-a33d-373f1bd3e8ce.md"
+          ]
+        },
+        {
+          "id": "e06",
+          "retrieved": [
+            "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md",
+            "qmd://kb-curated/b4c91d39-52d7-5e5f-962e-86824c26cce1.md",
+            "qmd://kb-guides/31ff051a-68ad-5566-9647-5a7012b99fe3.md",
+            "qmd://kb-curated/c4d67afa-5893-5c9e-b667-7350aa58fde4.md",
+            "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+            "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+            "qmd://kb-curated/b93ae381-373f-529e-8ff1-9b3a5635dabe.md",
+            "qmd://kb-curated/0bcd92cf-cce8-5413-84da-42780c79efda.md",
+            "qmd://kb-guides/31d305a7-b876-51df-869e-f6868b3026d9.md",
+            "qmd://kb-curated/ff13218e-8d0f-5985-9aa0-7c607b11f54e.md"
+          ]
+        },
+        {
+          "id": "e07",
+          "retrieved": [
+            "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-curated/2df21b07-001b-5ddd-9bb2-eb70f90974c3.md",
+            "qmd://kb-decisions/0c047fd4-2be6-5fcb-83c7-9be788c1c226.md",
+            "qmd://kb-decisions/8a1a1659-0817-5fb9-8768-7b9a4d4fd0e8.md",
+            "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md",
+            "qmd://kb-curated/a212fc57-7483-5e14-937a-69067d9aa0e4.md",
+            "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md",
+            "qmd://kb-curated/9396508e-a64e-5115-bc27-ee3d51a2e345.md",
+            "qmd://kb-curated/2acd8d19-5f4a-5a35-9b33-66ddb4e33226.md"
+          ]
+        },
+        {
+          "id": "e08",
+          "retrieved": [
+            "qmd://kb-curated/9396508e-a64e-5115-bc27-ee3d51a2e345.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-curated/2df21b07-001b-5ddd-9bb2-eb70f90974c3.md",
+            "qmd://kb-guides/8e268247-93c4-532a-a440-2e793003d245.md",
+            "qmd://kb-curated/a212fc57-7483-5e14-937a-69067d9aa0e4.md",
+            "qmd://kb-curated/1c0be82b-7138-5f7d-a32f-6b3aab4a4294.md",
+            "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md",
+            "qmd://kb-decisions/8a1a1659-0817-5fb9-8768-7b9a4d4fd0e8.md",
+            "qmd://kb-guides/d757b919-a716-5583-9b86-48cde4af2126.md",
+            "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md"
+          ]
+        },
+        {
+          "id": "e09",
+          "retrieved": [
+            "qmd://kb-guides/fda62c6b-0705-5b35-9269-01218c9e16cd.md",
+            "qmd://kb-guides/ab3245e0-c189-5e17-9265-ca06a281e3a9.md",
+            "qmd://kb-guides/a2d99227-4710-5d0b-8aac-36a6b9281a29.md",
+            "qmd://kb-guides/b5c624fa-132c-5549-bbd2-bc23d2e94af8.md",
+            "qmd://kb-decisions/27e8e8f6-ab55-5531-8c02-0aecb21e114c.md",
+            "qmd://kb-guides/83735ab7-fa6c-58b8-bf6e-5d8ce786cf6e.md",
+            "qmd://kb-guides/3d7c307e-84bd-575c-8a08-7ef282357200.md",
+            "qmd://kb-guides/d9c1fc3f-7964-5f27-af31-d96215f5e3ae.md",
+            "qmd://kb-guides/f0137cb0-5a89-56c3-9205-680b79973f24.md",
+            "qmd://kb-guides/0e884c93-2598-55c9-9692-040e9386c12b.md"
+          ]
+        },
+        {
+          "id": "e10",
+          "retrieved": [
+            "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+            "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+            "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md",
+            "qmd://kb-decisions/fb6364af-df5a-5124-aac8-887a9a1600f9.md",
+            "qmd://kb-guides/e9df6e66-7587-5560-960e-edf076cdcb98.md",
+            "qmd://kb-guides/753bbec3-a3e3-56a8-9ca4-2a1326500623.md",
+            "qmd://kb-guides/894e0e22-7678-5037-909d-5aa542e03004.md",
+            "qmd://kb-guides/0c245920-b96b-55b9-9739-efa9daeb736c.md",
+            "qmd://kb-guides/49f036bb-8928-5d24-9fea-ffd125f60bc3.md",
+            "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+          ]
+        },
+        {
+          "id": "e11",
+          "retrieved": [
+            "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+            "qmd://kb-decisions/d0ecdf22-ea24-5bd3-9aab-fcae3660cf25.md",
+            "qmd://kb-curated/7f834490-3f85-57aa-abdb-72af2e1b846e.md",
+            "qmd://kb-guides/033b28cf-c371-58ae-acb1-004625646da8.md",
+            "qmd://kb-guides/2ff209ac-1521-53fd-9fe7-5a7ada267d7f.md",
+            "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+            "qmd://kb-guides/c3a4156f-dc5a-5ef0-b4c3-d0d4def2dad5.md",
+            "qmd://kb-guides/147575fc-d7bc-55ca-921d-7d71821aaec7.md",
+            "qmd://kb-guides/f4e22934-95bc-5a53-a872-79c20a7f2239.md",
+            "qmd://kb-guides/ef0f9e10-074f-5a76-91e5-3008fd069b24.md"
+          ]
+        },
+        {
+          "id": "e13",
+          "retrieved": [
+            "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+            "qmd://kb-curated/feb023b2-0d32-5cb3-9124-3575ede0d2bd.md",
+            "qmd://kb-curated/b231ab76-1cdd-5390-971a-ae4aed9dd90a.md",
+            "qmd://kb-guides/c0685da8-4ef6-5563-8d04-695d3c891b7f.md",
+            "qmd://kb-curated/cb10e3d5-e749-519c-be4c-5e6d8aa82483.md",
+            "qmd://kb-curated/cd7be698-96d6-5478-ad33-e6f58c9b69fa.md",
+            "qmd://kb-curated/c3aca568-d7f6-5912-bba2-e2417674a180.md",
+            "qmd://kb-curated/f0bf6568-3785-593e-8b67-2b0094997d9e.md"
+          ]
+        },
+        {
+          "id": "e14",
+          "retrieved": [
+            "qmd://kb-guides/e37da121-916b-5ded-ba81-1efd51785365.md",
+            "qmd://kb-guides/a574bba9-303a-524d-a5a7-4d38eefae828.md",
+            "qmd://kb-guides/2796b885-cb7f-5bc0-8414-ac10ef4a054b.md",
+            "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md",
+            "qmd://kb-guides/2d40ba32-8a2c-5883-b697-42b8c431f773.md",
+            "qmd://kb-guides/b5e864f2-90f6-5e82-b667-e946ea10a8a7.md",
+            "qmd://kb-guides/c7856f23-81fd-5800-b5cb-94560e97a455.md",
+            "qmd://kb-guides/fdd2432c-475e-5ff4-9024-bbe03bcddaeb.md",
+            "qmd://kb-curated/bd707d32-c081-5266-ba13-15c68016581a.md",
+            "qmd://kb-guides/ca66c847-df18-5d15-9926-b0487cb8622f.md"
+          ]
+        },
+        {
+          "id": "e15",
+          "retrieved": [
+            "qmd://kb-curated/c386487e-014d-581c-8b0b-c272c2345e81.md",
+            "qmd://kb-curated/d672cca7-3f08-5ddb-b95b-2175c3b51b50.md",
+            "qmd://kb-guides/42247e58-6791-5c1e-9307-98c59ac1cd16.md",
+            "qmd://kb-guides/b3d09f96-834d-5a18-bf1b-87b2f71f8844.md",
+            "qmd://kb-guides/964851f9-ccbe-5d9b-8254-6d6723082ee4.md",
+            "qmd://kb-decisions/c73d7383-f6d7-587f-8103-2fb086ad0f13.md",
+            "qmd://kb-curated/fae3fb5c-990b-5dc8-a404-6015430ed3a3.md",
+            "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+            "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+            "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md"
+          ]
+        },
+        {
+          "id": "e17",
+          "retrieved": [
+            "qmd://kb-decisions/ab09bc10-2e78-5330-aa31-477b3b367a88.md",
+            "qmd://kb-curated/666e6548-9dda-5936-8bbb-65b89baf994b.md",
+            "qmd://kb-guides/bae800ff-d00d-5752-b99e-9fea8353f42d.md",
+            "qmd://kb-decisions/7a79acbf-5c76-5ada-826f-025e4a7fab8f.md",
+            "qmd://kb-guides/23895f07-7149-596d-b285-04276a929586.md",
+            "qmd://kb-guides/49a8e879-405c-559c-a403-fafda7f8ca83.md",
+            "qmd://kb-curated/877769ff-dac4-554e-8f77-1b7d0714a463.md",
+            "qmd://kb-guides/431fd991-edfa-5ef7-8a1c-54c7648ce9e9.md",
+            "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+            "qmd://kb-decisions/b6b5ea0f-3fe0-5c30-891b-3b596e9cf86c.md"
+          ]
+        },
+        {
+          "id": "e19",
+          "retrieved": [
+            "qmd://kb-decisions/b721ed72-b286-5ead-83e0-cdbd07f7c7f7.md",
+            "qmd://kb-guides/92588d6f-bc7b-543c-84ac-f8e8f9d10282.md",
+            "qmd://kb-guides/debe3112-256a-5c06-8942-762eaf8d25d6.md",
+            "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+            "qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md",
+            "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+            "qmd://kb-curated/fcc85736-86de-55b5-bf86-87504ca68477.md",
+            "qmd://kb-curated/fd787b30-efb7-5299-a323-dc1460af7752.md",
+            "qmd://kb-curated/e2225821-eff8-5416-8649-16846dcb1f3e.md",
+            "qmd://kb-curated/d79d7403-6332-5165-bf5b-c62025451ecf.md"
+          ]
+        },
+        {
+          "id": "e20",
+          "retrieved": [
+            "qmd://kb-guides/72fa04dc-4dc7-56c4-99de-eac4ddab2594.md",
+            "qmd://kb-guides/e5ee0f94-59eb-52cc-9145-f80c1b44de7d.md",
+            "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+            "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+            "qmd://kb-guides/fbde2a68-5059-5bac-a113-94ed78fa4c7e.md",
+            "qmd://kb-guides/a256648a-2d6e-5b00-9d4c-1323e6c26623.md",
+            "qmd://kb-guides/30152012-3e93-502a-b134-14bb37496ae8.md",
+            "qmd://kb-guides/ff9e3050-5106-5714-81a1-36b44380f2be.md",
+            "qmd://kb-guides/0658415f-cd8c-5ac0-baae-a01b342b39b4.md",
+            "qmd://kb-guides/41d59389-dcc9-56cb-9b0a-0762f0e995f2.md"
+          ]
+        },
+        {
+          "id": "e21",
+          "retrieved": [
+            "qmd://kb-curated/83aaadc3-e4eb-52b4-a458-d911666ced2c.md",
+            "qmd://kb-decisions/27e8e8f6-ab55-5531-8c02-0aecb21e114c.md",
+            "qmd://kb-decisions/9d8385bb-c744-5bdd-9100-d574b7bb2075.md",
+            "qmd://kb-guides/57f8f661-6f3a-5467-97bb-bcca6925e480.md",
+            "qmd://kb-curated/4312ea30-5932-5e30-b5fd-0af93cf52cac.md",
+            "qmd://kb-decisions/07241602-720c-566d-8d90-31f212dffdd1.md",
+            "qmd://kb-guides/c7c0f24a-03a8-5b3a-8e75-285145547bb7.md",
+            "qmd://kb-curated/3df7c751-714b-5b66-8ed6-a26ebb8e9512.md",
+            "qmd://kb-curated/316bf636-cc61-507b-afa9-1d811ed441d7.md",
+            "qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md"
+          ]
+        },
+        {
+          "id": "e22",
+          "retrieved": [
+            "qmd://kb-guides/e26807e0-c6ea-57f1-8d06-500c6c714d40.md",
+            "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+            "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+            "qmd://kb-guides/2d87e3ce-e958-52c3-8c09-79b3b0def143.md",
+            "qmd://kb-guides/312012dd-3db5-5df9-9c3b-94c57cffcc59.md",
+            "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+            "qmd://kb-curated/be9b1bed-0c96-53c7-a432-158fc362bc80.md",
+            "qmd://kb-guides/2c0b5f3e-9e0d-504a-ba91-2d911d056a0a.md",
+            "qmd://kb-guides/68ba82bb-e61c-5e13-81fe-ad01875b5546.md",
+            "qmd://kb-guides/272f5cb8-0112-405c-a541-cfc2720cd910.md"
+          ]
+        },
+        {
+          "id": "e23",
+          "retrieved": [
+            "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+            "qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md",
+            "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+            "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+            "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+            "qmd://kb-guides/f358e49a-4d60-5945-a7ee-7ab09b9e1331.md",
+            "qmd://kb-curated/a5c3cb2e-07f8-5478-8e61-5fe6aa032d84.md",
+            "qmd://kb-guides/b9395e59-8311-55ae-8a4d-deb09dc3b6ab.md",
+            "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+            "qmd://kb-guides/e43d1981-7757-5a3d-9f63-4447c630a214.md"
+          ]
+        },
+        {
+          "id": "e24",
+          "retrieved": [
+            "qmd://kb-decisions/c73d7383-f6d7-587f-8103-2fb086ad0f13.md",
+            "qmd://kb-decisions/8f45c823-e018-5282-9ad6-bc269f0acbc6.md",
+            "qmd://kb-guides/3dbe9f21-efc2-50ca-85b1-c00e25348b98.md",
+            "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+            "qmd://kb-guides/cfaa1f1b-d152-5e1e-86f3-ca11b8aa9a7c.md",
+            "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+            "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-decisions/1a704514-e550-540e-af2e-750c073dc29b.md",
+            "qmd://kb-guides/dbd9c271-381d-53d5-9dfc-5e8d183c0a3b.md"
+          ]
+        },
+        {
+          "id": "e25",
+          "retrieved": [
+            "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+            "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+            "qmd://kb-curated/52c82bde-6bab-5df9-8023-710f36f91bdf.md",
+            "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+            "qmd://kb-curated/f6cb7fb3-ca7e-5d4c-97f7-dfc063f2b982.md",
+            "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+            "qmd://kb-curated/dc805bbd-3d24-5071-8edb-fd37d8c4834b.md",
+            "qmd://kb-guides/6023dd04-b62b-53e3-adbc-9a5ff87d53a1.md",
+            "qmd://kb-guides/6e423817-4f15-53c8-b2f1-3800831afffc.md",
+            "qmd://kb-guides/438e947f-a1a3-46f3-ba69-5aae0f3ee156.md"
+          ]
+        },
+        {
+          "id": "e26",
+          "retrieved": [
+            "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+            "qmd://kb-guides/f866b733-9432-5d3d-8379-0eab99c092db.md",
+            "qmd://kb-curated/2452e8c9-9fbf-537c-83e7-f0de2e715d92.md",
+            "qmd://kb-curated/11a3a1a1-0cac-5339-85cc-7e90ceec756e.md",
+            "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+            "qmd://kb-curated/af95b796-4fd0-555d-a1f2-5a090ba9ab4b.md",
+            "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+            "qmd://kb-curated/a737802a-02a4-5a5b-8f79-25ac191de1b5.md",
+            "qmd://kb-guides/368b0125-bb07-5bfb-9c66-5f3d54017e04.md",
+            "qmd://kb-curated/11fb8198-e814-5333-882e-07f514393811.md"
+          ]
+        },
+        {
+          "id": "e27",
+          "retrieved": [
+            "qmd://kb-guides/078233c9-8ac3-5d23-b58a-b5ddfc6f4af8.md",
+            "qmd://kb-guides/0c66112b-8c09-4230-975b-2423c9f60fb8.md",
+            "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+            "qmd://kb-curated/53a4cc86-40ca-5dae-b91b-4f5cdc99df81.md",
+            "qmd://kb-curated/b9e6c34a-0eeb-5086-b462-a68572bdd123.md",
+            "qmd://kb-guides/fd2e6eab-e495-5c3d-9a18-df3227869114.md",
+            "qmd://kb-guides/13258ff8-cb3b-52a8-97fe-5ec98710083c.md",
+            "qmd://kb-guides/0148f2fd-a481-5aa1-a77a-fd1db9c0402d.md",
+            "qmd://kb-curated/6e85de00-69c7-5376-8153-9230e56571a2.md",
+            "qmd://kb-guides/45b91bbd-4447-5aa2-b62c-721b182fd6ca.md"
+          ]
+        },
+        {
+          "id": "e28",
+          "retrieved": [
+            "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+            "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+            "qmd://kb-guides/dba14edb-5d8d-5bfe-bbfb-694053d244f1.md",
+            "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+            "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md",
+            "qmd://kb-guides/42fefffc-c6a5-5cc8-a152-428261f86a3e.md",
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md",
+            "qmd://kb-guides/c344615f-6f6c-5d0a-8801-65ff32776d6c.md",
+            "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md"
+          ]
+        },
+        {
+          "id": "e29",
+          "retrieved": [
+            "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+            "qmd://kb-guides/8a458d74-1ce5-503b-bfcf-810594439751.md",
+            "qmd://kb-guides/17343c76-a49f-59a5-a3dd-1ec04b0842ca.md",
+            "qmd://kb-guides/e37da121-916b-5ded-ba81-1efd51785365.md",
+            "qmd://kb-guides/90f83aa0-87f7-57f1-be02-4016ccb96311.md",
+            "qmd://kb-guides/2d40ba32-8a2c-5883-b697-42b8c431f773.md",
+            "qmd://kb-guides/3b4868d1-b235-596d-88c2-ac24e969b908.md",
+            "qmd://kb-guides/b5e864f2-90f6-5e82-b667-e946ea10a8a7.md",
+            "qmd://kb-curated/8c2ae00d-5e17-5d05-b321-6d5bbb7f7170.md",
+            "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md"
+          ]
+        },
+        {
+          "id": "e30",
+          "retrieved": [
+            "qmd://kb-curated/3562ff70-7224-588a-b663-6bdac3d83183.md",
+            "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md",
+            "qmd://kb-curated/81ced7c5-e8f0-53cd-b5d5-600251b76adc.md",
+            "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+            "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+            "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+            "qmd://kb-guides/31128e56-19d5-5882-964f-c24a49460fd0.md",
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-curated/fd1dac78-56e5-5f29-9c62-4a246d14c62d.md",
+            "qmd://kb-guides/d5c1a8ec-fbb8-5f6a-add6-0c2dcfcd92dd.md"
+          ]
+        },
+        {
+          "id": "e31",
+          "retrieved": [
+            "qmd://kb-curated/a178f99a-940a-4e35-90bb-acddc5ddf068.md",
+            "qmd://kb-guides/acf1acff-6339-5829-9dc2-69903a107579.md",
+            "qmd://kb-guides/cc3e78cd-1d87-5cc5-bb87-f27da35c5653.md",
+            "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+            "qmd://kb-guides/b069b21e-a165-51fb-b96f-18bde21b5808.md",
+            "qmd://kb-guides/f6ebf070-1842-586e-a99c-69c4235de1bb.md",
+            "qmd://kb-guides/b1a02dbe-605e-522e-a7d4-e8c95ea7124a.md",
+            "qmd://kb-guides/448557c1-5f14-561e-b294-c80fca7dbd1b.md",
+            "qmd://kb-guides/93ff331c-30b9-5496-839f-42488544953a.md",
+            "qmd://kb-guides/e270abbe-a057-5580-aa3d-969d13114364.md"
+          ]
+        },
+        {
+          "id": "e32",
+          "retrieved": [
+            "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md",
+            "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+            "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+            "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+            "qmd://kb-curated/ec200f93-dfdd-5ece-a2a6-663800795877.md",
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-decisions/8f45c823-e018-5282-9ad6-bc269f0acbc6.md",
+            "qmd://kb-guides/0da49456-00d6-5003-bce3-43da21e622ff.md"
+          ]
+        },
+        {
+          "id": "e33",
+          "retrieved": [
+            "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+            "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+            "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md",
+            "qmd://kb-guides/fbaef8fe-1205-518f-a57f-93028fbbcd98.md",
+            "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-guides/97d9173b-a794-56c2-8b0e-e65cea49fcac.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md"
+          ]
+        },
+        {
+          "id": "e34",
+          "retrieved": [
+            "qmd://kb-decisions/7b60c5ae-4f77-5a52-bf50-5d245a6ab39a.md",
+            "qmd://kb-curated/c68ad991-6134-50c8-a577-2aa12c4e9d81.md",
+            "qmd://kb-decisions/45fcbe44-972f-5a3e-9c7b-00d03dc66beb.md",
+            "qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md",
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-curated/b1c0e2d7-6fd6-5e65-9cf0-4e94d5bd585e.md",
+            "qmd://kb-decisions/5286e665-197b-5645-b2f5-81caec9c5f43.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md"
+          ]
+        },
+        {
+          "id": "e35",
+          "retrieved": [
+            "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md",
+            "qmd://kb-decisions/adfcd3ec-334a-594c-9261-8f60d597ee57.md",
+            "qmd://kb-curated/a5c3cb2e-07f8-5478-8e61-5fe6aa032d84.md",
+            "qmd://kb-curated/a1015f63-e528-5869-9cdf-63741aa7683b.md",
+            "qmd://kb-guides/8237fc99-174f-57cb-b27e-5d2b9f80fa46.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+            "qmd://kb-curated/102badec-f7cc-5e7d-b786-f0dc171182aa.md",
+            "qmd://kb-curated/c16d8ba0-5b18-5619-a783-ab786d612dfa.md",
+            "qmd://kb-decisions/83095f51-0f5c-5b86-8809-5ab517740b5f.md",
+            "qmd://kb-curated/b13bdc4c-44ef-57a5-acc0-622415c4c46a.md"
+          ]
+        },
+        {
+          "id": "e36",
+          "retrieved": [
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-guides/04ae8495-0cb8-57ee-98e4-326be561cedb.md",
+            "qmd://kb-guides/227e5fa5-a818-5f49-a95a-46c1bde8f007.md",
+            "qmd://kb-guides/3896b501-3e1f-5c30-9b94-cca9b53c0983.md",
+            "qmd://kb-guides/c3c359da-9a41-551a-b4d3-0d497c44d94b.md",
+            "qmd://kb-guides/0da49456-00d6-5003-bce3-43da21e622ff.md",
+            "qmd://kb-guides/84a13186-d268-5d16-a231-81932ec298b3.md"
+          ]
+        },
+        {
+          "id": "e37",
+          "retrieved": [
+            "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+            "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+            "qmd://kb-curated/3ba46971-c58f-5724-9a8e-244cc037cd7d.md",
+            "qmd://kb-guides/3a417696-0f35-551c-9e03-e1d3c115bf2e.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+            "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md",
+            "qmd://kb-curated/2acd8d19-5f4a-5a35-9b33-66ddb4e33226.md"
+          ]
+        },
+        {
+          "id": "e38",
+          "retrieved": [
+            "qmd://kb-curated/b8e8e514-e4a1-53fd-b577-bb298b678bf8.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-guides/04ae8495-0cb8-57ee-98e4-326be561cedb.md",
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+            "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+            "qmd://kb-guides/756b0d3e-0942-5535-9666-29a1681bb3b5.md",
+            "qmd://kb-guides/218d0d1a-ce0a-55e9-8825-79a697cba8de.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md"
+          ]
+        },
+        {
+          "id": "e39",
+          "retrieved": [
+            "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+            "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md",
+            "qmd://kb-curated/d97cdad3-a072-5a80-be4a-f25c106255b8.md",
+            "qmd://kb-decisions/5286e665-197b-5645-b2f5-81caec9c5f43.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-guides/22fc38da-268b-5f12-a64b-e4059ab338fe.md",
+            "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+            "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md"
+          ]
+        },
+        {
+          "id": "e40",
+          "retrieved": [
+            "qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-curated/5592e35a-c3bd-5e8c-8269-eaa95734d804.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+            "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+            "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+            "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+            "qmd://kb-curated/ee55584a-b82a-5c66-87b2-4d62e3216d39.md",
+            "qmd://kb-curated/b612e2a0-7173-5c5c-a91d-2a425e18fc95.md"
+          ]
+        },
+        {
+          "id": "e41",
+          "retrieved": [
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-curated/0d4a6119-10c7-5c4c-838a-010951be2e36.md",
+            "qmd://kb-curated/55fd51da-c5af-56e3-b785-1ab1613d044d.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+            "qmd://kb-curated/fdb1200d-af94-501e-b2f3-ef11585f6f81.md",
+            "qmd://kb-curated/7702906d-acfc-546d-b29c-759b57ccfd60.md",
+            "qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md",
+            "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md"
+          ]
+        },
+        {
+          "id": "e42",
+          "retrieved": [
+            "qmd://kb-guides/dbe276cb-ec51-5788-9d24-da296c4beb00.md",
+            "qmd://kb-guides/4a97cb81-9f97-590b-ad7c-92c9f1be83ef.md",
+            "qmd://kb-guides/d4e17454-b742-5e5f-b965-e7dd614e6a51.md",
+            "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+            "qmd://kb-guides/b9b42c39-02b0-5dea-924e-88df0286c944.md",
+            "qmd://kb-guides/13f3125a-87cd-54c4-bd18-39e2cce928b0.md",
+            "qmd://kb-guides/7bc7203d-6f4a-5a55-a501-90cf429fdce6.md",
+            "qmd://kb-guides/7c740f82-4286-5450-ad9c-10b7719a416d.md",
+            "qmd://kb-guides/f2a995b0-c087-5c29-aecc-134d04729e11.md",
+            "qmd://kb-guides/000f4b1e-1b40-5d97-9248-a42df460b70b.md"
+          ]
+        },
+        {
+          "id": "e43",
+          "retrieved": [
+            "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+            "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+            "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md",
+            "qmd://kb-guides/3858dd90-a7f7-5766-b2c6-5e2e58d90306.md",
+            "qmd://kb-guides/58ed354f-2960-59cd-a4d5-fd3683d67b34.md",
+            "qmd://kb-guides/5aa37d32-52bf-5b58-a2c6-e83b81224477.md",
+            "qmd://kb-guides/17343c76-a49f-59a5-a3dd-1ec04b0842ca.md",
+            "qmd://kb-guides/6914b00d-22af-5611-847a-5a3613e47acf.md"
+          ]
+        },
+        {
+          "id": "e44",
+          "retrieved": [
+            "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+            "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+            "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+            "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-guides/62560836-8984-5142-ac7b-7f4a235939df.md",
+            "qmd://kb-guides/c3c359da-9a41-551a-b4d3-0d497c44d94b.md"
+          ]
+        },
+        {
+          "id": "e45",
+          "retrieved": [
+            "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md",
+            "qmd://kb-curated/5627a882-42b3-5c70-a2b7-1f03fd77bc9a.md",
+            "qmd://kb-curated/53a4cc86-40ca-5dae-b91b-4f5cdc99df81.md",
+            "qmd://kb-curated/f62d34bf-4bb6-5330-a9a2-e41b11a1842e.md",
+            "qmd://kb-curated/9a4af460-6e86-5e77-b285-4f3080a1a560.md",
+            "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+            "qmd://kb-curated/25d1d910-4ea7-57b7-9ed4-5bdd4ad216ea.md",
+            "qmd://kb-curated/ef0a52e0-30d0-5331-82a2-169242704119.md",
+            "qmd://kb-curated/df5fe8e7-8d6a-52f0-86ad-558c1960b0f0.md",
+            "qmd://kb-guides/e611824a-6030-5195-a0dc-9a8070702a09.md"
+          ]
+        },
+        {
+          "id": "e46",
+          "retrieved": [
+            "qmd://kb-guides/afe0faad-0d37-5662-8698-f0b254d31ab0.md",
+            "qmd://kb-guides/166a4550-03b2-5336-8205-b4c0ecccb37f.md",
+            "qmd://kb-guides/75549483-bffa-56a6-bd84-a80ca4258092.md",
+            "qmd://kb-curated/f0ef30e1-6b44-5a7a-b9d3-a3298612a111.md",
+            "qmd://kb-guides/fe492b5d-c3ef-5848-8afe-b556c14677be.md",
+            "qmd://kb-guides/daaa8b2f-d17a-5135-a8fc-4ce1d042907e.md",
+            "qmd://kb-guides/2ec030c4-6e96-43c9-a9df-276ac736d890.md",
+            "qmd://kb-guides/b0ea905a-45b5-53bf-8d85-0fe03b95f264.md",
+            "qmd://kb-guides/74ebdf3d-f31d-5177-9114-bd31044bc2a4.md",
+            "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+          ]
+        },
+        {
+          "id": "e48",
+          "retrieved": [
+            "qmd://kb-curated/cc31a039-a286-541c-8ed2-4638e2281d76.md",
+            "qmd://kb-decisions/166928bc-3681-521a-8d62-28f663695ba9.md",
+            "qmd://kb-guides/6914b00d-22af-5611-847a-5a3613e47acf.md",
+            "qmd://kb-guides/90f946a6-1191-54b5-8e79-b4431086025f.md",
+            "qmd://kb-guides/eeced9ee-8474-5de9-852f-2eae82bd7f48.md",
+            "qmd://kb-guides/ef9a5911-06a2-545f-a84c-d0909b1a8439.md",
+            "qmd://kb-guides/42fefffc-c6a5-5cc8-a152-428261f86a3e.md",
+            "qmd://kb-guides/06ba7ce8-055b-4995-9d33-8484ca708025.md",
+            "qmd://kb-guides/8d99897b-cdee-589c-97a1-3fcbf5405614.md",
+            "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md"
+          ]
+        },
+        {
+          "id": "e49",
+          "retrieved": [
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-curated/9b24593b-6d35-5b60-b4fd-676298369ab8.md",
+            "qmd://kb-curated/5c6fae4c-e36d-5af9-97e4-f30c0bca132d.md",
+            "qmd://kb-guides/563ddbd3-9eac-5553-9b90-cb2d60d909f2.md",
+            "qmd://kb-decisions/45fcbe44-972f-5a3e-9c7b-00d03dc66beb.md",
+            "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+            "qmd://kb-decisions/62ce5e2e-5ddd-5dc1-96fd-1c1c01154b52.md",
+            "qmd://kb-decisions/7b60c5ae-4f77-5a52-bf50-5d245a6ab39a.md",
+            "qmd://kb-curated/cd7e31b5-2971-5099-a796-ccde5cf51e79.md"
+          ]
+        }
+      ]
+    },
+    "new": {
+      "citationListSha256": "620829f1c3adf6c05bc6ae69ac965d359308f2c9a9e10f57665541911880ffd5",
+      "orderedResults": [
+        {
+          "id": "e01",
+          "retrieved": [
+            "qmd://kb-decisions/5ff7ac4a-248d-5a29-b434-2949023a143e.md",
+            "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+            "qmd://kb-curated/dc805bbd-3d24-5071-8edb-fd37d8c4834b.md",
+            "qmd://kb-curated/c478600e-b8f5-5538-be39-e44f8cb58c8e.md",
+            "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+            "qmd://kb-guides/d4c61580-91d8-5eb7-857d-b11c12da68eb.md",
+            "qmd://kb-guides/5142e7b7-ad1d-4a2f-b803-7e4900b3f322.md",
+            "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+            "qmd://kb-guides/e6be348d-0fbb-4032-afa8-bb81d2ed17f6.md",
+            "qmd://kb-guides/50ff6fdd-ec27-5302-b353-c5b5aed7191d.md"
+          ]
+        },
+        {
+          "id": "e02",
+          "retrieved": [
+            "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+            "qmd://kb-guides/06814f33-71c4-597b-9af4-8b275398d582.md",
+            "qmd://kb-guides/2ffa51ef-8521-5929-a349-ccc16741bc58.md",
+            "qmd://kb-guides/3896b501-3e1f-5c30-9b94-cca9b53c0983.md",
+            "qmd://kb-guides/8b6fbf19-590a-512a-b256-ae30f6133341.md",
+            "qmd://kb-guides/4a5a9fb1-dff6-5e50-88f6-0dedda7151d1.md",
+            "qmd://kb-guides/eca5b5be-d08c-568f-af1e-f803504c9ac4.md",
+            "qmd://kb-curated/830fc56c-df93-564f-8688-aba3bd0a5504.md",
+            "qmd://kb-curated/9f16d9e4-0c8a-5763-ac47-9f2612e57e32.md",
+            "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md"
+          ]
+        },
+        {
+          "id": "e03",
+          "retrieved": []
+        },
+        {
+          "id": "e04",
+          "retrieved": [
+            "qmd://kb-curated/65d6df11-d3a9-540c-bfed-9cd7d16b1ab6.md",
+            "qmd://kb-curated/200bcca0-67ca-5e66-88bc-ca36f6627a74.md",
+            "qmd://kb-curated/1070ea01-d497-52a0-8af6-6c2708ba4c26.md",
+            "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+            "qmd://kb-decisions/3bd3fe9c-003b-57a5-967e-673c08264f38.md",
+            "qmd://kb-curated/02dd1443-f9af-5893-ba62-09992fbedade.md",
+            "qmd://kb-curated/eb8da174-c6e8-5201-894c-9f47a9d8c84a.md",
+            "qmd://kb-guides/9b2c5afa-bac2-5c76-bce8-b63b1d5b553b.md",
+            "qmd://kb-decisions/8e6bbb56-4324-56cb-a718-b2ce36b3d87f.md",
+            "qmd://kb-guides/cf7bfdac-c3f5-548f-bffb-79b710c1e999.md"
+          ]
+        },
+        {
+          "id": "e05",
+          "retrieved": [
+            "qmd://kb-curated/93a12c14-d0a7-5b9d-a60b-ab75336be7ad.md",
+            "qmd://kb-decisions/3bd3fe9c-003b-57a5-967e-673c08264f38.md",
+            "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+            "qmd://kb-curated/2e015fff-5a9c-5e6f-be97-2e8ad95c524d.md",
+            "qmd://kb-curated/08810932-c4a3-5281-b3f0-942bf6334ccd.md",
+            "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+            "qmd://kb-guides/074bd575-3b6a-5bb9-952e-85a25097eeaf.md",
+            "qmd://kb-guides/1086c833-5edb-5282-97da-4954f0e6fd72.md",
+            "qmd://kb-guides/cc91447f-c354-5ba2-9626-85a6feb54ea5.md",
+            "qmd://kb-curated/636d1601-db58-5ad2-a33d-373f1bd3e8ce.md"
+          ]
+        },
+        {
+          "id": "e06",
+          "retrieved": [
+            "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md",
+            "qmd://kb-curated/b4c91d39-52d7-5e5f-962e-86824c26cce1.md",
+            "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+            "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+            "qmd://kb-guides/31ff051a-68ad-5566-9647-5a7012b99fe3.md",
+            "qmd://kb-guides/1b37a011-165b-5414-947e-5563f1076aaa.md",
+            "qmd://kb-guides/a466369e-de86-570d-bcda-0208836c30f2.md"
+          ]
+        },
+        {
+          "id": "e07",
+          "retrieved": [
+            "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-curated/2df21b07-001b-5ddd-9bb2-eb70f90974c3.md",
+            "qmd://kb-decisions/0c047fd4-2be6-5fcb-83c7-9be788c1c226.md",
+            "qmd://kb-decisions/8a1a1659-0817-5fb9-8768-7b9a4d4fd0e8.md",
+            "qmd://kb-decisions/c7bc39ea-9fc8-553b-bb5d-566b652662cf.md",
+            "qmd://kb-curated/5c3cfba5-68e7-5666-8cab-88b229095f56.md",
+            "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md",
+            "qmd://kb-curated/a212fc57-7483-5e14-937a-69067d9aa0e4.md",
+            "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md"
+          ]
+        },
+        {
+          "id": "e08",
+          "retrieved": [
+            "qmd://kb-curated/9396508e-a64e-5115-bc27-ee3d51a2e345.md",
+            "qmd://kb-decisions/c7bc39ea-9fc8-553b-bb5d-566b652662cf.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-decisions/2ed32e02-2ea4-5e74-8750-3300e7e109cd.md",
+            "qmd://kb-curated/2df21b07-001b-5ddd-9bb2-eb70f90974c3.md",
+            "qmd://kb-curated/8c926390-9eff-5c51-9834-8a08ef36a077.md",
+            "qmd://kb-guides/8e268247-93c4-532a-a440-2e793003d245.md",
+            "qmd://kb-curated/a212fc57-7483-5e14-937a-69067d9aa0e4.md",
+            "qmd://kb-guides/d757b919-a716-5583-9b86-48cde4af2126.md",
+            "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md"
+          ]
+        },
+        {
+          "id": "e09",
+          "retrieved": [
+            "qmd://kb-curated/a92d081a-ba3f-5486-b21f-8808b39c015d.md",
+            "qmd://kb-guides/fda62c6b-0705-5b35-9269-01218c9e16cd.md",
+            "qmd://kb-guides/a2d99227-4710-5d0b-8aac-36a6b9281a29.md",
+            "qmd://kb-guides/ab3245e0-c189-5e17-9265-ca06a281e3a9.md",
+            "qmd://kb-guides/b5c624fa-132c-5549-bbd2-bc23d2e94af8.md",
+            "qmd://kb-decisions/27e8e8f6-ab55-5531-8c02-0aecb21e114c.md",
+            "qmd://kb-guides/83735ab7-fa6c-58b8-bf6e-5d8ce786cf6e.md",
+            "qmd://kb-guides/3d7c307e-84bd-575c-8a08-7ef282357200.md",
+            "qmd://kb-guides/d9c1fc3f-7964-5f27-af31-d96215f5e3ae.md",
+            "qmd://kb-guides/f0137cb0-5a89-56c3-9205-680b79973f24.md"
+          ]
+        },
+        {
+          "id": "e10",
+          "retrieved": [
+            "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+            "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+            "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md",
+            "qmd://kb-decisions/fb6364af-df5a-5124-aac8-887a9a1600f9.md",
+            "qmd://kb-guides/e9df6e66-7587-5560-960e-edf076cdcb98.md",
+            "qmd://kb-guides/753bbec3-a3e3-56a8-9ca4-2a1326500623.md",
+            "qmd://kb-guides/894e0e22-7678-5037-909d-5aa542e03004.md",
+            "qmd://kb-guides/0c245920-b96b-55b9-9739-efa9daeb736c.md",
+            "qmd://kb-guides/49f036bb-8928-5d24-9fea-ffd125f60bc3.md",
+            "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+          ]
+        },
+        {
+          "id": "e11",
+          "retrieved": [
+            "qmd://kb-decisions/d0ecdf22-ea24-5bd3-9aab-fcae3660cf25.md",
+            "qmd://kb-curated/7f834490-3f85-57aa-abdb-72af2e1b846e.md",
+            "qmd://kb-guides/033b28cf-c371-58ae-acb1-004625646da8.md",
+            "qmd://kb-guides/2ff209ac-1521-53fd-9fe7-5a7ada267d7f.md",
+            "qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md",
+            "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+            "qmd://kb-guides/c3a4156f-dc5a-5ef0-b4c3-d0d4def2dad5.md",
+            "qmd://kb-guides/f4e22934-95bc-5a53-a872-79c20a7f2239.md",
+            "qmd://kb-guides/147575fc-d7bc-55ca-921d-7d71821aaec7.md",
+            "qmd://kb-guides/ef0f9e10-074f-5a76-91e5-3008fd069b24.md"
+          ]
+        },
+        {
+          "id": "e13",
+          "retrieved": [
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-curated/feb023b2-0d32-5cb3-9124-3575ede0d2bd.md",
+            "qmd://kb-curated/b231ab76-1cdd-5390-971a-ae4aed9dd90a.md",
+            "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+            "qmd://kb-curated/cb10e3d5-e749-519c-be4c-5e6d8aa82483.md",
+            "qmd://kb-guides/c0685da8-4ef6-5563-8d04-695d3c891b7f.md",
+            "qmd://kb-curated/cd7be698-96d6-5478-ad33-e6f58c9b69fa.md",
+            "qmd://kb-curated/c3aca568-d7f6-5912-bba2-e2417674a180.md",
+            "qmd://kb-curated/f0bf6568-3785-593e-8b67-2b0094997d9e.md",
+            "qmd://kb-curated/f9983dfa-e916-5c92-ae6b-3c38924810d6.md"
+          ]
+        },
+        {
+          "id": "e14",
+          "retrieved": [
+            "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md",
+            "qmd://kb-guides/e37da121-916b-5ded-ba81-1efd51785365.md",
+            "qmd://kb-guides/a574bba9-303a-524d-a5a7-4d38eefae828.md",
+            "qmd://kb-guides/2796b885-cb7f-5bc0-8414-ac10ef4a054b.md",
+            "qmd://kb-guides/b5e864f2-90f6-5e82-b667-e946ea10a8a7.md",
+            "qmd://kb-guides/c7856f23-81fd-5800-b5cb-94560e97a455.md",
+            "qmd://kb-guides/fdd2432c-475e-5ff4-9024-bbe03bcddaeb.md",
+            "qmd://kb-curated/bd707d32-c081-5266-ba13-15c68016581a.md",
+            "qmd://kb-guides/ca66c847-df18-5d15-9926-b0487cb8622f.md",
+            "qmd://kb-guides/3de585cf-9a35-54d2-880e-333cb950aafc.md"
+          ]
+        },
+        {
+          "id": "e15",
+          "retrieved": [
+            "qmd://kb-curated/c386487e-014d-581c-8b0b-c272c2345e81.md",
+            "qmd://kb-curated/d672cca7-3f08-5ddb-b95b-2175c3b51b50.md",
+            "qmd://kb-guides/42247e58-6791-5c1e-9307-98c59ac1cd16.md",
+            "qmd://kb-guides/b3d09f96-834d-5a18-bf1b-87b2f71f8844.md",
+            "qmd://kb-guides/964851f9-ccbe-5d9b-8254-6d6723082ee4.md",
+            "qmd://kb-decisions/c73d7383-f6d7-587f-8103-2fb086ad0f13.md",
+            "qmd://kb-curated/fae3fb5c-990b-5dc8-a404-6015430ed3a3.md",
+            "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+            "qmd://kb-curated/37fdda08-2b20-5549-b6ca-57eb56df5cd9.md",
+            "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md"
+          ]
+        },
+        {
+          "id": "e17",
+          "retrieved": [
+            "qmd://kb-decisions/ab09bc10-2e78-5330-aa31-477b3b367a88.md",
+            "qmd://kb-curated/666e6548-9dda-5936-8bbb-65b89baf994b.md",
+            "qmd://kb-guides/bae800ff-d00d-5752-b99e-9fea8353f42d.md",
+            "qmd://kb-decisions/7a79acbf-5c76-5ada-826f-025e4a7fab8f.md",
+            "qmd://kb-guides/23895f07-7149-596d-b285-04276a929586.md",
+            "qmd://kb-guides/49a8e879-405c-559c-a403-fafda7f8ca83.md",
+            "qmd://kb-curated/877769ff-dac4-554e-8f77-1b7d0714a463.md",
+            "qmd://kb-guides/431fd991-edfa-5ef7-8a1c-54c7648ce9e9.md",
+            "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+            "qmd://kb-decisions/b6b5ea0f-3fe0-5c30-891b-3b596e9cf86c.md"
+          ]
+        },
+        {
+          "id": "e19",
+          "retrieved": [
+            "qmd://kb-decisions/b721ed72-b286-5ead-83e0-cdbd07f7c7f7.md",
+            "qmd://kb-guides/92588d6f-bc7b-543c-84ac-f8e8f9d10282.md",
+            "qmd://kb-guides/debe3112-256a-5c06-8942-762eaf8d25d6.md",
+            "qmd://kb-decisions/bf203b66-b71f-56fb-8a40-2dc42b2d41f0.md",
+            "qmd://kb-curated/2a48c404-33f7-515f-881c-f1b703219c4a.md",
+            "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+            "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+            "qmd://kb-curated/fcc85736-86de-55b5-bf86-87504ca68477.md",
+            "qmd://kb-curated/fd787b30-efb7-5299-a323-dc1460af7752.md",
+            "qmd://kb-curated/e2225821-eff8-5416-8649-16846dcb1f3e.md"
+          ]
+        },
+        {
+          "id": "e20",
+          "retrieved": [
+            "qmd://kb-guides/72fa04dc-4dc7-56c4-99de-eac4ddab2594.md",
+            "qmd://kb-guides/9fa49f4a-cb1f-53c4-9c0f-d06a15079324.md",
+            "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+            "qmd://kb-guides/fbde2a68-5059-5bac-a113-94ed78fa4c7e.md",
+            "qmd://kb-guides/a256648a-2d6e-5b00-9d4c-1323e6c26623.md",
+            "qmd://kb-guides/30152012-3e93-502a-b134-14bb37496ae8.md",
+            "qmd://kb-guides/ff9e3050-5106-5714-81a1-36b44380f2be.md",
+            "qmd://kb-guides/0658415f-cd8c-5ac0-baae-a01b342b39b4.md",
+            "qmd://kb-guides/41d59389-dcc9-56cb-9b0a-0762f0e995f2.md",
+            "qmd://kb-guides/132b3bcd-a25d-5d14-9505-6c05ab9474dd.md"
+          ]
+        },
+        {
+          "id": "e21",
+          "retrieved": [
+            "qmd://kb-curated/83aaadc3-e4eb-52b4-a458-d911666ced2c.md",
+            "qmd://kb-decisions/27e8e8f6-ab55-5531-8c02-0aecb21e114c.md",
+            "qmd://kb-decisions/9d8385bb-c744-5bdd-9100-d574b7bb2075.md",
+            "qmd://kb-guides/57f8f661-6f3a-5467-97bb-bcca6925e480.md",
+            "qmd://kb-curated/4312ea30-5932-5e30-b5fd-0af93cf52cac.md",
+            "qmd://kb-decisions/07241602-720c-566d-8d90-31f212dffdd1.md",
+            "qmd://kb-guides/c7c0f24a-03a8-5b3a-8e75-285145547bb7.md",
+            "qmd://kb-curated/3df7c751-714b-5b66-8ed6-a26ebb8e9512.md",
+            "qmd://kb-curated/316bf636-cc61-507b-afa9-1d811ed441d7.md",
+            "qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md"
+          ]
+        },
+        {
+          "id": "e22",
+          "retrieved": [
+            "qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md",
+            "qmd://kb-guides/e26807e0-c6ea-57f1-8d06-500c6c714d40.md",
+            "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+            "qmd://kb-guides/2d87e3ce-e958-52c3-8c09-79b3b0def143.md",
+            "qmd://kb-guides/312012dd-3db5-5df9-9c3b-94c57cffcc59.md",
+            "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+            "qmd://kb-curated/be9b1bed-0c96-53c7-a432-158fc362bc80.md",
+            "qmd://kb-guides/2c0b5f3e-9e0d-504a-ba91-2d911d056a0a.md",
+            "qmd://kb-guides/68ba82bb-e61c-5e13-81fe-ad01875b5546.md",
+            "qmd://kb-guides/272f5cb8-0112-405c-a541-cfc2720cd910.md"
+          ]
+        },
+        {
+          "id": "e23",
+          "retrieved": [
+            "qmd://kb-decisions/bb4c7c02-3f71-56c5-96e7-3e7840ed813a.md",
+            "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+            "qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md",
+            "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+            "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+            "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+            "qmd://kb-guides/f358e49a-4d60-5945-a7ee-7ab09b9e1331.md",
+            "qmd://kb-guides/eacfaa6f-e60e-5795-bfbf-9e75ec2a6a82.md",
+            "qmd://kb-guides/b9395e59-8311-55ae-8a4d-deb09dc3b6ab.md",
+            "qmd://kb-curated/a5c3cb2e-07f8-5478-8e61-5fe6aa032d84.md"
+          ]
+        },
+        {
+          "id": "e24",
+          "retrieved": [
+            "qmd://kb-decisions/c73d7383-f6d7-587f-8103-2fb086ad0f13.md",
+            "qmd://kb-decisions/8f45c823-e018-5282-9ad6-bc269f0acbc6.md",
+            "qmd://kb-guides/3dbe9f21-efc2-50ca-85b1-c00e25348b98.md",
+            "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+            "qmd://kb-guides/cfaa1f1b-d152-5e1e-86f3-ca11b8aa9a7c.md",
+            "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+            "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+            "qmd://kb-guides/ff9fd1b7-13bc-5600-a71c-51f969e4598f.md",
+            "qmd://kb-guides/dbd9c271-381d-53d5-9dfc-5e8d183c0a3b.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md"
+          ]
+        },
+        {
+          "id": "e25",
+          "retrieved": [
+            "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+            "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+            "qmd://kb-curated/52c82bde-6bab-5df9-8023-710f36f91bdf.md",
+            "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+            "qmd://kb-curated/f6cb7fb3-ca7e-5d4c-97f7-dfc063f2b982.md",
+            "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+            "qmd://kb-curated/dc805bbd-3d24-5071-8edb-fd37d8c4834b.md",
+            "qmd://kb-guides/6023dd04-b62b-53e3-adbc-9a5ff87d53a1.md",
+            "qmd://kb-guides/6e423817-4f15-53c8-b2f1-3800831afffc.md",
+            "qmd://kb-guides/438e947f-a1a3-46f3-ba69-5aae0f3ee156.md"
+          ]
+        },
+        {
+          "id": "e26",
+          "retrieved": [
+            "qmd://kb-guides/f866b733-9432-5d3d-8379-0eab99c092db.md",
+            "qmd://kb-curated/e5270cbd-2422-5cfa-9689-53f40702cffc.md",
+            "qmd://kb-curated/2452e8c9-9fbf-537c-83e7-f0de2e715d92.md",
+            "qmd://kb-curated/11a3a1a1-0cac-5339-85cc-7e90ceec756e.md",
+            "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+            "qmd://kb-curated/af95b796-4fd0-555d-a1f2-5a090ba9ab4b.md",
+            "qmd://kb-curated/a737802a-02a4-5a5b-8f79-25ac191de1b5.md",
+            "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+            "qmd://kb-guides/368b0125-bb07-5bfb-9c66-5f3d54017e04.md",
+            "qmd://kb-curated/11fb8198-e814-5333-882e-07f514393811.md"
+          ]
+        },
+        {
+          "id": "e27",
+          "retrieved": [
+            "qmd://kb-guides/078233c9-8ac3-5d23-b58a-b5ddfc6f4af8.md",
+            "qmd://kb-guides/0c66112b-8c09-4230-975b-2423c9f60fb8.md",
+            "qmd://kb-curated/53a4cc86-40ca-5dae-b91b-4f5cdc99df81.md",
+            "qmd://kb-curated/b9e6c34a-0eeb-5086-b462-a68572bdd123.md",
+            "qmd://kb-guides/fd2e6eab-e495-5c3d-9a18-df3227869114.md",
+            "qmd://kb-guides/13258ff8-cb3b-52a8-97fe-5ec98710083c.md",
+            "qmd://kb-guides/0148f2fd-a481-5aa1-a77a-fd1db9c0402d.md",
+            "qmd://kb-curated/6e85de00-69c7-5376-8153-9230e56571a2.md",
+            "qmd://kb-guides/45b91bbd-4447-5aa2-b62c-721b182fd6ca.md",
+            "qmd://kb-guides/f8bfa83c-8024-5977-8bb8-c209a9bf9bb0.md"
+          ]
+        },
+        {
+          "id": "e28",
+          "retrieved": [
+            "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+            "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+            "qmd://kb-guides/dba14edb-5d8d-5bfe-bbfb-694053d244f1.md",
+            "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md",
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-guides/42fefffc-c6a5-5cc8-a152-428261f86a3e.md",
+            "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md",
+            "qmd://kb-guides/c344615f-6f6c-5d0a-8801-65ff32776d6c.md",
+            "qmd://kb-guides/d174649b-8115-5f4c-a011-11f60ae0a314.md",
+            "qmd://kb-guides/fd67f663-3200-534e-b2b6-dfaaa659227f.md"
+          ]
+        },
+        {
+          "id": "e29",
+          "retrieved": [
+            "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+            "qmd://kb-guides/8a458d74-1ce5-503b-bfcf-810594439751.md",
+            "qmd://kb-guides/17343c76-a49f-59a5-a3dd-1ec04b0842ca.md",
+            "qmd://kb-guides/e37da121-916b-5ded-ba81-1efd51785365.md",
+            "qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md",
+            "qmd://kb-guides/90f83aa0-87f7-57f1-be02-4016ccb96311.md",
+            "qmd://kb-guides/3b4868d1-b235-596d-88c2-ac24e969b908.md",
+            "qmd://kb-guides/b5e864f2-90f6-5e82-b667-e946ea10a8a7.md",
+            "qmd://kb-curated/8c2ae00d-5e17-5d05-b321-6d5bbb7f7170.md",
+            "qmd://kb-guides/caa6112a-29d7-5f50-980c-7a748308ad45.md"
+          ]
+        },
+        {
+          "id": "e30",
+          "retrieved": [
+            "qmd://kb-guides/d5c1a8ec-fbb8-5f6a-add6-0c2dcfcd92dd.md",
+            "qmd://kb-guides/19eed800-8d15-56d8-8417-de141c11d924.md",
+            "qmd://kb-guides/7d6b43c8-4a04-561b-83c1-b8a8075a6337.md",
+            "qmd://kb-guides/c9f6f82e-b373-59ed-ba0c-8c4a1310c155.md",
+            "qmd://kb-guides/9c2fe3bb-2b0a-5ad5-b0ae-293fc975d533.md",
+            "qmd://kb-guides/a2b928ce-919b-54d4-945f-fe21234148ed.md",
+            "qmd://kb-guides/daa30f78-2e05-5917-90d1-15c0101670ac.md"
+          ]
+        },
+        {
+          "id": "e31",
+          "retrieved": ["qmd://kb-guides/acf1acff-6339-5829-9dc2-69903a107579.md"]
+        },
+        {
+          "id": "e32",
+          "retrieved": [
+            "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md",
+            "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+            "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+            "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md",
+            "qmd://kb-curated/ec200f93-dfdd-5ece-a2a6-663800795877.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-decisions/766497dc-ce81-51fd-a49d-95f364a466ac.md",
+            "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-guides/0da49456-00d6-5003-bce3-43da21e622ff.md"
+          ]
+        },
+        {
+          "id": "e33",
+          "retrieved": [
+            "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md",
+            "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+            "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md",
+            "qmd://kb-guides/fbaef8fe-1205-518f-a57f-93028fbbcd98.md",
+            "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-guides/97d9173b-a794-56c2-8b0e-e65cea49fcac.md",
+            "qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md"
+          ]
+        },
+        {
+          "id": "e34",
+          "retrieved": [
+            "qmd://kb-decisions/7b60c5ae-4f77-5a52-bf50-5d245a6ab39a.md",
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-decisions/45fcbe44-972f-5a3e-9c7b-00d03dc66beb.md",
+            "qmd://kb-curated/c68ad991-6134-50c8-a577-2aa12c4e9d81.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-decisions/5286e665-197b-5645-b2f5-81caec9c5f43.md",
+            "qmd://kb-curated/b1c0e2d7-6fd6-5e65-9cf0-4e94d5bd585e.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+            "qmd://kb-decisions/d776dcc6-867f-5d7b-a16c-b35d0b840c9c.md",
+            "qmd://kb-curated/ce48d895-05ec-518b-b788-725199f35029.md"
+          ]
+        },
+        {
+          "id": "e35",
+          "retrieved": [
+            "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md",
+            "qmd://kb-decisions/adfcd3ec-334a-594c-9261-8f60d597ee57.md",
+            "qmd://kb-curated/a5c3cb2e-07f8-5478-8e61-5fe6aa032d84.md",
+            "qmd://kb-curated/a1015f63-e528-5869-9cdf-63741aa7683b.md",
+            "qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md",
+            "qmd://kb-guides/8237fc99-174f-57cb-b27e-5d2b9f80fa46.md",
+            "qmd://kb-decisions/83095f51-0f5c-5b86-8809-5ab517740b5f.md",
+            "qmd://kb-curated/102badec-f7cc-5e7d-b786-f0dc171182aa.md",
+            "qmd://kb-curated/c16d8ba0-5b18-5619-a783-ab786d612dfa.md",
+            "qmd://kb-curated/a120f99c-6436-5ba4-bfd2-dbcf84bba17e.md"
+          ]
+        },
+        {
+          "id": "e36",
+          "retrieved": [
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-guides/04ae8495-0cb8-57ee-98e4-326be561cedb.md",
+            "qmd://kb-curated/830fc56c-df93-564f-8688-aba3bd0a5504.md",
+            "qmd://kb-guides/227e5fa5-a818-5f49-a95a-46c1bde8f007.md",
+            "qmd://kb-guides/84a13186-d268-5d16-a231-81932ec298b3.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+            "qmd://kb-guides/3896b501-3e1f-5c30-9b94-cca9b53c0983.md",
+            "qmd://kb-guides/c3c359da-9a41-551a-b4d3-0d497c44d94b.md"
+          ]
+        },
+        {
+          "id": "e37",
+          "retrieved": [
+            "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+            "qmd://kb-curated/3ba46971-c58f-5724-9a8e-244cc037cd7d.md",
+            "qmd://kb-guides/3a417696-0f35-551c-9e03-e1d3c115bf2e.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+            "qmd://kb-curated/2acd8d19-5f4a-5a35-9b33-66ddb4e33226.md",
+            "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md",
+            "qmd://kb-guides/8761756e-e356-5844-86bf-2702112de8ef.md",
+            "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+            "qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md"
+          ]
+        },
+        {
+          "id": "e38",
+          "retrieved": [
+            "qmd://kb-curated/b8e8e514-e4a1-53fd-b577-bb298b678bf8.md",
+            "qmd://kb-guides/04ae8495-0cb8-57ee-98e4-326be561cedb.md",
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+            "qmd://kb-guides/756b0d3e-0942-5535-9666-29a1681bb3b5.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+            "qmd://kb-guides/218d0d1a-ce0a-55e9-8825-79a697cba8de.md",
+            "qmd://kb-curated/830fc56c-df93-564f-8688-aba3bd0a5504.md",
+            "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md"
+          ]
+        },
+        {
+          "id": "e39",
+          "retrieved": [
+            "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+            "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md",
+            "qmd://kb-decisions/5286e665-197b-5645-b2f5-81caec9c5f43.md",
+            "qmd://kb-curated/d97cdad3-a072-5a80-be4a-f25c106255b8.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-guides/22fc38da-268b-5f12-a64b-e4059ab338fe.md",
+            "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+            "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+            "qmd://kb-guides/c6782345-d828-5c66-8ce4-919a1d877dc9.md",
+            "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md"
+          ]
+        },
+        {
+          "id": "e40",
+          "retrieved": [
+            "qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-curated/5592e35a-c3bd-5e8c-8269-eaa95734d804.md",
+            "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+            "qmd://kb-curated/ee55584a-b82a-5c66-87b2-4d62e3216d39.md",
+            "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+            "qmd://kb-curated/b612e2a0-7173-5c5c-a91d-2a425e18fc95.md",
+            "qmd://kb-curated/a120f99c-6436-5ba4-bfd2-dbcf84bba17e.md",
+            "qmd://kb-curated/f195bb47-dcbb-50b0-b3c7-e8caf4600aaa.md"
+          ]
+        },
+        {
+          "id": "e41",
+          "retrieved": [
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-curated/cf735d0b-101f-5600-84f8-75b9f257974b.md",
+            "qmd://kb-curated/0d4a6119-10c7-5c4c-838a-010951be2e36.md",
+            "qmd://kb-curated/55fd51da-c5af-56e3-b785-1ab1613d044d.md",
+            "qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md",
+            "qmd://kb-curated/fdb1200d-af94-501e-b2f3-ef11585f6f81.md",
+            "qmd://kb-curated/7702906d-acfc-546d-b29c-759b57ccfd60.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+            "qmd://kb-curated/5c600718-4993-5ae6-b0e3-125a25bae51d.md"
+          ]
+        },
+        {
+          "id": "e42",
+          "retrieved": [
+            "qmd://kb-guides/dbe276cb-ec51-5788-9d24-da296c4beb00.md",
+            "qmd://kb-guides/4a97cb81-9f97-590b-ad7c-92c9f1be83ef.md",
+            "qmd://kb-guides/d4e17454-b742-5e5f-b965-e7dd614e6a51.md",
+            "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+            "qmd://kb-guides/b9b42c39-02b0-5dea-924e-88df0286c944.md",
+            "qmd://kb-guides/13f3125a-87cd-54c4-bd18-39e2cce928b0.md",
+            "qmd://kb-guides/7bc7203d-6f4a-5a55-a501-90cf429fdce6.md",
+            "qmd://kb-guides/7c740f82-4286-5450-ad9c-10b7719a416d.md",
+            "qmd://kb-guides/f2a995b0-c087-5c29-aecc-134d04729e11.md",
+            "qmd://kb-guides/000f4b1e-1b40-5d97-9248-a42df460b70b.md"
+          ]
+        },
+        {
+          "id": "e43",
+          "retrieved": [
+            "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+            "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+            "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+            "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md",
+            "qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md",
+            "qmd://kb-guides/3858dd90-a7f7-5766-b2c6-5e2e58d90306.md",
+            "qmd://kb-guides/17343c76-a49f-59a5-a3dd-1ec04b0842ca.md",
+            "qmd://kb-guides/58ed354f-2960-59cd-a4d5-fd3683d67b34.md",
+            "qmd://kb-guides/5aa37d32-52bf-5b58-a2c6-e83b81224477.md",
+            "qmd://kb-curated/908e71bd-3309-585b-9cd5-af50cb763ecb.md"
+          ]
+        },
+        {
+          "id": "e44",
+          "retrieved": [
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md",
+            "qmd://kb-curated/830fc56c-df93-564f-8688-aba3bd0a5504.md",
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+            "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+            "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+            "qmd://kb-guides/62560836-8984-5142-ac7b-7f4a235939df.md",
+            "qmd://kb-guides/0da49456-00d6-5003-bce3-43da21e622ff.md",
+            "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md"
+          ]
+        },
+        {
+          "id": "e45",
+          "retrieved": [
+            "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md",
+            "qmd://kb-curated/5627a882-42b3-5c70-a2b7-1f03fd77bc9a.md",
+            "qmd://kb-curated/53a4cc86-40ca-5dae-b91b-4f5cdc99df81.md",
+            "qmd://kb-curated/f62d34bf-4bb6-5330-a9a2-e41b11a1842e.md",
+            "qmd://kb-curated/9a4af460-6e86-5e77-b285-4f3080a1a560.md",
+            "qmd://kb-curated/25d1d910-4ea7-57b7-9ed4-5bdd4ad216ea.md",
+            "qmd://kb-curated/ef0a52e0-30d0-5331-82a2-169242704119.md",
+            "qmd://kb-curated/df5fe8e7-8d6a-52f0-86ad-558c1960b0f0.md",
+            "qmd://kb-guides/e611824a-6030-5195-a0dc-9a8070702a09.md",
+            "qmd://kb-curated/110a52fe-97ea-558e-9953-92acd738f1b3.md"
+          ]
+        },
+        {
+          "id": "e46",
+          "retrieved": [
+            "qmd://kb-guides/afe0faad-0d37-5662-8698-f0b254d31ab0.md",
+            "qmd://kb-guides/166a4550-03b2-5336-8205-b4c0ecccb37f.md",
+            "qmd://kb-guides/75549483-bffa-56a6-bd84-a80ca4258092.md",
+            "qmd://kb-curated/f0ef30e1-6b44-5a7a-b9d3-a3298612a111.md",
+            "qmd://kb-guides/fe492b5d-c3ef-5848-8afe-b556c14677be.md",
+            "qmd://kb-guides/daaa8b2f-d17a-5135-a8fc-4ce1d042907e.md",
+            "qmd://kb-guides/2ec030c4-6e96-43c9-a9df-276ac736d890.md",
+            "qmd://kb-guides/b0ea905a-45b5-53bf-8d85-0fe03b95f264.md",
+            "qmd://kb-guides/74ebdf3d-f31d-5177-9114-bd31044bc2a4.md",
+            "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+          ]
+        },
+        {
+          "id": "e48",
+          "retrieved": [
+            "qmd://kb-curated/eabad576-1fe7-5e46-afaf-8f133fbb68bc.md",
+            "qmd://kb-curated/cc31a039-a286-541c-8ed2-4638e2281d76.md",
+            "qmd://kb-decisions/166928bc-3681-521a-8d62-28f663695ba9.md",
+            "qmd://kb-guides/6914b00d-22af-5611-847a-5a3613e47acf.md",
+            "qmd://kb-guides/90f946a6-1191-54b5-8e79-b4431086025f.md",
+            "qmd://kb-guides/eeced9ee-8474-5de9-852f-2eae82bd7f48.md",
+            "qmd://kb-guides/42fefffc-c6a5-5cc8-a152-428261f86a3e.md",
+            "qmd://kb-guides/ef9a5911-06a2-545f-a84c-d0909b1a8439.md",
+            "qmd://kb-guides/06ba7ce8-055b-4995-9d33-8484ca708025.md",
+            "qmd://kb-guides/8d99897b-cdee-589c-97a1-3fcbf5405614.md"
+          ]
+        },
+        {
+          "id": "e49",
+          "retrieved": [
+            "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+            "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+            "qmd://kb-curated/459217ed-fe1e-5113-ba50-dcb52e25ab58.md",
+            "qmd://kb-curated/9b24593b-6d35-5b60-b4fd-676298369ab8.md",
+            "qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md",
+            "qmd://kb-curated/5c6fae4c-e36d-5af9-97e4-f30c0bca132d.md",
+            "qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md",
+            "qmd://kb-guides/bf4f265d-6bd5-5f19-a8ef-b9a94f3bc545.md",
+            "qmd://kb-guides/563ddbd3-9eac-5553-9b90-cb2d60d909f2.md",
+            "qmd://kb-curated/cd7e31b5-2971-5099-a796-ccde5cf51e79.md"
+          ]
+        }
+      ],
+      "isolation": {
+        "mode": "temporary database/index snapshots; original export tree read only",
+        "sourceIndexes": {
+          "qmd": true,
+          "native": true,
+          "dense": true
+        },
+        "startedAt": "2026-10-23T21:51:44.079Z",
+        "completedAt": "2026-10-23T21:51:47.832Z",
+        "atomicAcrossSources": false,
+        "sourceSqliteCoordination": "readonly backup may create empty WAL/SHM files and update SHM reader marks"
+      },
+      "backend": "local SearchService retrieval · DEGRADED: dense arm failed 5 time(s) (query-failure:5); qmd snapshot present; native snapshot present",
+      "denseFailureCategories": {
+        "query-failure": 5
+      }
+    }
+  },
+  "matrix": {
+    "oldLists": {
+      "priorLabels": {
+        "recall": 0.538888888888889,
+        "ndcg": 0.4001241315604058,
+        "fama": 0.5151322751322752,
+        "exposure": 0.1111111111111111
+      },
+      "correctedLabels": {
+        "recall": 0.37592592592592594,
+        "ndcg": 0.28630488732341397,
+        "fama": 0.3566666666666667,
+        "exposure": 0.26666666666666666
+      }
+    },
+    "newLists": {
+      "priorLabels": {
+        "recall": 0.3277777777777778,
+        "ndcg": 0.25304219116403576,
+        "fama": 0.31592592592592594,
+        "exposure": 0.1111111111111111
+      },
+      "correctedLabels": {
+        "recall": 0.4388888888888889,
+        "ndcg": 0.3390359778257353,
+        "fama": 0.42148148148148146,
+        "exposure": 0.1111111111111111
+      }
+    }
+  },
+  "retiredOriginalsInNewTop10": [],
+  "remainingGaps": [
+    "e45 worktree policy remains partial under compile-then-govern-39z.33.4",
+    "All other gold records and unlabeled stale answers are not certified current",
+    "Configured audience-narrowing and contradiction-check rules were reported dormant, not proven enforced",
+    "Independent SQLite snapshots plus original export tree are not an atomic ensemble",
+    "No deployed HTTP, release, bundle or marketplace acceptance"
+  ]
+}

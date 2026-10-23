@@ -315,3 +315,153 @@ try {
 }
 JS
 ```
+
+### Selective mixed-current corrections on 2026-10-23
+
+The `compile-then-govern-39z.33` pass first admitted twelve source-reviewed
+corrections through bounded, owned spools and normal configured governance. Two
+existing summaries reuse a replacement, covering fourteen originals without
+fourteen new captures. One Plane proposal was flagged for an internal absolute
+home-directory path; a fresh proposal removed that unnecessary path and passed
+without a policy override. The configured policy reports dormant audience-narrowing
+and contradiction-check rules; this batch does not prove those rules were enforced.
+
+The residual `39z.33.3` review admitted three narrowly scoped additions: the
+Compiler's model-backed passes versus deterministic linking, the estate
+search-first convention with code-first exceptions, and Claude-specific commit
+attribution. These preserve unique facts while reusing the accepted architecture,
+command/intake and PR guides. The combined label disposition covers **seventeen
+originals using fifteen accepted corrections**; it does not create another generic
+architecture or PR guide. A Claude attribution setting is not a claim that Codex
+or an ordinary Git command supplies the same footer. No configured footer or
+credential values are published here.
+
+The correction themes are calendar layout, retrieval/index placement, local/team
+capture, Dolt task authority, personal-site deployment, merge gates, tracker roles,
+application mail, emergency access, the distinct Compiler/Registrar audit surfaces
+and the three residual distinctions above. Source configuration and dated
+operations records are distinguished from current service health.
+
+The same **45 scored question ids, kinds and literal queries** are retained.
+Seventeen questions receive corrected labels. Relevant labels change from **117
+to 113**: the two old task guides collapse to one replacement, four occurrences
+of the old PR guide duplicate an existing accepted citation, and one unique
+attribution citation is added **only to e26**, the commit-standard question.
+That relevance decision was made before observing new retrieval ranks.
+Obsolete labels change from **54 to 64 across 25 queries**: nine precise additions
+from the first fourteen dispositions, then the false Compiler-determinism claim
+**only for e34**. Independent review removed eight proposed penalties for errors
+outside the literal question. Old search-first/PR summaries receive no background
+error penalty for questions whose useful answer remains current. Replacing gold
+does not automatically make the original obsolete for every question.
+
+Replaying the original **unchanged 450 citation slots** separates annotation from
+retrieval effects:
+
+| Labels on the original captured lists | Recall@10 |  nDCG@10 |  FAMA@10 | Obsolete exposure |
+| ------------------------------------- | --------: | -------: | -------: | ----------------: |
+| Prior audit labels                    |  0.538889 | 0.400124 | 0.515132 |              5/45 |
+| First fourteen dispositions           |  0.412963 | 0.305089 | 0.383704 |             11/45 |
+| Final seventeen dispositions          |  0.375926 | 0.286305 | 0.356667 |             12/45 |
+
+These differences are **annotation effects**, not evidence that ranking or the
+corpus improved or regressed. A later retrieval run must use the final corrected
+labels on both the old and new lists; prior-label scores can be reported
+separately. The original ordered-list SHA-256 remains
+`4327d237dc93981237b911775caf5774a5f433048b90203385d83684ad262366`.
+The preparation receipt freezes the labels before the later retrieval run. Admission
+alone is not proof of export, index completeness, lifecycle retirement, deployment
+or subsequent retrieval quality.
+
+This bounded pass does not establish that every other gold document is current.
+The three previously named residual originals now have explicit source-reviewed
+replacement/delta dispositions, rather than being silently treated as fully
+current. **e45 remains partial:** branch guidance is covered, but a canonical,
+retrievable worktree-policy answer remains tracked under
+`compile-then-govern-39z.33.4`. Do not erase that gap or broaden obsolete labels to
+compensate for it.
+
+### Retrieval after selective retirement on 2026-10-23
+
+The [correction receipt](estate-onboarding-corrections-2026-10-23.json) publishes
+IDs, content hashes, frozen labels and ordered citation lists, without private
+memory bodies. The operator reports seventeen originals reversibly deprecated
+through canonical lifecycle writes with per-record receipts, after replacement
+admission and private retirement/restore rehearsals. All fifteen accepted
+corrections remained active. Export preserved the originals in archive; readonly
+metadata checks found all seventeen only in archive across the lexical, native
+and dense indexes. Final refresh embedded three archive entries, removed three
+old paths and skipped zero. Local anchor commits are recorded; publication to a
+remote witness is not established.
+
+The isolated local `SearchService` run retained all 45 literal scored questions
+and used the final labels fixed before retrieval. No retired original appeared
+in its scored top 10. The two-by-two replay separates annotation effects from
+observed list changes:
+
+| Captured lists   | Labels    | Recall@10 |  nDCG@10 |  FAMA@10 | Obsolete exposure |
+| ---------------- | --------- | --------: | -------: | -------: | ----------------: |
+| Original         | Prior     |  0.538889 | 0.400124 | 0.515132 |              5/45 |
+| Original         | Corrected |  0.375926 | 0.286305 | 0.356667 |             12/45 |
+| After retirement | Prior     |  0.327778 | 0.253042 | 0.315926 |              5/45 |
+| After retirement | Corrected |  0.438889 | 0.339036 | 0.421481 |              5/45 |
+
+At fixed corrected labels, current-answer recall and forgetting-aware scores
+improved in this observation, and obsolete exposure fell from twelve to five
+questions. This is **not a controlled pure-hybrid comparison**: the new run
+reported **five dense `query-failure` events** and failed open to lexical results
+for those events. The existing counter combines scored questions and unscored
+gap probes, so it cannot assign all five events to scored queries. Generic
+categories also do not establish a specific cause. The backend is explicitly
+degraded; no clean run is substituted. Follow-up tracks sanitized per-query
+reasons and diagnosis. These lists also reflect changed corpus/index state and
+observation time, not only a ranking algorithm change.
+
+Five questions still retrieve labeled obsolete answers: e21, e22, e28, e38 and
+e42. Other unlabeled stale answers and unreviewed gold may remain. The e45
+worktree-policy gap above stays open. This is local retrieval evidence, not an
+HTTP authentication test, a deployment, a release or proof every answer is current.
+Independent SQLite snapshots and the original export tree are not an atomic
+ensemble; readonly backup may still create WAL/SHM files and update reader marks.
+
+Run this offline from the repository root; it needs no live store, index, embedder
+or private memory text. It replays both captured lists against both frozen label
+sets, checks their projection hashes and verifies all four recorded metric rows:
+
+```bash
+node --import tsx --input-type=module <<'JS'
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { runEval } from './packages/qmd-adapter/src/eval/run-eval.ts';
+import { ESTATE_ONBOARDING_V1_DATASET as base } from './packages/qmd-adapter/src/eval/datasets/estate-onboarding-v1.ts';
+const receipt = JSON.parse(fs.readFileSync('./packages/qmd-adapter/src/eval/datasets/estate-onboarding-corrections-2026-10-23.json', 'utf8'));
+for (const [captureName, capture] of Object.entries(receipt.captures)) {
+  const hash = createHash('sha256').update(JSON.stringify(capture.orderedResults)).digest('hex');
+  if (hash !== capture.citationListSha256) throw new Error('Projection hash mismatch');
+  const rows = new Map(capture.orderedResults.map(r => [r.id, r.retrieved]));
+  if (rows.size !== 45) throw new Error('Expected 45 unique captured questions');
+  for (const [labelName, labels] of Object.entries(receipt.labelSets)) {
+    const byId = new Map(labels.map(q => [q.id, q]));
+    if (byId.size !== 45) throw new Error('Expected 45 frozen label rows');
+    const dataset = { ...base, queries: base.queries.map(q => {
+      const label = byId.get(q.id);
+      if (!label) throw new Error('Frozen question missing');
+      return { ...q, relevant: label.relevant, obsolete: label.obsolete };
+    }) };
+    const ids = new Map(dataset.queries.map(q => [q.query, q.id]));
+    const report = await runEval(dataset, async query => {
+      const hits = rows.get(ids.get(query));
+      if (!hits) throw new Error('Captured question missing');
+      return hits;
+    }, { k: 10, backend: 'offline frozen correction replay' });
+    const metrics = { recall: report.meanRecallAtK, ndcg: report.meanNdcgAtK,
+      fama: report.meanFamaAtK, exposure: report.obsoleteExposureRate };
+    const expected = receipt.matrix[`${captureName}Lists`][`${labelName}Labels`];
+    for (const name of Object.keys(metrics)) {
+      if (Math.abs(metrics[name] - expected[name]) > 1e-12) throw new Error('Metric mismatch');
+    }
+    console.log(captureName, labelName, metrics);
+  }
+}
+JS
+```
