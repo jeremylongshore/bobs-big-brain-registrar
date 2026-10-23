@@ -69,9 +69,9 @@ describe('getDirectory', () => {
     expect(getDirectory(memory)).toBe('decisions');
   });
 
-  it('deprecated lifecycle uses category mapping', () => {
+  it('deprecated lifecycle routes to archive', () => {
     const memory = makeCuratedMemory({ category: 'pattern', lifecycle: 'deprecated' });
-    expect(getDirectory(memory)).toBe('curated');
+    expect(getDirectory(memory)).toBe('archive');
   });
 
   it('active architecture → curated', () => {
@@ -93,13 +93,13 @@ describe('bulk_import routing (5bm.8)', () => {
     expect(getDirectory(memory)).toBe('bulk');
   });
 
-  it('deprecated bulk_import → bulk/', () => {
+  it('deprecated bulk_import → archive/', () => {
     const memory = makeCuratedMemory({
       source: 'bulk_import',
       category: 'decision',
       lifecycle: 'deprecated',
     });
-    expect(getDirectory(memory)).toBe('bulk');
+    expect(getDirectory(memory)).toBe('archive');
   });
 
   it('archived bulk_import → archive/ (lifecycle still wins)', () => {

@@ -144,8 +144,8 @@ describe('detectChanges', () => {
     memoryRepo.insert(superseded);
 
     const changeset = detectChanges(memoryRepo, exportStateRepo, makeConfig());
-    expect(changeset.toWrite).toHaveLength(2); // active + deprecated
-    expect(changeset.toArchive).toHaveLength(2); // archived + superseded
+    expect(changeset.toWrite).toHaveLength(1); // active
+    expect(changeset.toArchive).toHaveLength(3); // deprecated + archived + superseded
   });
 
   it('quarantines an unreadable row (5bm.12) without dropping the healthy ones', () => {

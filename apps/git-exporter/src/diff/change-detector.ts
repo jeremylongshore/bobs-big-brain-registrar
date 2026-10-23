@@ -1,7 +1,11 @@
 import type { MemoryRepository, ExportStateRepository } from '@qmd-team-intent-kb/store';
 import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
 import type { ExportChangeset, ExportConfig } from '../types.js';
-import { getRelativePath, getActiveDirectory } from '../formatter/directory-mapper.js';
+import {
+  getDirectory,
+  getRelativePath,
+  getActiveDirectory,
+} from '../formatter/directory-mapper.js';
 import { join } from 'node:path';
 import { findStaleFiles } from './stale-files.js';
 
@@ -16,8 +20,8 @@ export const DEFAULT_MAX_ORPHAN_REMOVALS = 50;
  * - Reconcile mode (`config.reconcile`): every memory, regardless of export state,
  *   plus `toRemove` for stale files on disk (see `findStaleFiles`).
  *
- * Active / deprecated memories → `toWrite`
- * Archived / superseded memories → `toArchive` (move from category dir to archive/)
+ * Active memories → `toWrite`
+ * Deprecated / archived / superseded memories → `toArchive` (move from category dir to archive/)
  */
 export function detectChanges(
   memoryRepo: MemoryRepository,
@@ -70,7 +74,7 @@ export function detectChanges(
     // memory. A quarantined memory is neither written nor silently dropped into
     // curated/; the operator fixes it at source (recategorize, 5bm.7).
     try {
-      if (memory.lifecycle === 'archived' || memory.lifecycle === 'superseded') {
+      if (getDirectory(memory) === 'archive') {
         // File may currently live in its active-time directory (category dir,
         // or bulk/ for a bulk_import memory — 5bm.8).
         const activeDir = getActiveDirectory(memory);

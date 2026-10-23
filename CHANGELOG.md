@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Deprecated memories now export to `archive/` and are excluded from default
+  curated search after export reconciliation and index refresh (umbrella bead
+  `compile-then-govern-39z.13`). Their database lifecycle remains deprecated;
+  explicit archive/all search still reaches them. Reactivation plus reconciliation
+  restores the active folder and removes the stale archive copy.
+
 ### Changed
 
 - **Estate eval labels follow the corrected rewrites (umbrella bead

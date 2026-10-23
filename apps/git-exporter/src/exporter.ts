@@ -12,7 +12,7 @@ import { readFileSync, existsSync } from 'node:fs';
  * Steps:
  * 1. Detect changes since last export
  * 2. Write new/updated files to their category directory
- * 3. Archive superseded/archived files to `archive/`
+ * 3. Archive deprecated/superseded/archived files to `archive/`
  * 4. Remove deleted files (changeset `toRemove`)
  * 5. Record the current timestamp as the new export state
  *
