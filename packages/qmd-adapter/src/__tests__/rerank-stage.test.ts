@@ -93,8 +93,8 @@ describe('RerankStage (B1) — opt-in reorder, fail-open to the fused order', ()
     server = null;
     await new Promise<void>((resolve, reject) => {
       closing.close((error) => (error ? reject(error) : resolve()));
-      // The timeout fixture intentionally never responds. Drain those sockets
-      // rather than leaving an asynchronous server/request for the next test.
+      // The timeout fixture intentionally never responds. Force-close its
+      // sockets and await shutdown before starting the next test.
       closing.closeAllConnections();
     });
   });
