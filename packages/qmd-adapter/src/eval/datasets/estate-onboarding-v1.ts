@@ -477,7 +477,7 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/aee3f27d-c59a-5dc2-87c4-3051f4ef7387.md',
       ],
       notes:
-        "2026-10-23 dense audit: 174b389f rank 7 presents qmd-team-intent-kb as the current repository and Phase 0 as current; no historical disclaimer. Package/image/Bead aliases deliberately remain valid. Earlier lexical-only observation: Probe returned 0 hits; 'brain repositories' returned 28b15174 #1 (OBSOLETE) and noise, relevant not in top 10. Obsolete: 28b15174 points contributors to intentional-cognition-os/qmd-team-intent-kb; 9ab72519 stack map with old names; e65e4505 repo map lists old engine names + private team marketplace; d9c58178 umbrella as intent-solutions-io/governed-second-brain; aee3f27d 007-SMAP snapshot with 5 repos incl. team marketplace.",
+        "2026-10-23 dense audit: 174b389f rank 7 presents qmd-team-intent-kb as the current repository; this label concerns repository identity only, with no formal phase-status judgment. Package/image/Bead aliases deliberately remain valid. Earlier lexical-only observation: Probe returned 0 hits; 'brain repositories' returned 28b15174 #1 (OBSOLETE) and noise, relevant not in top 10. Obsolete: 28b15174 points contributors to intentional-cognition-os/qmd-team-intent-kb; 9ab72519 stack map with old names; e65e4505 repo map lists old engine names + private team marketplace; d9c58178 umbrella as intent-solutions-io/governed-second-brain; aee3f27d 007-SMAP snapshot with 5 repos incl. team marketplace.",
     },
     {
       id: 'e39',

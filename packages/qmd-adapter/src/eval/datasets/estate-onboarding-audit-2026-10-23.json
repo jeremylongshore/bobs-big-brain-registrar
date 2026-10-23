@@ -91,5 +91,759 @@
   "labelCount": 54,
   "labeledQueries": 21,
   "scope": "Observed local QmdAdapter/SearchService snapshots, not deployed HTTP acceptance; after is an offline relabel of identical retrieved lists, not a retrieval rerun or corpus remediation.",
-  "remaining": "Mixed-current gold and other stale clauses are pending selective governed repair under umbrella compile-then-govern-39z.33; labels do not establish exhaustive currentness."
+  "remaining": "Mixed-current gold and other stale clauses are pending selective governed repair under umbrella compile-then-govern-39z.33; labels do not establish exhaustive currentness.",
+  "evidenceScope": "Author-reported local observation and adjudication; not independently attested. Private bodies and private authority contents are not published.",
+  "beforeLabelSourceCommit": "a4788164bdac22454351d8929dbbdc177676b760",
+  "afterLabelSourceCommit": "b3bd37f5d09900af8e1787c730ecd6b99ba27bfe",
+  "beforeLabelCount": 47,
+  "beforeLabeledQueries": 20,
+  "projectionSerialization": "UTF-8 JSON.stringify(orderedResults), objects inserted with keys id then retrieved; ordered dataset queries and best-rank-first citation strings, no whitespace or trailing newline.",
+  "orderedResults": [
+    {
+      "id": "e01",
+      "retrieved": [
+        "qmd://kb-decisions/5ff7ac4a-248d-5a29-b434-2949023a143e.md",
+        "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+        "qmd://kb-curated/dc805bbd-3d24-5071-8edb-fd37d8c4834b.md",
+        "qmd://kb-curated/c478600e-b8f5-5538-be39-e44f8cb58c8e.md",
+        "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+        "qmd://kb-guides/d4c61580-91d8-5eb7-857d-b11c12da68eb.md",
+        "qmd://kb-guides/5142e7b7-ad1d-4a2f-b803-7e4900b3f322.md",
+        "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+        "qmd://kb-guides/e6be348d-0fbb-4032-afa8-bb81d2ed17f6.md",
+        "qmd://kb-guides/50ff6fdd-ec27-5302-b353-c5b5aed7191d.md"
+      ]
+    },
+    {
+      "id": "e02",
+      "retrieved": [
+        "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+        "qmd://kb-guides/06814f33-71c4-597b-9af4-8b275398d582.md",
+        "qmd://kb-guides/2ffa51ef-8521-5929-a349-ccc16741bc58.md",
+        "qmd://kb-guides/3896b501-3e1f-5c30-9b94-cca9b53c0983.md",
+        "qmd://kb-guides/8b6fbf19-590a-512a-b256-ae30f6133341.md",
+        "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+        "qmd://kb-guides/4a5a9fb1-dff6-5e50-88f6-0dedda7151d1.md",
+        "qmd://kb-guides/eca5b5be-d08c-568f-af1e-f803504c9ac4.md",
+        "qmd://kb-curated/dd648500-95cb-5203-a4ba-01fc4e150462.md",
+        "qmd://kb-curated/830fc56c-df93-564f-8688-aba3bd0a5504.md"
+      ]
+    },
+    {
+      "id": "e03",
+      "retrieved": [
+        "qmd://kb-curated/f6cb7fb3-ca7e-5d4c-97f7-dfc063f2b982.md",
+        "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+        "qmd://kb-guides/56cbd961-e6e5-5d6d-b6d6-e8921ce09cbe.md",
+        "qmd://kb-decisions/5ff7ac4a-248d-5a29-b434-2949023a143e.md",
+        "qmd://kb-guides/423d6de0-4511-57b8-8f55-0c09362b3bbf.md",
+        "qmd://kb-guides/6a3b0e05-479f-54e3-8b6e-7c42406e3a2d.md",
+        "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+        "qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md",
+        "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+        "qmd://kb-guides/d81c157e-864f-5596-8df0-d7e577cf1b27.md"
+      ]
+    },
+    {
+      "id": "e04",
+      "retrieved": [
+        "qmd://kb-curated/200bcca0-67ca-5e66-88bc-ca36f6627a74.md",
+        "qmd://kb-curated/1070ea01-d497-52a0-8af6-6c2708ba4c26.md",
+        "qmd://kb-decisions/3bd3fe9c-003b-57a5-967e-673c08264f38.md",
+        "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+        "qmd://kb-curated/02dd1443-f9af-5893-ba62-09992fbedade.md",
+        "qmd://kb-curated/eb8da174-c6e8-5201-894c-9f47a9d8c84a.md",
+        "qmd://kb-decisions/8e6bbb56-4324-56cb-a718-b2ce36b3d87f.md",
+        "qmd://kb-guides/cf7bfdac-c3f5-548f-bffb-79b710c1e999.md",
+        "qmd://kb-guides/a6ede975-d7e8-5e40-b5c4-89178b6b0142.md",
+        "qmd://kb-guides/ea45b88d-e820-572b-960a-64215deb47ed.md"
+      ]
+    },
+    {
+      "id": "e05",
+      "retrieved": [
+        "qmd://kb-curated/93a12c14-d0a7-5b9d-a60b-ab75336be7ad.md",
+        "qmd://kb-decisions/3bd3fe9c-003b-57a5-967e-673c08264f38.md",
+        "qmd://kb-curated/6243141f-aa38-4a4b-b3e7-87df102befc7.md",
+        "qmd://kb-curated/2e015fff-5a9c-5e6f-be97-2e8ad95c524d.md",
+        "qmd://kb-curated/08810932-c4a3-5281-b3f0-942bf6334ccd.md",
+        "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+        "qmd://kb-guides/074bd575-3b6a-5bb9-952e-85a25097eeaf.md",
+        "qmd://kb-guides/1086c833-5edb-5282-97da-4954f0e6fd72.md",
+        "qmd://kb-guides/cc91447f-c354-5ba2-9626-85a6feb54ea5.md",
+        "qmd://kb-curated/636d1601-db58-5ad2-a33d-373f1bd3e8ce.md"
+      ]
+    },
+    {
+      "id": "e06",
+      "retrieved": [
+        "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md",
+        "qmd://kb-curated/b4c91d39-52d7-5e5f-962e-86824c26cce1.md",
+        "qmd://kb-guides/31ff051a-68ad-5566-9647-5a7012b99fe3.md",
+        "qmd://kb-curated/c4d67afa-5893-5c9e-b667-7350aa58fde4.md",
+        "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+        "qmd://kb-guides/f1abddca-3ccc-566f-b7e4-3c02986e8907.md",
+        "qmd://kb-curated/b93ae381-373f-529e-8ff1-9b3a5635dabe.md",
+        "qmd://kb-curated/0bcd92cf-cce8-5413-84da-42780c79efda.md",
+        "qmd://kb-guides/31d305a7-b876-51df-869e-f6868b3026d9.md",
+        "qmd://kb-curated/ff13218e-8d0f-5985-9aa0-7c607b11f54e.md"
+      ]
+    },
+    {
+      "id": "e07",
+      "retrieved": [
+        "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md",
+        "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+        "qmd://kb-curated/2df21b07-001b-5ddd-9bb2-eb70f90974c3.md",
+        "qmd://kb-decisions/0c047fd4-2be6-5fcb-83c7-9be788c1c226.md",
+        "qmd://kb-decisions/8a1a1659-0817-5fb9-8768-7b9a4d4fd0e8.md",
+        "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md",
+        "qmd://kb-curated/a212fc57-7483-5e14-937a-69067d9aa0e4.md",
+        "qmd://kb-guides/1f35d737-e247-54f0-b7fb-54d786cf3b2d.md",
+        "qmd://kb-curated/9396508e-a64e-5115-bc27-ee3d51a2e345.md",
+        "qmd://kb-curated/2acd8d19-5f4a-5a35-9b33-66ddb4e33226.md"
+      ]
+    },
+    {
+      "id": "e08",
+      "retrieved": [
+        "qmd://kb-curated/9396508e-a64e-5115-bc27-ee3d51a2e345.md",
+        "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+        "qmd://kb-curated/2df21b07-001b-5ddd-9bb2-eb70f90974c3.md",
+        "qmd://kb-guides/8e268247-93c4-532a-a440-2e793003d245.md",
+        "qmd://kb-curated/a212fc57-7483-5e14-937a-69067d9aa0e4.md",
+        "qmd://kb-curated/1c0be82b-7138-5f7d-a32f-6b3aab4a4294.md",
+        "qmd://kb-curated/cb664dd7-ff9a-5209-95f2-d26df59933d6.md",
+        "qmd://kb-decisions/8a1a1659-0817-5fb9-8768-7b9a4d4fd0e8.md",
+        "qmd://kb-guides/d757b919-a716-5583-9b86-48cde4af2126.md",
+        "qmd://kb-decisions/2d5be563-3f34-58ce-8dd2-4fb6e96a6211.md"
+      ]
+    },
+    {
+      "id": "e09",
+      "retrieved": [
+        "qmd://kb-guides/fda62c6b-0705-5b35-9269-01218c9e16cd.md",
+        "qmd://kb-guides/ab3245e0-c189-5e17-9265-ca06a281e3a9.md",
+        "qmd://kb-guides/a2d99227-4710-5d0b-8aac-36a6b9281a29.md",
+        "qmd://kb-guides/b5c624fa-132c-5549-bbd2-bc23d2e94af8.md",
+        "qmd://kb-decisions/27e8e8f6-ab55-5531-8c02-0aecb21e114c.md",
+        "qmd://kb-guides/83735ab7-fa6c-58b8-bf6e-5d8ce786cf6e.md",
+        "qmd://kb-guides/3d7c307e-84bd-575c-8a08-7ef282357200.md",
+        "qmd://kb-guides/d9c1fc3f-7964-5f27-af31-d96215f5e3ae.md",
+        "qmd://kb-guides/f0137cb0-5a89-56c3-9205-680b79973f24.md",
+        "qmd://kb-guides/0e884c93-2598-55c9-9692-040e9386c12b.md"
+      ]
+    },
+    {
+      "id": "e10",
+      "retrieved": [
+        "qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md",
+        "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+        "qmd://kb-guides/00655222-c6d3-5523-bd6c-e7bb088c1394.md",
+        "qmd://kb-decisions/fb6364af-df5a-5124-aac8-887a9a1600f9.md",
+        "qmd://kb-guides/e9df6e66-7587-5560-960e-edf076cdcb98.md",
+        "qmd://kb-guides/753bbec3-a3e3-56a8-9ca4-2a1326500623.md",
+        "qmd://kb-guides/894e0e22-7678-5037-909d-5aa542e03004.md",
+        "qmd://kb-guides/0c245920-b96b-55b9-9739-efa9daeb736c.md",
+        "qmd://kb-guides/49f036bb-8928-5d24-9fea-ffd125f60bc3.md",
+        "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+      ]
+    },
+    {
+      "id": "e11",
+      "retrieved": [
+        "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+        "qmd://kb-decisions/d0ecdf22-ea24-5bd3-9aab-fcae3660cf25.md",
+        "qmd://kb-curated/7f834490-3f85-57aa-abdb-72af2e1b846e.md",
+        "qmd://kb-guides/033b28cf-c371-58ae-acb1-004625646da8.md",
+        "qmd://kb-guides/2ff209ac-1521-53fd-9fe7-5a7ada267d7f.md",
+        "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+        "qmd://kb-guides/c3a4156f-dc5a-5ef0-b4c3-d0d4def2dad5.md",
+        "qmd://kb-guides/147575fc-d7bc-55ca-921d-7d71821aaec7.md",
+        "qmd://kb-guides/f4e22934-95bc-5a53-a872-79c20a7f2239.md",
+        "qmd://kb-guides/ef0f9e10-074f-5a76-91e5-3008fd069b24.md"
+      ]
+    },
+    {
+      "id": "e13",
+      "retrieved": [
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-curated/feb023b2-0d32-5cb3-9124-3575ede0d2bd.md",
+        "qmd://kb-curated/b231ab76-1cdd-5390-971a-ae4aed9dd90a.md",
+        "qmd://kb-guides/c0685da8-4ef6-5563-8d04-695d3c891b7f.md",
+        "qmd://kb-curated/cb10e3d5-e749-519c-be4c-5e6d8aa82483.md",
+        "qmd://kb-curated/cd7be698-96d6-5478-ad33-e6f58c9b69fa.md",
+        "qmd://kb-curated/c3aca568-d7f6-5912-bba2-e2417674a180.md",
+        "qmd://kb-curated/f0bf6568-3785-593e-8b67-2b0094997d9e.md"
+      ]
+    },
+    {
+      "id": "e14",
+      "retrieved": [
+        "qmd://kb-guides/e37da121-916b-5ded-ba81-1efd51785365.md",
+        "qmd://kb-guides/a574bba9-303a-524d-a5a7-4d38eefae828.md",
+        "qmd://kb-guides/2796b885-cb7f-5bc0-8414-ac10ef4a054b.md",
+        "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md",
+        "qmd://kb-guides/2d40ba32-8a2c-5883-b697-42b8c431f773.md",
+        "qmd://kb-guides/b5e864f2-90f6-5e82-b667-e946ea10a8a7.md",
+        "qmd://kb-guides/c7856f23-81fd-5800-b5cb-94560e97a455.md",
+        "qmd://kb-guides/fdd2432c-475e-5ff4-9024-bbe03bcddaeb.md",
+        "qmd://kb-curated/bd707d32-c081-5266-ba13-15c68016581a.md",
+        "qmd://kb-guides/ca66c847-df18-5d15-9926-b0487cb8622f.md"
+      ]
+    },
+    {
+      "id": "e15",
+      "retrieved": [
+        "qmd://kb-curated/c386487e-014d-581c-8b0b-c272c2345e81.md",
+        "qmd://kb-curated/d672cca7-3f08-5ddb-b95b-2175c3b51b50.md",
+        "qmd://kb-guides/42247e58-6791-5c1e-9307-98c59ac1cd16.md",
+        "qmd://kb-guides/b3d09f96-834d-5a18-bf1b-87b2f71f8844.md",
+        "qmd://kb-guides/964851f9-ccbe-5d9b-8254-6d6723082ee4.md",
+        "qmd://kb-decisions/c73d7383-f6d7-587f-8103-2fb086ad0f13.md",
+        "qmd://kb-curated/fae3fb5c-990b-5dc8-a404-6015430ed3a3.md",
+        "qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md",
+        "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+        "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md"
+      ]
+    },
+    {
+      "id": "e17",
+      "retrieved": [
+        "qmd://kb-decisions/ab09bc10-2e78-5330-aa31-477b3b367a88.md",
+        "qmd://kb-curated/666e6548-9dda-5936-8bbb-65b89baf994b.md",
+        "qmd://kb-guides/bae800ff-d00d-5752-b99e-9fea8353f42d.md",
+        "qmd://kb-decisions/7a79acbf-5c76-5ada-826f-025e4a7fab8f.md",
+        "qmd://kb-guides/23895f07-7149-596d-b285-04276a929586.md",
+        "qmd://kb-guides/49a8e879-405c-559c-a403-fafda7f8ca83.md",
+        "qmd://kb-curated/877769ff-dac4-554e-8f77-1b7d0714a463.md",
+        "qmd://kb-guides/431fd991-edfa-5ef7-8a1c-54c7648ce9e9.md",
+        "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+        "qmd://kb-decisions/b6b5ea0f-3fe0-5c30-891b-3b596e9cf86c.md"
+      ]
+    },
+    {
+      "id": "e19",
+      "retrieved": [
+        "qmd://kb-decisions/b721ed72-b286-5ead-83e0-cdbd07f7c7f7.md",
+        "qmd://kb-guides/92588d6f-bc7b-543c-84ac-f8e8f9d10282.md",
+        "qmd://kb-guides/debe3112-256a-5c06-8942-762eaf8d25d6.md",
+        "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+        "qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md",
+        "qmd://kb-decisions/9db97802-14a4-5ab1-960a-b91c38ef16cf.md",
+        "qmd://kb-curated/fcc85736-86de-55b5-bf86-87504ca68477.md",
+        "qmd://kb-curated/fd787b30-efb7-5299-a323-dc1460af7752.md",
+        "qmd://kb-curated/e2225821-eff8-5416-8649-16846dcb1f3e.md",
+        "qmd://kb-curated/d79d7403-6332-5165-bf5b-c62025451ecf.md"
+      ]
+    },
+    {
+      "id": "e20",
+      "retrieved": [
+        "qmd://kb-guides/72fa04dc-4dc7-56c4-99de-eac4ddab2594.md",
+        "qmd://kb-guides/e5ee0f94-59eb-52cc-9145-f80c1b44de7d.md",
+        "qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-guides/fbde2a68-5059-5bac-a113-94ed78fa4c7e.md",
+        "qmd://kb-guides/a256648a-2d6e-5b00-9d4c-1323e6c26623.md",
+        "qmd://kb-guides/30152012-3e93-502a-b134-14bb37496ae8.md",
+        "qmd://kb-guides/ff9e3050-5106-5714-81a1-36b44380f2be.md",
+        "qmd://kb-guides/0658415f-cd8c-5ac0-baae-a01b342b39b4.md",
+        "qmd://kb-guides/41d59389-dcc9-56cb-9b0a-0762f0e995f2.md"
+      ]
+    },
+    {
+      "id": "e21",
+      "retrieved": [
+        "qmd://kb-curated/83aaadc3-e4eb-52b4-a458-d911666ced2c.md",
+        "qmd://kb-decisions/27e8e8f6-ab55-5531-8c02-0aecb21e114c.md",
+        "qmd://kb-decisions/9d8385bb-c744-5bdd-9100-d574b7bb2075.md",
+        "qmd://kb-guides/57f8f661-6f3a-5467-97bb-bcca6925e480.md",
+        "qmd://kb-curated/4312ea30-5932-5e30-b5fd-0af93cf52cac.md",
+        "qmd://kb-decisions/07241602-720c-566d-8d90-31f212dffdd1.md",
+        "qmd://kb-guides/c7c0f24a-03a8-5b3a-8e75-285145547bb7.md",
+        "qmd://kb-curated/3df7c751-714b-5b66-8ed6-a26ebb8e9512.md",
+        "qmd://kb-curated/316bf636-cc61-507b-afa9-1d811ed441d7.md",
+        "qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md"
+      ]
+    },
+    {
+      "id": "e22",
+      "retrieved": [
+        "qmd://kb-guides/e26807e0-c6ea-57f1-8d06-500c6c714d40.md",
+        "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+        "qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md",
+        "qmd://kb-guides/2d87e3ce-e958-52c3-8c09-79b3b0def143.md",
+        "qmd://kb-guides/312012dd-3db5-5df9-9c3b-94c57cffcc59.md",
+        "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+        "qmd://kb-curated/be9b1bed-0c96-53c7-a432-158fc362bc80.md",
+        "qmd://kb-guides/2c0b5f3e-9e0d-504a-ba91-2d911d056a0a.md",
+        "qmd://kb-guides/68ba82bb-e61c-5e13-81fe-ad01875b5546.md",
+        "qmd://kb-guides/272f5cb8-0112-405c-a541-cfc2720cd910.md"
+      ]
+    },
+    {
+      "id": "e23",
+      "retrieved": [
+        "qmd://kb-guides/c7decb44-1d37-58f5-aa6e-af043f9516b2.md",
+        "qmd://kb-guides/f8322014-3c38-5e65-8a8e-ca83a723f79e.md",
+        "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+        "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+        "qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md",
+        "qmd://kb-guides/f358e49a-4d60-5945-a7ee-7ab09b9e1331.md",
+        "qmd://kb-curated/a5c3cb2e-07f8-5478-8e61-5fe6aa032d84.md",
+        "qmd://kb-guides/b9395e59-8311-55ae-8a4d-deb09dc3b6ab.md",
+        "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+        "qmd://kb-guides/e43d1981-7757-5a3d-9f63-4447c630a214.md"
+      ]
+    },
+    {
+      "id": "e24",
+      "retrieved": [
+        "qmd://kb-decisions/c73d7383-f6d7-587f-8103-2fb086ad0f13.md",
+        "qmd://kb-decisions/8f45c823-e018-5282-9ad6-bc269f0acbc6.md",
+        "qmd://kb-guides/3dbe9f21-efc2-50ca-85b1-c00e25348b98.md",
+        "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+        "qmd://kb-guides/cfaa1f1b-d152-5e1e-86f3-ca11b8aa9a7c.md",
+        "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+        "qmd://kb-guides/f6fe25e6-ba1e-54b6-b7e8-2ba58ee54d9f.md",
+        "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+        "qmd://kb-decisions/1a704514-e550-540e-af2e-750c073dc29b.md",
+        "qmd://kb-guides/dbd9c271-381d-53d5-9dfc-5e8d183c0a3b.md"
+      ]
+    },
+    {
+      "id": "e25",
+      "retrieved": [
+        "qmd://kb-guides/17b49d32-f0ab-5e22-b841-b102a08e2bfd.md",
+        "qmd://kb-curated/49ffe920-78fd-5e9c-8565-84bdfae1ea62.md",
+        "qmd://kb-curated/52c82bde-6bab-5df9-8023-710f36f91bdf.md",
+        "qmd://kb-guides/91fd5ce5-ad6d-51d3-8e8c-48e6552e7c9d.md",
+        "qmd://kb-curated/f6cb7fb3-ca7e-5d4c-97f7-dfc063f2b982.md",
+        "qmd://kb-guides/8b668d91-6e39-5dc9-adbe-d3d6502352b6.md",
+        "qmd://kb-curated/dc805bbd-3d24-5071-8edb-fd37d8c4834b.md",
+        "qmd://kb-guides/6023dd04-b62b-53e3-adbc-9a5ff87d53a1.md",
+        "qmd://kb-guides/6e423817-4f15-53c8-b2f1-3800831afffc.md",
+        "qmd://kb-guides/438e947f-a1a3-46f3-ba69-5aae0f3ee156.md"
+      ]
+    },
+    {
+      "id": "e26",
+      "retrieved": [
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-guides/f866b733-9432-5d3d-8379-0eab99c092db.md",
+        "qmd://kb-curated/2452e8c9-9fbf-537c-83e7-f0de2e715d92.md",
+        "qmd://kb-curated/11a3a1a1-0cac-5339-85cc-7e90ceec756e.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-curated/af95b796-4fd0-555d-a1f2-5a090ba9ab4b.md",
+        "qmd://kb-curated/39316eb0-bc10-5ed2-8746-a247e337fb99.md",
+        "qmd://kb-curated/a737802a-02a4-5a5b-8f79-25ac191de1b5.md",
+        "qmd://kb-guides/368b0125-bb07-5bfb-9c66-5f3d54017e04.md",
+        "qmd://kb-curated/11fb8198-e814-5333-882e-07f514393811.md"
+      ]
+    },
+    {
+      "id": "e27",
+      "retrieved": [
+        "qmd://kb-guides/078233c9-8ac3-5d23-b58a-b5ddfc6f4af8.md",
+        "qmd://kb-guides/0c66112b-8c09-4230-975b-2423c9f60fb8.md",
+        "qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md",
+        "qmd://kb-curated/53a4cc86-40ca-5dae-b91b-4f5cdc99df81.md",
+        "qmd://kb-curated/b9e6c34a-0eeb-5086-b462-a68572bdd123.md",
+        "qmd://kb-guides/fd2e6eab-e495-5c3d-9a18-df3227869114.md",
+        "qmd://kb-guides/13258ff8-cb3b-52a8-97fe-5ec98710083c.md",
+        "qmd://kb-guides/0148f2fd-a481-5aa1-a77a-fd1db9c0402d.md",
+        "qmd://kb-curated/6e85de00-69c7-5376-8153-9230e56571a2.md",
+        "qmd://kb-guides/45b91bbd-4447-5aa2-b62c-721b182fd6ca.md"
+      ]
+    },
+    {
+      "id": "e28",
+      "retrieved": [
+        "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+        "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+        "qmd://kb-guides/dba14edb-5d8d-5bfe-bbfb-694053d244f1.md",
+        "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+        "qmd://kb-curated/03badc0d-fd42-5f8d-b63b-f074d3d69cd0.md",
+        "qmd://kb-guides/42fefffc-c6a5-5cc8-a152-428261f86a3e.md",
+        "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+        "qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md",
+        "qmd://kb-guides/c344615f-6f6c-5d0a-8801-65ff32776d6c.md",
+        "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md"
+      ]
+    },
+    {
+      "id": "e29",
+      "retrieved": [
+        "qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md",
+        "qmd://kb-guides/8a458d74-1ce5-503b-bfcf-810594439751.md",
+        "qmd://kb-guides/17343c76-a49f-59a5-a3dd-1ec04b0842ca.md",
+        "qmd://kb-guides/e37da121-916b-5ded-ba81-1efd51785365.md",
+        "qmd://kb-guides/90f83aa0-87f7-57f1-be02-4016ccb96311.md",
+        "qmd://kb-guides/2d40ba32-8a2c-5883-b697-42b8c431f773.md",
+        "qmd://kb-guides/3b4868d1-b235-596d-88c2-ac24e969b908.md",
+        "qmd://kb-guides/b5e864f2-90f6-5e82-b667-e946ea10a8a7.md",
+        "qmd://kb-curated/8c2ae00d-5e17-5d05-b321-6d5bbb7f7170.md",
+        "qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md"
+      ]
+    },
+    {
+      "id": "e30",
+      "retrieved": [
+        "qmd://kb-curated/3562ff70-7224-588a-b663-6bdac3d83183.md",
+        "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md",
+        "qmd://kb-curated/81ced7c5-e8f0-53cd-b5d5-600251b76adc.md",
+        "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+        "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+        "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+        "qmd://kb-guides/31128e56-19d5-5882-964f-c24a49460fd0.md",
+        "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+        "qmd://kb-curated/fd1dac78-56e5-5f29-9c62-4a246d14c62d.md",
+        "qmd://kb-guides/d5c1a8ec-fbb8-5f6a-add6-0c2dcfcd92dd.md"
+      ]
+    },
+    {
+      "id": "e31",
+      "retrieved": [
+        "qmd://kb-curated/a178f99a-940a-4e35-90bb-acddc5ddf068.md",
+        "qmd://kb-guides/acf1acff-6339-5829-9dc2-69903a107579.md",
+        "qmd://kb-guides/cc3e78cd-1d87-5cc5-bb87-f27da35c5653.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-guides/b069b21e-a165-51fb-b96f-18bde21b5808.md",
+        "qmd://kb-guides/f6ebf070-1842-586e-a99c-69c4235de1bb.md",
+        "qmd://kb-guides/b1a02dbe-605e-522e-a7d4-e8c95ea7124a.md",
+        "qmd://kb-guides/448557c1-5f14-561e-b294-c80fca7dbd1b.md",
+        "qmd://kb-guides/93ff331c-30b9-5496-839f-42488544953a.md",
+        "qmd://kb-guides/e270abbe-a057-5580-aa3d-969d13114364.md"
+      ]
+    },
+    {
+      "id": "e32",
+      "retrieved": [
+        "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md",
+        "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+        "qmd://kb-curated/ec200f93-dfdd-5ece-a2a6-663800795877.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-decisions/8f45c823-e018-5282-9ad6-bc269f0acbc6.md",
+        "qmd://kb-guides/0da49456-00d6-5003-bce3-43da21e622ff.md"
+      ]
+    },
+    {
+      "id": "e33",
+      "retrieved": [
+        "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-curated/e9c8ace8-ff14-530f-988a-3ad225eef117.md",
+        "qmd://kb-guides/fbaef8fe-1205-518f-a57f-93028fbbcd98.md",
+        "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+        "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+        "qmd://kb-guides/97d9173b-a794-56c2-8b0e-e65cea49fcac.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md"
+      ]
+    },
+    {
+      "id": "e34",
+      "retrieved": [
+        "qmd://kb-decisions/7b60c5ae-4f77-5a52-bf50-5d245a6ab39a.md",
+        "qmd://kb-curated/c68ad991-6134-50c8-a577-2aa12c4e9d81.md",
+        "qmd://kb-decisions/45fcbe44-972f-5a3e-9c7b-00d03dc66beb.md",
+        "qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md",
+        "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-curated/b1c0e2d7-6fd6-5e65-9cf0-4e94d5bd585e.md",
+        "qmd://kb-decisions/5286e665-197b-5645-b2f5-81caec9c5f43.md",
+        "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md"
+      ]
+    },
+    {
+      "id": "e35",
+      "retrieved": [
+        "qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md",
+        "qmd://kb-decisions/adfcd3ec-334a-594c-9261-8f60d597ee57.md",
+        "qmd://kb-curated/a5c3cb2e-07f8-5478-8e61-5fe6aa032d84.md",
+        "qmd://kb-curated/a1015f63-e528-5869-9cdf-63741aa7683b.md",
+        "qmd://kb-guides/8237fc99-174f-57cb-b27e-5d2b9f80fa46.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+        "qmd://kb-curated/102badec-f7cc-5e7d-b786-f0dc171182aa.md",
+        "qmd://kb-curated/c16d8ba0-5b18-5619-a783-ab786d612dfa.md",
+        "qmd://kb-decisions/83095f51-0f5c-5b86-8809-5ab517740b5f.md",
+        "qmd://kb-curated/b13bdc4c-44ef-57a5-acc0-622415c4c46a.md"
+      ]
+    },
+    {
+      "id": "e36",
+      "retrieved": [
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+        "qmd://kb-guides/04ae8495-0cb8-57ee-98e4-326be561cedb.md",
+        "qmd://kb-guides/227e5fa5-a818-5f49-a95a-46c1bde8f007.md",
+        "qmd://kb-guides/3896b501-3e1f-5c30-9b94-cca9b53c0983.md",
+        "qmd://kb-guides/c3c359da-9a41-551a-b4d3-0d497c44d94b.md",
+        "qmd://kb-guides/0da49456-00d6-5003-bce3-43da21e622ff.md",
+        "qmd://kb-guides/84a13186-d268-5d16-a231-81932ec298b3.md"
+      ]
+    },
+    {
+      "id": "e37",
+      "retrieved": [
+        "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-curated/3ba46971-c58f-5724-9a8e-244cc037cd7d.md",
+        "qmd://kb-guides/3a417696-0f35-551c-9e03-e1d3c115bf2e.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-curated/bcda8f6f-8ca3-5d86-92b1-a5d55677cc55.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md",
+        "qmd://kb-curated/2acd8d19-5f4a-5a35-9b33-66ddb4e33226.md"
+      ]
+    },
+    {
+      "id": "e38",
+      "retrieved": [
+        "qmd://kb-curated/b8e8e514-e4a1-53fd-b577-bb298b678bf8.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-guides/04ae8495-0cb8-57ee-98e4-326be561cedb.md",
+        "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md",
+        "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+        "qmd://kb-guides/756b0d3e-0942-5535-9666-29a1681bb3b5.md",
+        "qmd://kb-guides/218d0d1a-ce0a-55e9-8825-79a697cba8de.md",
+        "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md"
+      ]
+    },
+    {
+      "id": "e39",
+      "retrieved": [
+        "qmd://kb-guides/2960262f-d55e-5bef-bb49-e33cd10332ad.md",
+        "qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md",
+        "qmd://kb-curated/d97cdad3-a072-5a80-be4a-f25c106255b8.md",
+        "qmd://kb-decisions/5286e665-197b-5645-b2f5-81caec9c5f43.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-guides/22fc38da-268b-5f12-a64b-e4059ab338fe.md",
+        "qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md",
+        "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md"
+      ]
+    },
+    {
+      "id": "e40",
+      "retrieved": [
+        "qmd://kb-curated/6d9d970f-062d-5c60-b08d-049b13022b66.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-curated/5592e35a-c3bd-5e8c-8269-eaa95734d804.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+        "qmd://kb-guides/a73cb23b-af79-5c43-8d69-a5b2ebdceb20.md",
+        "qmd://kb-guides/d6649d32-9f90-5249-ad73-32f48dc0212d.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-curated/ee55584a-b82a-5c66-87b2-4d62e3216d39.md",
+        "qmd://kb-curated/b612e2a0-7173-5c5c-a91d-2a425e18fc95.md"
+      ]
+    },
+    {
+      "id": "e41",
+      "retrieved": [
+        "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+        "qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-curated/0d4a6119-10c7-5c4c-838a-010951be2e36.md",
+        "qmd://kb-curated/55fd51da-c5af-56e3-b785-1ab1613d044d.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+        "qmd://kb-curated/fdb1200d-af94-501e-b2f3-ef11585f6f81.md",
+        "qmd://kb-curated/7702906d-acfc-546d-b29c-759b57ccfd60.md",
+        "qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md",
+        "qmd://kb-guides/909253ba-2923-585f-806f-2eaf403a2006.md"
+      ]
+    },
+    {
+      "id": "e42",
+      "retrieved": [
+        "qmd://kb-guides/dbe276cb-ec51-5788-9d24-da296c4beb00.md",
+        "qmd://kb-guides/4a97cb81-9f97-590b-ad7c-92c9f1be83ef.md",
+        "qmd://kb-guides/d4e17454-b742-5e5f-b965-e7dd614e6a51.md",
+        "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+        "qmd://kb-guides/b9b42c39-02b0-5dea-924e-88df0286c944.md",
+        "qmd://kb-guides/13f3125a-87cd-54c4-bd18-39e2cce928b0.md",
+        "qmd://kb-guides/7bc7203d-6f4a-5a55-a501-90cf429fdce6.md",
+        "qmd://kb-guides/7c740f82-4286-5450-ad9c-10b7719a416d.md",
+        "qmd://kb-guides/f2a995b0-c087-5c29-aecc-134d04729e11.md",
+        "qmd://kb-guides/000f4b1e-1b40-5d97-9248-a42df460b70b.md"
+      ]
+    },
+    {
+      "id": "e43",
+      "retrieved": [
+        "qmd://kb-curated/59541d56-b6e4-53e7-8f8d-172dd430131d.md",
+        "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+        "qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md",
+        "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+        "qmd://kb-curated/e076d56f-318b-58ac-9bba-24b7817fec9c.md",
+        "qmd://kb-guides/3858dd90-a7f7-5766-b2c6-5e2e58d90306.md",
+        "qmd://kb-guides/58ed354f-2960-59cd-a4d5-fd3683d67b34.md",
+        "qmd://kb-guides/5aa37d32-52bf-5b58-a2c6-e83b81224477.md",
+        "qmd://kb-guides/17343c76-a49f-59a5-a3dd-1ec04b0842ca.md",
+        "qmd://kb-guides/6914b00d-22af-5611-847a-5a3613e47acf.md"
+      ]
+    },
+    {
+      "id": "e44",
+      "retrieved": [
+        "qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md",
+        "qmd://kb-curated/e0ccd2ad-8620-5b1b-9ab7-a8019dc7ed42.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+        "qmd://kb-curated/269d0375-9c2f-50f4-b464-9e5d00d811d8.md",
+        "qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md",
+        "qmd://kb-guides/323b8b4a-ac23-5df9-96ab-f99caf58dbdb.md",
+        "qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md",
+        "qmd://kb-guides/62560836-8984-5142-ac7b-7f4a235939df.md",
+        "qmd://kb-guides/c3c359da-9a41-551a-b4d3-0d497c44d94b.md"
+      ]
+    },
+    {
+      "id": "e45",
+      "retrieved": [
+        "qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md",
+        "qmd://kb-curated/5627a882-42b3-5c70-a2b7-1f03fd77bc9a.md",
+        "qmd://kb-curated/53a4cc86-40ca-5dae-b91b-4f5cdc99df81.md",
+        "qmd://kb-curated/f62d34bf-4bb6-5330-a9a2-e41b11a1842e.md",
+        "qmd://kb-curated/9a4af460-6e86-5e77-b285-4f3080a1a560.md",
+        "qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md",
+        "qmd://kb-curated/25d1d910-4ea7-57b7-9ed4-5bdd4ad216ea.md",
+        "qmd://kb-curated/ef0a52e0-30d0-5331-82a2-169242704119.md",
+        "qmd://kb-curated/df5fe8e7-8d6a-52f0-86ad-558c1960b0f0.md",
+        "qmd://kb-guides/e611824a-6030-5195-a0dc-9a8070702a09.md"
+      ]
+    },
+    {
+      "id": "e46",
+      "retrieved": [
+        "qmd://kb-guides/afe0faad-0d37-5662-8698-f0b254d31ab0.md",
+        "qmd://kb-guides/166a4550-03b2-5336-8205-b4c0ecccb37f.md",
+        "qmd://kb-guides/75549483-bffa-56a6-bd84-a80ca4258092.md",
+        "qmd://kb-curated/f0ef30e1-6b44-5a7a-b9d3-a3298612a111.md",
+        "qmd://kb-guides/fe492b5d-c3ef-5848-8afe-b556c14677be.md",
+        "qmd://kb-guides/daaa8b2f-d17a-5135-a8fc-4ce1d042907e.md",
+        "qmd://kb-guides/2ec030c4-6e96-43c9-a9df-276ac736d890.md",
+        "qmd://kb-guides/b0ea905a-45b5-53bf-8d85-0fe03b95f264.md",
+        "qmd://kb-guides/74ebdf3d-f31d-5177-9114-bd31044bc2a4.md",
+        "qmd://kb-guides/781a5b80-b29a-5df3-be17-5522f12e63e9.md"
+      ]
+    },
+    {
+      "id": "e48",
+      "retrieved": [
+        "qmd://kb-curated/cc31a039-a286-541c-8ed2-4638e2281d76.md",
+        "qmd://kb-decisions/166928bc-3681-521a-8d62-28f663695ba9.md",
+        "qmd://kb-guides/6914b00d-22af-5611-847a-5a3613e47acf.md",
+        "qmd://kb-guides/90f946a6-1191-54b5-8e79-b4431086025f.md",
+        "qmd://kb-guides/eeced9ee-8474-5de9-852f-2eae82bd7f48.md",
+        "qmd://kb-guides/ef9a5911-06a2-545f-a84c-d0909b1a8439.md",
+        "qmd://kb-guides/42fefffc-c6a5-5cc8-a152-428261f86a3e.md",
+        "qmd://kb-guides/06ba7ce8-055b-4995-9d33-8484ca708025.md",
+        "qmd://kb-guides/8d99897b-cdee-589c-97a1-3fcbf5405614.md",
+        "qmd://kb-curated/599bc808-bef9-5b6f-95ed-538dd54c573f.md"
+      ]
+    },
+    {
+      "id": "e49",
+      "retrieved": [
+        "qmd://kb-decisions/c268e790-b57a-571d-8270-170fa0d9e8f8.md",
+        "qmd://kb-curated/fe604b5c-c82a-597a-88b8-161acd727591.md",
+        "qmd://kb-curated/9b24593b-6d35-5b60-b4fd-676298369ab8.md",
+        "qmd://kb-curated/5c6fae4c-e36d-5af9-97e4-f30c0bca132d.md",
+        "qmd://kb-guides/563ddbd3-9eac-5553-9b90-cb2d60d909f2.md",
+        "qmd://kb-decisions/45fcbe44-972f-5a3e-9c7b-00d03dc66beb.md",
+        "qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md",
+        "qmd://kb-decisions/62ce5e2e-5ddd-5dc1-96fd-1c1c01154b52.md",
+        "qmd://kb-decisions/7b60c5ae-4f77-5a52-bf50-5d245a6ab39a.md",
+        "qmd://kb-curated/cd7e31b5-2971-5099-a796-ccde5cf51e79.md"
+      ]
+    }
+  ],
+  "probeProjectionSha256": "4327d237dc93981237b911775caf5774a5f433048b90203385d83684ad262366",
+  "probeOrderMatches": true,
+  "adjudicatedSourceContentHashes": [
+    {
+      "citation": "qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md",
+      "contentSha256": "41470c72e7cb3e9e28e52599edc28433c0a538c04834c68533e8bf3ea767cabb",
+      "lifecycleObserved": "active"
+    },
+    {
+      "citation": "qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md",
+      "contentSha256": "dd16e9b16b0ad344a76eddc4389df3f5ab82657d805fce23fce83c3630456496",
+      "lifecycleObserved": "active"
+    },
+    {
+      "citation": "qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md",
+      "contentSha256": "1869900b699024a380837ed3ac6c58fbe2584423ab122e1ac106817a7e42767d",
+      "lifecycleObserved": "active"
+    },
+    {
+      "citation": "qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md",
+      "contentSha256": "587c047848b018d0a5263fd860b5088285b4d1a82d68cc79eb0c59a9e79c7b9c",
+      "lifecycleObserved": "active"
+    },
+    {
+      "citation": "qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md",
+      "contentSha256": "5e38c93aab234d4141658be47131f3615e1946a3208e1268d0353970df91d596",
+      "lifecycleObserved": "active"
+    },
+    {
+      "citation": "qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md",
+      "contentSha256": "ead9d5fca90f42e54847e3e04f34e7ee0e2cd968fa6011324972ef171ad7137a",
+      "lifecycleObserved": "active"
+    },
+    {
+      "citation": "qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md",
+      "contentSha256": "9c515635adf56394da70cd6c539b51ac607ec432e6355e6c89f6b4960a2a1712",
+      "lifecycleObserved": "active"
+    }
+  ],
+  "privateAuthorityFingerprints": [
+    {
+      "authority": "intent-os/AGENTS.md",
+      "sha256": "fb2c01d197339395cc0706288bf45a7a77b0d772be09391c47d13ff562a9ac08"
+    },
+    {
+      "authority": "intent-os/CLAUDE.md",
+      "sha256": "178d4ed919eb8a39e25c2145f77fa481360efcdee9d5046fa648d7628dfd36ef"
+    },
+    {
+      "authority": "local-skills/doc-filing/SKILL.md",
+      "sha256": "ccd50b6244ad2638e668936c276f5df03551d1c214742ebc6b924d2fd30f64ef"
+    }
+  ],
+  "dnsObservation": {
+    "observedAt": "2026-10-23T20:25:57.791918+00:00",
+    "scope": "Fresh author-run DNS check supporting the e21 label; not the timestamp of the earlier retrieval snapshot",
+    "commands": [
+      {
+        "argv": ["dig", "+short", "hustlestats.io", "A"],
+        "stdout": "167.86.106.29\n"
+      },
+      {
+        "argv": ["dig", "+short", "www.hustlestats.io", "A"],
+        "stdout": "167.86.106.29\n"
+      },
+      {
+        "argv": ["dig", "+short", "www.hustlestats.io", "CNAME"],
+        "stdout": ";; communications error to 127.0.0.53#53: timed out\n;; communications error to 127.0.0.53#53: timed out\n"
+      }
+    ]
+  }
 }
