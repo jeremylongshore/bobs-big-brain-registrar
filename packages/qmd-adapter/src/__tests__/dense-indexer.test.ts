@@ -30,6 +30,10 @@ class StubEmbedder {
   private embedRequests = 0;
   private baseUrl = '';
 
+  get embeddingRequestCount(): number {
+    return this.embedRequests;
+  }
+
   constructor() {
     this.server = createServer((req, res) => {
       const isEmbed = req.url !== '/health';
@@ -171,7 +175,7 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
     expect(stub.embeddedTexts).toEqual([]); // zero model calls
   });
 
-  it('indexes through a one-document-capacity stub and reuses unchanged vectors', async () => {
+  it('indexes through a one-document-capacity stub without re-embedding unchanged documents', async () => {
     stub.maxDocumentsPerRequest = 1;
     const indexer = new DenseIndexer({
       index,
@@ -183,10 +187,12 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
     expect(report).toMatchObject({ embedded: 3, skipped: 0, serviceDown: false });
     expect(index.count()).toBe(3);
     expect(stub.embeddedTexts).toHaveLength(3);
-    // Completion remains content-addressed: the next sweep sends no work.
+    expect(stub.embeddingRequestCount).toBe(3);
+    // The next sweep still scans files, but sends no embedding requests.
     stub.embeddedTexts = [];
     expect(await indexer.sync()).toMatchObject({ embedded: 0, skipped: 0 });
     expect(stub.embeddedTexts).toEqual([]);
+    expect(stub.embeddingRequestCount).toBe(3);
   });
 
   it('a changed doc is re-embedded (content-hash keyed, not mtime)', async () => {
