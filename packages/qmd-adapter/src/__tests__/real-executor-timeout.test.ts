@@ -171,6 +171,26 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
     expect(describeQmdFailure(['update'], r).message).toContain('process group was terminated');
   }, 15_000);
 
+  it.each(['missing-binary', 'invalid-null-byte'])(
+    'releases signal handlers after %s spawn failure',
+    async (kind) => {
+      const signals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'exit'] as const;
+      const hostHandler = () => {};
+      process.on('SIGINT', hostHandler);
+      const before = signals.map((signal) => process.listenerCount(signal));
+      try {
+        const binary = kind === 'missing-binary' ? join(dir, 'missing-qmd') : '\0';
+        const result = await new RealQmdExecutor({ binary }).execute(['update']);
+        expect(result.failure?.kind).toBe('spawn');
+        expect(liveGroupCount()).toBe(0);
+        expect(signals.map((signal) => process.listenerCount(signal))).toEqual(before);
+        expect(process.listeners('SIGINT')).toContain(hostHandler);
+      } finally {
+        process.off('SIGINT', hostHandler);
+      }
+    },
+  );
+
   it('a successful run is unchanged: stdout, stderr and exit 0', async () => {
     const fake = script('ok-qmd', 'echo "args:$*"\necho warn >&2');
     const r = await new RealQmdExecutor({ binary: fake }).execute(['search', '--json', '--', 'x']);
@@ -208,6 +228,40 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
     // The executor signals the qmd group, then re-raises SIGINT (no other
     // listener) so the host still dies of it — with no survivor left behind.
     expect(exitSignal).toBe('SIGINT');
+    expect(await waitGone(grandchild)).toBe(true);
+  }, 30_000);
+
+  it('owns a child when SIGINT arrives before spawn returns to the executor', async () => {
+    const fake = script('spawn-race-qmd', `sleep 300 &\necho $! > "${pidFile}"\nwait`);
+    const host = join(dir, 'spawn-race-host.mts');
+    const executorPath = resolve(HERE, '../executor/real-executor.ts');
+    // Widen the real registration gap deterministically: spawn a real launcher,
+    // wait for its grandchild, then signal the host before returning its PID to
+    // the executor. An unhandled SIGINT has Node's default fatal disposition.
+    writeFileSync(
+      host,
+      `import childProcess from 'node:child_process';\n` +
+        `import { syncBuiltinESMExports } from 'node:module';\n` +
+        `import { existsSync, readFileSync } from 'node:fs';\n` +
+        `const original = childProcess.spawn;\n` +
+        `childProcess.spawn = (...args) => {\n` +
+        `  const child = original(...args);\n` +
+        `  const pause = new Int32Array(new SharedArrayBuffer(4));\n` +
+        `  const deadline = Date.now() + 5000;\n` +
+        `  while ((!existsSync(${JSON.stringify(pidFile)}) || readFileSync(${JSON.stringify(pidFile)}, 'utf8').trim() === '') && Date.now() < deadline) Atomics.wait(pause, 0, 0, 5);\n` +
+        `  process.kill(process.pid, 'SIGINT');\n` +
+        `  Atomics.wait(pause, 0, 0, 50);\n` +
+        `  return child;\n` +
+        `};\n` +
+        `syncBuiltinESMExports();\n` +
+        `const { RealQmdExecutor } = await import(${JSON.stringify(executorPath)});\n` +
+        `await new RealQmdExecutor({ binary: ${JSON.stringify(fake)}, maintenanceTimeout: 60000 }).execute(['update']);\n`,
+    );
+    const loader = pathToFileURL(resolve(HERE, '../../../../node_modules/tsx/dist/loader.mjs'));
+    const child = spawn(process.execPath, ['--import', loader.href, host], { stdio: 'ignore' });
+    const exited = new Promise<NodeJS.Signals | null>((r) => child.on('exit', (_c, sig) => r(sig)));
+    const grandchild = Number(await waitForFile(pidFile, 10_000));
+    expect(await exited).toBe('SIGINT');
     expect(await waitGone(grandchild)).toBe(true);
   }, 30_000);
 

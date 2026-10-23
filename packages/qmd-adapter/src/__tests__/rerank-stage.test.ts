@@ -19,12 +19,31 @@ import type { QmdSearchResult } from '../types.js';
 function startStub(): Promise<{ url: string; server: Server; calls: () => number }> {
   let callCount = 0;
   const server = createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/health') {
+      res.writeHead(200).end();
+      return;
+    }
+    if (req.method !== 'POST' || req.url !== '/v1/rerank') {
+      res.writeHead(404).end();
+      return;
+    }
     let body = '';
+    req.on('error', () => res.destroy());
     req.on('data', (chunk: Buffer) => (body += chunk.toString()));
     req.on('end', () => {
+      let documents: unknown;
+      try {
+        documents = (JSON.parse(body) as { documents?: unknown }).documents;
+      } catch {
+        res.writeHead(400).end();
+        return;
+      }
+      if (!Array.isArray(documents) || !documents.every((doc) => typeof doc === 'string')) {
+        res.writeHead(400).end();
+        return;
+      }
       callCount += 1;
-      const parsed = JSON.parse(body) as { documents: string[] };
-      const results = parsed.documents.map((doc, index) => {
+      const results = documents.map((doc: string, index) => {
         const match = /relevance=([0-9.]+)/.exec(doc);
         return { index, relevance_score: match ? Number(match[1]) : 0 };
       });
@@ -68,12 +87,36 @@ describe('RerankStage (B1) — opt-in reorder, fail-open to the fused order', ()
     rmSync(exportDir, { recursive: true, force: true });
   });
 
-  afterEach(() => {
-    server?.close();
+  afterEach(async () => {
+    if (server === null) return;
+    const closing = server;
     server = null;
+    await new Promise<void>((resolve, reject) => {
+      closing.close((error) => (error ? reject(error) : resolve()));
+      // The timeout fixture intentionally never responds. Drain those sockets
+      // rather than leaving an asynchronous server/request for the next test.
+      closing.closeAllConnections();
+    });
   });
 
   const fused = () => [hit('a.md', 0.9), hit('b.md', 0.8), hit('c.md', 0.7), hit('d.md', 0.6)];
+
+  it('rejects an empty scoring request and still serves a subsequent valid query', async () => {
+    const stub = await startStub();
+    server = stub.server;
+    const invalid = await fetch(`${stub.url}/v1/rerank`, {
+      method: 'POST',
+      body: '',
+      signal: AbortSignal.timeout(1_000),
+    });
+    expect(invalid.status).toBe(400);
+    const health = await fetch(`${stub.url}/health`);
+    expect(health.status).toBe(200);
+    expect(stub.calls()).toBe(0);
+    const stage = new RerankStage({ client: new RerankClient({ url: stub.url }), exportDir });
+    expect((await stage.apply('query', fused()))[0]?.file).toBe('qmd://kb-curated/c.md');
+    expect(stub.calls()).toBe(1);
+  });
 
   it('reorders the fused list by cross-encoder score', async () => {
     const stub = await startStub();

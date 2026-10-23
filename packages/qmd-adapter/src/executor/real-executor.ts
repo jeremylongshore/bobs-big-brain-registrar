@@ -4,7 +4,7 @@ import type { CommandFailure, CommandResult } from '../types.js';
 import { delimiter, dirname, isAbsolute } from 'node:path';
 import { DEFAULT_TIMEOUT, resolveMaintenanceTimeoutMs } from '../config.js';
 import { QMD_NOT_FOUND_EXIT_CODE, resolveQmdBinary } from './resolve-binary.js';
-import { trackGroup, untrackGroup } from './process-groups.js';
+import { beginGroupSpawn, trackGroup, untrackGroup } from './process-groups.js';
 
 /** Exit code reported for a run that hit its time limit (coreutils `timeout` convention). */
 export const QMD_TIMEOUT_EXIT_CODE = 124;
@@ -154,8 +154,9 @@ export class RealQmdExecutor implements QmdExecutor {
    * launcher died, the real `qmd update` was reparented to PID 1 and kept
    * writing the index after the wrapper had already reported "Failed to update
    * index". Here a timeout signals the whole group (SIGTERM, then SIGKILL after
-   * the grace), and the promise does not settle until the group is gone — when
-   * this returns, nothing qmd started is still writing.
+   * the grace), then bounded disappearance checks report whether that tracked
+   * group is gone. A descendant that leaves the process group is outside this
+   * ownership boundary; a failed disappearance check is not a cleanup guarantee.
    */
   private run(
     binary: string,
@@ -166,6 +167,7 @@ export class RealQmdExecutor implements QmdExecutor {
     const startedAt = Date.now();
     return new Promise<CommandResult>((resolve) => {
       let child: ChildProcess;
+      const releaseSpawn = USE_PROCESS_GROUP ? beginGroupSpawn() : undefined;
       try {
         child = spawn(binary, args, {
           env,
@@ -173,18 +175,19 @@ export class RealQmdExecutor implements QmdExecutor {
           stdio: ['ignore', 'pipe', 'pipe'],
         });
       } catch (e) {
+        releaseSpawn?.();
         resolve(this.spawnFailure(binary, e));
         return;
       }
+      const pid = child.pid;
+      if (pid !== undefined && USE_PROCESS_GROUP) trackGroup(pid);
+      releaseSpawn?.();
 
       const out: Buffer[] = [];
       const err: Buffer[] = [];
       let bytes = 0;
       let failure: CommandFailure | undefined;
       let terminating: Promise<boolean> | null = null;
-      const pid = child.pid;
-      if (pid !== undefined && USE_PROCESS_GROUP) trackGroup(pid);
-
       // `hard` skips the SIGTERM grace: a process flooding its pipes is not
       // going to honour a polite request.
       const terminate = (hard = false): Promise<boolean> => {
