@@ -83,11 +83,28 @@ brain (`ESTATE_ONBOARDING_V1_GAPS`): merging through `safe-merge`, the tailnet
 Netdata URL, the Jitsi meeting tool, the business mailing address, and where the
 LLM provider keys live. They are listed for curation instead of being scored.
 
-**Run** (live, read-only — the store opens `readonly`, nothing reindexes):
+**Run** (source data read-only; index refresh is isolated as described below):
 
     pnpm eval:estate             # report
     pnpm eval:estate --json      # machine-readable
     pnpm eval:estate --probe "q" # top 10 with lifecycle/category/date, for labeling
+
+The launcher backs up the selected tenant's qmd, native FTS5 and dense SQLite
+indexes and the memory store into a private temporary directory, then runs a
+worker against those copies. Native refresh and dense model invalidation do not
+alter source index data. The original export tree is read for current markdown;
+there is no reindex of the source qmd/dense index and no document embedding pass.
+The configured loopback query embedder is still used when dense is enabled.
+
+Each SQLite backup includes committed WAL frames. Source read-only connections
+may create empty WAL/SHM files or update SHM reader coordination; database and
+committed WAL data are not rewritten. Separate database backups plus the live
+export tree are **not one atomic snapshot**, so concurrent activity can affect
+comparability. JSON reports include snapshot timestamps and source-index presence;
+probes also print retrieval mode and degradation. Missing, empty, incompatible
+or unavailable dense state is reported rather than silently scored as healthy.
+Temporary files are removed after worker exit, including error and normal signal
+paths; a forced OS kill can leave a private temporary directory behind.
 
 The report names the retrieval mode it measured. Production search fails open to
 lexical-only when the embedder is down, so the runner counts dense-arm failures

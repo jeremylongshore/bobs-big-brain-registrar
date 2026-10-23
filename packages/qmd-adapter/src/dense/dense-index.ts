@@ -99,6 +99,11 @@ export class DenseVecIndex {
     this.dims = storedDims === null ? null : Number(storedDims);
   }
 
+  /** Dimension of the built index, null when no vectors have been indexed. */
+  get dimensions(): number | null {
+    return this.dims;
+  }
+
   private getMeta(key: string): string | null {
     const row = this.db.prepare('SELECT value FROM dense_meta WHERE key = ?').get(key) as
       { value: string } | undefined;
