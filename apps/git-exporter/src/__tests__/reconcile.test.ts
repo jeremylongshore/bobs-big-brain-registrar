@@ -80,6 +80,53 @@ describe('runExport — reconcile mode', () => {
     );
   });
 
+  describe.each([
+    ['decision', 'mcp', 'decisions'],
+    ['pattern', 'mcp', 'curated'],
+    ['reference', 'mcp', 'guides'],
+    ['reference', 'bulk_import', 'bulk'],
+  ] as const)('deprecated %s from %s', (category, source, activeDir) => {
+    it('first export keeps deprecated content only in archive, preserving its lifecycle', () => {
+      const m = makeCuratedMemory({ category, source, lifecycle: 'deprecated' });
+      memoryRepo.insert(m);
+      const result = runExport(memoryRepo, exportStateRepo, incremental(), () => LATER);
+      const archivePath = join(out, 'archive', `${m.id}.md`);
+      expect(result.archived).toEqual([archivePath]);
+      expect(result.written).toEqual([]);
+      expect(stateTable()).toEqual([`archive/${m.id}.md`]);
+      expect(readFileSync(archivePath, 'utf8')).toContain('lifecycle: "deprecated"');
+      expect(memoryRepo.findById(m.id)?.lifecycle).toBe('deprecated');
+    });
+
+    it('reconciles a previously exported deprecation and restores reactivated content', () => {
+      const m = makeCuratedMemory({ category, source, updatedAt: NOW });
+      memoryRepo.insert(m);
+      runExport(memoryRepo, exportStateRepo, incremental(), () => LATER);
+      const activePath = join(out, activeDir, `${m.id}.md`);
+      const archivePath = join(out, 'archive', `${m.id}.md`);
+      expect(existsSync(activePath)).toBe(true);
+
+      // Existing deployments may have exported deprecated content under the old
+      // routing policy, with updatedAt older than the export watermark.
+      memoryRepo.updateLifecycle(m.id, 'deprecated', NOW);
+      const result = runExport(memoryRepo, exportStateRepo, cfg(), () => LATER);
+      expect(result.archived).toEqual([archivePath]);
+      expect(existsSync(activePath)).toBe(false);
+      expect(readFileSync(archivePath, 'utf8')).toContain('lifecycle: "deprecated"');
+      expect(memoryRepo.findById(m.id)?.lifecycle).toBe('deprecated');
+      const again = runExport(memoryRepo, exportStateRepo, cfg(), () => LATER);
+      expect([again.written, again.archived, again.removed]).toEqual([[], [], []]);
+      expect(again.unchanged).toBe(1);
+
+      memoryRepo.updateLifecycle(m.id, 'active', NOW);
+      const restored = runExport(memoryRepo, exportStateRepo, cfg(), () => LATER);
+      expect(restored.written).toEqual([activePath]);
+      expect(existsSync(archivePath)).toBe(false);
+      expect(readFileSync(activePath, 'utf8')).toContain('lifecycle: "active"');
+      expect(stateTable()).toEqual([`${activeDir}/${m.id}.md`]);
+    });
+  });
+
   it('reports archive moves in the result (the exported:0 regression)', () => {
     const m = makeCuratedMemory({ category: 'pattern' });
     memoryRepo.insert(m);

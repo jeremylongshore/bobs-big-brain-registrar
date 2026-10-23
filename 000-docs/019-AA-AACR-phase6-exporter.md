@@ -14,8 +14,8 @@ Phase 6 implemented the git export mirror: formatting curated memories as Markdo
 
 - **Frontmatter Formatter**: String-templated YAML (no yaml library). Deterministic key order, quoted strings, handles escaping for colons/quotes in titles.
 - **Markdown Formatter**: Full document: `---frontmatter---\n\n# Title\n\nContent\n`. Filename: `{id}.md`.
-- **Directory Mapper**: Category-based routing: decision→`decisions/`, pattern/convention/architecture→`curated/`, troubleshooting/reference/onboarding→`guides/`. Archived/superseded→`archive/` regardless of category.
-- **Change Detector**: Queries memories updated since last export. First run = all active memories. Uses `ExportStateRepository` for incremental tracking.
+- **Directory Mapper**: Category-based routing: decision→`decisions/`, pattern/convention/architecture→`curated/`, troubleshooting/reference/onboarding→`guides/`. Deprecated/archived/superseded→`archive/` regardless of category.
+- **Change Detector**: Queries memories updated since last export. First run = all lifecycle states. Uses `ExportStateRepository` for incremental tracking.
 - **File Writer**: Sync filesystem operations. Creates directories as needed. Archive removes old location, writes new.
 - **Exporter Orchestrator**: Detect changes → write/archive → update export state. Idempotent — re-running with no changes produces no writes.
 - 76 tests
@@ -27,7 +27,7 @@ kb-export/
   curated/     <- pattern, convention, architecture
   decisions/   <- decision
   guides/      <- troubleshooting, reference, onboarding
-  archive/     <- any lifecycle=archived or superseded
+  archive/     <- any lifecycle=deprecated, archived or superseded
 ```
 
 ## What Phase 6 Does NOT Do
@@ -51,3 +51,18 @@ kb-export/
 - String-templated YAML is sufficient for flat frontmatter and avoids a dependency, but the escape logic needs careful handling for edge cases (colons in titles, quotes in content).
 - Idempotency check via `readFileSync` comparison is simple and effective for file-level change detection.
 - `mkdtempSync` + `rmSync` in test fixtures provides clean isolation for filesystem tests.
+
+## Deprecated content and existing exports
+
+Deprecated memories export to `archive/`, retaining `lifecycle: "deprecated"`
+in frontmatter and in the database. The `kb-archive` collection is excluded
+from default curated search and remains available through the explicit
+`archived` or `all` scope. Ranking demotion remains a fallback for old indexes;
+it does not replace collection routing.
+
+After upgrading an existing export, run the exporter with `--reconcile` to
+relocate files whose timestamps predate the export watermark, then rebuild or
+refresh the retrieval indexes before relying on the new search boundary.
+Reactivating a memory and reconciling restores its active category (or bulk)
+folder and removes its stale archive copy. A code rollback likewise needs
+reconciliation and index refresh to restore the previous routing policy.
