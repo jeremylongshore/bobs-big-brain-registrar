@@ -124,6 +124,19 @@ Highlights:
 - **OpenAPI Documentation** — Generated OpenAPI 3.1 spec at `/openapi.json` and Swagger UI at `/docs` (Phase 10)
 - **Supply-Chain Security** — Cosign keyless signing + SLSA Level 3 provenance for container images (Phase 10)
 - **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (semantic sqlite-vec path deferred behind the eval gate)
+  If all strict and dense arms yield no usable hits (including qmd failure),
+  unquoted English question-shaped queries can use a
+  native fallback for 2–12 distinct topical terms, with up to 200 returned candidates within
+  the requested collections and at least 60% term coverage (both terms required
+  for two-term questions). It refuses fallback when the native index exceeds 25,000 documents,
+  any term exceeds 2,000 scoped postings, or total term postings exceed 10,000. Bounded probes
+  and ranking share one read snapshot; scope and coverage eligibility precede the cutoff.
+  These are row/posting refusal limits, not document-size or index-refresh limits.
+  The fallback does not augment nonempty lists. Separately, applying native scope
+  before top-k can change strict result membership, including keyword/quoted searches.
+  No timeout configuration changes or new wall-time guarantee are introduced. This fallback
+  does not establish semantic correctness or live retrieval acceptance.
+
 - **MCP Server** — local + team-brain tool surface for Claude Code; read tools always register, write tools are admin-gated, team mode proxies the remote brain over the tailnet
 - **Govern Hardening** — write-time enum-membership backstop + CHECK constraints on curated memories, lifecycle state-graph enforcement, sensitivity persisted at promotion and enforced at read time (curated search never returns confidential/restricted memories), fail-closed export category mapping, spool `schemaVersion` validation, and an anti-dormancy policy-coverage gate
 

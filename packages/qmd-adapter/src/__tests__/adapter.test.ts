@@ -7,6 +7,7 @@ import { QmdAdapter } from '../adapter.js';
 import { DenseVecIndex } from '../dense/dense-index.js';
 import { QMD_WEIGHTS_MANIFEST } from '../weights/weights-manifest.js';
 import {
+  EmbedClient,
   EmbedFailure,
   EMBEDDINGGEMMA_QUERY_PREFIX,
   EMBEDDINGGEMMA_DOCUMENT_PREFIX,
@@ -265,6 +266,76 @@ describe('QmdAdapter — native FTS5 fusion', () => {
     if (withDense.ok && withoutDense.ok) {
       expect(withDense.value).toEqual(withoutDense.value);
     }
+  });
+
+  it('retains useful scoped natural-question candidates when dense embedding times out', async () => {
+    write('curated', 'token-guide.md', 'Access tokens remain in the credential vault.');
+    write('archive', 'old.md', 'where are access tokens stored');
+    const pinned = QMD_WEIGHTS_MANIFEST.models.find((model) => model.id === 'embedding')!;
+    const path = join(exportDir, 'dense-question-fixture.sqlite');
+    const index = new DenseVecIndex({
+      path,
+      modelId: pinned.file,
+      modelVersion: `${pinned.sha256}|q:${EMBEDDINGGEMMA_QUERY_PREFIX}|d:${EMBEDDINGGEMMA_DOCUMENT_PREFIX}`,
+    });
+    index.upsert({
+      docId: 'qmd://kb-curated/token-guide.md',
+      collection: 'kb-curated',
+      contentHash: 'fixture',
+      snippet: 'fixture',
+      embedding: new Float32Array([1, 0, 0]),
+    });
+    index.close();
+    const embed = vi
+      .spyOn(EmbedClient.prototype, 'embed')
+      .mockImplementation(async (_texts, _role, failure) => {
+        failure?.(new EmbedFailure('timeout'));
+        return null;
+      });
+    try {
+      const reasons: unknown[] = [];
+      mock.queueSuccess('[]');
+      const result = await denseAdapter({
+        indexPath: path,
+        onQueryDegraded: (reason) => reasons.push(reason),
+      }).query('where are access tokens stored', 'curated', 'test-tenant');
+      expect(reasons).toHaveLength(1);
+      expect(reasons[0]).toBeInstanceOf(EmbedFailure);
+      expect((reasons[0] as EmbedFailure).category).toBe('timeout');
+      expect(result.ok).toBe(true);
+      if (result.ok)
+        expect(result.value.map((h) => h.file)).toEqual(['qmd://kb-curated/token-guide.md']);
+    } finally {
+      embed.mockRestore();
+    }
+  });
+
+  it('does not add partial candidates when an existing arm already found an answer', async () => {
+    write('curated', 'partial.md', 'Access tokens remain in the credential vault.');
+    mock.queueSuccess(
+      JSON.stringify([
+        { file: 'qmd://kb-curated/official.md', score: 1, snippet: 'official answer' },
+      ]),
+    );
+    const result = await fusedAdapter().query(
+      'where are access tokens stored',
+      'curated',
+      'test-tenant',
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.map((h) => h.file)).toEqual(['qmd://kb-curated/official.md']);
+  });
+
+  it('refuses a natural-question fallback for another tenant before querying', async () => {
+    write('curated', 'private.md', 'Access tokens remain in the credential vault.');
+    const result = await fusedAdapter().query(
+      'where are access tokens stored',
+      'curated',
+      'other-tenant',
+    );
+    expect(result).toEqual({ ok: true, value: [] });
+    expect(mock.commands).toHaveLength(0);
   });
 
   it('denseSync() with the embedder down reports serviceDown instead of throwing', async () => {

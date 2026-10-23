@@ -41,7 +41,38 @@ export function buildFts5MatchQuery(query: string): string {
   return tokens.map((t) => `"${t}"`).join(' ');
 }
 
+const QUESTION_STARTERS = new Set(
+  'what where when which who why how can could do does is are should would tell explain'.split(' '),
+);
+const QUESTION_MAX_DOCS = 25000;
+const QUESTION_MAX_TERM_POSTINGS = 2000;
+const QUESTION_MAX_TOTAL_POSTINGS = 10000;
+const QUESTION_FUNCTION_WORDS = new Set(
+  (
+    'a an the and or of to for from in on at by with without about as into through ' +
+    'what where when which who why how can could do does did is are was were be been being ' +
+    'should would will shall may might must have has had i me my we us our you your he she it its they them their ' +
+    'this that these those there here please tell explain'
+  ).split(' '),
+);
+
+/** Only broaden bounded, unquoted natural questions; every term remains literal. */
+function questionTerms(query: string): string[] {
+  if (query.length > 4096 || query.includes('"') || !/^\p{L}/u.test(query.trim())) return [];
+  const tokens =
+    query
+      .normalize('NFKC')
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (!QUESTION_STARTERS.has(tokens[0] ?? '')) return [];
+  const terms = [
+    ...new Set(tokens.filter((term) => term.length > 1 && !QUESTION_FUNCTION_WORDS.has(term))),
+  ];
+  return terms.length <= 12 ? terms : [];
+}
+
 interface SearchRow {
+  rowId: number;
   id: string;
   collection: string;
   snippet: string;
@@ -53,7 +84,11 @@ export class Fts5Backend {
   private readonly insertStmt: Database.Statement;
   private readonly deleteStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
+  private readonly scopedSearchStmt: Database.Statement;
   private readonly countStmt: Database.Statement;
+  private readonly boundedDocCountStmt: Database.Statement;
+  private readonly boundedTermCountStmt: Database.Statement;
+  private readonly scopedBoundedTermCountStmt: Database.Statement;
 
   constructor(opts: { path?: string; db?: Database.Database } = {}) {
     // An injected db lets a caller (NativeIndexManager) share one SQLite file
@@ -66,11 +101,22 @@ export class Fts5Backend {
     );
     this.insertStmt = this.db.prepare('INSERT INTO docs(id, collection, content) VALUES (?, ?, ?)');
     this.deleteStmt = this.db.prepare('DELETE FROM docs WHERE id = ?');
-    this.searchStmt = this.db.prepare(
-      "SELECT id, collection, snippet(docs, 2, '', '', '…', 16) AS snippet, bm25(docs) AS rank " +
-        'FROM docs WHERE docs MATCH ? ORDER BY rank LIMIT ?',
+    const selectHits =
+      "SELECT rowid AS rowId, id, collection, snippet(docs, 2, '', '', '…', 16) AS snippet, bm25(docs) AS rank " +
+      'FROM docs WHERE docs MATCH ?';
+    this.searchStmt = this.db.prepare(selectHits + ' ORDER BY rank LIMIT ?');
+    this.scopedSearchStmt = this.db.prepare(
+      selectHits + ' AND collection IN (SELECT value FROM json_each(?)) ORDER BY rank LIMIT ?',
     );
     this.countStmt = this.db.prepare('SELECT count(*) AS n FROM docs');
+    this.boundedDocCountStmt = this.db.prepare(
+      'SELECT count(*) AS n FROM (SELECT rowid FROM docs LIMIT ?)',
+    );
+    const termCount = 'SELECT count(*) AS n FROM (SELECT rowid FROM docs WHERE docs MATCH ?';
+    this.boundedTermCountStmt = this.db.prepare(termCount + ' LIMIT ?)');
+    this.scopedBoundedTermCountStmt = this.db.prepare(
+      termCount + ' AND collection IN (SELECT value FROM json_each(?)) LIMIT ?)',
+    );
   }
 
   /** Index documents (upsert by id — a re-indexed doc replaces its prior copy). */
@@ -114,17 +160,96 @@ export class Fts5Backend {
     this.db.exec('DELETE FROM docs');
   }
 
-  /** BM25 keyword search → top-k hits, most relevant first. */
-  search(query: string, k = 10): Fts5SearchHit[] {
+  private searchRows(match: string, k: number, allowedCollections: readonly string[]): SearchRow[] {
+    return (
+      allowedCollections.length === 0
+        ? this.searchStmt.all(match, k)
+        : this.scopedSearchStmt.all(match, JSON.stringify(allowedCollections), k)
+    ) as SearchRow[];
+  }
+
+  private toHit(row: SearchRow): Fts5SearchHit {
+    return { id: row.id, collection: row.collection, snippet: row.snippet, score: -row.rank };
+  }
+
+  /** BM25 keyword search; apply collection scope before the top-k cutoff. */
+  search(query: string, k = 10, allowedCollections: readonly string[] = []): Fts5SearchHit[] {
     const match = buildFts5MatchQuery(query);
     if (match.length === 0) return [];
-    const rows = this.searchStmt.all(match, k) as SearchRow[];
-    return rows.map((r) => ({
-      id: r.id,
-      collection: r.collection,
-      snippet: r.snippet,
-      score: -r.rank, // FTS5 bm25() is negative (best = most negative); negate so higher = better
-    }));
+    return this.searchRows(match, k, allowedCollections).map((row) => this.toHit(row));
+  }
+
+  /** Last-resort question retrieval. Caller must first exhaust all strict/dense arms. */
+  searchQuestionFallback(
+    query: string,
+    k = 10,
+    allowedCollections: readonly string[] = [],
+  ): Fts5SearchHit[] {
+    const terms = questionTerms(query);
+    if (terms.length < 2 || !Number.isSafeInteger(k) || k <= 0) return [];
+    const minimum = Math.ceil(terms.length * 0.6);
+    // Keep every probe and the final query on one WAL read snapshot. A second
+    // connection cannot grow the postings between our checks and ranking.
+    return this.db
+      .transaction(() => {
+        if (!this.questionWithinBounds(terms, allowedCollections)) return [];
+        return this.questionRows(terms, minimum, Math.min(k, 200), allowedCollections).map((row) =>
+          this.toHit(row),
+        );
+      })
+      .deferred();
+  }
+
+  /** Refuse broad fallback work; LIMIT is inside each aggregate's input. */
+  private questionWithinBounds(terms: readonly string[], collections: readonly string[]): boolean {
+    const docs = this.boundedDocCountStmt.get(QUESTION_MAX_DOCS + 1) as { n: number };
+    if (docs.n > QUESTION_MAX_DOCS) return false;
+    let total = 0;
+    for (const term of terms) {
+      const match = `"${term}"`;
+      const count = (
+        collections.length === 0
+          ? this.boundedTermCountStmt.get(match, QUESTION_MAX_TERM_POSTINGS + 1)
+          : this.scopedBoundedTermCountStmt.get(
+              match,
+              JSON.stringify(collections),
+              QUESTION_MAX_TERM_POSTINGS + 1,
+            )
+      ) as { n: number };
+      total += count.n;
+      if (count.n > QUESTION_MAX_TERM_POSTINGS || total > QUESTION_MAX_TOTAL_POSTINGS) return false;
+    }
+    return true;
+  }
+
+  /** Count distinct literal matches inside SQLite before any candidate cutoff. */
+  private questionRows(
+    terms: readonly string[],
+    minimum: number,
+    k: number,
+    allowedCollections: readonly string[],
+  ): SearchRow[] {
+    const scope =
+      allowedCollections.length === 0 ? '' : ' AND collection IN (SELECT value FROM json_each(?))';
+    const perTerm = 'SELECT rowid AS docRowId FROM docs WHERE docs MATCH ?' + scope;
+    const params = terms.flatMap((term) =>
+      allowedCollections.length === 0
+        ? [`"${term}"`]
+        : [`"${term}"`, JSON.stringify(allowedCollections)],
+    );
+    const match = terms.map((term) => `"${term}"`).join(' OR ');
+    // SQL text depends only on bounded term count and the presence of scope;
+    // user terms and collection names are always bound values. FTS5 tokenization
+    // supplies accent semantics without loading document bodies into JS.
+    const statement = this.db.prepare(
+      'WITH term_matches AS (' +
+        terms.map(() => perTerm).join(' UNION ALL ') +
+        '), coverage AS (SELECT docRowId, count(*) AS covered FROM term_matches GROUP BY docRowId HAVING count(*) >= ?) ' +
+        "SELECT docs.rowid AS rowId, id, collection, snippet(docs, 2, '', '', '…', 16) AS snippet, bm25(docs) AS rank " +
+        'FROM docs JOIN coverage ON docs.rowid = coverage.docRowId WHERE docs MATCH ? ' +
+        'ORDER BY coverage.covered DESC, rank, docs.rowid LIMIT ?',
+    );
+    return statement.all(...params, minimum, match, k) as SearchRow[];
   }
 
   count(): number {
