@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and await connection teardown, so an empty request cannot escape as an unhandled JSON
   exception during otherwise-passing validation (`compile-then-govern-1io.4.1`).
 
+- Commit HTTP memory lifecycle/category updates and their audit receipts in
+  one shared transaction, rolling both back on failure while retaining nested
+  caller transactions (`compile-then-govern-1io.7`).
+
 - Arm qmd host-signal cleanup before spawning the launcher so SIGINT during
   spawn cannot leave a running detached child unregistered. Failed/no-PID
   spawns release their reservation; normal release/untrack removes qmd

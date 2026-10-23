@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type Database from 'better-sqlite3';
 import {
   createTestDatabase,
@@ -343,6 +343,86 @@ describe('MemoryService', () => {
     const memory = makeMemory();
     memoryRepo.insert(memory);
     expect(() => service.recategorize(memory.id, { category: 'not-a-category' })).toThrow(ApiError);
+  });
+
+  describe.each(['transition', 'recategorize'] as const)('%s receipt atomicity', (operation) => {
+    const actor = { type: 'human' as const, id: 'atomicity-reviewer' };
+
+    function apply(id: string) {
+      return operation === 'transition'
+        ? service.transition(id, 'deprecated', { reason: 'Correct obsolete guidance', actor })
+        : service.recategorize(id, {
+            category: 'architecture',
+            reason: 'Correct classification',
+            actor,
+          });
+    }
+
+    function seed() {
+      const earlier = makeMemory({ lifecycle: 'active' });
+      memoryRepo.insert(earlier);
+      service.transition(earlier.id, 'deprecated', { reason: 'Earlier receipt', actor });
+      const memory = makeMemory({ lifecycle: 'active', category: 'reference' });
+      memoryRepo.insert(memory);
+      return {
+        id: memory.id,
+        before: memoryRepo.findById(memory.id),
+        auditBefore: auditRepo.findAllChronological(),
+      };
+    }
+
+    it('rolls back a real audit insert and memory change on failure, then retries once', () => {
+      const { id, before, auditBefore } = seed();
+      const insert = auditRepo.insert.bind(auditRepo);
+      const fault = vi.spyOn(auditRepo, 'insert').mockImplementationOnce((event) => {
+        insert(event); // Exercise the real nested audit transaction before failing.
+        throw new Error('Injected failure after audit insert');
+      });
+      try {
+        expect(() => apply(id)).toThrow('Injected failure after audit insert');
+      } finally {
+        fault.mockRestore();
+      }
+      expect(memoryRepo.findById(id)).toEqual(before); // Includes lifecycle/category/updatedAt.
+      expect(auditRepo.findAllChronological()).toEqual(auditBefore);
+      expect(db.inTransaction).toBe(false);
+
+      const updated = apply(id);
+      expect(memoryRepo.findById(id)).toEqual(updated);
+      expect(updated.updatedAt).not.toBe(before?.updatedAt);
+      expect(updated.lifecycle).toBe(operation === 'transition' ? 'deprecated' : 'active');
+      expect(updated.category).toBe(operation === 'recategorize' ? 'architecture' : 'reference');
+      const events = auditRepo.findByMemory(id);
+      expect(events).toHaveLength(1);
+      expect(events[0]?.actor).toEqual(actor);
+      expect(events[0]?.action).toBe(operation === 'transition' ? 'demoted' : 'recategorized');
+      expect(events[0]?.details).toEqual(
+        operation === 'transition'
+          ? { from: 'active', to: 'deprecated' }
+          : { fromCategory: 'reference', toCategory: 'architecture' },
+      );
+      const tail = auditRepo.findAllChronological();
+      expect(tail).toHaveLength(auditBefore.length + 1);
+      expect(tail.at(-1)?.prev_entry_hash).toBe(auditBefore.at(-1)?.entry_hash);
+    });
+
+    it('leaves the caller transaction open and rolls back with its outer failure', () => {
+      const { id, before, auditBefore } = seed();
+      expect(() =>
+        db.transaction(() => {
+          const updated = apply(id);
+          expect(db.inTransaction).toBe(true);
+          expect(memoryRepo.findById(id)).toEqual(updated);
+          expect(auditRepo.findByMemory(id)).toHaveLength(1);
+          throw new Error('Outer caller rolls back');
+        })(),
+      ).toThrow('Outer caller rolls back');
+      expect(memoryRepo.findById(id)).toEqual(before);
+      expect(auditRepo.findAllChronological()).toEqual(auditBefore);
+      expect(db.inTransaction).toBe(false);
+      apply(id);
+      expect(auditRepo.findByMemory(id)).toHaveLength(1);
+    });
   });
 });
 

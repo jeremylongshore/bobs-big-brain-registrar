@@ -82,29 +82,34 @@ export class MemoryService {
       throw badRequest(`Invalid transition request: ${parsed.error.message}`);
     }
 
-    const memory = this.getById(id); // throws 404 if missing
-    const validation = validateTransition(memory.lifecycle, to, parsed.data);
-    if (!validation.valid) {
-      throw badRequest(validation.error);
-    }
+    // Keep the memory change and its receipt atomic, including nested callers.
+    return this.memoryRepo.connection
+      .transaction(() => {
+        const memory = this.getById(id); // throws 404 if missing
+        const validation = validateTransition(memory.lifecycle, to, parsed.data);
+        if (!validation.valid) {
+          throw badRequest(validation.error);
+        }
 
-    const now = new Date().toISOString();
-    this.memoryRepo.updateLifecycle(id, to, now);
+        const now = new Date().toISOString();
+        this.memoryRepo.updateLifecycle(id, to, now);
 
-    const auditEvent = AuditEvent.parse({
-      id: randomUUID(),
-      action: lifecycleToAction(to),
-      memoryId: id,
-      tenantId: memory.tenantId,
-      actor: parsed.data.actor,
-      reason: parsed.data.reason,
-      details: { from: memory.lifecycle, to },
-      timestamp: now,
-    });
-    this.auditRepo.insert(auditEvent);
+        const auditEvent = AuditEvent.parse({
+          id: randomUUID(),
+          action: lifecycleToAction(to),
+          memoryId: id,
+          tenantId: memory.tenantId,
+          actor: parsed.data.actor,
+          reason: parsed.data.reason,
+          details: { from: memory.lifecycle, to },
+          timestamp: now,
+        });
+        this.auditRepo.insert(auditEvent);
 
-    // Return the updated memory without a second DB fetch
-    return { ...memory, lifecycle: to, updatedAt: now };
+        // Return the updated memory without a second DB fetch
+        return { ...memory, lifecycle: to, updatedAt: now };
+      })
+      .immediate();
   }
 
   /**
@@ -162,27 +167,36 @@ export class MemoryService {
       throw badRequest(`Invalid recategorize request: ${parsed.error.message}`);
     }
 
-    const memory = this.getById(id); // throws 404 if missing
-    if (memory.category === parsed.data.category) {
-      throw badRequest(`Memory ${id} is already category "${memory.category}"`);
-    }
+    // Keep the memory change and its receipt atomic, including nested callers.
+    return this.memoryRepo.connection
+      .transaction(() => {
+        const memory = this.getById(id); // throws 404 if missing
+        if (memory.category === parsed.data.category) {
+          throw badRequest(`Memory ${id} is already category "${memory.category}"`);
+        }
 
-    const now = new Date().toISOString();
-    const updated: CuratedMemory = { ...memory, category: parsed.data.category, updatedAt: now };
-    this.memoryRepo.update(updated);
+        const now = new Date().toISOString();
+        const updated: CuratedMemory = {
+          ...memory,
+          category: parsed.data.category,
+          updatedAt: now,
+        };
+        this.memoryRepo.update(updated);
 
-    const auditEvent = AuditEvent.parse({
-      id: randomUUID(),
-      action: 'recategorized',
-      memoryId: id,
-      tenantId: memory.tenantId,
-      actor: parsed.data.actor,
-      reason: parsed.data.reason,
-      details: { fromCategory: memory.category, toCategory: parsed.data.category },
-      timestamp: now,
-    });
-    this.auditRepo.insert(auditEvent);
+        const auditEvent = AuditEvent.parse({
+          id: randomUUID(),
+          action: 'recategorized',
+          memoryId: id,
+          tenantId: memory.tenantId,
+          actor: parsed.data.actor,
+          reason: parsed.data.reason,
+          details: { fromCategory: memory.category, toCategory: parsed.data.category },
+          timestamp: now,
+        });
+        this.auditRepo.insert(auditEvent);
 
-    return updated;
+        return updated;
+      })
+      .immediate();
   }
 }
