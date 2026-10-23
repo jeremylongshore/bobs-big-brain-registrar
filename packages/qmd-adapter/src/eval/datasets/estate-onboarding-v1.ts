@@ -2,8 +2,8 @@ import type { EvalDataset } from '../eval-types.js';
 
 /**
  * estate-onboarding-v1 — questions a new hire asks about how Intent Solutions
- * runs, each labeled with the doc(s) that answer it CORRECTLY as of 2026-10-13
- * and the still-searchable docs that answer it with OBSOLETE information (a
+ * runs. Current-answer and still-searchable obsolete-answer labels identify the
+ * sources a new hire can act on correctly or wrongly (for example, a
  * torn-down platform, a renamed repo, a retired channel). Scored with FAMA@10
  * (bead compile-then-govern-39z.5): Recall@10 cannot see a brain that serves the
  * right answer next to a wrong one; FAMA subtracts for it.
@@ -20,8 +20,12 @@ import type { EvalDataset } from '../eval-types.js';
  * are separate observations. The relevant labels
  * do not depend on search; an obsolete doc that only dense retrieval surfaces
  * may still be unlabeled. The 2026-10-23 audit adds seven query-specific
- * obsolete labels from local top 10 with dense configured; mixed-gold repairs remain open
- * under 39z.33. Methodology and authority links: ./README.md.
+ * obsolete labels from local top 10 with dense configured. The later 39z.33/33.3
+ * pass replaces seventeen mixed-current originals using fifteen accepted corrections
+ * (some reused), with query-specific obsolete labels. The same scored question ids,
+ * kinds and literal queries are retained. Labels were adjudicated before observing
+ * new retrieval results; annotation effects are reported separately from ranking.
+ * Methodology and authority links: ./README.md.
  */
 export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
   name: 'estate-onboarding-v1',
@@ -60,8 +64,9 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/9ac7783e-c711-53f7-925e-7613c4936253.md',
         'qmd://kb-guides/3da6addc-b68e-566a-aaee-797742ac4592.md',
       ],
+      obsolete: ['qmd://kb-guides/96e801bc-35d9-5a95-a8b2-a7bd6bfe3bca.md'],
       notes:
-        'Probe returned ZERO results. Ope onboarding packet (2a8fee37, rewritten as 9ac7783e in 39z.28): tailnet join is the prerequisite, no public SSH; security posture: SSH tailnet-only, pubkey-only. No obsolete doc found.',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Old emergency guide recommends public SSH and local-only backup assumptions. Earlier probe notes retain their historical labels/ranks: Probe returned ZERO results. Ope onboarding packet (2a8fee37, rewritten as 9ac7783e in 39z.28): tailnet join is the prerequisite, no public SSH; security posture: SSH tailnet-only, pubkey-only. No obsolete doc found.',
     },
     {
       id: 'e04',
@@ -172,12 +177,12 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'lexical',
       query: 'what CI checks must pass before merging',
       relevant: [
-        'qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md',
-        'qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md',
+        'qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md',
         'qmd://kb-curated/004b9ba8-8db2-5a29-9a73-d875afa87dd3.md',
       ],
+      obsolete: ['qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md'],
       notes:
-        'Relevant at #1 (013-OD-STND PR conventions); 20fd0fe9 and 004b9ba8 (required CI checks are the deterministic gate, AI reviewer advisory, never --admin-bypass) not in top 10. None lists the concrete check set (Codecov, CodeQL, mutation, lint, typecheck, harness verify). No obsolete.',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Old merge standard says protection is absent and plugin lacks its current unit gate. Earlier probe notes retain their historical labels/ranks: Relevant at #1 (013-OD-STND PR conventions); 20fd0fe9 and 004b9ba8 (required CI checks are the deterministic gate, AI reviewer advisory, never --admin-bypass) not in top 10. None lists the concrete check set (Codecov, CodeQL, mutation, lint, typecheck, harness verify). No obsolete.',
     },
     {
       id: 'e14',
@@ -225,10 +230,11 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       query: 'where is the shared calendar',
       relevant: [
         'qmd://kb-curated/b206b680-ed7a-5055-90c0-d23649331df2.md',
-        'qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md',
+        'qmd://kb-curated/2a48c404-33f7-515f-881c-f1b703219c4a.md',
       ],
+      obsolete: ['qmd://kb-curated/0a55ea2c-d00f-508c-8e66-b16243ca6fa7.md'],
       notes:
-        "Relevant not in top 10; #1 'Calendar write authority is a property of the collection' is on-topic but doesn't say where. Relevant: Radicale CalDAV at calendar.intentsolutions.io, shared 'team' account. No obsolete.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Old calendar summary prescribes two collections per user instead of the shared-team layout. Earlier probe notes retain their historical labels/ranks: Relevant not in top 10; #1 'Calendar write authority is a property of the collection' is on-topic but doesn't say where. Relevant: Radicale CalDAV at calendar.intentsolutions.io, shared 'team' account. No obsolete.",
     },
     {
       id: 'e20',
@@ -236,10 +242,10 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       query: 'how do I access the CRM',
       relevant: [
         'qmd://kb-guides/e6d325b6-448c-508d-b939-e88a86384da3.md',
-        'qmd://kb-guides/e5ee0f94-59eb-52cc-9145-f80c1b44de7d.md',
+        'qmd://kb-guides/9fa49f4a-cb1f-53c4-9c0f-d06a15079324.md',
       ],
       notes:
-        "Probe returned ZERO results. Twenty CRM at crm.intentsolutions.io (self-hosted on the VPS); e5ee0f94 still says SMTP via Jeremy's Gmail (stale detail, off-question). No obsolete.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The replacement preserves this question’s useful answer; unrelated stale clauses do not by themselves justify a query-specific obsolete label. Earlier probe notes retain their historical labels/ranks: Probe returned ZERO results. Twenty CRM at crm.intentsolutions.io (self-hosted on the VPS); e5ee0f94 still says SMTP via Jeremy's Gmail (stale detail, off-question). No obsolete.",
     },
     {
       id: 'e21',
@@ -258,7 +264,7 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'semantic',
       query: 'how does the jeremylongshore.com website deploy',
       relevant: [
-        'qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md',
+        'qmd://kb-guides/41e58242-b3ee-53c5-af7b-bc4aa9e38a12.md',
         'qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md',
       ],
       obsolete: [
@@ -267,9 +273,10 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md',
         'qmd://kb-guides/215d695b-e78b-5aab-95e1-6807d081c71a.md',
         'qmd://kb-guides/31cf8803-ef48-5ba3-b5db-e353d6deddbe.md',
+        'qmd://kb-guides/a2bc9ef3-666c-584e-859c-47e89c5dc5c1.md',
       ],
       notes:
-        "2026-10-23 dense audit: 2a1df12b rank 2 and 0d239fc3 rank 6 prescribe retired Linkyee/static deployment; current site is Next.js/Docker. Gold a2bc9ef3 also mixes obsolete deployment with valid VPS facts; its replacement is pending 39z.33, so this remains an optimistic gold set. Earlier lexical-only observation: Probe returned ZERO results. Relevant: README (GitHub Actions + Tailscale OIDC + force-command to VPS, off Firebase/Netlify 2026-06-20); GCP decision confirms the move. Obsolete: Domain audit ('jeremylongshore.com will remain on Netlify/Firebase'), blog workspace overview + Multi-Blog CLAUDE.md (Netlify deploys from main).",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Old site guide prescribes the retired Linkyee/static build. Earlier probe notes retain their historical labels/ranks: 2026-10-23 dense audit: 2a1df12b rank 2 and 0d239fc3 rank 6 prescribe retired Linkyee/static deployment; current site is Next.js/Docker. Gold a2bc9ef3 also mixes obsolete deployment with valid VPS facts; its replacement is pending 39z.33, so this remains an optimistic gold set. Earlier lexical-only observation: Probe returned ZERO results. Relevant: README (GitHub Actions + Tailscale OIDC + force-command to VPS, off Firebase/Netlify 2026-06-20); GCP decision confirms the move. Obsolete: Domain audit ('jeremylongshore.com will remain on Netlify/Firebase'), blog workspace overview + Multi-Blog CLAUDE.md (Netlify deploys from main).",
     },
     {
       id: 'e23',
@@ -309,31 +316,25 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'semantic',
       query: 'what is the commit message standard',
       relevant: [
-        'qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md',
-        'qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md',
+        'qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md',
+        'qmd://kb-curated/e5270cbd-2422-5cfa-9689-53f40702cffc.md',
       ],
       notes:
-        '013-OD-STND guide ranks #1; Branch/commit/PR discipline + Outsider Test (curated) not in top 10. 013 doc still names pre-rename repos (ICO/qmd-team-intent-kb) and says branch protection OFF, but the commit rules match v1.1. No obsolete hit in top 10; ranks 2-8 are other-project guides (noise).',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Reuse the accepted current PR guide, deduplicate its citation, and preserve the unique Claude-specific attribution convention as a separate relevant citation. This label was adjudicated before observing new retrieval ranks. Earlier probe notes retain their historical labels/ranks: 013-OD-STND guide ranks #1; Branch/commit/PR discipline + Outsider Test (curated) not in top 10. 013 doc still names pre-rename repos (ICO/qmd-team-intent-kb) and says branch protection OFF, but the commit rules match v1.1. No obsolete hit in top 10; ranks 2-8 are other-project guides (noise).',
     },
     {
       id: 'e27',
       kind: 'semantic',
       query: 'what has to be in a pull request description',
-      relevant: [
-        'qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md',
-        'qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md',
-      ],
+      relevant: ['qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md'],
       notes:
-        '013-OD-STND ranks #2 (Kobiton client CONTRIBUTING #1 = noise). 20fd0fe9 not in top 10. No obsolete hit.',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The replacement preserves this question’s useful answer; unrelated stale clauses do not by themselves justify a query-specific obsolete label. Earlier probe notes retain their historical labels/ranks: 013-OD-STND ranks #2 (Kobiton client CONTRIBUTING #1 = noise). 20fd0fe9 not in top 10. No obsolete hit.',
     },
     {
       id: 'e28',
       kind: 'semantic',
       query: 'how do I track my tasks',
-      relevant: [
-        'qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md',
-        'qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md',
-      ],
+      relevant: ['qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md'],
       obsolete: [
         'qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md',
         'qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md',
@@ -341,9 +342,11 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-curated/c680061a-c46c-54fa-b954-4cbe38515b6a.md',
         'qmd://kb-curated/ae354749-eade-518b-81f9-13d954ff783f.md',
         'qmd://kb-guides/5c201940-c1ac-527d-9fcc-2714ead434fe.md',
+        'qmd://kb-curated/cda0ce1e-17f6-4057-be6e-fa83200715f0.md',
+        'qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md',
       ],
       notes:
-        "2026-10-23 dense audit: 83567b00 rank 1 and 41f458f7 rank 7 prescribe obsolete bd sync/JSONL/SQLite/beads-sync persistence. Current authority is Dolt/refs/dolt/data, passive JSONL. Both current gold docs also need selective correction under 39z.33. Earlier lexical-only observation: Probe returned 0 hits for this phrasing; 'how do I track tasks' returned 4 noise/other-project hits; keyword probe 'beads task tracking' ranks b48e0ab0 #4 (onboarding still says 'bd sync', which is pre-Dolt). Obsolete: 6dc4a43f (#3 kw) and c680061a describe beads as SQLite + beads-sync git branch (pre-Dolt); ae354749 (#1 kw) bd sync + '10 top-level epics'; 5c201940 prescribes Taskwarrior tracking.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Both old task guides prescribe pre-Dolt persistence/synchronization. Earlier probe notes retain their historical labels/ranks: 2026-10-23 dense audit: 83567b00 rank 1 and 41f458f7 rank 7 prescribe obsolete bd sync/JSONL/SQLite/beads-sync persistence. Current authority is Dolt/refs/dolt/data, passive JSONL. Both current gold docs also need selective correction under 39z.33. Earlier lexical-only observation: Probe returned 0 hits for this phrasing; 'how do I track tasks' returned 4 noise/other-project hits; keyword probe 'beads task tracking' ranks b48e0ab0 #4 (onboarding still says 'bd sync', which is pre-Dolt). Obsolete: 6dc4a43f (#3 kw) and c680061a describe beads as SQLite + beads-sync git branch (pre-Dolt); ae354749 (#1 kw) bd sync + '10 top-level epics'; 5c201940 prescribes Taskwarrior tracking.",
     },
     {
       id: 'e29',
@@ -352,10 +355,10 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       relevant: [
         'qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md',
         'qmd://kb-curated/273a0178-1240-5689-8e9e-7d5563ef1b1d.md',
-        'qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md',
+        'qmd://kb-curated/88a6a863-a182-5fc5-8c69-ac221b511188.md',
       ],
       notes:
-        "Exact phrasing returned 0 hits; 'mirror a task to GitHub and Plane' ranks d5d9927b #1, b48e0ab0 not in top 10; 'bd-sync mirror GitHub Plane' ranks d5d9927b #1, 273a0178 #2, b48e0ab0 #3. No obsolete doc gives wrong mirror instructions (8a458d74/dba14edb are contradiction records, noise).",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Gold replacement only: the old mirroring procedure remains useful; stale background clauses do not justify an obsolete mirroring label. Earlier probe notes retain their historical labels/ranks: Exact phrasing returned 0 hits; 'mirror a task to GitHub and Plane' ranks d5d9927b #1, b48e0ab0 not in top 10; 'bd-sync mirror GitHub Plane' ranks d5d9927b #1, 273a0178 #2, b48e0ab0 #3. No obsolete doc gives wrong mirror instructions (8a458d74/dba14edb are contradiction records, noise).",
     },
     {
       id: 'e30',
@@ -404,25 +407,29 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'semantic',
       query: 'how do I search the brain',
       relevant: [
-        'qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md',
-        'qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md',
-        'qmd://kb-curated/ac51988a-b99f-5b92-a15f-e88371dcb798.md',
+        'qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md',
+        'qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md',
+        'qmd://kb-curated/86a22878-b5a4-52bc-89cc-4452cd348151.md',
       ],
-      obsolete: ['qmd://kb-guides/87d86da8-4f48-5bb5-a12a-0e17c7a71cbe.md'],
+      obsolete: [
+        'qmd://kb-guides/87d86da8-4f48-5bb5-a12a-0e17c7a71cbe.md',
+        'qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md',
+      ],
       notes:
-        "7a25e42e #4; e25bccbd and ac51988a not in top 10. 7a25e42e described brain_search as 'qmd search --json'; rewritten as 28604f29 with the fused BM25/FTS5/dense stack in 39z.28. Obsolete: 87d86da8 tells you to use the old teamkb_search MCP tool (now brain_search); not in top 10 here.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The old commands guide falsely restricts retrieval to keyword-AND rather than natural-language search; the other guide retains a useful search workflow and is not penalized for background index-location errors. Earlier probe notes retain their historical labels/ranks: 7a25e42e #4; e25bccbd and ac51988a not in top 10. 7a25e42e described brain_search as 'qmd search --json'; rewritten as 28604f29 with the fused BM25/FTS5/dense stack in 39z.28. Obsolete: 87d86da8 tells you to use the old teamkb_search MCP tool (now brain_search); not in top 10 here.",
     },
     {
       id: 'e34',
       kind: 'lexical',
       query: 'how does the brain decide what knowledge to keep (compile then govern)',
       relevant: [
-        'qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md',
-        'qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md',
+        'qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md',
+        'qmd://kb-curated/66221efa-fad4-5d48-9ba2-6cc224677883.md',
         'qmd://kb-guides/e1adedd1-9886-552f-a39a-aab1e0b30e1e.md',
       ],
+      obsolete: ['qmd://kb-curated/081bce4f-1801-539d-a852-add50f441e50.md'],
       notes:
-        "Full phrasing returned 0 hits (also without the parenthetical). Keyword probe 'compile then govern': 081bce4f #3, e1adedd1 #7, 7203130b not in top 10. Thesis docs use pre-rename repo names but the concept (model proposes, deterministic dedupe/policy/promotion, hash-chained receipts) is current; no obsolete doc misstates it. 9ab72519 (#1 kw) has old repo names (obsolete for e38, not this question).",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The old architecture centrally misstates six Compiler passes as deterministic; the accepted pass delta distinguishes five model-backed passes and deterministic linking, while the existing architecture gold retains the broader governance boundary. Earlier probe notes retain their historical labels/ranks: Full phrasing returned 0 hits (also without the parenthetical). Keyword probe 'compile then govern': 081bce4f #3, e1adedd1 #7, 7203130b not in top 10. Thesis docs use pre-rename repo names but the concept (model proposes, deterministic dedupe/policy/promotion, hash-chained receipts) is current; no obsolete doc misstates it. 9ab72519 (#1 kw) has old repo names (obsolete for e38, not this question).",
     },
     {
       id: 'e35',
@@ -441,12 +448,12 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'semantic',
       query: "where does the brain's data live",
       relevant: [
-        'qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md',
+        'qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md',
         'qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md',
         'qmd://kb-guides/84a42564-fd30-5682-b04e-51a6d814b577.md',
       ],
       notes:
-        'None of the relevant docs in top 10 (top 5 are SigNoz/Dolt/D88/doc-database noise). No obsolete doc found placing the brain elsewhere.',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The replacement preserves this question’s useful answer; unrelated stale clauses do not by themselves justify a query-specific obsolete label. Earlier probe notes retain their historical labels/ranks: None of the relevant docs in top 10 (top 5 are SigNoz/Dolt/D88/doc-database noise). No obsolete doc found placing the brain elsewhere.',
     },
     {
       id: 'e37',
@@ -455,10 +462,10 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       relevant: [
         'qmd://kb-guides/e60ee3c7-8cef-51b0-8aa6-d7f0ff358d3e.md',
         'qmd://kb-curated/682750ff-6792-52f5-b1ca-d989a52827cc.md',
-        'qmd://kb-guides/7203130b-1eff-576f-aa34-290c708a09b4.md',
+        'qmd://kb-guides/b56108ee-cbc9-5794-b8ca-c14686bd199a.md',
       ],
       notes:
-        'None of the relevant docs in top 10; top 10 is noise (brand voice, commit discipline, etc.). Backup runbook 006-AT-RNBK is fully missed. No obsolete brain-backup doc found.',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The replacement preserves this question’s useful answer; unrelated stale clauses do not by themselves justify a query-specific obsolete label. Earlier probe notes retain their historical labels/ranks: None of the relevant docs in top 10; top 10 is noise (brand voice, commit discipline, etc.). Backup runbook 006-AT-RNBK is fully missed. No obsolete brain-backup doc found.',
     },
     {
       id: 'e38',
@@ -519,17 +526,18 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       query: 'what search technology does the brain use',
       relevant: [
         'qmd://kb-decisions/5c98d93b-770f-56c3-ac3e-8a2a39dd75f7.md',
-        'qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md',
+        'qmd://kb-curated/cf735d0b-101f-5600-84f8-75b9f257974b.md',
         'qmd://kb-decisions/79af3f81-3187-545f-b6aa-982a05635680.md',
-        'qmd://kb-guides/28604f29-08be-5b86-9e9c-af8caef737e8.md',
+        'qmd://kb-guides/95cd747a-564a-5a78-b855-5c00d9d8307c.md',
       ],
       obsolete: [
         'qmd://kb-guides/4f61a0c4-f91e-5ae0-8e31-959ec5233ec6.md',
         'qmd://kb-decisions/872fa0b4-d60e-5dde-b3fd-d5cc3e054e28.md',
         'qmd://kb-curated/5d756bb0-fba6-5267-952f-eb9211feae2c.md',
+        'qmd://kb-curated/28bceea0-b471-59d3-86bd-e04f8ea2ec87.md',
       ],
       notes:
-        "Probe returned 0 hits (also 'brain retrieval search technology'). Relevant: dense on-by-default decision + RRF qmd BM25/FTS5 + measured dense win, and since 39z.28 the rewritten how-to-use guide 28604f29 (fused stack). Obsolete: 4f61a0c4 'BM25 is the only wired path'; 872fa0b4 044-DECR defers dense and drops EmbeddingGemma (later reversed); 5d756bb0 native backend only 'proposed'. 7a25e42e ('qmd search --json') was superseded and archived 2026-10-16.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The old retrieval architecture defers serving dense search. The guide already naming all three technologies is not penalized for background index-location errors. Earlier probe notes retain their historical labels/ranks: Probe returned 0 hits (also 'brain retrieval search technology'). Relevant: dense on-by-default decision + RRF qmd BM25/FTS5 + measured dense win, and since 39z.28 the rewritten how-to-use guide 28604f29 (fused stack). Obsolete: 4f61a0c4 'BM25 is the only wired path'; 872fa0b4 044-DECR defers dense and drops EmbeddingGemma (later reversed); 5d756bb0 native backend only 'proposed'. 7a25e42e ('qmd search --json') was superseded and archived 2026-10-16.",
     },
     {
       id: 'e42',
@@ -552,41 +560,41 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
       kind: 'semantic',
       query: 'what project tracker do we use',
       relevant: [
-        'qmd://kb-guides/99977978-f92e-547a-b772-2fb8a615a50c.md',
+        'qmd://kb-guides/de4bd0ec-3609-58dd-aa1c-8bb32fbbf7e3.md',
         'qmd://kb-guides/4ffce70d-cbee-58bf-ab0e-abd05df5ac69.md',
         'qmd://kb-curated/d5d9927b-b896-5944-a108-9148be37841c.md',
       ],
       notes:
-        'Relevant not in top 10 (top 3 noise). No doc found naming a different tracker as current (Taskwarrior docs cover personal task tracking, labeled under e28).',
+        '2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. Gold replacement only: Plane remains a project tracker; its task-authority overclaim is corrected without penalizing this literal tracker question. Earlier probe notes retain their historical labels/ranks: Relevant not in top 10 (top 3 noise). No doc found naming a different tracker as current (Taskwarrior docs cover personal task tracking, labeled under e28).',
     },
     {
       id: 'e44',
       kind: 'semantic',
       query: 'how do I add something to the brain',
       relevant: [
-        'qmd://kb-curated/e25bccbd-227a-58b8-b6fa-33449bbbd5be.md',
-        'qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md',
+        'qmd://kb-curated/9b655bbf-dd7f-5d21-b693-64a63a729fb7.md',
+        'qmd://kb-curated/5284ce56-c8ce-5960-932d-179b16ba4c61.md',
         'qmd://kb-curated/03e26e71-27ee-5975-81f3-badbb273894b.md',
       ],
       obsolete: [
         'qmd://kb-guides/79b7c1bc-e3f7-53de-bd44-6722cafe51fa.md',
         'qmd://kb-curated/02e42c1d-7241-57ad-8e21-35cde6c23987.md',
+        'qmd://kb-curated/3fc61a8d-4f89-5c05-aaa5-925bfb3710b0.md',
       ],
       notes:
-        "Relevant not in top 10. 'add a fact to the brain': 79b7c1bc #4 (OBSOLETE: says writes are admin-only and member installs never see write tools; team mode now proxies brain_capture for members), 87d86da8 #2. 02e42c1d: intent-brain /brain-promote skill.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The old intake convention falsely says intake never deduplicates. The commands guide correctly distinguishes local/team capture and receives no obsolete penalty for this question. Earlier probe notes retain their historical labels/ranks: Relevant not in top 10. 'add a fact to the brain': 79b7c1bc #4 (OBSOLETE: says writes are admin-only and member installs never see write tools; team mode now proxies brain_capture for members), 87d86da8 #2. 02e42c1d: intent-brain /brain-promote skill.",
     },
     {
       id: 'e45',
       kind: 'semantic',
       query: 'what are the rules for branches and worktrees',
       relevant: [
-        'qmd://kb-curated/20fd0fe9-96b8-5f16-afb0-e68c51f2f9a1.md',
-        'qmd://kb-guides/9fd70dbb-8a7d-539a-9149-5e7a28963a00.md',
+        'qmd://kb-guides/2b16bd66-200c-5afd-8472-ca89bdd146de.md',
         'qmd://kb-decisions/647e8258-fe2e-5fb1-8b12-8eb93f1311c4.md',
       ],
       obsolete: ['qmd://kb-guides/f92788aa-996f-54f6-b649-4ff423d2f742.md'],
       notes:
-        "Probe returned 0 hits; 'branch and worktree rules' returned only 3ff6d7c2 (#1). PARTIAL GAP: branch rules are covered, but the owner's 2026-10-09 worktree rule (one task, one branch, one PR; no worktree per subagent; retire only verified-merged) is in no doc. 3ff6d7c2 recommends worktrees for multi-step work, matching ~/CLAUDE.md, so not marked obsolete. Obsolete: f92788aa branch pattern feat/epic{N}-<desc>-bz<story>.",
+        "2026-10-23 final correction labels (39z.33/33.3): replace mixed-current gold with accepted, source-reviewed corrections; identical reused citations are deduplicated. The replacement preserves this question’s useful answer; unrelated stale clauses do not by themselves justify a query-specific obsolete label. Earlier probe notes retain their historical labels/ranks: Probe returned 0 hits; 'branch and worktree rules' returned only 3ff6d7c2 (#1). PARTIAL GAP: branch rules are covered, but the owner's 2026-10-09 worktree rule (one task, one branch, one PR; no worktree per subagent; retire only verified-merged) is in no doc. 3ff6d7c2 recommends worktrees for multi-step work, matching ~/CLAUDE.md, so not marked obsolete. Obsolete: f92788aa branch pattern feat/epic{N}-<desc>-bz<story>.",
     },
     {
       id: 'e46',

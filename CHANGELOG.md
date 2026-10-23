@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Record seventeen local memory retirements and fifteen accepted corrections; update seventeen question labels (sixteen replace relevant citations, fourteen correction citations become gold), preserve all 45 scored questions, and publish frozen labels plus a two-by-two citation replay. On corrected labels, the later local run measured Recall@10 0.4389 and obsolete exposure 5/45 versus 0.3759 and 12/45 on the earlier lists. Five dense query failures make this degraded retrieval evidence, not a controlled pure-hybrid or deployed acceptance claim; remaining gaps stay tracked.
+
 - Add seven authority-checked, query-specific obsolete estate labels and a dated local observation/relabel receipt; expose known mixed-current gold awaiting selective repair. No retrieval ranking or corpus mutation.
 
 - **Estate eval labels follow the corrected rewrites (umbrella bead
