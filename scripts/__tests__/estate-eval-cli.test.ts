@@ -132,6 +132,8 @@ describe('estate evaluation isolated CLI', () => {
       expect(output).toContain(`qmd://kb-guides/${memory.id}.md`);
       expect(output).toContain('DEGRADED: dense arm failed');
       expect(output).toContain('unbuilt-or-empty:1');
+      expect(output).toContain('"phase":"probe","queryId":"probe-1","category":"unbuilt-or-empty"');
+      expect(output).toContain('"denseFailureEventsDropped":0');
       expect(output).toContain('not an atomic corpus snapshot');
       expect(dataFiles(base)).toEqual(before);
       expect(readdirSync(scratch)).toEqual([]);

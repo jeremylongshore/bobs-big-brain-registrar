@@ -7,6 +7,7 @@ import { QmdAdapter } from '../adapter.js';
 import { DenseVecIndex } from '../dense/dense-index.js';
 import { QMD_WEIGHTS_MANIFEST } from '../weights/weights-manifest.js';
 import {
+  EmbedFailure,
   EMBEDDINGGEMMA_QUERY_PREFIX,
   EMBEDDINGGEMMA_DOCUMENT_PREFIX,
 } from '../dense/embed-client.js';
@@ -416,6 +417,47 @@ describe('QmdAdapter — native FTS5 fusion', () => {
         );
     },
   );
+
+  it('propagates the sanitized embed failure once and still serves lexical hits', async () => {
+    const pinned = QMD_WEIGHTS_MANIFEST.models.find((model) => model.id === 'embedding')!;
+    const path = join(exportDir, 'dense-http-fixture.sqlite');
+    const index = new DenseVecIndex({
+      path,
+      modelId: pinned.file,
+      modelVersion: `${pinned.sha256}|q:${EMBEDDINGGEMMA_QUERY_PREFIX}|d:${EMBEDDINGGEMMA_DOCUMENT_PREFIX}`,
+    });
+    index.upsert({
+      docId: 'qmd://kb-curated/dense.md',
+      collection: 'kb-curated',
+      contentHash: 'h',
+      snippet: 'fixture',
+      embedding: new Float32Array([1, 0, 0]),
+    });
+    index.close();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('PRIVATE-BODY', { status: 503 })),
+    );
+    const reasons: unknown[] = [];
+    const adapter = denseAdapter({
+      indexPath: path,
+      onQueryDegraded: (reason) => {
+        reasons.push(reason);
+        throw new Error('PRIVATE-OBSERVER');
+      },
+    });
+    mock.queueSuccess(
+      JSON.stringify([{ file: 'qmd://kb-curated/lexical-floor.md', score: 0.9, snippet: 'floor' }]),
+    );
+    const result = await adapter.query('PRIVATE-QUERY', 'curated', 'test-tenant');
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0]).toBeInstanceOf(EmbedFailure);
+    expect(reasons[0]).toMatchObject({ category: 'http-error', httpStatus: 503 });
+    expect(JSON.stringify(reasons)).not.toContain('PRIVATE');
+  });
 
   it('denseSync() is null when dense is not configured (the default)', async () => {
     expect(await fusedAdapter().denseSync()).toBeNull();

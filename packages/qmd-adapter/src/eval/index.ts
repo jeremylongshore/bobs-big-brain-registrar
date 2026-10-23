@@ -10,6 +10,7 @@ export type {
   EvalQuery,
   EvalDataset,
   RetrievalFn,
+  RetrievalContext,
   QueryEvalResult,
   EvalReport,
 } from './eval-types.js';

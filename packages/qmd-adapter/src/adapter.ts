@@ -21,6 +21,7 @@ import { RerankCache } from './rerank/rerank-cache.js';
 import { RerankStage } from './rerank/rerank-stage.js';
 import {
   EmbedClient,
+  type EmbedFailure,
   EMBEDDINGGEMMA_DOCUMENT_PREFIX,
   EMBEDDINGGEMMA_QUERY_PREFIX,
 } from './dense/embed-client.js';
@@ -227,10 +228,15 @@ export class QmdAdapter {
         this.notifyDenseDegraded(new Error('dense index is empty or unbuilt'));
         return [];
       }
-      const vectors = await this.dense.queryClient.embed([queryText], 'query');
+      let embedFailure: EmbedFailure | undefined;
+      const vectors = await this.dense.queryClient.embed([queryText], 'query', (failure) => {
+        embedFailure = failure;
+      });
       const queryVec = vectors?.[0];
       if (queryVec === undefined) {
-        this.notifyDenseDegraded(new Error('embedder returned no vector for the query'));
+        this.notifyDenseDegraded(
+          embedFailure ?? new Error('embedder returned no vector for the query'),
+        );
         return [];
       }
       if (queryVec.length !== this.dense.index.dimensions) {

@@ -33,8 +33,18 @@ export interface EvalDataset {
   queries: EvalQuery[];
 }
 
+/** Stable query identity for optional retrieval diagnostics, without query text. */
+export interface RetrievalContext {
+  phase: 'scored' | 'gap' | 'probe';
+  queryId: string;
+}
+
 /** A retrieval backend under test: query → ranked doc ids (best first), top-k. */
-export type RetrievalFn = (query: string, k: number) => Promise<string[]>;
+export type RetrievalFn = (
+  query: string,
+  k: number,
+  context?: RetrievalContext,
+) => Promise<string[]>;
 
 /** Per-query eval result. */
 export interface QueryEvalResult {
