@@ -5,11 +5,11 @@ Hand-labeled query sets that gate the retrieval-backend decision in
 **does BM25-on-qmd clear Recall@10 ≥ 0.85, or is the deferred sqlite-vec semantic
 backend (bead `qmd-team-intent-kb-0t9.3`) justified?**
 
-| Dataset                      | File                                                   | Corpus                                             | Purpose                                                                                               |
-| ---------------------------- | ------------------------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `governed-second-brain-seed` | [`seed-queries.ts`](./seed-queries.ts)                 | _(none — placeholder ids)_                         | SHAPE/starter only. Runnable against a mock backend in unit tests. **Not a real benchmark.**          |
-| `governed-brain-v1`          | [`governed-brain-v1.ts`](./governed-brain-v1.ts)       | live `~/.teamkb` (tenant `intent-solutions`)       | The **first real number** (bead `compile-then-govern-e06.4` / umbrella #27).                          |
-| `estate-onboarding-v1`       | [`estate-onboarding-v1.ts`](./estate-onboarding-v1.ts) | live `~/.teamkb`, through the team-API search path | **FAMA@10**: does the brain serve obsolete answers to a new hire? (bead `compile-then-govern-39z.5`). |
+| Dataset                      | File                                                   | Corpus                                                 | Purpose                                                                                               |
+| ---------------------------- | ------------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `governed-second-brain-seed` | [`seed-queries.ts`](./seed-queries.ts)                 | _(none — placeholder ids)_                             | SHAPE/starter only. Runnable against a mock backend in unit tests. **Not a real benchmark.**          |
+| `governed-brain-v1`          | [`governed-brain-v1.ts`](./governed-brain-v1.ts)       | live `~/.teamkb` (tenant `intent-solutions`)           | The **first real number** (bead `compile-then-govern-e06.4` / umbrella #27).                          |
+| `estate-onboarding-v1`       | [`estate-onboarding-v1.ts`](./estate-onboarding-v1.ts) | local retrieval core, snapshots of `~/.teamkb` indexes | **FAMA@10**: does the brain serve obsolete answers to a new hire? (bead `compile-then-govern-39z.5`). |
 
 ## `governed-brain-v1` — how it was built (methodology)
 
@@ -101,7 +101,8 @@ may create empty WAL/SHM files or update SHM reader coordination; database and
 committed WAL data are not rewritten. Separate database backups plus the live
 export tree are **not one atomic snapshot**, so concurrent activity can affect
 comparability. JSON reports include snapshot timestamps and source-index presence;
-probes also print retrieval mode and degradation. Missing, empty, incompatible
+probes also print retrieval mode and sanitized degradation categories.
+This runs the local QmdAdapter/SearchService core, not the deployed HTTP API. Missing, empty, incompatible
 or unavailable dense state is reported rather than silently scored as healthy.
 Temporary files are removed after worker exit, including error and normal signal
 paths; a forced OS kill can leave a private temporary directory behind.

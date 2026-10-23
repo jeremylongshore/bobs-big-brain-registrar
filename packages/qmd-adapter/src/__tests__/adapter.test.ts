@@ -317,7 +317,16 @@ describe('QmdAdapter — native FTS5 fusion', () => {
 
   it('reports an unbuilt dense index rather than silently claiming a healthy arm', async () => {
     const reasons: unknown[] = [];
-    mock.queueSuccess('[]');
+    mock.queueSuccess(
+      JSON.stringify([
+        {
+          file: 'qmd://kb-curated/lexical-floor.md',
+          collection: 'kb-curated',
+          score: 0.9,
+          snippet: 'retained lexical answer',
+        },
+      ]),
+    );
     const result = await denseAdapter({ onQueryDegraded: (reason) => reasons.push(reason) }).query(
       'fixture',
       'curated',
@@ -325,17 +334,30 @@ describe('QmdAdapter — native FTS5 fusion', () => {
     );
     expect(result.ok).toBe(true);
     expect(String(reasons[0])).toContain('empty or unbuilt');
+    if (result.ok)
+      expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
   });
 
   it('reports dense construction failure and continues serving lexical results', async () => {
     const reasons: unknown[] = [];
-    mock.queueSuccess('[]');
+    mock.queueSuccess(
+      JSON.stringify([
+        {
+          file: 'qmd://kb-curated/lexical-floor.md',
+          collection: 'kb-curated',
+          score: 0.9,
+          snippet: 'retained lexical answer',
+        },
+      ]),
+    );
     const result = await denseAdapter({
       indexPath: exportDir,
       onQueryDegraded: (reason) => reasons.push(reason),
     }).query('fixture', 'curated', 'test-tenant');
     expect(result.ok).toBe(true);
     expect(String(reasons[0])).toContain('unavailable after construction');
+    if (result.ok)
+      expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
   });
 
   it.each([
@@ -369,7 +391,16 @@ describe('QmdAdapter — native FTS5 fusion', () => {
         ),
       );
       const reasons: unknown[] = [];
-      mock.queueSuccess('[]');
+      mock.queueSuccess(
+        JSON.stringify([
+          {
+            file: 'qmd://kb-curated/lexical-floor.md',
+            collection: 'kb-curated',
+            score: 0.9,
+            snippet: 'retained lexical answer',
+          },
+        ]),
+      );
       const result = await denseAdapter({
         indexPath: path,
         onQueryDegraded: (reason) => reasons.push(reason),
@@ -377,6 +408,8 @@ describe('QmdAdapter — native FTS5 fusion', () => {
       expect(result.ok).toBe(true);
       expect(reasons).toHaveLength(mismatch ? 1 : 0);
       if (mismatch) expect(String(reasons[0])).toContain('dimension');
+      if (result.ok)
+        expect(result.value.map((hit) => hit.file)).toContain('qmd://kb-curated/lexical-floor.md');
       if (result.ok)
         expect(result.value.some((hit) => hit.file === 'qmd://kb-curated/dense.md')).toBe(
           !mismatch,

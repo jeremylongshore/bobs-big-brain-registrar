@@ -4,17 +4,17 @@
  * questions a new hire asks (bead compile-then-govern-39z.5).
  *
  * Recall@10 scores the brain fine while it still recommends a platform torn down
- * on 2026-07-09. This runs the `estate-onboarding-v1` set through the SAME path
- * a teammate's `brain_search` takes on the team API — QmdAdapter with the
- * production dense default, then SearchService's freshness/category/lifecycle
- * rerank and audience filter — and reports Recall@10 next to FAMA@10, which
+ * on 2026-07-09. This runs `estate-onboarding-v1` through the local
+ * QmdAdapter/SearchService retrieval core with temporary index snapshots and
+ * the current export tree. It does not exercise the deployed HTTP API, auth or
+ * middleware. It reports Recall@10 next to FAMA@10, which
  * subtracts for every labeled-obsolete doc that makes the top 10.
  *
  * The launcher snapshots the store and retrieval indexes before this worker runs.
  * Native refresh and dense initialization write only to temporary copies.
  * Exported markdown is read from the original tree. Point it at another brain with
  * TEAMKB_BASE_PATH. Unlike the governed-brain-v1 anchor this is NOT frozen: the
- * point is to measure what the live brain serves today, as it changes.
+ * point is to measure local current-source retrieval, not deployed-service acceptance.
  *
  * Usage:
  *   pnpm eval:estate                               # score the dataset
@@ -41,6 +41,7 @@ import {
 } from '../packages/qmd-adapter/src/eval/index.js';
 import type { RetrievalFn } from '../packages/qmd-adapter/src/eval/index.js';
 import { SearchService } from '../apps/api/src/services/search-service.js';
+import { classifyDenseFailure } from './lib/estate-eval-diagnostics.js';
 
 const K = 10;
 
@@ -63,12 +64,20 @@ async function main(): Promise<void> {
   // report must say which retrieval it measured.
   const dense = getDefaultDenseConfig();
   let denseDegraded = 0;
+  const denseFailureCategories: Record<string, number> = {};
   const executor = new RealQmdExecutor({ env: getQmdTenantEnv(tenantId) });
   const adapter = new QmdAdapter(
     {
       tenantId,
       exportDir,
-      dense: { ...dense, onQueryDegraded: () => void denseDegraded++ },
+      dense: {
+        ...dense,
+        onQueryDegraded: (reason) => {
+          denseDegraded++;
+          const category = classifyDenseFailure(reason);
+          denseFailureCategories[category] = (denseFailureCategories[category] ?? 0) + 1;
+        },
+      },
     },
     {
       // Explicit index prevents qmd from auto-discovering a project-local .qmd
@@ -103,7 +112,11 @@ async function main(): Promise<void> {
       : snapshot.indexes?.dense !== true
         ? 'DEGRADED: dense index missing in source snapshot'
         : denseDegraded > 0
-          ? `DEGRADED: dense arm failed ${denseDegraded} time(s)`
+          ? `DEGRADED: dense arm failed ${denseDegraded} time(s) (${Object.entries(
+              denseFailureCategories,
+            )
+              .map(([name, count]) => `${name}:${count}`)
+              .join(', ')})`
           : 'dense + lexical (dense query failures observed: 0)';
     return (
       `${denseMode}; qmd snapshot ${snapshot.indexes?.qmd === true ? 'present' : 'missing'}; ` +
@@ -145,7 +158,7 @@ async function main(): Promise<void> {
   const dataset = ESTATE_ONBOARDING_V1_DATASET;
   const report = await runEval(dataset, retrieve, {
     k: K,
-    backend: 'team-api search',
+    backend: 'local SearchService retrieval',
   });
   if (!report.perQuery.some((r) => r.retrieved.length > 0)) {
     console.error(`every query returned 0 hits for tenant "${tenantId}" — index unbuilt?`);
@@ -166,9 +179,9 @@ async function main(): Promise<void> {
     gaps.push({ ...g, answerRank });
   }
 
-  report.backend = `team-api search · ${mode()}`;
+  report.backend = `local SearchService retrieval · ${mode()}`;
   if (args.includes('--json')) {
-    console.log(JSON.stringify({ ...report, gaps, isolation }, null, 2));
+    console.log(JSON.stringify({ ...report, gaps, isolation, denseFailureCategories }, null, 2));
     return;
   }
 
