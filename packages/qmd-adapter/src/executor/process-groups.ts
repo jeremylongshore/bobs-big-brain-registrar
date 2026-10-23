@@ -8,16 +8,18 @@
  * registry, interrupting `reindex` would recreate the exact orphan the
  * detached spawn exists to prevent.
  *
- * Handlers are installed only while at least one group is live, and removed
- * with the last one, so a long-running host (API server, MCP server) keeps its
- * own signal semantics between qmd calls. On a signal we SIGTERM every live
+ * Handlers are armed before spawning and remain while a spawn or group is live.
+ * They are removed with the last one, so a long-running host (API server, MCP server) keeps its
+ * signal listeners between qmd calls. On a signal we SIGTERM every live
  * group (SIGKILL after a short blocking grace), then re-raise the signal only
  * if nobody else is listening for it — a host with its own handler keeps
- * control of its shutdown. Every listener on a signal is called, so a host
- * handler registered before or after ours still runs; `uninstall` removes
- * only our own listeners.
+ * control when another listener remains at that check. An earlier once-handler
+ * has already removed itself by then; preserving that callback's control is a
+ * separate follow-up. `uninstall` removes only our own listeners.
  */
 const live = new Set<number>();
+let pendingSpawns = 0;
+let installed = false;
 const FORWARDED: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
 /**
@@ -54,7 +56,9 @@ function anyAlive(): boolean {
  * SIGTERM every live group, wait (blocking) up to {@link SHUTDOWN_GRACE_MS}
  * for them to exit, then SIGKILL whatever remains. Synchronous on purpose:
  * it runs on the way out of the process, where no timer will ever fire, and a
- * qmd that ignores SIGTERM must not outlive the host that started it.
+ * tracked qmd group that ignores SIGTERM receives SIGKILL before host shutdown.
+ * This does not confirm post-SIGKILL reaping or cover a host killed with SIGKILL,
+ * descendants that leave the group, or an uninterruptible kernel state.
  */
 function shutdownGroups(): void {
   if (live.size === 0) return;
@@ -74,25 +78,47 @@ const onSignal = (signal: NodeJS.Signals): void => {
 };
 
 function install(): void {
+  if (installed) return;
+  installed = true;
   process.on('exit', onExit);
   for (const s of FORWARDED) process.on(s, onSignal);
 }
 
 function uninstall(): void {
+  if (!installed) return;
+  installed = false;
   process.off('exit', onExit);
   for (const s of FORWARDED) process.off(s, onSignal);
 }
 
+/**
+ * Arm signal handlers BEFORE spawn. A child can run before spawn returns its
+ * PID; a fatal default signal in that interval would leave it unowned. Signal
+ * callbacks run after the synchronous spawn/registration stack has completed.
+ * The returned release also removes handlers after a failed/no-PID spawn.
+ */
+export function beginGroupSpawn(): () => void {
+  install();
+  pendingSpawns++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    pendingSpawns--;
+    if (live.size === 0 && pendingSpawns === 0) uninstall();
+  };
+}
+
 /** Register a live process group (its leader's pid). */
 export function trackGroup(pgid: number): void {
-  if (live.size === 0) install();
+  install();
   live.add(pgid);
 }
 
 /** Forget a process group once it has exited. */
 export function untrackGroup(pgid: number): void {
   if (!live.delete(pgid)) return;
-  if (live.size === 0) uninstall();
+  if (live.size === 0 && pendingSpawns === 0) uninstall();
 }
 
 /** Number of live tracked groups (diagnostics/tests). */
