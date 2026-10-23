@@ -75,8 +75,8 @@ intent-os `ops/`, the umbrella `000-docs`), then the docs stating it were found 
 `kb-export` by reading them. `obsolete` holds only active, default-scope docs a
 new hire could act on wrongly (GCP or Netlify deploys, Slack alerts, "B2 not
 provisioned", pre-rename repo maps, the retired private marketplace); off-topic
-noise and docs framed as history are not obsolete. 45 questions are scored; 23
-carry obsolete labels (60 in all).
+noise and docs framed as history are not obsolete. 45 questions are scored; 21
+carry obsolete labels (54 in all after the 2026-10-23 audit).
 
 **Gaps are an output, not a failure.** Five questions have no current doc in the
 brain (`ESTATE_ONBOARDING_V1_GAPS`): merging through `safe-merge`, the tailnet
@@ -182,6 +182,136 @@ Nine questions still miss (e01, e03, e09, e14, e17, e25, e38, e43, e48); e02 "wh
 production hosted" now hits. The two numbers are not strictly comparable because the labels
 changed with the corpus; the obsolete-exposure column is the one this bead was for.
 
-**Known limit.** Labels were drawn while the embedder was down, so an obsolete doc
-that only dense retrieval surfaces may still be unlabeled; review the dense top-10
-before treating obsolete exposure as complete.
+**Dense-enabled local top-10 audit (2026-10-23, bead `compile-then-govern-39z.27`).**
+An isolated local QmdAdapter/SearchService run at registrar
+`06a960a219928a9e2ca0e8309a08509f842fc4c6` captured all 45 unchanged questions
+with dense configured and all three source indexes present. The worker reported
+zero dense-query failure callbacks; per-query arm hit counts were not recorded. Backups ran 19:37:04–19:37:09UTC. All45 literal probes returned
+the same 450 result slots / 329 unique citations; the authors screened their content
+against the inspected authorities (a local audit report, not an independent attestation). See the compact
+[observation and relabel receipt](./estate-onboarding-audit-2026-10-23.json).
+No private source content is included in that receipt. Its opaque citation
+IDs/ranks and hashes are public repository evaluation metadata. The workspace
+package is marked `private: true`, and the JSON is not imported by serving code;
+this does not assert the include set of a hypothetical future `npm pack`.
+
+The authors added seven query-specific obsolete labels after reading their actionable,
+current-tense claims and checking the authorities below. Historical records,
+contradiction proposals and off-topic cloud examples were not labeled solely for
+mentioning an old platform. Labels apply to these questions, not universally to
+every appearance of the document.
+
+| Query | Citation prefix / observed rank | Stale instruction                                                          | Current authority                                                                                                                                                                                                                                                                           |
+| ----- | ------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| e21   | `dd3f92bc` /10                  | Point Hustle www at Google hosting                                         | [VPS deployment target](https://github.com/jeremylongshore/hustle/blob/3aca65905492da30c7cd2eeb3042767280039fb1/.github/workflows/deploy.yml#L54); observed apex/www both 167.86.106.29, CNAME lookup timed out; absence was not established                                                |
+| e22   | `2a1df12b` /2, `0d239fc3` /6    | Build Linkyee/static `_output/`                                            | [Next.js/Docker deployment](https://github.com/jeremylongshore/jeremylongshore.com/blob/36a8da81dace59c1e5d0718b7f5647984921c073/CLAUDE.md#L10), [content/deploy rules](https://github.com/jeremylongshore/jeremylongshore.com/blob/36a8da81dace59c1e5d0718b7f5647984921c073/CLAUDE.md#L51) |
+| e28   | `83567b00` /1, `41f458f7` /7    | Persist through `bd sync`, JSONL flush or SQLite/`beads-sync` branch       | [Umbrella task authority and passive JSONL rule](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/db924dd3289df03841a5a5b9a3c8bff4d9e8e592/AGENTS.md#L56)                                                                                                                |
+| e38   | `174b389f` /7                   | Current repository is qmd-team-intent-kb                                   | [Current registrar repository identity](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/db924dd3289df03841a5a5b9a3c8bff4d9e8e592/CLAUDE.md#L75); package/image/Bead aliases remain valid                                                                                |
+| e42   | `3c865bbb` /4                   | deployment-docs, four-digit numbering, feature folders/camelCase filenames | [Public umbrella naming/layout rule](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/db924dd3289df03841a5a5b9a3c8bff4d9e8e592/AGENTS.md#L41); local v4.4 authority also inspected                                                                                       |
+
+Public authorities are pinned where available; local private authority checks
+are author-reported and their file hashes are recorded in the receipt.
+The audit also inspected private estate guidance for persistence and filing;
+its contents are not published here. Public links above support the task-authority
+and filename/layout distinctions, rather than pretending private source URLs are
+publicly inspectable evidence.
+
+Replaying the **same captured retrieval lists** through `runEval` after adding
+only these seven obsolete labels gives:
+
+| Labels on identical captured results | Recall@10 | nDCG@10 | FAMA@10 | Obsolete exposure |
+| ------------------------------------ | --------- | ------- | ------- | ----------------- |
+| Previous labels                      | 0.5389    | 0.4001  | 0.5389  | 0/45              |
+| Seven additional obsolete labels     | 0.5389    | 0.4001  | 0.5151  | 5/45 (0.1111)     |
+
+The actual pre-change dataset had **20 questions / 47 obsolete labels**; the old
+README claim of 23/60 was already stale. The seven additions produce 21/54.
+The receipt pins both label-source commits and records the source-derived counts.
+
+This exposes a measurement gap; no ranking or source-memory improvement occurred.
+Recall/nDCG are identical because relevant labels and result lists are unchanged.
+The capture's original backend string said `team-api search`; that was an
+incorrect label for this local service invocation, narrowed in registrar PR 382.
+It never exercised the deployed HTTP endpoint, authentication or middleware.
+
+To take a new observation (requires the local brain, built indexes, working
+loopback embedder and temporary space proportional to the selected store/indexes):
+
+```sh
+TEAMKB_BASE_PATH="$HOME/.teamkb" TEAMKB_TENANT=intent-solutions \
+  TEAMKB_DENSE_ENABLED=1 TEAMKB_QMD_BIN="$PWD/node_modules/.bin/qmd" \
+  TMPDIR=/dev/shm pnpm eval:estate --json > /tmp/estate-current.json
+```
+
+`/dev/shm` was chosen for available space on this host, not as a requirement.
+A new capture can differ because the store, separate indexes and original export
+tree are not an atomic ensemble. The receipt includes the original ordered query-id/retrieved-id projection
+and its UTF-8 `JSON.stringify(orderedResults)` SHA-256. The separately reconstructed
+probe projection has the same hash. Offline before/after relabeling uses that
+unchanged projection, not an earlier lexical-only run. Private source-body hashes
+identify the seven adjudicated document versions without publishing their text.
+Private full reports/probes were retained locally for this audit; they are not
+included as a public reproducible corpus or an external attestation.
+
+**Known limit.** The authors report screening all 329 observed unique citations;
+the private review notes are not an independently attested public review ledger.
+Mixed-current
+**gold remains unresolved** under `compile-then-govern-39z.33`: calendar layout
+(e19), personal-site deployment (e22), Beads persistence (e28/e29), retrieval
+(e33/e41) and intake deduplication (e44), among other clauses. Gold citations are
+retained pending bounded corrected admission/replacement; this keeps the present
+score optimistic. No citation is both relevant and obsolete for one question.
+No source-content capture, lifecycle transition, export refresh or source reindex was performed
+by this audit. The audit did create temporary evaluation snapshots and record retrieval results.
+The five exposed questions are an author-adjudicated exposure lower bound, not a claim
+that the remaining answers or future dense results are current.
+
+To replay the historical scores without the private brain, use the recorded
+citation projection and pinned label revisions (the Git objects must be available
+in the checkout). No retrieval or corpus writes occur:
+
+```sh
+node --import tsx --input-type=module <<'JS'
+import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { runEval, formatReport } from './packages/qmd-adapter/src/eval/run-eval.ts';
+const receipt = JSON.parse(fs.readFileSync('packages/qmd-adapter/src/eval/datasets/estate-onboarding-audit-2026-10-23.json', 'utf8'));
+const digest = createHash('sha256').update(JSON.stringify(receipt.orderedResults)).digest('hex');
+if (digest !== receipt.citationListSha256) throw new Error('Projection hash mismatch');
+const rows = new Map(receipt.orderedResults.map(row => [row.id, row.retrieved]));
+const scratch = fs.mkdtempSync(join(tmpdir(), 'estate-label-replay-'));
+try {
+  for (const key of ['before', 'after']) {
+    const source = execFileSync('git', ['show', `${receipt[key + 'LabelSourceCommit']}:packages/qmd-adapter/src/eval/datasets/estate-onboarding-v1.ts`]);
+    const file = join(scratch, `${key}.ts`);
+    fs.writeFileSync(file, source, { mode: 0o600 });
+    const { ESTATE_ONBOARDING_V1_DATASET: dataset } = await import(pathToFileURL(file).href);
+    const ids = new Map(dataset.queries.map(q => [q.query, q.id]));
+    const report = await runEval(dataset, async query => {
+      const hits = rows.get(ids.get(query));
+      if (!hits) throw new Error('Captured question missing');
+      return hits;
+    }, { k: 10, backend: `offline ${key} labels on the same captured lists` });
+    const expected = receipt[key];
+    const metrics = { recall: report.meanRecallAtK, ndcg: report.meanNdcgAtK,
+      fama: report.meanFamaAtK, exposure: report.obsoleteExposureRate };
+    for (const name of Object.keys(metrics)) {
+      if (Math.abs(metrics[name] - expected[name]) > 1e-12) throw new Error(`Metric mismatch: ${key} ${name}`);
+    }
+    const labels = dataset.queries.reduce((n, q) => n + (q.obsolete?.length ?? 0), 0);
+    const labeled = dataset.queries.filter(q => q.obsolete?.length).length;
+    if (labels !== (key === 'before' ? receipt.beforeLabelCount : receipt.labelCount) ||
+        labeled !== (key === 'before' ? receipt.beforeLabeledQueries : receipt.labeledQueries)) {
+      throw new Error(`Label-count mismatch: ${key}`);
+    }
+    console.log(formatReport(report));
+  }
+} finally {
+  fs.rmSync(scratch, { recursive: true, force: true });
+}
+JS
+```

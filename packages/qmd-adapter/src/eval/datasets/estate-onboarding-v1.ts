@@ -16,9 +16,12 @@ import type { EvalDataset } from '../eval-types.js';
  * in ESTATE_ONBOARDING_V1_GAPS instead of being scored.
  *
  * Labels were drawn while the dense arm was down (embedder stopped
- * 2026-10-10..13), so `notes` ranks are lexical-only ranks. The relevant labels
+ * 2026-10-10..13), so earlier `notes` ranks are lexical-only. Dated dense-audit ranks below
+ * are separate observations. The relevant labels
  * do not depend on search; an obsolete doc that only dense retrieval surfaces
- * may still be unlabeled. Methodology: ./README.md.
+ * may still be unlabeled. The 2026-10-23 audit adds seven query-specific
+ * obsolete labels from local top 10 with dense configured; mixed-gold repairs remain open
+ * under 39z.33. Methodology and authority links: ./README.md.
  */
 export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
   name: 'estate-onboarding-v1',
@@ -246,8 +249,9 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/c7c0f24a-03a8-5b3a-8e75-285145547bb7.md',
         'qmd://kb-curated/4312ea30-5932-5e30-b5fd-0af93cf52cac.md',
       ],
+      obsolete: ['qmd://kb-guides/dd3f92bc-194f-5dd2-87fe-9b40cbe73d81.md'],
       notes:
-        'Relevant not in top 10 (probe: coastal-realty summary, IEP blueprint, Phase F AAR \u2014 noise). Porkbun via sops-wrapped ops/dns scripts. Partial: no doc states the change procedure in ops/dns/README. No obsolete.',
+        '2026-10-23 dense audit: dd3f92bc rank 10 prescribes Google-hosted Hustle DNS; current apex/www resolve to the VPS. Earlier lexical-only observation: Relevant not in top 10 (probe: coastal-realty summary, IEP blueprint, Phase F AAR \u2014 noise). Porkbun via sops-wrapped ops/dns scripts. Partial: no doc states the change procedure in ops/dns/README. No obsolete.',
     },
     {
       id: 'e22',
@@ -258,12 +262,14 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-decisions/44854c16-ae8b-5fb7-9273-df9686690b9d.md',
       ],
       obsolete: [
+        'qmd://kb-guides/0d239fc3-e329-569c-af12-6ddf2c001d43.md',
+        'qmd://kb-guides/2a1df12b-35c1-5d1a-b8a6-cc15ca3127c6.md',
         'qmd://kb-guides/26fad4c1-a939-53e9-b81d-beb7585fb13d.md',
         'qmd://kb-guides/215d695b-e78b-5aab-95e1-6807d081c71a.md',
         'qmd://kb-guides/31cf8803-ef48-5ba3-b5db-e353d6deddbe.md',
       ],
       notes:
-        "Probe returned ZERO results. Relevant: README (GitHub Actions + Tailscale OIDC + force-command to VPS, off Firebase/Netlify 2026-06-20); GCP decision confirms the move. Obsolete: Domain audit ('jeremylongshore.com will remain on Netlify/Firebase'), blog workspace overview + Multi-Blog CLAUDE.md (Netlify deploys from main).",
+        "2026-10-23 dense audit: 2a1df12b rank 2 and 0d239fc3 rank 6 prescribe retired Linkyee/static deployment; current site is Next.js/Docker. Gold a2bc9ef3 also mixes obsolete deployment with valid VPS facts; its replacement is pending 39z.33, so this remains an optimistic gold set. Earlier lexical-only observation: Probe returned ZERO results. Relevant: README (GitHub Actions + Tailscale OIDC + force-command to VPS, off Firebase/Netlify 2026-06-20); GCP decision confirms the move. Obsolete: Domain audit ('jeremylongshore.com will remain on Netlify/Firebase'), blog workspace overview + Multi-Blog CLAUDE.md (Netlify deploys from main).",
     },
     {
       id: 'e23',
@@ -329,13 +335,15 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/b48e0ab0-1f9b-5105-b81c-701544c013ba.md',
       ],
       obsolete: [
+        'qmd://kb-curated/41f458f7-cc65-58dd-bd55-af98c362e4eb.md',
+        'qmd://kb-curated/83567b00-54fe-4f34-8bda-109221344025.md',
         'qmd://kb-curated/6dc4a43f-3b1e-577d-9b21-fffd78e35425.md',
         'qmd://kb-curated/c680061a-c46c-54fa-b954-4cbe38515b6a.md',
         'qmd://kb-curated/ae354749-eade-518b-81f9-13d954ff783f.md',
         'qmd://kb-guides/5c201940-c1ac-527d-9fcc-2714ead434fe.md',
       ],
       notes:
-        "Probe returned 0 hits for this phrasing; 'how do I track tasks' returned 4 noise/other-project hits; keyword probe 'beads task tracking' ranks b48e0ab0 #4 (onboarding still says 'bd sync', which is pre-Dolt). Obsolete: 6dc4a43f (#3 kw) and c680061a describe beads as SQLite + beads-sync git branch (pre-Dolt); ae354749 (#1 kw) bd sync + '10 top-level epics'; 5c201940 prescribes Taskwarrior tracking.",
+        "2026-10-23 dense audit: 83567b00 rank 1 and 41f458f7 rank 7 prescribe obsolete bd sync/JSONL/SQLite/beads-sync persistence. Current authority is Dolt/refs/dolt/data, passive JSONL. Both current gold docs also need selective correction under 39z.33. Earlier lexical-only observation: Probe returned 0 hits for this phrasing; 'how do I track tasks' returned 4 noise/other-project hits; keyword probe 'beads task tracking' ranks b48e0ab0 #4 (onboarding still says 'bd sync', which is pre-Dolt). Obsolete: 6dc4a43f (#3 kw) and c680061a describe beads as SQLite + beads-sync git branch (pre-Dolt); ae354749 (#1 kw) bd sync + '10 top-level epics'; 5c201940 prescribes Taskwarrior tracking.",
     },
     {
       id: 'e29',
@@ -461,6 +469,7 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-curated/2b7ef292-a74d-531d-96d5-283476804365.md',
       ],
       obsolete: [
+        'qmd://kb-guides/174b389f-def3-57f8-b694-3f343813859b.md',
         'qmd://kb-guides/9ab72519-611c-58d8-a24a-ff4dfe234d95.md',
         'qmd://kb-curated/e65e4505-f169-509c-ab1c-0992707dcee8.md',
         'qmd://kb-guides/28b15174-e241-5b09-9e4a-db4dbad0bada.md',
@@ -468,7 +477,7 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-guides/aee3f27d-c59a-5dc2-87c4-3051f4ef7387.md',
       ],
       notes:
-        "Probe returned 0 hits; 'brain repositories' returned 28b15174 #1 (OBSOLETE) and noise, relevant not in top 10. Obsolete: 28b15174 points contributors to intentional-cognition-os/qmd-team-intent-kb; 9ab72519 stack map with old names; e65e4505 repo map lists old engine names + private team marketplace; d9c58178 umbrella as intent-solutions-io/governed-second-brain; aee3f27d 007-SMAP snapshot with 5 repos incl. team marketplace.",
+        "2026-10-23 dense audit: 174b389f rank 7 presents qmd-team-intent-kb as the current repository; this label concerns repository identity only, with no formal phase-status judgment. Package/image/Bead aliases deliberately remain valid. Earlier lexical-only observation: Probe returned 0 hits; 'brain repositories' returned 28b15174 #1 (OBSOLETE) and noise, relevant not in top 10. Obsolete: 28b15174 points contributors to intentional-cognition-os/qmd-team-intent-kb; 9ab72519 stack map with old names; e65e4505 repo map lists old engine names + private team marketplace; d9c58178 umbrella as intent-solutions-io/governed-second-brain; aee3f27d 007-SMAP snapshot with 5 repos incl. team marketplace.",
     },
     {
       id: 'e39',
@@ -531,11 +540,12 @@ export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {
         'qmd://kb-curated/9507c16f-4ed7-508a-abba-97ddbd63309a.md',
       ],
       obsolete: [
+        'qmd://kb-guides/3c865bbb-fe3c-5383-8b5a-c3e1e2fd2861.md',
         'qmd://kb-guides/ab762ff1-7b16-52c6-aca3-ee8851666959.md',
         'qmd://kb-guides/9a88a3eb-6bca-50a7-bdef-ef1da24782fc.md',
       ],
       notes:
-        "Relevant not in top 10 (LangGraph how-tos dominate). 'document filing naming standard' ranks ab762ff1 v4.2 #1 (OBSOLETE: 6767-series canonical standards) above d4e17454 v4.4 #2. 9a88a3eb also cites 6767-a doc filing (ranks #3 for e26).",
+        "2026-10-23 dense audit: 3c865bbb rank 4 prescribes deployment-docs/four-digit/feature-folder/camelCase grammar, superseded by v4.4. Earlier lexical-only observation: Relevant not in top 10 (LangGraph how-tos dominate). 'document filing naming standard' ranks ab762ff1 v4.2 #1 (OBSOLETE: 6767-series canonical standards) above d4e17454 v4.4 #2. 9a88a3eb also cites 6767-a doc filing (ranks #3 for e26).",
     },
     {
       id: 'e43',
