@@ -844,6 +844,22 @@
         "argv": ["dig", "+short", "www.hustlestats.io", "CNAME"],
         "stdout": ";; communications error to 127.0.0.53#53: timed out\n;; communications error to 127.0.0.53#53: timed out\n"
       }
-    ]
-  }
+    ],
+    "cnameConclusion": "Captured CNAME stdout contains resolver timeout messages; absence of a CNAME was not established. Positive A results and owning VPS deployment evidence support the e21 label."
+  },
+  "reportedRetrieval": {
+    "capturedWorkerBackendLabel": "team-api search \u00b7 dense + lexical (dense query failures observed: 0); qmd snapshot present; native snapshot present",
+    "labelCorrection": "The captured team-api label was incorrect; the worker invoked local SearchService. This is not a deployed API observation.",
+    "configuredDenseEnabled": true,
+    "reportedDenseQueryFailures": 0,
+    "counterScope": "Author-captured worker onQueryDegraded callback count, not dense hit counts, latency, quality or proof that every arm contributed to each list.",
+    "perQueryArmContributions": "not recorded",
+    "configuration": {
+      "TEAMKB_TENANT": "intent-solutions",
+      "TEAMKB_DENSE_ENABLED": "1",
+      "TEAMKB_QMD_BIN": "workspace node_modules/.bin/qmd (2.5.3)",
+      "TMPDIR": "/dev/shm"
+    }
+  },
+  "publicationScope": "Public repository evaluation metadata (opaque citation IDs/ranks and hashes), no private source bodies. Workspace package is marked private; this JSON is not imported by serving code. No claim about a hypothetical future npm pack include set."
 }

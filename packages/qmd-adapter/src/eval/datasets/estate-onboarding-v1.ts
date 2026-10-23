@@ -20,7 +20,7 @@ import type { EvalDataset } from '../eval-types.js';
  * are separate observations. The relevant labels
  * do not depend on search; an obsolete doc that only dense retrieval surfaces
  * may still be unlabeled. The 2026-10-23 audit adds seven query-specific
- * obsolete labels from dense+lexical top 10; mixed-gold repairs remain open
+ * obsolete labels from local top 10 with dense configured; mixed-gold repairs remain open
  * under 39z.33. Methodology and authority links: ./README.md.
  */
 export const ESTATE_ONBOARDING_V1_DATASET: EvalDataset = {

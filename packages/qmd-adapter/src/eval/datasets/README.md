@@ -182,15 +182,18 @@ Nine questions still miss (e01, e03, e09, e14, e17, e25, e38, e43, e48); e02 "wh
 production hosted" now hits. The two numbers are not strictly comparable because the labels
 changed with the corpus; the obsolete-exposure column is the one this bead was for.
 
-**Dense top-10 audit (2026-10-23, bead `compile-then-govern-39z.27`).**
+**Dense-enabled local top-10 audit (2026-10-23, bead `compile-then-govern-39z.27`).**
 An isolated local QmdAdapter/SearchService run at registrar
 `06a960a219928a9e2ca0e8309a08509f842fc4c6` captured all 45 unchanged questions
-with dense enabled, all three source indexes present and zero observed dense
-query failures. Backups ran 19:37:04–19:37:09UTC. All45 literal probes returned
+with dense configured and all three source indexes present. The worker reported
+zero dense-query failure callbacks; per-query arm hit counts were not recorded. Backups ran 19:37:04–19:37:09UTC. All45 literal probes returned
 the same 450 result slots / 329 unique citations; the authors screened their content
 against the inspected authorities (a local audit report, not an independent attestation). See the compact
 [observation and relabel receipt](./estate-onboarding-audit-2026-10-23.json).
-No private source content is included in that receipt.
+No private source content is included in that receipt. Its opaque citation
+IDs/ranks and hashes are public repository evaluation metadata. The workspace
+package is marked `private: true`, and the JSON is not imported by serving code;
+this does not assert the include set of a hypothetical future `npm pack`.
 
 The authors added seven query-specific obsolete labels after reading their actionable,
 current-tense claims and checking the authorities below. Historical records,
@@ -200,7 +203,7 @@ every appearance of the document.
 
 | Query | Citation prefix / observed rank | Stale instruction                                                          | Current authority                                                                                                                                                                                                                                                                           |
 | ----- | ------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| e21   | `dd3f92bc` /10                  | Point Hustle www at Google hosting                                         | [VPS deployment target](https://github.com/jeremylongshore/hustle/blob/3aca65905492da30c7cd2eeb3042767280039fb1/.github/workflows/deploy.yml#L54); observed apex/www both 167.86.106.29, no www CNAME                                                                                       |
+| e21   | `dd3f92bc` /10                  | Point Hustle www at Google hosting                                         | [VPS deployment target](https://github.com/jeremylongshore/hustle/blob/3aca65905492da30c7cd2eeb3042767280039fb1/.github/workflows/deploy.yml#L54); observed apex/www both 167.86.106.29, CNAME lookup timed out; absence was not established                                                |
 | e22   | `2a1df12b` /2, `0d239fc3` /6    | Build Linkyee/static `_output/`                                            | [Next.js/Docker deployment](https://github.com/jeremylongshore/jeremylongshore.com/blob/36a8da81dace59c1e5d0718b7f5647984921c073/CLAUDE.md#L10), [content/deploy rules](https://github.com/jeremylongshore/jeremylongshore.com/blob/36a8da81dace59c1e5d0718b7f5647984921c073/CLAUDE.md#L51) |
 | e28   | `83567b00` /1, `41f458f7` /7    | Persist through `bd sync`, JSONL flush or SQLite/`beads-sync` branch       | [Umbrella task authority and passive JSONL rule](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/db924dd3289df03841a5a5b9a3c8bff4d9e8e592/AGENTS.md#L56)                                                                                                                |
 | e38   | `174b389f` /7                   | Current repository is qmd-team-intent-kb                                   | [Current registrar repository identity](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/db924dd3289df03841a5a5b9a3c8bff4d9e8e592/CLAUDE.md#L75); package/image/Bead aliases remain valid                                                                                |
@@ -293,6 +296,18 @@ try {
       if (!hits) throw new Error('Captured question missing');
       return hits;
     }, { k: 10, backend: `offline ${key} labels on the same captured lists` });
+    const expected = receipt[key];
+    const metrics = { recall: report.meanRecallAtK, ndcg: report.meanNdcgAtK,
+      fama: report.meanFamaAtK, exposure: report.obsoleteExposureRate };
+    for (const name of Object.keys(metrics)) {
+      if (Math.abs(metrics[name] - expected[name]) > 1e-12) throw new Error(`Metric mismatch: ${key} ${name}`);
+    }
+    const labels = dataset.queries.reduce((n, q) => n + (q.obsolete?.length ?? 0), 0);
+    const labeled = dataset.queries.filter(q => q.obsolete?.length).length;
+    if (labels !== (key === 'before' ? receipt.beforeLabelCount : receipt.labelCount) ||
+        labeled !== (key === 'before' ? receipt.beforeLabeledQueries : receipt.labeledQueries)) {
+      throw new Error(`Label-count mismatch: ${key}`);
+    }
     console.log(formatReport(report));
   }
 } finally {
