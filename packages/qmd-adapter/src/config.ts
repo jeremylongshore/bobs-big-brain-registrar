@@ -55,7 +55,7 @@ export interface DenseConfig {
   maxDocChars?: number;
   /** Timeout for a document-batch embed call during indexing (default 120000 ms). */
   indexTimeoutMs?: number;
-  /** Docs per embed request during indexing (default 16). */
+  /** Docs per embed request during indexing (default 1; larger batches require measured capacity). */
   batchSize?: number;
   /**
    * Observer invoked when a QUERY's dense arm degrades — embed failure, embed

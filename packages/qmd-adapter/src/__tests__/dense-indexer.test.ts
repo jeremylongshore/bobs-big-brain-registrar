@@ -25,6 +25,8 @@ class StubEmbedder {
   failFromEmbedRequest: number | null = null;
   /** When >0, the next N /v1/embeddings requests 503 and then recover (transient outage) — decremented per embed request. */
   failNextEmbedRequests = 0;
+  /** Healthy single-slot service: requests above its document capacity fail. */
+  maxDocumentsPerRequest = Number.POSITIVE_INFINITY;
   private embedRequests = 0;
   private baseUrl = '';
 
@@ -58,6 +60,11 @@ class StubEmbedder {
       req.on('data', (c: Buffer) => (body += c.toString()));
       req.on('end', () => {
         const { input } = JSON.parse(body) as { input: string[] };
+        if (input.length > this.maxDocumentsPerRequest) {
+          res.writeHead(503);
+          res.end();
+          return;
+        }
         // Data-poison: any input containing POISON_MARKER is OMITTED from the
         // response (models llama-server's per-input "too large" send_error),
         // so the batch comes back with fewer rows than requested — a partial
@@ -162,6 +169,24 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
     const report = await makeIndexer().sync();
     expect(report).toMatchObject({ embedded: 0, removed: 0, skipped: 0, serviceDown: false });
     expect(stub.embeddedTexts).toEqual([]); // zero model calls
+  });
+
+  it('makes durable progress on a healthy single-document embedder without dropping a batch', async () => {
+    stub.maxDocumentsPerRequest = 1;
+    const indexer = new DenseIndexer({
+      index,
+      client: new EmbedClient({ url, timeoutMs: 5000 }),
+      exportDir,
+      maxBatchRetries: 0,
+    });
+    const report = await indexer.sync();
+    expect(report).toMatchObject({ embedded: 3, skipped: 0, serviceDown: false });
+    expect(index.count()).toBe(3);
+    expect(stub.embeddedTexts).toHaveLength(3);
+    // Completion remains content-addressed: the next sweep sends no work.
+    stub.embeddedTexts = [];
+    expect(await indexer.sync()).toMatchObject({ embedded: 0, skipped: 0 });
+    expect(stub.embeddedTexts).toEqual([]);
   });
 
   it('a changed doc is re-embedded (content-hash keyed, not mtime)', async () => {
