@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Verify owned qmd artifact files through a reused bounded buffer and precompute
+  layout lookups, preserving full-byte hashes, native-file verification and strict
+  graph/layout checks. Reject files that change identity, size or recorded metadata
+  while hashing. This source change requires a newly staged artifact; it does not
+  establish availability within the existing command budgets
+  (`compile-then-govern-1io.1.5.1.3.2.3.1`).
+
 - Exclude optional standalone HTTP from the owned qmd launcher. Parsed `--http`
   options are refused before spawning, while MCP stdio, literal arguments and
   explicit external binary overrides retain their behavior. This restriction

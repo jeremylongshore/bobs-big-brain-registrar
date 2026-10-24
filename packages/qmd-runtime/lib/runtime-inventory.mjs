@@ -1,5 +1,15 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync } from 'node:fs';
+import {
+  closeSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+} from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep, posix } from 'node:path';
 
 export const MAX_RUNTIME_BYTES = 2 * 1024 ** 3;
@@ -29,6 +39,46 @@ export function inventory(root, { maxBytes = MAX_RUNTIME_BYTES, omit = [] } = {}
   root = realpathSync(root);
   const entries = {};
   let bytes = 0;
+  let buffer;
+  function sameFile(left, right) {
+    return ['dev', 'ino', 'size', 'mode', 'mtimeMs', 'ctimeMs'].every(
+      (key) => left[key] === right[key],
+    );
+  }
+  function fileHash(path, initial) {
+    const fd = openSync(path, 'r');
+    try {
+      const opened = fstatSync(fd);
+      if (!opened.isFile() || !sameFile(initial, opened))
+        throw new Error('Runtime file changed before hashing');
+      buffer ??= Buffer.allocUnsafe(1024 * 1024);
+      const hash = createHash('sha256');
+      let total = 0;
+      while (true) {
+        // One extra byte detects growth without reading an indefinitely growing file.
+        const count = readSync(
+          fd,
+          buffer,
+          0,
+          Math.min(buffer.length, initial.size - total + 1),
+          null,
+        );
+        if (!count) break;
+        total += count;
+        if (total > initial.size) throw new Error('Runtime file grew during hashing');
+        hash.update(buffer.subarray(0, count));
+      }
+      if (
+        total !== initial.size ||
+        !sameFile(initial, fstatSync(fd)) ||
+        !sameFile(initial, lstatSync(path))
+      )
+        throw new Error('Runtime file changed during hashing');
+      return hash.digest('hex');
+    } finally {
+      closeSync(fd);
+    }
+  }
   function visit(path) {
     const rel = relative(root, path).split(sep).join('/');
     if (omit.includes(rel)) return;
@@ -48,7 +98,7 @@ export function inventory(root, { maxBytes = MAX_RUNTIME_BYTES, omit = [] } = {}
         kind: 'file',
         bytes: stat.size,
         mode: stat.mode & 0o777,
-        sha256: sha256(readFileSync(path)),
+        sha256: fileHash(path, stat),
       };
     } else {
       throw new Error('Runtime contains unsupported special file');
@@ -292,13 +342,26 @@ export function verifyLayout(files, graph) {
       ),
     )
     .map(([path]) => path);
+  const packageRoots = new Set(packages);
+  const recognized = new Set([...owned, ...generated]);
+  const properAncestors = new Set(['']);
+  for (const file of [...owned, ...packages, ...generated, ...knownModuleAliases]) {
+    for (let slash = file.lastIndexOf('/'); slash >= 0; slash = file.lastIndexOf('/', slash - 1)) {
+      properAncestors.add(file.slice(0, slash));
+      if (slash === 0) break;
+    }
+  }
   for (const [path, entry] of Object.entries(files.entries)) {
-    const packageFile = packages.some((dir) => path === dir || path.startsWith(dir + '/'));
-    const ancestor =
-      entry.kind === 'directory' &&
-      [...owned, ...packages, ...generated, ...knownModuleAliases].some(
-        (file) => path === '' || file.startsWith(path + '/'),
-      );
+    let packageFile = packageRoots.has(path);
+    for (
+      let slash = path.lastIndexOf('/');
+      !packageFile && slash >= 0;
+      slash = path.lastIndexOf('/', slash - 1)
+    ) {
+      packageFile = packageRoots.has(path.slice(0, slash));
+      if (slash === 0) break;
+    }
+    const ancestor = entry.kind === 'directory' && properAncestors.has(path);
     const shim =
       path.startsWith('node_modules/') && (path.includes('/.bin/') || path.endsWith('/.bin'));
     const hoistDirectory =
@@ -309,8 +372,7 @@ export function verifyLayout(files, graph) {
     if (
       !packageFile &&
       !ancestor &&
-      !owned.includes(path) &&
-      !generated.includes(path) &&
+      !recognized.has(path) &&
       !shim &&
       !moduleLink &&
       !hoistDirectory
