@@ -1,7 +1,15 @@
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    globalSetup: [
+      fileURLToPath(new URL('./tests/support/fixture-global-setup.ts', import.meta.url)),
+    ],
+    setupFiles: [fileURLToPath(new URL('./tests/support/fixture-environment.ts', import.meta.url))],
+    // Ambient live-lane markers cannot bypass the ordinary private baseline.
+    env: { TEAMKB_TEST_LIVE_LANE: '0' },
     exclude: [
       '**/dist/**',
       '**/node_modules/**',

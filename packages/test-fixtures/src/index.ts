@@ -16,3 +16,11 @@ export { makeCandidate, makeCandidateWithHash, makeAttestedCandidate } from './m
 export { makeMemory } from './make-memory.js';
 export { makePolicy } from './make-policy.js';
 export { makeAuditEvent } from './make-audit-event.js';
+
+export {
+  FIXTURE_QMD_BINARY,
+  fixtureQmdOptions,
+  fixtureQmdArgs,
+  fixtureQmdAvailable,
+  withFixtureQmdIndex,
+} from './qmd.js';

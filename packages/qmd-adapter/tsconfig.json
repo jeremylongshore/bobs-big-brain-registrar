@@ -9,9 +9,20 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../schema" },
-    { "path": "../common" },
-    { "path": "../store" },
-    { "path": "../policy-engine" }
+    {
+      "path": "../schema"
+    },
+    {
+      "path": "../common"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../policy-engine"
+    },
+    {
+      "path": "../test-fixtures"
+    }
   ]
 }

@@ -1,3 +1,8 @@
+import {
+  fixtureQmdOptions,
+  fixtureQmdAvailable,
+  withFixtureQmdIndex,
+} from '@qmd-team-intent-kb/test-fixtures';
 /**
  * Integration test: the search-health canary + reindex against the REAL qmd
  * binary (bead compile-then-govern-e06.13 / risk register R11 / umbrella #27).
@@ -18,12 +23,11 @@
  * Fully isolated exactly like adapter-qmd-integration.test.ts: `TEAMKB_BASE_PATH`
  * is repointed at a tmp dir so the tenant's XDG_CONFIG_HOME / XDG_CACHE_HOME (the
  * qmd registry + index) live in tmp and never touch the operator's personal qmd
- * state. Skipped when qmd is not on PATH so CI without qmd stays green.
+ * state. Skipped when the workspace-pinned qmd is unavailable so CI without qmd stays green.
  *
  * @module __tests__/search-canary-integration.test
  */
 
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,19 +35,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { QmdAdapter } from '../adapter.js';
+import { RealQmdExecutor } from '../executor/real-executor.js';
 import { reindex } from '../reindex/reindex.js';
 import { runSearchCanary } from '../canary/search-canary.js';
 
-function qmdAvailable(): boolean {
-  try {
-    execFileSync('qmd', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const HAS_QMD = qmdAvailable();
+const HAS_QMD = fixtureQmdAvailable();
 
 let workDir: string;
 let exportDir: string;
@@ -86,7 +82,12 @@ const CONTROLS = [
 describe.skipIf(!HAS_QMD)('search-health canary ↔ real qmd', () => {
   it('is DEGRADED on an empty/unregistered tenant (the incident)', async () => {
     seedCorpus(); // corpus exists on disk, but the tenant index is not built yet
-    const adapter = new QmdAdapter({ tenantId: 'canary-empty', exportDir });
+    const adapter = new QmdAdapter(
+      { tenantId: 'canary-empty', exportDir },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'canary-empty')),
+      ),
+    );
 
     const report = await runSearchCanary(adapter, 'canary-empty', { controls: CONTROLS });
 
@@ -96,7 +97,12 @@ describe.skipIf(!HAS_QMD)('search-health canary ↔ real qmd', () => {
 
   it('reindex() rebuilds the index → canary goes HEALTHY with cited hits', async () => {
     seedCorpus();
-    const adapter = new QmdAdapter({ tenantId: 'canary-rebuild', exportDir });
+    const adapter = new QmdAdapter(
+      { tenantId: 'canary-rebuild', exportDir },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'canary-rebuild')),
+      ),
+    );
 
     // BEFORE: degraded.
     const before = await runSearchCanary(adapter, 'canary-rebuild', { controls: CONTROLS });
@@ -124,7 +130,12 @@ describe.skipIf(!HAS_QMD)('search-health canary ↔ real qmd', () => {
 
   it('is idempotent — a second reindex creates no collections and stays healthy', async () => {
     seedCorpus();
-    const adapter = new QmdAdapter({ tenantId: 'canary-idem', exportDir });
+    const adapter = new QmdAdapter(
+      { tenantId: 'canary-idem', exportDir },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'canary-idem')),
+      ),
+    );
 
     const first = await reindex(adapter);
     expect(first.ok).toBe(true);
@@ -142,7 +153,12 @@ describe.skipIf(!HAS_QMD)('search-health canary ↔ real qmd', () => {
 
   it('--heal self-repairs an empty tenant from kb-export in one call', async () => {
     seedCorpus();
-    const adapter = new QmdAdapter({ tenantId: 'canary-heal', exportDir });
+    const adapter = new QmdAdapter(
+      { tenantId: 'canary-heal', exportDir },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'canary-heal')),
+      ),
+    );
 
     const report = await runSearchCanary(adapter, 'canary-heal', {
       controls: CONTROLS,

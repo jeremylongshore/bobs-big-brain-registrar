@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -59,6 +59,19 @@ describe('runCycle', () => {
     expect(result.curation).toBeNull();
     expect(result.export).toBeNull();
     expect(result.indexUpdate).toBeNull();
+  });
+
+  it('honors the injected owned enterprise settings before ingest', async () => {
+    const settings = join(spoolDir, 'settings.json');
+    await writeFile(settings, JSON.stringify({ memoryCapture: { enabled: false } }));
+    deps.memoryCaptureSettingsPath = settings;
+    await writeSpoolFile(spoolDir, 'spool-disabled.jsonl', [makeCandidate()]);
+    const result = await runCycle(config, deps, logger);
+    expect(result.ingest.ingested).toBe(0);
+    expect(result.curation).toBeNull();
+    expect(
+      logger.messages.some((entry) => entry.message.includes('disabled by enterprise settings')),
+    ).toBe(true);
   });
 
   it('ingests candidates from spool', async () => {

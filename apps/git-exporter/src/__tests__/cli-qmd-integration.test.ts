@@ -1,3 +1,8 @@
+import {
+  FIXTURE_QMD_BINARY,
+  fixtureQmdArgs,
+  fixtureQmdAvailable,
+} from '@qmd-team-intent-kb/test-fixtures';
 /**
  * Integration test for demo stages 5-6 (bead `qmd-team-intent-kb-e3q`):
  * curated memory → exporter-cli → real qmd index → search citation.
@@ -8,10 +13,10 @@
  * file-backed store, exactly the pattern the curator pipeline produces in
  * the live demo.
  *
- * It drives the REAL `qmd` binary (2.x) with an isolated
- * XDG_CACHE_HOME so the test never touches the operator's personal qmd
- * index. The whole test is skipped if `qmd` is not on PATH (so CI without
- * qmd stays green) — but it runs locally + anywhere qmd is installed.
+ * It drives the workspace-pinned qmd with explicit private config/index paths
+ * and a named index, so ambient overrides and ancestor discovery cannot route
+ * the test into an operator index. It skips if that fixture is unavailable;
+ * a global qmd executable is never substituted.
  *
  * Stage mapping:
  *   stage 5 → exporter-cli writes kb-export markdown + `qmd collection add` + `qmd update`
@@ -21,6 +26,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,17 +37,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { dispatch } from '../cli.js';
 
-/** Detect qmd on PATH once; skip the suite if absent. */
-function qmdAvailable(): boolean {
-  try {
-    execFileSync('qmd', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const HAS_QMD = qmdAvailable();
+const HAS_QMD = fixtureQmdAvailable();
 
 let workDir: string;
 let dbPath: string;
@@ -69,9 +65,17 @@ afterEach(async () => {
  * `qmd collection add` entries into the operator's global registry.
  */
 function qmd(args: string[]): string {
-  return execFileSync('qmd', args, {
+  mkdirSync(join(cacheDir, 'qmd'), { recursive: true });
+  mkdirSync(join(configDir, 'qmd'), { recursive: true });
+  return execFileSync(FIXTURE_QMD_BINARY, fixtureQmdArgs(args), {
     encoding: 'utf8',
-    env: { ...process.env, XDG_CACHE_HOME: cacheDir, XDG_CONFIG_HOME: configDir },
+    env: {
+      ...process.env,
+      XDG_CACHE_HOME: cacheDir,
+      XDG_CONFIG_HOME: configDir,
+      INDEX_PATH: join(cacheDir, 'qmd', 'index.sqlite'),
+      QMD_CONFIG_DIR: join(configDir, 'qmd'),
+    },
   });
 }
 

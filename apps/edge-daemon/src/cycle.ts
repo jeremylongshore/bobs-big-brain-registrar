@@ -26,9 +26,10 @@ import { withRetry } from './retry.js';
  * Reads ~/.claude/settings.json and checks for memoryCapture.enabled === false.
  * Safe default: if file is absent or unparseable, returns true (proceed).
  */
-function isMemoryCaptureEnabled(): boolean {
+export function isMemoryCaptureEnabled(
+  settingsPath = join(homedir(), '.claude', 'settings.json'),
+): boolean {
   try {
-    const settingsPath = join(homedir(), '.claude', 'settings.json');
     if (!existsSync(settingsPath)) return true;
     const raw = readFileSync(settingsPath, 'utf8');
     const settings = JSON.parse(raw) as Record<string, unknown>;
@@ -381,7 +382,7 @@ export async function runCycle(
   };
 
   // Threat #8: Enterprise managed settings check
-  if (!isMemoryCaptureEnabled()) {
+  if (!isMemoryCaptureEnabled(deps.memoryCaptureSettingsPath)) {
     logger.info('Memory capture disabled by enterprise settings — skipping cycle');
     result.completedAt = nowFn();
     return result;
