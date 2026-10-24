@@ -31,6 +31,23 @@ const qmd = join(root, 'node_modules', '.bin', 'qmd');
 const tsx = join(root, 'node_modules', 'tsx', 'dist', 'loader.mjs');
 const launcher = join(root, 'scripts', 'eval-estate-onboarding.ts');
 
+function processGone(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') return true;
+    throw error;
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (!processGone(pid) && Date.now() < deadline)
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  return processGone(pid);
+}
+
 function dataFiles(base: string): Record<string, string> {
   return Object.fromEntries(
     readdirSync(base, { recursive: true, withFileTypes: true })
@@ -47,6 +64,11 @@ describe('estate evaluation isolated CLI', () => {
     base = mkdtempSync(join(tmpdir(), 'estate-cli-test-'));
   });
   afterEach(() => rmSync(base, { recursive: true, force: true }));
+
+  it('does not mistake a live owned process for a reaped child', async () => {
+    expect(await waitForProcessExit(process.pid, 30)).toBe(false);
+    expect(processGone(process.pid)).toBe(false);
+  });
 
   it(
     'refreshes native retrieval in the worker without modifying source indexes or following inherited qmd paths',
@@ -291,7 +313,7 @@ describe('estate evaluation isolated CLI', () => {
       const binary = join(base, 'slow-qmd');
       writeFileSync(
         binary,
-        `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(started)}, String(process.pid)); setInterval(() => {}, 1000);\n`,
+        `#!${process.execPath}\nconst fs = require('node:fs'); const ready = ${JSON.stringify(started)}; fs.writeFileSync(ready + '.tmp', String(process.pid)); fs.renameSync(ready + '.tmp', ready); setInterval(() => {}, 1000);\n`,
         { mode: 0o700 },
       );
       const child = spawn(process.execPath, ['--import', tsx, launcher, '--probe', 'fixture'], {
@@ -316,9 +338,13 @@ describe('estate evaluation isolated CLI', () => {
           await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
         expect(existsSync(started)).toBe(true);
         const qmdPid = Number(readFileSync(started, 'utf8'));
+        expect(Number.isSafeInteger(qmdPid) && qmdPid > 1).toBe(true);
         child.kill('SIGTERM');
         expect(await done).toBe(143);
-        expect(() => process.kill(qmdPid, 0)).toThrow();
+        // A dead descendant may remain visible until the owning reaper runs.
+        // Require actual ESRCH, rather than accepting a live or zombie process.
+        expect(await waitForProcessExit(qmdPid, 2_000)).toBe(true);
+        expect(processGone(qmdPid)).toBe(true);
         expect(readdirSync(scratch)).toEqual([]);
       } finally {
         if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');

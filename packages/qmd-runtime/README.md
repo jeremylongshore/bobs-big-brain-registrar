@@ -40,6 +40,16 @@ recorded inventory and graph, then runs published qmd dist with that same
 and Darwin residency initialization follow the hash-pinned upstream launcher.
 Arguments are passed literally. Its children remain in the caller's process group.
 
+The owned launcher supports MCP stdio, and refuses any parsed `--http` option
+before starting qmd, including reordered and `--http=...` forms. This applies even
+on help or non-MCP commands. Actual `--` literal arguments and flag-shaped string
+option values remain unchanged. The parser follows the pinned qmd 2.5.3 grammar;
+review it when changing that CLI. This is a launcher capability restriction, not
+a patch to the included HTTP server: invoking qmd dist directly or using an
+explicit external/global binary is outside this control. Previously staged
+artifacts retain their original behavior; regenerate the candidate and review its
+new manifest digest before selecting this restriction.
+
 The manifest is an integrity receipt, not an independent signature or trust
 anchor. Portability, clean-platform native provisioning, model execution,
 configured serving identity and deployed identity need separate evidence.
