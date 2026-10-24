@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refresh residual dependency paths to qs 6.16.1, fast-copy 4.2.0, Fastify
+  5.12.7, ip-address 10.7.4 and fast-uri 3.1.9. The typed-rest-client 2.3.1
+  exact qs pin is an explicit compatibility exception, covered through its real
+  URL helper. The inherited fast-uri 3 override still falls outside two Fastify
+  parent declarations for version 4; selected local-reference validation and
+  serialization cases are exercised while parent-range reconciliation remains separate
+  (`compile-then-govern-1io.1.12`). Synthetic advisory and normal-operation
+  contracts cover the selected repository dependencies; qmd, node-llama-cpp
+  and native/model pins remain unchanged.
+
 - Refresh installed helper dependencies to tar 7.5.22, nanoid 5.1.16,
   body-parser 2.4.0 and undici 8.12.3; align both MCP SDK paths on 1.32.2.
   The scoped simple-git 4.0.2 override is a reviewed major-range exception for
@@ -345,7 +355,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant-scoped content-hash candidate dedup (#241); per-actor capture quota + aligned DB path
   (#240); pre-hashed scrypt tokens accepted at rest (#227); durable revoke-by-actor persisted
   revocation list (#229); promote() writes wrapped in one transaction for atomic receipts (#231);
-  immutable tag-pinned release deploy for the brain API (#228) with a tailnet deploy runbook (#211).
+  tag-pinned release deployment for the brain API (#228) with a tailnet deploy runbook (#211).
 - **EPIC 1 merge substrate (demand-gated, foundation only):** content-derived UUID v5 +
   deterministic audit-chain timestamps (#206), a govern-at-merge gate that re-derives the union as
   untrusted (#207), a per-actor Ed25519 signed DAG anchor + merge-aware verifier (#208), a
