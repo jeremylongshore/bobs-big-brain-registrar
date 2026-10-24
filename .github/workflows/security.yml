@@ -13,11 +13,6 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Dependency / lockfile checks only run when deps change OR on main pushes.
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      contains(github.event.pull_request.labels.*.name, 'dependencies')
     steps:
       - uses: actions/checkout@v7
 
@@ -32,7 +27,6 @@ jobs:
 
       - name: npm audit
         run: pnpm audit --audit-level=high
-        continue-on-error: true
 
       - name: Lockfile integrity
         run: |
