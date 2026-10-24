@@ -1,3 +1,8 @@
+import {
+  fixtureQmdOptions,
+  fixtureQmdAvailable,
+  withFixtureQmdIndex,
+} from '@qmd-team-intent-kb/test-fixtures';
 /**
  * D1 acceptance: a promoted memory becomes retrievable IMMEDIATELY.
  *
@@ -15,10 +20,8 @@
  *
  * Isolation mirrors adapter-qmd-integration.test.ts: TEAMKB_BASE_PATH is
  * repointed at a tmp dir so the tenant's qmd registry/index never touch the
- * operator's real ~/.teamkb. Skipped when qmd is not on PATH (CI puts the
- * pinned workspace bin on PATH).
+ * operator's real ~/.teamkb. Skipped when the workspace-pinned qmd is unavailable with no global executable fallback.
  */
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,21 +36,12 @@ import {
   IndexStateRepository,
 } from '@qmd-team-intent-kb/store';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
+import { QmdAdapter, RealQmdExecutor } from '@qmd-team-intent-kb/qmd-adapter';
 import { buildApp } from '../app.js';
 import { buildIndexRefresher } from '../services/index-refresher.js';
 import { makeCandidate } from './fixtures.js';
 
-function qmdAvailable(): boolean {
-  try {
-    execFileSync('qmd', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const HAS_QMD = qmdAvailable();
+const HAS_QMD = fixtureQmdAvailable();
 const TENANT = 'promote-search-e2e';
 
 describe.skipIf(!HAS_QMD)('promote → search immediately (D1, real qmd)', () => {
@@ -67,11 +61,16 @@ describe.skipIf(!HAS_QMD)('promote → search immediately (D1, real qmd)', () =>
 
     db = createTestDatabase();
     indexStateRepo = new IndexStateRepository(db);
-    adapter = new QmdAdapter({
-      tenantId: TENANT,
-      exportDir,
-      stalenessProbe: () => indexStateRepo.stalenessSeconds(TENANT),
-    });
+    adapter = new QmdAdapter(
+      {
+        tenantId: TENANT,
+        exportDir,
+        stalenessProbe: () => indexStateRepo.stalenessSeconds(TENANT),
+      },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, TENANT)),
+      ),
+    );
     // The production wiring from main.ts: refresher over the same db + adapter.
     const indexRefresher = buildIndexRefresher({ db, adapter, exportDir });
     app = buildApp({ db, silent: true, qmdAdapter: adapter, indexRefresher });

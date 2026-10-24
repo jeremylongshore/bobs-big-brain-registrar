@@ -1,3 +1,8 @@
+import {
+  fixtureQmdOptions,
+  fixtureQmdAvailable,
+  withFixtureQmdIndex,
+} from '@qmd-team-intent-kb/test-fixtures';
 /**
  * Integration test for the PRODUCTION qmd-adapter against the real qmd binary
  * (bead `qmd-team-intent-kb-e3q`).
@@ -20,12 +25,11 @@
  * Fully isolated: `TEAMKB_BASE_PATH` is repointed at a tmp dir so the tenant's
  * XDG_CONFIG_HOME / XDG_CACHE_HOME (and thus the qmd registry + index) live in
  * tmp and never touch the operator's personal `~/.config/qmd` / `~/.cache/qmd`.
- * Skipped entirely when qmd is not on PATH (keeps CI without qmd green).
+ * Skipped entirely when the workspace-pinned qmd is unavailable (keeps CI without qmd green).
  *
  * @module __tests__/adapter-qmd-integration.test
  */
 
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,17 +37,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { QmdAdapter } from '../adapter.js';
+import { RealQmdExecutor } from '../executor/real-executor.js';
 
-function qmdAvailable(): boolean {
-  try {
-    execFileSync('qmd', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const HAS_QMD = qmdAvailable();
+const HAS_QMD = fixtureQmdAvailable();
 
 let workDir: string;
 let exportDir: string;
@@ -82,7 +78,12 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
         'sequence positions when producing each output representation.\n',
     );
 
-    const adapter = new QmdAdapter({ tenantId: 'demo-e2e', exportDir });
+    const adapter = new QmdAdapter(
+      { tenantId: 'demo-e2e', exportDir },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'demo-e2e')),
+      ),
+    );
 
     const ensured = await adapter.ensureCollections();
     expect(ensured.ok).toBe(true);
@@ -121,7 +122,12 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
     );
 
     // Tenant A indexes the export tree.
-    const tenantA = new QmdAdapter({ tenantId: 'tenant-a', exportDir });
+    const tenantA = new QmdAdapter(
+      { tenantId: 'tenant-a', exportDir },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'tenant-a')),
+      ),
+    );
     expect((await tenantA.ensureCollections()).ok).toBe(true);
     expect((await tenantA.update()).ok).toBe(true);
     const aHit = await tenantA.query('attention', 'curated', 'tenant-a');
@@ -130,7 +136,12 @@ describe.skipIf(!HAS_QMD)('QmdAdapter ↔ real qmd (production index path)', () 
 
     // Tenant B has its own (empty) export tree + its own XDG dirs → finds nothing.
     const tenantBExport = join(workDir, 'kb-export-b');
-    const tenantB = new QmdAdapter({ tenantId: 'tenant-b', exportDir: tenantBExport });
+    const tenantB = new QmdAdapter(
+      { tenantId: 'tenant-b', exportDir: tenantBExport },
+      withFixtureQmdIndex(
+        new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'tenant-b')),
+      ),
+    );
     expect((await tenantB.ensureCollections()).ok).toBe(true);
     expect((await tenantB.update()).ok).toBe(true);
     const bHit = await tenantB.query('attention', 'curated', 'tenant-b');

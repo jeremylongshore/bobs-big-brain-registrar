@@ -148,3 +148,54 @@ The upstream `@intentsolutions/audit-harness` ships `harness-hash.sh` with a har
 | `tests/JOURNEYS.md` | Seeded (Batch 3, this PR) | 6 journeys declared. 43 in-scope steps. 2 real coverage gaps (hash-chain verifier); 1 blocked by Epic 16 (ICOS→qmd bridge).        |
 
 **Linking infrastructure not yet wired.** The three artifacts above declare the _intent_ — what the system serves and what flows matter — but tests don't yet carry persona/flow/REQ-id annotations, so coverage % can't be computed automatically. Next pass: decide annotation convention (JSDoc on `describe` blocks recommended), then `rtm-builder-agent` / `persona-coverage-agent` / `journey-mapper-agent` walk tests and populate the linked columns.
+
+## Explicit live retrieval acceptance
+
+The ordinary `pnpm test` / `pnpm test:coverage` lane creates a private per-file
+worker brain, empty brainignore and XDG directories before test modules load.
+A run-owned parent directory is removed by global teardown even when a fully
+skipped file never runs its suite cleanup hooks.
+HOME and toolchain paths stay unchanged. Documented operator routing/auth
+variables are isolated; individual fixtures still set and restore their own
+settings. The three live suites never infer authorization from an available
+port, executable or existing index. Their dataset integrity checks remain in the
+ordinary lane; live assertions require an exact `1` opt-in and the separate
+configuration below. Values such as `false` do not opt in.
+
+Run a live lane deliberately, with explicit settings. These commands execute
+real services or corpus queries and are separate acceptance obligations; normal
+unit runs do not execute them:
+
+```bash
+TEAMKB_TEST_LIVE_DENSE=1 \
+  TEAMKB_TEST_LIVE_DENSE_URL=http://127.0.0.1:8098 \
+  pnpm exec vitest run --config vitest.live.config.ts dense-live-integration
+
+TEAMKB_TEST_LIVE_RERANK=1 \
+  TEAMKB_TEST_LIVE_RERANK_URL=http://127.0.0.1:8097 \
+  pnpm exec vitest run --config vitest.live.config.ts rerank-live-integration
+
+TEAMKB_TEST_LIVE_RETRIEVAL=1 \
+  TEAMKB_TEST_LIVE_BASE_PATH=/absolute/approved/brain \
+  TEAMKB_TEST_LIVE_TENANT_ID=approved-tenant \
+  TEAMKB_TEST_LIVE_QMD_BIN=/absolute/approved/qmd \
+  pnpm exec vitest run --config vitest.live.config.ts eval-retrieval-live
+```
+
+The embedder/reranker URLs must match the existing pinned loopback endpoints.
+Missing requested configuration, service, executable or index fails preflight;
+it does not turn an opted-in run into a successful skip. Retrieval uses the
+explicit tenant registry/index and `--index index` to avoid ambient overrides
+and ancestor discovery. The production adapter may initialize or refresh qmd
+and native FTS5 sidecars. This lane is not a promise of zero filesystem writes
+or a pure BM25 backend. The query set, model configurations, assertions and
+ordinary coverage thresholds remain unchanged.
+
+Fixture-only real-qmd integrations use the workspace-pinned executable through
+shared test helpers, explicit tenant-owned `INDEX_PATH` / `QMD_CONFIG_DIR` and
+`--index index`. The selector stays after command options and before a query's
+`--` terminator, preserving maintenance timeouts and literal query text. These
+helpers create the private DB parent directories that qmd's explicit index-path
+override does not create. Operator `TEAMKB_QMD_BIN` / `BBB_QMD_BIN` overrides
+are removed from the ordinary fixture baseline. This test binding does not
+change the production resolver or patch a global/deployed qmd installation.

@@ -1,16 +1,20 @@
 import { connect } from 'node:net';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import { RerankClient } from '../rerank/rerank-client.js';
+import { liveTestEnabled, requireLiveSetting } from './live-test-config.js';
+
+import type { RerankClient as RerankClientType } from '../rerank/rerank-client.js';
+
+let RerankClient: typeof RerankClientType;
 
 /**
  * Live integration against the real `bbb-reranker` systemd user service
  * (llama-server + pinned Qwen3-Reranker-0.6B on loopback :8097; see
  * scripts/bbb-reranker.service and the runbook 050-AT-RNBK).
  *
- * Skipped (not failed) when nothing is listening on the port, so CI and boxes
- * without the service stay green — the same posture as the other live tests.
+ * Explicit live lane only. Missing configuration or service fails preflight;
+ * ordinary collection neither imports clients/native indexes nor probes ports.
  */
 const RERANKER_PORT = 8097;
 const RERANKER_URL = `http://127.0.0.1:${RERANKER_PORT}`;
@@ -28,9 +32,16 @@ function portOpen(port: number, timeoutMs = 500): Promise<boolean> {
   });
 }
 
-const serviceUp = await portOpen(RERANKER_PORT);
+describe.skipIf(!liveTestEnabled('RERANK'))('live bbb-reranker service (B1)', () => {
+  beforeAll(async () => {
+    const configured = requireLiveSetting('TEAMKB_TEST_LIVE_RERANK_URL');
+    if (configured !== RERANKER_URL)
+      throw new Error('Live URL must match the pinned reranker endpoint');
+    if (!(await portOpen(RERANKER_PORT)))
+      throw new Error('Configured live reranker is unavailable');
+    ({ RerankClient } = await import('../rerank/rerank-client.js'));
+  });
 
-describe.skipIf(!serviceUp)('live bbb-reranker service (B1)', () => {
   it('answers the health probe', async () => {
     const client = new RerankClient({ url: RERANKER_URL, timeoutMs: 5000 });
     expect(await client.healthy()).toBe(true);

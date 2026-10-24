@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@qmd-team-intent-kb/policy-engine": "workspace:*",
-    "@types/better-sqlite3": "^9.6.0"
+    "@types/better-sqlite3": "^9.6.0",
+    "@qmd-team-intent-kb/test-fixtures": "workspace:*"
   }
 }

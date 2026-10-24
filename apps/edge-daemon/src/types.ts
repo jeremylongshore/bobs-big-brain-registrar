@@ -59,6 +59,8 @@ export interface DaemonConfig {
 
 /** Repository dependencies injected into the daemon */
 export interface DaemonDependencies {
+  /** Optional owned settings file; absent preserves the operator settings default. */
+  memoryCaptureSettingsPath?: string;
   candidateRepo: CandidateRepository;
   /** Durable ledger for broad/bulk spool admission receipts. */
   importBatchRepo?: ImportBatchRepository;

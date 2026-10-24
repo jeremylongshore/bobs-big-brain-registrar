@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { DaemonConfig, DaemonDependencies, DaemonLogger } from '../types.js';
 import {
@@ -25,6 +26,10 @@ const TENANT = DEFAULT_TENANT;
 /** Create all daemon dependencies from an in-memory test database */
 export function makeDeps(db: Database.Database): DaemonDependencies {
   return {
+    memoryCaptureSettingsPath: join(
+      process.env['TEAMKB_BASE_PATH']!,
+      'absent-claude-settings.json',
+    ),
     candidateRepo: new CandidateRepository(db),
     memoryRepo: new MemoryRepository(db),
     policyRepo: new PolicyRepository(db),

@@ -1,21 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { execSync } from 'node:child_process';
+import { join } from 'node:path';
+import {
+  fixtureQmdOptions,
+  fixtureQmdAvailable,
+  withFixtureQmdIndex,
+} from '@qmd-team-intent-kb/test-fixtures';
 import { RealQmdExecutor } from '../executor/real-executor.js';
 
-// Sync check required — describe.skipIf does not support async conditions
-function isQmdAvailable(): boolean {
-  try {
-    execSync('which qmd', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const qmdAvailable = isQmdAvailable();
+const qmdAvailable = fixtureQmdAvailable();
 
 describe('RealQmdExecutor', () => {
-  const executor = new RealQmdExecutor();
+  const executor = withFixtureQmdIndex(
+    new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'executor')),
+  );
 
   it('accepts an env option for XDG isolation', () => {
     const exec = new RealQmdExecutor({
@@ -44,9 +41,17 @@ describe('RealQmdExecutor', () => {
     it('does not pass the (nonexistent) --data-dir flag to qmd', async () => {
       // qmd 2.x rejects unknown flags; --version must still succeed, proving
       // we no longer prepend --data-dir. Isolation is via XDG_* env instead.
-      const exec = new RealQmdExecutor({
-        env: { XDG_CONFIG_HOME: '/tmp/qmd-iso-cfg', XDG_CACHE_HOME: '/tmp/qmd-iso-cache' },
-      });
+      const options = fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, 'executor-isolation');
+      const exec = withFixtureQmdIndex(
+        new RealQmdExecutor({
+          ...options,
+          env: {
+            ...options.env,
+            XDG_CONFIG_HOME: join(process.env['TEAMKB_BASE_PATH']!, 'version-config'),
+            XDG_CACHE_HOME: join(process.env['TEAMKB_BASE_PATH']!, 'version-cache'),
+          },
+        }),
+      );
       const result = await exec.execute(['--version']);
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('qmd');

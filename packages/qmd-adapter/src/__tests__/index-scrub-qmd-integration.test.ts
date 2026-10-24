@@ -1,7 +1,12 @@
+import {
+  fixtureQmdOptions,
+  fixtureQmdAvailable,
+  withFixtureQmdIndex,
+} from '@qmd-team-intent-kb/test-fixtures';
 /**
  * Index scrub against indexes built by the REAL pinned qmd binary (bead
- * 39z.19). CI puts the workspace `@tobilu/qmd` on PATH, so this runs there;
- * it is skipped only where no qmd binary exists.
+ * 39z.19). The test binds the workspace-pinned qmd and explicit tenant paths;
+ * it is skipped only where that fixture executable is unavailable.
  *
  * It reproduces the live finding of 2026-10-04 with qmd's own code paths:
  *   - tenant `intent-solutions` is reindexed after the redacted memory moved
@@ -11,7 +16,6 @@
  * It also proves the recorded schema matches what this qmd version writes.
  */
 
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +24,7 @@ import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { QmdAdapter } from '../adapter.js';
+import { RealQmdExecutor } from '../executor/real-executor.js';
 import { scrubIndexes } from '../scrub/index-scrub.js';
 import { QMD_INDEX_SCHEMA, checkSchema } from '../scrub/schema-guard.js';
 import {
@@ -35,16 +40,7 @@ import {
   writeExport,
 } from './index-scrub-fixtures.js';
 
-function qmdAvailable(): boolean {
-  try {
-    execFileSync('qmd', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const HAS_QMD = qmdAvailable();
+const HAS_QMD = fixtureQmdAvailable();
 
 let work: string;
 let exportDir: string;
@@ -66,7 +62,12 @@ afterEach(() => {
 });
 
 async function qmdIndex(tenantId: string): Promise<QmdAdapter> {
-  const adapter = new QmdAdapter({ tenantId, exportDir, disableNativeFusion: true });
+  const adapter = new QmdAdapter(
+    { tenantId, exportDir, disableNativeFusion: true },
+    withFixtureQmdIndex(
+      new RealQmdExecutor(fixtureQmdOptions(process.env['TEAMKB_BASE_PATH']!, tenantId)),
+    ),
+  );
   expect((await adapter.ensureCollections()).ok).toBe(true);
   expect((await adapter.update()).ok).toBe(true);
   return adapter;

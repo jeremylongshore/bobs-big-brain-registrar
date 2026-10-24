@@ -2,6 +2,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    globalSetup: ['./tests/support/fixture-global-setup.ts'],
+    setupFiles: ['./tests/support/fixture-environment.ts'],
+    // Ambient live-lane markers cannot bypass the ordinary private baseline.
+    env: { TEAMKB_TEST_LIVE_LANE: '0' },
     exclude: [
       '**/dist/**',
       '**/node_modules/**',

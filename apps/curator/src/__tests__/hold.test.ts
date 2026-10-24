@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -74,8 +74,8 @@ let savedEnv: Record<string, string | undefined>;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'hold-'));
   dbPath = join(dir, 'teamkb.db');
-  // The CLI resolves the origin secret and brainignore file under the brain base
-  // path: point it at the temp dir so no test reads or writes a real brain.
+  // Origin secrets use BASE; brainignore has its own explicit override.
+  // Keep both private so the CLI never falls back to an operator brainignore.
   savedEnv = {
     TEAMKB_BASE_PATH: process.env['TEAMKB_BASE_PATH'],
     TEAMKB_ORIGIN_SECRET: process.env['TEAMKB_ORIGIN_SECRET'],
@@ -87,6 +87,8 @@ beforeEach(() => {
   for (const key of Object.keys(savedEnv).filter((k) => k !== 'TEAMKB_BASE_PATH')) {
     delete process.env[key];
   }
+  process.env['TEAMKB_BRAINIGNORE'] = join(dir, 'brainignore');
+  writeFileSync(process.env['TEAMKB_BRAINIGNORE'], '');
   open();
   policies.insert(makePolicy({ rules: RULES }));
   // The test policy is deliberately partial; silence the dormant-rule notice.

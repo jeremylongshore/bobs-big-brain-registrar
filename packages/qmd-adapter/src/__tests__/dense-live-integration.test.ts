@@ -1,17 +1,23 @@
 import { connect } from 'node:net';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import { DenseVecIndex } from '../dense/dense-index.js';
-import { EmbedClient } from '../dense/embed-client.js';
+import { liveTestEnabled, requireLiveSetting } from './live-test-config.js';
+
+import type { DenseVecIndex as DenseVecIndexType } from '../dense/dense-index.js';
+
+let DenseVecIndex: typeof DenseVecIndexType;
+import type { EmbedClient as EmbedClientType } from '../dense/embed-client.js';
+
+let EmbedClient: typeof EmbedClientType;
 
 /**
  * Live integration against the real `bbb-embedder` systemd user service
  * (llama-server + pinned EmbeddingGemma-300M on loopback :8098; see
  * scripts/bbb-embedder.service and the runbook 051-AT-RNBK).
  *
- * Skipped (not failed) when nothing is listening on the port, so CI and boxes
- * without the service stay green — the same posture as the other live tests.
+ * Explicit live lane only. Missing configuration or service fails preflight;
+ * ordinary collection neither imports clients/native indexes nor probes ports.
  */
 const EMBEDDER_PORT = 8098;
 const EMBEDDER_URL = `http://127.0.0.1:${EMBEDDER_PORT}`;
@@ -29,9 +35,17 @@ function portOpen(port: number, timeoutMs = 500): Promise<boolean> {
   });
 }
 
-const serviceUp = await portOpen(EMBEDDER_PORT);
+describe.skipIf(!liveTestEnabled('DENSE'))('live bbb-embedder service (B4)', () => {
+  beforeAll(async () => {
+    const configured = requireLiveSetting('TEAMKB_TEST_LIVE_DENSE_URL');
+    if (configured !== EMBEDDER_URL)
+      throw new Error('Live URL must match the pinned embedder endpoint');
+    if (!(await portOpen(EMBEDDER_PORT)))
+      throw new Error('Configured live embedder is unavailable');
+    ({ DenseVecIndex } = await import('../dense/dense-index.js'));
+    ({ EmbedClient } = await import('../dense/embed-client.js'));
+  });
 
-describe.skipIf(!serviceUp)('live bbb-embedder service (B4)', () => {
   it('answers the health probe', async () => {
     const client = new EmbedClient({ url: EMBEDDER_URL, timeoutMs: 5000 });
     expect(await client.healthy()).toBe(true);
