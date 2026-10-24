@@ -52,6 +52,8 @@ describe('actual SDK-resolved HTTP parser dependency (not a stdio transport cap)
     );
     expect(JSON.parse(output)).toMatchObject({
       excessiveEncodingsRefused: true,
+      completeEncodedBodyRefused: true,
+      encodingLimitCauseVerified: true,
       subsequentRequestAlive: true,
     });
   }, 15_000);

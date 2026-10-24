@@ -237,7 +237,18 @@ async function tarContract() {
       ]),
     ),
   );
-  await tar.t({ file: archive, gzip: true }, ['selected.txt']);
+  // Nonmatching selection is the original deep-parent-recursion crash case.
+  const nonmatching = [];
+  await tar.t({ file: archive, gzip: true, onReadEntry: (entry) => nonmatching.push(entry.path) }, [
+    'selected.txt',
+  ]);
+  assert.deepEqual(nonmatching, []);
+  const actualPath = longName.subarray(0, -1).toString();
+  const matching = [];
+  await tar.t({ file: archive, gzip: true, onReadEntry: (entry) => matching.push(entry.path) }, [
+    actualPath,
+  ]);
+  assert.deepEqual(matching, [actualPath]);
   const content = Buffer.from('owned fixture\n');
   const valid = join(scratch, 'valid.tar');
   writeFileSync(
@@ -248,7 +259,12 @@ async function tarContract() {
   mkdirSync(output);
   await tar.x({ file: valid, cwd: output }, ['selected.txt']);
   assert.equal(readFileSync(join(output, 'selected.txt'), 'utf8'), content.toString());
-  return { version: selected.info.version, selectedLongPathSurvives: true, validExtraction: true };
+  return {
+    version: selected.info.version,
+    selectedLongPathSurvives: true,
+    selectedLongPathEmitted: true,
+    validExtraction: true,
+  };
 }
 
 try {
