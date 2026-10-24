@@ -91,7 +91,13 @@
       "vite": "^8.3.3",
       "fast-uri": "^3.1.2",
       "@tobilu/qmd@2.5.3>zod": "^4.6.7",
-      "@intentsolutions/core@0.11.0>zod": "^4.6.7"
+      "@intentsolutions/core@0.11.0>zod": "^4.6.7",
+      "cmake-js@8.0.0>tar": "^7.5.21",
+      "node-llama-cpp@3.18.1>nanoid": "^5.1.16",
+      "express@5.2.1>body-parser": "^2.4.0",
+      "@tobilu/qmd@2.5.3>@modelcontextprotocol/sdk": "^1.32.2",
+      "node-llama-cpp@3.18.1>simple-git": "^4.0.2",
+      "testcontainers@12.2.0>undici": "^8.12.2"
     }
   }
 }

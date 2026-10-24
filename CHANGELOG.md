@@ -9,10 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refresh installed helper dependencies to tar 7.5.22, nanoid 5.1.16,
+  body-parser 2.4.0 and undici 8.12.3; align both MCP SDK paths on 1.32.2.
+  The scoped simple-git 4.0.2 override is a reviewed major-range exception for
+  node-llama-cpp 3.18.1, covered by real local Git consumer and unsafe-input
+  refusal contracts. qmd, node-llama-cpp and native/model pins stay unchanged.
+  These repository changes do not update separately installed qmd executables
+  or harden qmd's optional standalone HTTP transport.
+
 - Upgrade all resolved Zod dependencies to 4.6.7 and Vite to 8.3.5 (patched
   floor 8.3.3) for GHSA-mrhx-c7xc-m3w5 and GHSA-587h-7wmj-h5pm. Scoped
-  qmd/core overrides align with the owned Zod range; qmd and MCP SDK versions
-  remain unchanged. Offline contracts exercise owned size-bounded collections,
+  qmd/core overrides align with the owned Zod range. That validator-only update
+  left qmd and MCP SDK versions unchanged; the subsequent SDK refresh is described above. Offline contracts exercise owned size-bounded collections,
   both actual SDK instances, and the pinned qmd MCP stdio server. SDK compatibility
   modules still include Zod 3 code; these tests cover the selected patched Zod 4 paths.
 

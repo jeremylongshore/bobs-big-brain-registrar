@@ -110,7 +110,9 @@ describe('actual pinned qmd MCP validator contract', () => {
         expect(invalid).toMatchObject({ isError: true });
         // Patched v4 rejects size before each missing type/query field is parsed.
         const diagnostic = JSON.stringify(invalid);
-        expect(diagnostic).toContain('too_big');
+        // SDK1.32 formats Zod issues as message/path rather than raw codes.
+        expect(diagnostic).toContain('Too big: expected array to have <=10 items at searches');
+        expect(diagnostic).not.toMatch(/searches(?:\.|\[)\d/);
         expect(diagnostic).not.toContain('invalid_type');
         expect(runtimeRows().filter((row) => row.kind === 'denied')).toEqual([]);
         expect(runtimeRows().filter((row) => row.entry === cliEntry)).toHaveLength(2);
