@@ -122,7 +122,7 @@ describe('actual MCP SDK and Zod4 contracts', () => {
       '../../..',
     );
     const sdkPackage = JSON.parse(readFileSync(join(sdkRoot, 'package.json'), 'utf8'));
-    expect(sdkPackage.version).toBe('1.29.0');
+    expect(sdkPackage.version).toBe('1.32.2');
     // Follow the packages' declared import exports, not require's CJS copy.
     const Parser: { z: typeof z } = await import(
       pathToFileURL(join(zodRoot, zodPackage.exports['.'].import)).href
