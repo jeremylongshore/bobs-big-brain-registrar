@@ -13,7 +13,7 @@ import { SearchClient, resolveScopeCollections } from './search/search-client.js
 import { fuseReciprocalRank } from './search/rrf-fusion.js';
 import { IndexLifecycleManager } from './index-manager/index-lifecycle.js';
 import { checkHealth } from './health/health-check.js';
-import { getQmdTenantEnv, getQmdTenantIndexPath } from './config.js';
+import { getQmdTenantIndexPath } from './config.js';
 import { getNativeIndexManager, type NativeIndexManager } from './native/native-index-manager.js';
 import type { Fts5SearchHit } from './native/fts5-backend.js';
 import { RerankClient } from './rerank/rerank-client.js';
@@ -77,10 +77,10 @@ export class QmdAdapter {
       executor ??
       new RealQmdExecutor({
         binary: config.qmdBinary,
+        ownedRuntime: config.qmdRuntime,
+        tenant: { id: config.tenantId, basePath: config.basePath },
         timeout: config.timeout,
         maintenanceTimeout: config.maintenanceTimeout,
-        // Per-tenant isolation via XDG_* env, not the nonexistent --data-dir.
-        env: getQmdTenantEnv(config.tenantId),
       });
     this.collections = new CollectionManager(this.executor);
     this.search = new SearchClient(this.executor);
@@ -96,7 +96,7 @@ export class QmdAdapter {
           exportDir: config.exportDir,
           indexPath:
             config.nativeIndexPath ??
-            join(getQmdTenantIndexPath(config.tenantId), 'native-fts5.sqlite'),
+            join(getQmdTenantIndexPath(config.tenantId, config.basePath), 'native-fts5.sqlite'),
         });
       } catch {
         this.native = null;
@@ -364,7 +364,9 @@ function buildDenseArm(config: QmdAdapterConfig): DenseArm | null {
       `${pinned?.sha256 ?? 'unpinned'}|q:${EMBEDDINGGEMMA_QUERY_PREFIX}` +
       `|d:${EMBEDDINGGEMMA_DOCUMENT_PREFIX}`;
     const index = new DenseVecIndex({
-      path: dense.indexPath ?? join(getQmdTenantIndexPath(config.tenantId), 'dense-vec.sqlite'),
+      path:
+        dense.indexPath ??
+        join(getQmdTenantIndexPath(config.tenantId, config.basePath), 'dense-vec.sqlite'),
       modelId: pinned?.file ?? 'unknown-embedding',
       modelVersion,
     });
@@ -406,7 +408,8 @@ function buildRerankStage(config: QmdAdapterConfig): RerankStage | null {
     try {
       cache = new RerankCache({
         path:
-          rerank.cachePath ?? join(getQmdTenantIndexPath(config.tenantId), 'rerank-cache.sqlite'),
+          rerank.cachePath ??
+          join(getQmdTenantIndexPath(config.tenantId, config.basePath), 'rerank-cache.sqlite'),
         modelId: pinned?.file ?? 'unknown-reranker',
         modelVersion: pinned?.sha256 ?? 'unpinned',
       });

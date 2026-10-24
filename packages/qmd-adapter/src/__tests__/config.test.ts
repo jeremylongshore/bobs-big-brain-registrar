@@ -55,6 +55,8 @@ describe('qmd-adapter config', () => {
     expect(getQmdTenantEnv('t1')).toEqual({
       XDG_CONFIG_HOME: '/custom/qmd-index/t1/config',
       XDG_CACHE_HOME: '/custom/qmd-index/t1/cache',
+      QMD_CONFIG_DIR: '/custom/qmd-index/t1/config/qmd',
+      INDEX_PATH: '/custom/qmd-index/t1/cache/qmd/index.sqlite',
     });
   });
 

@@ -1,11 +1,16 @@
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { getTeamKbBasePath, isPathSafe } from '@qmd-team-intent-kb/common';
+import type { OwnedQmdRuntime } from '@qmd-team-intent-kb/qmd-adapter';
 
 /** Resolved configuration for the MCP server */
 export interface McpServerConfig {
   /** Tenant identifier — scopes all operations */
   tenantId: string;
+  /** Programmatic binary pin; TEAMKB_QMD_BIN remains its environment equivalent. */
+  qmdBinary?: string;
+  /** Paired artifact declaration; otherwise shared selection lazily reads TEAMKB_QMD_RUNTIME. */
+  qmdRuntime?: OwnedQmdRuntime;
   /** Absolute path to the TeamKB base directory */
   basePath: string;
   /** Absolute path to the spool directory */

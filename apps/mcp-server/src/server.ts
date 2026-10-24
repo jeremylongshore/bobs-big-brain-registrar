@@ -26,7 +26,7 @@ const VERSION = '0.1.0';
  * not call the brain API. Local filesystem permissions are the write security
  * boundary.
  *
- * Call `isQmdAvailable()` first if you want to conditionally register sync.
+ * Call `isQmdAvailable(config)` first if you want to conditionally register sync.
  */
 export function createServer(
   config: McpServerConfig,
@@ -274,13 +274,13 @@ export function createServer(
   }
 
   // teamkb_sync — rebuild qmd vector index (registered only if qmd is present)
-  if (options.withSync === true) {
+  if (options.withSync === true && !config.apiUrl) {
     server.tool(
       'teamkb_sync',
       'Rebuild the local qmd vector index by running `qmd embed`. May take up to 2 minutes on large corpora.',
       {},
       async () => {
-        const result = await runSync();
+        const result = await runSync(config);
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
         };

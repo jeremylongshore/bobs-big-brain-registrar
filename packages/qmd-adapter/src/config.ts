@@ -1,6 +1,7 @@
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
-import { resolveTeamKbPath } from '@qmd-team-intent-kb/common';
+import { getTeamKbBasePath, resolveTeamKbPath } from '@qmd-team-intent-kb/common';
+import type { OwnedQmdRuntime } from './executor/resolve-command.js';
 
 /** Base directory for qmd indexes, isolated from personal qmd usage */
 export const QMD_INDEX_DIR = 'qmd-index';
@@ -11,8 +12,21 @@ export function getQmdIndexBasePath(): string {
 }
 
 /** Get the index path for a specific tenant */
-export function getQmdTenantIndexPath(tenantId: string): string {
-  return resolveTeamKbPath(`${QMD_INDEX_DIR}/${tenantId}`);
+export function getQmdTenantIndexPath(tenantId: string, basePath?: string): string {
+  const root = resolve(basePath ?? getTeamKbBasePath(), QMD_INDEX_DIR);
+  const parts = tenantId.split(sep);
+  if (
+    !tenantId ||
+    tenantId.includes('\0') ||
+    isAbsolute(tenantId) ||
+    parts.some((p) => p === '.' || p === '..' || p === '')
+  )
+    throw new Error('Tenant index identity must be a nonempty relative path without traversal');
+  const path = resolve(root, tenantId);
+  const within = relative(root, path);
+  if (!within || isAbsolute(within) || within === '..' || within.startsWith(`..${sep}`))
+    throw new Error('Tenant index path escapes the configured TeamKB base');
+  return path;
 }
 
 /** Get the index path for a specific tenant + collection */
@@ -23,18 +37,26 @@ export function getQmdCollectionIndexPath(tenantId: string, collection: string):
 /**
  * Environment overrides that isolate a tenant's qmd registry + index.
  *
- * qmd 2.x reads its collection registry from `$XDG_CONFIG_HOME/qmd/index.yml`
- * and its BM25 index from `$XDG_CACHE_HOME/qmd/index.sqlite`. Pointing both at
- * tenant-scoped subdirs of the tenant index path gives full per-tenant
- * isolation without the (nonexistent) `--data-dir` flag, and keeps the team
- * KB's qmd state out of the operator's personal `~/.config/qmd` / `~/.cache/qmd`.
+ * Preserve qmd's existing tenant XDG layout while binding QMD_CONFIG_DIR and
+ * INDEX_PATH explicitly. Pair this environment with withQmdTenantSelector:
+ * the selector disables ancestor .qmd discovery, which otherwise overrides
+ * the default index path. This helper alone does not disable that discovery.
  */
-export function getQmdTenantEnv(tenantId: string): Record<string, string> {
-  const base = getQmdTenantIndexPath(tenantId);
+export function getQmdTenantEnv(tenantId: string, basePath?: string): Record<string, string> {
+  const base = getQmdTenantIndexPath(tenantId, basePath);
   return {
     XDG_CONFIG_HOME: join(base, 'config'),
     XDG_CACHE_HOME: join(base, 'cache'),
+    QMD_CONFIG_DIR: join(base, 'config', 'qmd'),
+    INDEX_PATH: join(base, 'cache', 'qmd', 'index.sqlite'),
   };
+}
+
+/** Explicit selector disables qmd's ancestor .qmd discovery; query literals stay after --. */
+export function withQmdTenantSelector(args: readonly string[]): string[] {
+  const literal = args.indexOf('--');
+  const at = literal < 0 ? args.length : literal;
+  return [...args.slice(0, at), '--index', 'index', ...args.slice(at)];
 }
 
 /** Loopback endpoint served by the pinned EmbeddingGemma user service. */
@@ -110,6 +132,10 @@ export interface QmdAdapterConfig {
    */
   exportDir: string;
   qmdBinary?: string;
+  /** Opt-in artifact declaration; a declared missing/broken artifact never uses legacy discovery. */
+  qmdRuntime?: OwnedQmdRuntime;
+  /** Explicit TeamKB base for tenant indexes; defaults to normal ambient base resolution. */
+  basePath?: string;
   /** Limit for interactive qmd commands (default {@link DEFAULT_TIMEOUT}). */
   timeout?: number;
   /**

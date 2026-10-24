@@ -119,11 +119,28 @@ export async function searchTool(
   if (config.apiUrl !== undefined && config.apiUrl !== '') {
     return searchRemote(input.query, scope, limit, config, deps.fetchFn ?? fetch);
   }
-  return searchLocal(input.query, scope, limit, config, deps.makeAdapter ?? defaultAdapter);
+  return searchLocal(
+    input.query,
+    scope,
+    limit,
+    config,
+    deps.makeAdapter ?? ((tenantId, exportDir) => defaultAdapter(tenantId, exportDir, config)),
+  );
 }
 
-function defaultAdapter(tenantId: string, exportDir: string): QmdQueryPort {
-  return new QmdAdapter({ tenantId, exportDir, dense: getDefaultDenseConfig() });
+function defaultAdapter(
+  tenantId: string,
+  exportDir: string,
+  config: McpServerConfig,
+): QmdQueryPort {
+  return new QmdAdapter({
+    tenantId,
+    exportDir,
+    basePath: config.basePath,
+    qmdBinary: config.qmdBinary,
+    qmdRuntime: config.qmdRuntime,
+    dense: getDefaultDenseConfig(),
+  });
 }
 
 /** Local mode: run qmd in-process and map results to cited hits. */

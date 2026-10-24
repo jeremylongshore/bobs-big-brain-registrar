@@ -17,6 +17,7 @@ export {
   getQmdTenantIndexPath,
   getQmdCollectionIndexPath,
   getQmdTenantEnv,
+  withQmdTenantSelector,
   getDefaultDenseConfig,
   DEFAULT_QMD_BINARY,
   DEFAULT_TIMEOUT,
@@ -41,6 +42,19 @@ export type {
   ResolveQmdBinaryOptions,
   QmdBinarySource,
 } from './executor/resolve-binary.js';
+export {
+  resolveQmdCommand,
+  inspectOwnedQmdRuntime,
+  OwnedQmdRuntimeError,
+  QMD_RUNTIME_ENV,
+} from './executor/resolve-command.js';
+export type {
+  OwnedQmdRuntime,
+  OwnedQmdProvenance,
+  QmdCommandProvenance,
+  ResolvedQmdCommand,
+  ResolveQmdCommandOptions,
+} from './executor/resolve-command.js';
 export {
   resolveQmdBinary,
   QmdBinaryNotFoundError,

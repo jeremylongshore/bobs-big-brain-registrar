@@ -12,7 +12,7 @@ import { createServer, isQmdAvailable } from './server.js';
 
 async function main(): Promise<void> {
   const config = resolveConfig();
-  const withSync = await isQmdAvailable();
+  const withSync = !config.apiUrl && (await isQmdAvailable(config));
   const canWrite = config.role === 'admin';
 
   const server = createServer(config, { withSync, canWrite });
