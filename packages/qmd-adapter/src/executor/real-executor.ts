@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import type { QmdExecutor } from './executor.js';
 import type { CommandFailure, CommandResult } from '../types.js';
 import { delimiter, dirname, isAbsolute } from 'node:path';
@@ -79,6 +80,18 @@ async function waitGroupGone(pid: number, ms: number): Promise<boolean> {
     await sleep(GROUP_POLL_MS);
   }
   return true;
+}
+
+/** INDEX_PATH bypasses qmd's default cache-parent mkdir; prepare only derived tenant paths. */
+function prepareTenantDirectories(env: Readonly<Record<string, string>>): void {
+  const indexPath = env['INDEX_PATH'];
+  const configDir = env['QMD_CONFIG_DIR'];
+  // Validate every derived path before the first write. Execution env overrides
+  // are merged later and cannot redirect this preparation.
+  if (!indexPath || !configDir || !isAbsolute(indexPath) || !isAbsolute(configDir))
+    throw new Error('Derived tenant index and registry paths must be absolute');
+  mkdirSync(dirname(indexPath), { recursive: true, mode: 0o700 });
+  mkdirSync(configDir, { recursive: true, mode: 0o700 });
 }
 
 /** Real qmd CLI executor using child_process */
@@ -166,6 +179,15 @@ export class RealQmdExecutor implements QmdExecutor {
         stdout: '',
         stderr: error instanceof Error ? error.message : 'qmd command selection failed',
         exitCode: QMD_NOT_FOUND_EXIT_CODE,
+      };
+    }
+    try {
+      if (this.tenant) prepareTenantDirectories(tenantEnv);
+    } catch (error) {
+      return {
+        stdout: '',
+        stderr: `qmd tenant directories could not be prepared: ${error instanceof Error ? error.message : 'filesystem setup failed'}`,
+        exitCode: 1,
       };
     }
     const remaining = timeoutMs - (Date.now() - startedAt);

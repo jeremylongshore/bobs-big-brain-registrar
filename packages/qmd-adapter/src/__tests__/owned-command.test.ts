@@ -319,3 +319,91 @@ describe('owned command metadata and routing contracts', () => {
     ]);
   });
 });
+
+describe('cold tenant directory preparation', () => {
+  it('starts from absent cache/config parents and preserves existing files on repeat', async () => {
+    const owned = fixture(
+      `import {existsSync,writeFileSync} from 'node:fs';import {join} from 'node:path';const index=process.env.INDEX_PATH;const registry=join(process.env.QMD_CONFIG_DIR,'index.yml');if(!existsSync(index))writeFileSync(index,'synthetic-index',{flag:'wx'});if(!existsSync(registry))writeFileSync(registry,'collections: {}',{flag:'wx'});console.log('cold-tenant-ready');`,
+    );
+    const base = join(owned.root, 'cold-brain');
+    const tenant = join(base, 'qmd-index', 'cold-team');
+    const index = join(tenant, 'cache', 'qmd', 'index.sqlite');
+    const registry = join(tenant, 'config', 'qmd', 'index.yml');
+    vi.stubEnv('TEAMKB_QMD_BIN', '');
+    const executor = new RealQmdExecutor({
+      ownedRuntime: owned,
+      tenant: { id: 'cold-team', basePath: base },
+      env: {
+        INDEX_PATH: join(owned.root, 'ambient', 'index.sqlite'),
+        QMD_CONFIG_DIR: join(owned.root, 'ambient-config'),
+      },
+    });
+    expect(existsSync(base)).toBe(false);
+    const result = await executor.execute(['collection', 'add', 'synthetic-source']);
+    expect({ exitCode: result.exitCode, stderr: result.stderr }).toEqual({
+      exitCode: 0,
+      stderr: '',
+    });
+    expect(result.stdout).toContain('cold-tenant-ready');
+    writeFileSync(index, 'preserve-existing-index');
+    writeFileSync(registry, 'preserve-existing-registry');
+    expect((await executor.execute(['status'])).exitCode).toBe(0);
+    expect(readFileSync(index, 'utf8')).toBe('preserve-existing-index');
+    expect(readFileSync(registry, 'utf8')).toBe('preserve-existing-registry');
+    expect(existsSync(join(owned.root, 'ambient'))).toBe(false);
+    expect(existsSync(join(owned.root, 'ambient-config'))).toBe(false);
+  });
+
+  it('reports an obstructed tenant parent without spawning the selected child', async () => {
+    const owned = fixture();
+    const marker = join(owned.root, 'child-ran');
+    const binary = join(owned.root, 'selected-child');
+    writeFileSync(
+      binary,
+      `#!${process.execPath}\nimport {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(marker)},'unexpected');`,
+      { mode: 0o700 },
+    );
+    const base = join(owned.root, 'brain');
+    const tenant = join(base, 'qmd-index', 'blocked');
+    mkdirSync(tenant, { recursive: true });
+    writeFileSync(join(tenant, 'cache'), 'obstructed');
+    const result = await new RealQmdExecutor({
+      binary,
+      tenant: { id: 'blocked', basePath: base },
+    }).execute(['status']);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('tenant directories');
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it.each(['invalid tenant', 'broken owned declaration'])(
+    'validates %s before creating any tenant directories',
+    async (kind) => {
+      const owned = fixture();
+      const marker = join(owned.root, 'child-ran');
+      const binary = join(owned.root, 'selected-child');
+      writeFileSync(
+        binary,
+        `#!${process.execPath}\nimport {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(marker)},'unexpected');`,
+        { mode: 0o700 },
+      );
+      const base = join(owned.root, 'never-created');
+      vi.stubEnv('TEAMKB_QMD_BIN', '');
+      const executor = new RealQmdExecutor({
+        ...(kind === 'invalid tenant'
+          ? { binary }
+          : {
+              ownedRuntime: {
+                root: join(owned.root, 'missing'),
+                manifestSha256: owned.manifestSha256,
+              },
+            }),
+        tenant: { id: kind === 'invalid tenant' ? '../outside' : 'valid', basePath: base },
+      });
+      expect((await executor.execute(['status'])).exitCode).toBe(127);
+      expect(existsSync(base)).toBe(false);
+      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(join(base, 'outside'))).toBe(false);
+    },
+  );
+});
