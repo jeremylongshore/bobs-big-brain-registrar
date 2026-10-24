@@ -356,6 +356,12 @@ importers:
         specifier: ^9.6.0
         version: 9.6.0
 
+  packages/qmd-runtime:
+    dependencies:
+      '@tobilu/qmd':
+        specifier: 2.5.3
+        version: 2.5.3(typescript@5.9.3)
+
   packages/repo-resolver:
     dependencies:
       '@qmd-team-intent-kb/common':

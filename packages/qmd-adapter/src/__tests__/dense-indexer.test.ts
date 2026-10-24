@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -27,6 +27,8 @@ class StubEmbedder {
   failNextEmbedRequests = 0;
   /** Healthy single-slot service: requests above its document capacity fail. */
   maxDocumentsPerRequest = Number.POSITIVE_INFINITY;
+  rejectedRequestCount = 0;
+  readonly rejectedRequests: Array<{ method: string; path: string; reason: string }> = [];
   private embedRequests = 0;
   private baseUrl = '';
 
@@ -36,34 +38,58 @@ class StubEmbedder {
 
   constructor() {
     this.server = createServer((req, res) => {
-      const isEmbed = req.url !== '/health';
-      if (isEmbed) {
-        this.embedRequests++;
-        if (this.failFromEmbedRequest !== null && this.embedRequests >= this.failFromEmbedRequest) {
-          this.down = true;
-        }
-      }
-      // Transient outage: fail this embed request but recover afterwards.
-      if (isEmbed && this.failNextEmbedRequests > 0) {
-        this.failNextEmbedRequests--;
-        res.writeHead(503);
-        res.end();
+      req.on('error', () => {
+        this.recordRejection(req, 'request-error');
+        res.destroy();
+      });
+      if (req.method === 'GET' && req.url === '/health') {
+        res.writeHead(this.down ? 503 : 200);
+        res.end(this.down ? '' : '{"status":"ok"}');
         return;
       }
-      if (this.down) {
-        res.writeHead(503);
-        res.end();
-        return;
-      }
-      if (req.url === '/health') {
-        res.writeHead(200);
-        res.end('{"status":"ok"}');
+      if (req.method !== 'POST' || req.url !== '/v1/embeddings') {
+        this.recordRejection(req, 'route');
+        req.resume();
+        res.writeHead(404).end();
         return;
       }
       let body = '';
       req.on('data', (c: Buffer) => (body += c.toString()));
       req.on('end', () => {
-        const { input } = JSON.parse(body) as { input: string[] };
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          this.recordRejection(req, 'invalid-json');
+          res.writeHead(400).end();
+          return;
+        }
+        const input =
+          parsed !== null && typeof parsed === 'object' && 'input' in parsed
+            ? parsed.input
+            : undefined;
+        if (
+          !Array.isArray(input) ||
+          !input.every((text: unknown): text is string => typeof text === 'string')
+        ) {
+          this.recordRejection(req, 'invalid-input');
+          res.writeHead(400).end();
+          return;
+        }
+        this.embedRequests++;
+        if (this.failFromEmbedRequest !== null && this.embedRequests >= this.failFromEmbedRequest) {
+          this.down = true;
+        }
+        // Only valid embedding requests advance the transient outage counter.
+        if (this.failNextEmbedRequests > 0) {
+          this.failNextEmbedRequests--;
+          res.writeHead(503).end();
+          return;
+        }
+        if (this.down) {
+          res.writeHead(503).end();
+          return;
+        }
         if (input.length > this.maxDocumentsPerRequest) {
           res.writeHead(503);
           res.end();
@@ -85,6 +111,17 @@ class StubEmbedder {
         );
       });
     });
+  }
+
+  private recordRejection(req: IncomingMessage, reason: string): void {
+    this.rejectedRequestCount++;
+    if (this.rejectedRequests.length < 16) {
+      this.rejectedRequests.push({
+        method: (req.method ?? '').slice(0, 16),
+        path: (req.url ?? '').split('?')[0]!.slice(0, 128),
+        reason,
+      });
+    }
   }
 
   /** Inputs containing this marker are rejected (omitted) by the stub — models a per-input server error. */
@@ -111,8 +148,11 @@ class StubEmbedder {
     });
   }
 
-  close(): void {
-    this.server.close();
+  close(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.server.close((error) => (error ? reject(error) : resolve()));
+      this.server.closeAllConnections();
+    });
   }
 }
 
@@ -121,8 +161,10 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
   let url: string;
   let exportDir: string;
   let index: DenseVecIndex;
+  let expectedRejections: number;
 
   beforeEach(async () => {
+    expectedRejections = 0;
     stub = new StubEmbedder();
     url = await stub.listen();
     exportDir = mkdtempSync(join(tmpdir(), 'dense-indexer-test-'));
@@ -134,10 +176,16 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
     index = new DenseVecIndex({ path: ':memory:', modelId: 'm', modelVersion: 'v' });
   });
 
-  afterEach(() => {
-    stub.close();
-    index.close();
-    rmSync(exportDir, { recursive: true, force: true });
+  afterEach(async () => {
+    try {
+      await stub.close();
+    } finally {
+      index.close();
+      rmSync(exportDir, { recursive: true, force: true });
+    }
+    expect(stub.rejectedRequestCount, JSON.stringify(stub.rejectedRequests)).toBe(
+      expectedRejections,
+    );
   });
 
   function makeIndexer(batchSize = 2, retry?: Partial<DenseIndexerOptions>): DenseIndexer {
@@ -153,6 +201,63 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
       ...retry,
     });
   }
+
+  it('rejects malformed embedding requests without consuming valid-request outage controls', async () => {
+    expectedRejections = 7;
+    for (const body of [
+      '',
+      '{',
+      JSON.stringify({ input: [null] }),
+      JSON.stringify({ input: 'wrong' }),
+    ]) {
+      const response = await fetch(`${url}/v1/embeddings`, {
+        method: 'POST',
+        body,
+        signal: AbortSignal.timeout(1_000),
+      });
+      expect(response.status).toBe(400);
+      await response.arrayBuffer();
+    }
+    expect(stub.embeddingRequestCount).toBe(0);
+    stub.failNextEmbedRequests = 1;
+    const invalid = await fetch(`${url}/v1/embeddings`, {
+      method: 'POST',
+      body: '',
+      signal: AbortSignal.timeout(1_000),
+    });
+    expect(invalid.status).toBe(400);
+    await invalid.arrayBuffer();
+    const unknown = await fetch(`${url}/not-an-embedding-route`, {
+      method: 'POST',
+      body: JSON.stringify({ input: ['synthetic'] }),
+      signal: AbortSignal.timeout(1_000),
+    });
+    expect(unknown.status).toBe(404);
+    await unknown.arrayBuffer();
+    const wrongMethod = await fetch(`${url}/v1/embeddings`, {
+      signal: AbortSignal.timeout(1_000),
+    });
+    expect(wrongMethod.status).toBe(404);
+    await wrongMethod.arrayBuffer();
+    const client = new EmbedClient({ url });
+    expect(await client.healthy()).toBe(true);
+    expect(stub.embeddingRequestCount).toBe(0);
+    expect(stub.failNextEmbedRequests).toBe(1);
+    expect(await client.embed(['synthetic'], 'document')).toBeNull();
+    expect(stub.embeddingRequestCount).toBe(1);
+    expect(await client.embed(['synthetic'], 'document')).toHaveLength(1);
+    expect(stub.embeddingRequestCount).toBe(2);
+    expect(stub.rejectedRequestCount).toBe(7);
+    expect(stub.rejectedRequests).toEqual([
+      { method: 'POST', path: '/v1/embeddings', reason: 'invalid-json' },
+      { method: 'POST', path: '/v1/embeddings', reason: 'invalid-json' },
+      { method: 'POST', path: '/v1/embeddings', reason: 'invalid-input' },
+      { method: 'POST', path: '/v1/embeddings', reason: 'invalid-input' },
+      { method: 'POST', path: '/v1/embeddings', reason: 'invalid-json' },
+      { method: 'POST', path: '/not-an-embedding-route', reason: 'route' },
+      { method: 'GET', path: '/v1/embeddings', reason: 'route' },
+    ]);
+  });
 
   it('first sync embeds every exportable doc with qmd:// citation ids', async () => {
     const report = await makeIndexer().sync();
