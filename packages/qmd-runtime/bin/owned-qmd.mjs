@@ -3,7 +3,71 @@ import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { parseArgs } from 'node:util';
 import { verifyRuntime } from '../lib/runtime-inventory.mjs';
+
+/** qmd 2.5.3 parseCLI option metadata; parsing must match its greedy string values. */
+const cliOptions = {
+  index: { type: 'string' },
+  context: { type: 'string' },
+  help: { type: 'boolean', short: 'h' },
+  version: { type: 'boolean', short: 'v' },
+  skill: { type: 'boolean' },
+  global: { type: 'boolean' },
+  yes: { type: 'boolean' },
+  n: { type: 'string' },
+  'min-score': { type: 'string' },
+  all: { type: 'boolean' },
+  full: { type: 'boolean' },
+  format: { type: 'string' },
+  csv: { type: 'boolean' },
+  md: { type: 'boolean' },
+  xml: { type: 'boolean' },
+  files: { type: 'boolean' },
+  json: { type: 'boolean' },
+  explain: { type: 'boolean' },
+  collection: { type: 'string', short: 'c', multiple: true },
+  name: { type: 'string' },
+  mask: { type: 'string' },
+  force: { type: 'boolean', short: 'f' },
+  'max-docs-per-batch': { type: 'string' },
+  'max-batch-mb': { type: 'string' },
+  pull: { type: 'boolean' },
+  refresh: { type: 'boolean' },
+  l: { type: 'string' },
+  from: { type: 'string' },
+  'max-bytes': { type: 'string' },
+  'line-numbers': { type: 'boolean' },
+  'no-line-numbers': { type: 'boolean' },
+  'full-path': { type: 'boolean' },
+  'candidate-limit': { type: 'string', short: 'C' },
+  'no-rerank': { type: 'boolean', default: false },
+  'no-gpu': { type: 'boolean', default: false },
+  intent: { type: 'string' },
+  'chunk-strategy': { type: 'string' },
+  http: { type: 'boolean' },
+  daemon: { type: 'boolean' },
+  port: { type: 'string' },
+};
+
+export function assertOwnedTransportSupported(args) {
+  let tokens;
+  try {
+    ({ tokens } = parseArgs({
+      args,
+      options: cliOptions,
+      allowPositionals: true,
+      strict: false,
+      tokens: true,
+    }));
+  } catch {
+    // Preserve upstream argument errors rather than introduce another CLI validator.
+    return;
+  }
+  if (tokens.some((token) => token.kind === 'option' && token.name === 'http')) {
+    throw new Error('Standalone HTTP is unsupported by the owned qmd launcher; use mcp stdio');
+  }
+}
 
 /** Mirrors the hash-pinned upstream bin/qmd initialization, before CLI imports. */
 export function initializedEnvironment(args, inherited, platform) {
@@ -24,6 +88,7 @@ export function launchOwnedQmd(root, args) {
   if (Number(process.versions.node.split('.')[0]) < 22) {
     throw new Error('Owned qmd candidate requires Node 22 or newer');
   }
+  assertOwnedTransportSupported(args);
   const { qmd } = verifyRuntime(root);
   let child;
   let pendingSignal;

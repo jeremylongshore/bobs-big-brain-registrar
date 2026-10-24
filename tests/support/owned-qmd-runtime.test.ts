@@ -15,11 +15,14 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   hostPlatform,
   inventory,
   projectLock,
+  sha256,
   verifyGraph,
   verifyRuntime,
 } from '../../packages/qmd-runtime/lib/runtime-inventory.mjs';
@@ -28,6 +31,33 @@ import { copyRuntimeClosure } from '../../scripts/lib/copy-qmd-runtime.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const roots: string[] = [];
+
+function upstreamHasHttpOption(args: string[]): boolean {
+  const source = readFileSync(join(repo, 'node_modules/@tobilu/qmd/dist/cli/qmd.js'), 'utf8');
+  // Review the pinned upstream grammar when its published CLI bytes change.
+  expect(sha256(Buffer.from(source))).toBe(
+    '2fb0da8887e4cac6fca35a11895b3b9ce8f2ecd677ab7590c069bd564003939d',
+  );
+  const start = source.indexOf(
+    'const { values, positionals } = parseArgs({',
+    source.indexOf('function parseCLI()'),
+  );
+  const end = source.indexOf('\n    });', start);
+  expect(start).toBeGreaterThan(0);
+  expect(end).toBeGreaterThan(start);
+  // Evaluate only the published parseArgs call: no qmd module import or CLI startup.
+  const values: unknown = runInNewContext(
+    `${source.slice(start, end + '\n    });'.length)}\nvalues`,
+    {
+      parseArgs,
+      process: { argv: ['node', 'qmd.js', ...args] },
+    },
+  );
+  if (values === null || typeof values !== 'object')
+    throw new Error('Upstream parser returned no values');
+  return Object.hasOwn(values, 'http');
+}
+
 const lock = () => ({
   importers: {
     'packages/qmd-runtime': {
@@ -176,6 +206,65 @@ describe('owned qmd candidate graph and inventory', () => {
 });
 
 describe('fixed Node owned launcher', () => {
+  it.each([
+    ['mcp', '--http'],
+    ['--http', 'mcp'],
+    ['--index', 'index', '--http', 'mcp'],
+    ['mcp', '--http', '--daemon', '--port', '8181'],
+    ['mcp', '--http=true'],
+    ['mcp', '--http=false'],
+    ['mcp', '--http='],
+    ['mcp', '--http', '--http='],
+    ['mcp', '--http', '--no-http'],
+    ['mcp', '--index', '--', '--http'],
+    ['mcp', '-c', '--', '--http'],
+    ['mcp', '-C', '--', '--http'],
+  ])('refuses HTTP options before starting its synthetic child: %j', (...args) => {
+    expect(upstreamHasHttpOption(args)).toBe(true);
+    const f = fixture();
+    const marker = join(f.base, 'child-started');
+    writeFileSync(
+      join(f.qmd, 'dist/cli/qmd.js'),
+      `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'started');`,
+    );
+    f.seal();
+    const result = spawnSync(process.execPath, [join(f.root, 'bin/owned-qmd.mjs'), ...args], {
+      encoding: 'utf8',
+      timeout: 5_000,
+    });
+    // No HTTP listener, service, model or real qmd module exists in this fixture.
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toMatch(/standalone HTTP is unsupported.*stdio/i);
+    expect(result.stdout).toBe('');
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it.each([
+    ['mcp'],
+    ['mcp', '--index', 'index'],
+    ['mcp', '--', '--http'],
+    ['query', '--', '--http=false'],
+    ['mcp', '--port', '--http'],
+    ['mcp', '--port=--http'],
+    ['mcp', '--index=--http'],
+    ['mcp', '-c', '--http'],
+    ['mcp', '-C--http'],
+    ['mcp', '--context', '--http'],
+    ['mcp', '--intent', '--http'],
+    ['mcp', '--daemon'],
+    ['mcp', '--index'],
+    ['mcp', '--unknown=value', '--', '--http'],
+  ])('preserves non-HTTP and literal option-shaped arguments: %j', (...args) => {
+    expect(upstreamHasHttpOption(args)).toBe(false);
+    const f = fixture();
+    const result = spawnSync(process.execPath, [join(f.root, 'bin/owned-qmd.mjs'), ...args], {
+      encoding: 'utf8',
+      timeout: 5_000,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ execPath: process.execPath, args });
+  });
+
   it('runs physical and symlink entrypoints with literal arguments and the canonical runtime root', () => {
     const f = fixture();
     const entry = join(f.root, 'bin/owned-qmd.mjs');
