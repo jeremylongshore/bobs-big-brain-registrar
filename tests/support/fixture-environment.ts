@@ -21,6 +21,7 @@ if (process.env['TEAMKB_TEST_LIVE_LANE'] !== '1') {
     'TEAMKB_API_KEY',
     'TEAMKB_ORIGIN_SECRET',
     'TEAMKB_QMD_BIN',
+    'TEAMKB_QMD_RUNTIME',
     'BBB_QMD_BIN',
     'XDG_CONFIG_HOME',
     'XDG_CACHE_HOME',

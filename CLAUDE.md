@@ -183,7 +183,11 @@ Incremental export of curated memories to `kb-export/` as Markdown with YAML fro
 
 ### qmd binary discovery (packages/qmd-adapter)
 
-`RealQmdExecutor` with no explicit `binary` resolves qmd via `resolveQmdBinary`: `qmdBinary` config → `TEAMKB_QMD_BIN` → `PATH` → `~/.bun/bin/qmd`. A pinned path that is not executable is an error (never a silent fallback). Nothing found → exit 127 whose stderr names everything searched; `ensureCollections()`/`update()` return `not_available` with that message.
+`RealQmdExecutor` selects `qmdBinary` config → `TEAMKB_QMD_BIN` → declared owned runtime → legacy `PATH` / `~/.bun/bin/qmd`. Explicit binary strings retain verbatim spawn behavior. The legacy `resolveQmdBinary` API remains path-only; `resolveQmdCommand` returns executable, prefix and readonly selection provenance.
+
+Owned execution is opt-in: pass `qmdRuntime: { root, manifestSha256 }` or set `TEAMKB_QMD_RUNTIME` to JSON with those two fields. The digest must come from separately reviewed artifact provenance. A declaration with invalid metadata, redirected internal files or incompatible host/Node ABI fails without legacy fallback. A source checkout alone declares no runtime. Metadata inspection and the launcher's full closure verification consume the existing command deadline. Selection metadata records the source base commit, uncommitted-candidate flag and source-file binding; it does not establish serving or portable native compatibility.
+
+Tenant execution binds `INDEX_PATH` to `<base>/qmd-index/<tenant>/cache/qmd/index.sqlite` and `QMD_CONFIG_DIR` to `<base>/qmd-index/<tenant>/config/qmd`, preserving the existing layout. An explicit `--index index` before literal `--` disables qmd's ancestor `.qmd` discovery. Original arguments select the timeout class before prefixes/selectors: adapter 30s interactive / 600s maintenance; MCP 5s version / 120s embed. MCP uses its resolved config base for sync. Team startup and forced team sync registration never select or probe local qmd. `options.env` remains child execution environment, not discovery configuration.
 
 ## Monorepo Layout
 

@@ -1,9 +1,22 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import type { QmdExecutor } from './executor.js';
 import type { CommandFailure, CommandResult } from '../types.js';
 import { delimiter, dirname, isAbsolute } from 'node:path';
-import { DEFAULT_TIMEOUT, resolveMaintenanceTimeoutMs } from '../config.js';
-import { QMD_NOT_FOUND_EXIT_CODE, resolveQmdBinary } from './resolve-binary.js';
+import {
+  DEFAULT_TIMEOUT,
+  getQmdTenantEnv,
+  resolveMaintenanceTimeoutMs,
+  withQmdTenantSelector,
+} from '../config.js';
+import { QMD_NOT_FOUND_EXIT_CODE } from './resolve-binary.js';
+import {
+  recheckQmdCommand,
+  resolveQmdCommand,
+  type OwnedQmdRuntime,
+  type QmdCommandProvenance,
+  type ResolvedQmdCommand,
+} from './resolve-command.js';
 import { beginGroupSpawn, trackGroup, untrackGroup } from './process-groups.js';
 
 /** Exit code reported for a run that hit its time limit (coreutils `timeout` convention). */
@@ -69,10 +82,24 @@ async function waitGroupGone(pid: number, ms: number): Promise<boolean> {
   return true;
 }
 
+/** INDEX_PATH bypasses qmd's default cache-parent mkdir; prepare only derived tenant paths. */
+function prepareTenantDirectories(env: Readonly<Record<string, string>>): void {
+  const indexPath = env['INDEX_PATH'];
+  const configDir = env['QMD_CONFIG_DIR'];
+  // Validate every derived path before the first write. Execution env overrides
+  // are merged later and cannot redirect this preparation.
+  if (!indexPath || !configDir || !isAbsolute(indexPath) || !isAbsolute(configDir))
+    throw new Error('Derived tenant index and registry paths must be absolute');
+  mkdirSync(dirname(indexPath), { recursive: true, mode: 0o700 });
+  mkdirSync(configDir, { recursive: true, mode: 0o700 });
+}
+
 /** Real qmd CLI executor using child_process */
 export class RealQmdExecutor implements QmdExecutor {
   private readonly explicitBinary: string | undefined;
-  private resolved: string | null = null;
+  private resolved: ResolvedQmdCommand | null = null;
+  private readonly ownedRuntime: OwnedQmdRuntime | undefined;
+  private readonly tenant: { id: string; basePath?: string } | undefined;
   private readonly timeout: number;
   private readonly maintenanceTimeout: number;
   private readonly killGraceMs: number;
@@ -81,9 +108,8 @@ export class RealQmdExecutor implements QmdExecutor {
   /**
    * @param options.env Environment overrides merged over `process.env` for every
    *   qmd invocation. qmd 2.x has **no `--data-dir` flag** — per-tenant index
-   *   and registry isolation is achieved by pointing `XDG_CONFIG_HOME`
-   *   (collection registry) and `XDG_CACHE_HOME` (BM25 index) at tenant-scoped
-   *   dirs. See `getQmdTenantEnv` in `config.ts` and ADR
+   *   and registry isolation uses tenant-bound XDG/INDEX_PATH/QMD_CONFIG_DIR
+   *   plus an explicit --index selector that disables ancestor discovery. See `getQmdTenantEnv` in `config.ts` and ADR
    *   `000-docs/037-AT-DSGN-qmd-adapter-source-index-separation.md`.
    * @param options.timeout Limit for interactive commands (default 30 s).
    * @param options.maintenanceTimeout Limit for update/embed/cleanup/collection
@@ -92,14 +118,18 @@ export class RealQmdExecutor implements QmdExecutor {
    */
   constructor(options?: {
     binary?: string;
+    ownedRuntime?: OwnedQmdRuntime;
+    tenant?: { id: string; basePath?: string };
     timeout?: number;
     maintenanceTimeout?: number;
     killGraceMs?: number;
     env?: Record<string, string>;
   }) {
     // An explicit binary is used verbatim (callers/tests pin exactly what runs).
-    // With none, discovery is deferred to execute() — see resolveBinary().
+    // With none, discovery is deferred to execute() — see resolveCommand().
     this.explicitBinary = options?.binary;
+    this.ownedRuntime = options?.ownedRuntime;
+    this.tenant = options?.tenant;
     this.timeout = options?.timeout ?? DEFAULT_TIMEOUT;
     this.maintenanceTimeout = options?.maintenanceTimeout ?? resolveMaintenanceTimeoutMs();
     this.killGraceMs = options?.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
@@ -112,37 +142,88 @@ export class RealQmdExecutor implements QmdExecutor {
   }
 
   /**
-   * The binary to run, or the actionable reason there is none. Discovery order
-   * (env var, PATH, `~/.bun/bin/qmd`) lives in {@link resolveQmdBinary}. A
-   * successful resolution is cached; a failure is NOT, so installing qmd (or
-   * fixing the env) takes effect on the next call without a restart.
+   * Select executable/prefix and readonly provenance: explicit binary, env pin,
+   * declared owned runtime, then legacy PATH/Bun discovery. Successful selection
+   * is cached; owned metadata is rechecked. Failures remain uncached so repairing
+   * configuration takes effect on the next call without a restart.
    */
-  private resolveBinary(): { binary: string; message?: undefined } | { message: string } {
-    if (this.explicitBinary !== undefined) return { binary: this.explicitBinary };
-    if (this.resolved !== null) return { binary: this.resolved };
-    try {
-      this.resolved = resolveQmdBinary().path;
-      return { binary: this.resolved };
-    } catch (e) {
-      return { message: e instanceof Error ? e.message : String(e) };
+  private resolveCommand(): ResolvedQmdCommand {
+    if (this.resolved !== null) {
+      recheckQmdCommand(this.resolved);
+      return this.resolved;
     }
+    const selected = resolveQmdCommand({
+      explicit: this.explicitBinary,
+      ownedRuntime: this.ownedRuntime,
+    });
+    this.resolved = selected;
+    return selected;
+  }
+
+  /** Selected metadata only, never a claim of successful execution or deployed identity. */
+  get commandProvenance(): QmdCommandProvenance | null {
+    return this.resolved?.provenance ?? null;
   }
 
   async execute(args: string[]): Promise<CommandResult> {
-    const target = this.resolveBinary();
-    if (target.message !== undefined) {
+    const startedAt = Date.now();
+    const timeoutMs = this.timeoutFor(args);
+    let target: ResolvedQmdCommand;
+    let tenantEnv: Record<string, string> = {};
+    try {
+      target = this.resolveCommand();
+      if (this.tenant) tenantEnv = getQmdTenantEnv(this.tenant.id, this.tenant.basePath);
+    } catch (error) {
       // 127 = "command not found" by shell convention; stderr carries the fix.
-      return { stdout: '', stderr: target.message, exitCode: QMD_NOT_FOUND_EXIT_CODE };
+      return {
+        stdout: '',
+        stderr: error instanceof Error ? error.message : 'qmd command selection failed',
+        exitCode: QMD_NOT_FOUND_EXIT_CODE,
+      };
     }
+    try {
+      if (this.tenant) prepareTenantDirectories(tenantEnv);
+    } catch (error) {
+      return {
+        stdout: '',
+        stderr: `qmd tenant directories could not be prepared: ${error instanceof Error ? error.message : 'filesystem setup failed'}`,
+        exitCode: 1,
+      };
+    }
+    const remaining = timeoutMs - (Date.now() - startedAt);
+    if (remaining <= 0)
+      return {
+        stdout: '',
+        stderr: 'qmd command selection exhausted its original deadline',
+        exitCode: QMD_TIMEOUT_EXIT_CODE,
+        failure: {
+          kind: 'timeout',
+          elapsedMs: Date.now() - startedAt,
+          timeoutMs,
+          groupTerminated: true,
+        },
+      };
     // Merge over process.env so tenant-scoped XDG_* vars isolate the registry +
     // index. An absolute binary's own directory is prepended to PATH: qmd is a
     // launcher script that re-execs node/bun, which can live beside it
     // (~/.bun/bin) while being absent from an MCP server's PATH.
-    const env: Record<string, string | undefined> = { ...process.env, ...(this.env ?? {}) };
-    if (isAbsolute(target.binary)) {
-      env['PATH'] = [dirname(target.binary), env['PATH']].filter((p) => p).join(delimiter);
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      ...(this.env ?? {}),
+      ...tenantEnv,
+    };
+    if (isAbsolute(target.executable)) {
+      env['PATH'] = [dirname(target.executable), env['PATH']].filter((p) => p).join(delimiter);
     }
-    return this.run(target.binary, args, env, this.timeoutFor(args));
+    const selectedArgs = this.tenant ? withQmdTenantSelector(args) : args;
+    return this.run(
+      target.executable,
+      [...target.prefix, ...selectedArgs],
+      env,
+      remaining,
+      startedAt,
+      timeoutMs,
+    );
   }
 
   /**
@@ -163,8 +244,9 @@ export class RealQmdExecutor implements QmdExecutor {
     args: string[],
     env: Record<string, string | undefined>,
     timeoutMs: number,
+    startedAt: number,
+    originalTimeoutMs: number,
   ): Promise<CommandResult> {
-    const startedAt = Date.now();
     return new Promise<CommandResult>((resolve) => {
       let child: ChildProcess;
       const releaseSpawn = USE_PROCESS_GROUP ? beginGroupSpawn() : undefined;
@@ -240,7 +322,7 @@ export class RealQmdExecutor implements QmdExecutor {
         failure = {
           kind: 'timeout',
           elapsedMs: Date.now() - startedAt,
-          timeoutMs,
+          timeoutMs: originalTimeoutMs,
           groupTerminated: false,
         };
         void terminate();

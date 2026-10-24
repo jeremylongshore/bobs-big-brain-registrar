@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Share opt-in owned qmd command selection across adapter and MCP sync, with a
+  paired artifact root/manifest digest and no legacy fallback for broken
+  declarations. Preserve command budgets, tenant registry/cache locations and
+  explicit binary compatibility; disable ancestor index discovery with an explicit
+  selector. Team startup skips local qmd probing and sync registration. This source
+  integration does not activate an artifact, update global tools or deliver plugin
+  runtime packaging (`compile-then-govern-1io.1.5.1.2`).
+
 - Refresh residual dependency paths to qs 6.16.1, fast-copy 4.2.0, Fastify
   5.12.7, ip-address 10.7.4 and fast-uri 3.1.9. The typed-rest-client 2.3.1
   exact qs pin is an explicit compatibility exception, covered through its real
