@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Upgrade all resolved Zod dependencies to 4.6.7 and Vite to 8.3.5 (patched
+  floor 8.3.3) for GHSA-mrhx-c7xc-m3w5 and GHSA-587h-7wmj-h5pm. Scoped
+  qmd/core overrides align with the owned Zod range; qmd and MCP SDK versions
+  remain unchanged. Offline contracts exercise owned size-bounded collections,
+  both actual SDK instances, and the pinned qmd MCP stdio server. SDK compatibility
+  modules still include Zod 3 code; these tests cover the selected patched Zod 4 paths.
+
 - Add native lexical candidates for English question-shaped queries when strict
   and dense retrieval arms yield no usable hits (including qmd failure). The fallback uses 2–12
   distinct topical terms, up to 200 collection-scoped candidates and a minimum
