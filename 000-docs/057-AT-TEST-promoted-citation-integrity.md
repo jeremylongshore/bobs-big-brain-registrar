@@ -1,9 +1,11 @@
 # Promoted receipt citation integrity
 
-This deterministic check covers a declared tenant's current store and export
-snapshot. It follows each `promoted` audit receipt to its memory, derives the
-memory's canonical `qmd://` citation, and checks the corresponding export file.
-It does not run a model or qmd process, change a memory, or refresh an index.
+Given a stable caller-supplied store and export view, this check applies
+deterministic identity and export rules for a declared tenant. It follows each
+`promoted` audit receipt to its memory, derives the memory's canonical `qmd://`
+citation, and checks the corresponding export file. It does not create or certify
+an atomic snapshot. It does not run a model or qmd process, write store records
+or export content, repair state, or refresh an index.
 
 The composition belongs in the API application, which already consumes the
 store, git exporter and qmd adapter. The check adds no endpoint, read permission,
@@ -70,10 +72,18 @@ tenant metadata. It does not establish body entailment, factual truth, retrieval
 ranking, complete historical coverage, or full ALCE evaluation. It neither runs
 the live corpus nor certifies a deployed index.
 
-The caller supplies consistent store and export inputs. Path checks do not freeze
-files against a concurrent same-user writer, and they are not a new authorization
-boundary. Local audit chains remain tamper-evident; an earlier independent anchor
-provides a separate witness for the re-hash-forward control.
+The caller supplies consistent store and export inputs. Report entries retain
+repository result order; the checker does not normalize it. Path checks do not
+freeze files against a concurrent same-user writer, and they are not a new
+authorization boundary. The existing synthetic control demonstrates that
+comparison with an earlier retained anchor detects a re-hash-forward rewrite.
+This check does not establish independent anchor storage, remote durability or
+production audit authenticity. Local integrity and ordering checks do not prevent
+a local writer from editing and re-hashing history.
 
-Rollback is a normal source revert. The checker has no durable-state mutation,
-automatic remediation or export-policy change to undo.
+The fixture compares the serialized database image and selected exported files'
+bytes, mtime and inode. It does not establish unchanged physical database, WAL or
+shared-memory bytes, or unchanged access metadata from reads.
+
+Rollback is a normal source revert. The checker has no store-record writes,
+export-content writes, automatic remediation or export-policy change to undo.
