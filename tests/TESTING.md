@@ -187,7 +187,7 @@ Missing requested service configuration fails the requested lane rather than
 turning it into a successful skip. Explicit retrieval requires a source export
 tree and trusted executable, then copies regular exports into owned scratch and
 rebuilds derived qmd/native indexes there. Source indexes, registry and state DBs
-are not opened or copied. Its worker has private HOME/XDG/cwd and explicit tenant
+are excluded from copying and worker routing. Its worker has private HOME/XDG/cwd and explicit tenant
 `INDEX_PATH` / `QMD_CONFIG_DIR` before any probe. It reports a copied corpus rather
 than reproducing the source's existing live index; it is not a pure BM25 promise.
 The query set, model configurations, assertions and coverage thresholds remain

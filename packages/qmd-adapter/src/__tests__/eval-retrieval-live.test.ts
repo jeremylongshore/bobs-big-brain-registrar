@@ -59,40 +59,37 @@ describe.skipIf(!liveTestEnabled('RETRIEVAL'))(
     });
     it('rebuilds a disposable copied corpus and returns a coherent stratified report', async () => {
       const { runCopiedRetrieval } = await import('./live-retrieval-copy.js');
-      const {
-        report,
-        stratified: sr,
-        copiedFiles,
-        copiedBytes,
-      } = await runCopiedRetrieval({
+      await runCopiedRetrieval({
         sourceBase,
         tenantId: tenant,
         qmdBinary,
+        validateResult: ({ report, stratified: sr, copiedFiles, copiedBytes }) => {
+          expect(copiedFiles).toBeGreaterThan(0);
+          expect(copiedBytes).toBeGreaterThan(0);
+
+          expect(report.queryCount).toBe(GOVERNED_BRAIN_V1_DATASET.queries.length);
+          // The rebuilt copy must actually answer some queries (else it is unbuilt).
+          expect(report.perQuery.some((r) => r.retrieved.length > 0)).toBe(true);
+
+          // Every retrieved id is a real qmd:// citation (the production id space).
+          for (const r of report.perQuery) {
+            for (const id of r.retrieved) {
+              expect(id.startsWith('qmd://')).toBe(true);
+            }
+          }
+
+          // Metrics are bounded [0,1] and the strata sum to the whole.
+          expect(sr.overall.meanRecallAtK).toBeGreaterThanOrEqual(0);
+          expect(sr.overall.meanRecallAtK).toBeLessThanOrEqual(1);
+          expect(sr.overall.meanNdcgAtK).toBeGreaterThanOrEqual(0);
+          expect(sr.overall.meanNdcgAtK).toBeLessThanOrEqual(1);
+          const summed = sr.byKind.reduce((n, s) => n + s.queryCount, 0);
+          expect(summed).toBe(report.queryCount);
+
+          const semantic = sr.byKind.find((s) => s.stratum === 'semantic');
+          expect(semantic).toBeDefined();
+        },
       });
-      expect(copiedFiles).toBeGreaterThan(0);
-      expect(copiedBytes).toBeGreaterThan(0);
-
-      expect(report.queryCount).toBe(GOVERNED_BRAIN_V1_DATASET.queries.length);
-      // The rebuilt copy must actually answer some queries (else it is unbuilt).
-      expect(report.perQuery.some((r) => r.retrieved.length > 0)).toBe(true);
-
-      // Every retrieved id is a real qmd:// citation (the production id space).
-      for (const r of report.perQuery) {
-        for (const id of r.retrieved) {
-          expect(id.startsWith('qmd://')).toBe(true);
-        }
-      }
-
-      // Metrics are bounded [0,1] and the strata sum to the whole.
-      expect(sr.overall.meanRecallAtK).toBeGreaterThanOrEqual(0);
-      expect(sr.overall.meanRecallAtK).toBeLessThanOrEqual(1);
-      expect(sr.overall.meanNdcgAtK).toBeGreaterThanOrEqual(0);
-      expect(sr.overall.meanNdcgAtK).toBeLessThanOrEqual(1);
-      const summed = sr.byKind.reduce((n, s) => n + s.queryCount, 0);
-      expect(summed).toBe(report.queryCount);
-
-      const semantic = sr.byKind.find((s) => s.stratum === 'semantic');
-      expect(semantic).toBeDefined();
       // Fresh copied-corpus indexing is bounded by the helper's 120 s budget.
     }, 150000);
   },

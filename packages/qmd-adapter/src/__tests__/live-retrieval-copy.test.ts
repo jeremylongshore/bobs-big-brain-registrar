@@ -20,7 +20,11 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createRetrievalCopy, runCopiedRetrieval } from './live-retrieval-copy.js';
+import {
+  createRetrievalCopy,
+  runCopiedRetrieval,
+  type CopiedRetrievalResult,
+} from './live-retrieval-copy.js';
 
 const io = vi.hoisted(() => ({
   copyRoots: [] as string[],
@@ -241,6 +245,42 @@ describe('disposable copied retrieval boundary', () => {
     20_000,
   );
 
+  it('retains an envelope-valid report when parent semantic validation fails', async () => {
+    const replacement = join(root, 'semantic-invalid-report.cjs');
+    const response = { report: { queryCount: 1 }, stratified: {}, groupsClosed: true };
+    writeFileSync(
+      replacement,
+      `process.stdin.resume(); process.stdout.write(${JSON.stringify(JSON.stringify(response))});`,
+    );
+    io.replacementWorker = replacement;
+    const semanticError = new Error('Fixture semantic report refusal');
+    const validateResult = vi.fn((result: CopiedRetrievalResult) => {
+      expect(result.copiedFiles).toBe(1);
+      expect(result.copiedBytes).toBe(Buffer.byteLength(CONTENT));
+      expect(io.copyRoots).toHaveLength(1);
+      expect(existsSync(io.copyRoots[0]!)).toBe(true);
+      expect(result.report.queryCount).toBe(1);
+      expect(result.stratified).toEqual({});
+      throw semanticError;
+    });
+    const failure: unknown = await runCopiedRetrieval({
+      sourceBase: source,
+      tenantId: 'copy-tenant',
+      qmdBinary: process.execPath,
+      timeoutMs: 10_000,
+      validateResult,
+    }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe(
+      `Copied retrieval worker failed; scratch retained at ${io.copyRoots[0]}`,
+    );
+    expect(validateResult).toHaveBeenCalledTimes(1);
+    expect(validateResult.mock.results[0]).toMatchObject({ type: 'throw', value: semanticError });
+    expect(io.copyRoots).toHaveLength(1);
+    expect(existsSync(io.copyRoots[0]!)).toBe(true);
+    expect(readFileSync(file, 'utf8')).toBe(CONTENT);
+  }, 20_000);
+
   it('refuses missing self proc witnesses before making a copy', async () => {
     io.hideSelfWitness = true;
     await expect(
@@ -313,11 +353,19 @@ if (args[0] === 'search') process.stdout.write(JSON.stringify([{file:'qmd://kb-c
 `,
       { mode: 0o700 },
     );
+    const validateResult = vi.fn((result: CopiedRetrievalResult) => {
+      expect(result.report.queryCount).toBeGreaterThan(0);
+      expect(result.copiedFiles).toBe(1);
+      expect(io.copyRoots).toHaveLength(1);
+      expect(existsSync(io.copyRoots[0]!)).toBe(true);
+    });
     const result = await runCopiedRetrieval({
       sourceBase: source,
       tenantId: 'copy-tenant',
       qmdBinary: binary,
+      validateResult,
     });
+    expect(validateResult).toHaveBeenCalledTimes(1);
     expect(result.report.queryCount).toBeGreaterThan(0);
     expect(result.stratified.overall.queryCount).toBe(result.report.queryCount);
     expect(

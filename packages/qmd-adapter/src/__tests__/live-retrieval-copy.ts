@@ -31,6 +31,12 @@ export interface CopiedRetrievalOptions {
   /** Explicit trusted executable; this helper does not sandbox arbitrary binaries. */
   qmdBinary: string;
   timeoutMs?: number;
+  /**
+   * Synchronous parent-side semantic assertions, run after envelope validation
+   * and worker close but before successful cleanup. Throwing retains the copy.
+   * Without this callback the helper validates only the worker report envelope.
+   */
+  validateResult?: (result: CopiedRetrievalResult) => void;
 }
 export interface CopiedRetrievalResult {
   report: EvalReport;
@@ -299,9 +305,17 @@ export async function runCopiedRetrieval(
             result.groupsClosed !== true
           )
             throw new Error('Invalid copied retrieval worker report');
-          // Code zero alone is insufficient: validate the report before cleanup.
+          const response: CopiedRetrievalResult = {
+            report: result.report,
+            stratified: result.stratified,
+            copiedFiles: copy.copiedFiles,
+            copiedBytes: copy.copiedBytes,
+          };
+          // The envelope is not a dataset acceptance check. Caller assertions
+          // must also pass before marking the copy eligible for cleanup.
+          options.validateResult?.(response);
           terminal = true;
-          fulfill({ ...result, copiedFiles: copy.copiedFiles, copiedBytes: copy.copiedBytes });
+          fulfill(response);
         } catch {
           reject(retainedError());
         }

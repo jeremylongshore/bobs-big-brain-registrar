@@ -1,8 +1,8 @@
 # Disposable copied-corpus retrieval acceptance
 
 The explicit retrieval test builds fresh derived indexes over an internally
-owned copy of configured exports. It does not open the source qmd/native index,
-state database or registry. Its report describes retrieval from the copied corpus,
+owned copy of configured exports. The helper excludes source qmd/native indexes,
+state databases and registries from copying and worker routing. Its report describes retrieval from the copied corpus,
 not bitwise reproduction of an existing live index. The ordinary default-lane
 isolation and the separate dense/rerank lanes retain their existing behavior.
 
@@ -30,7 +30,8 @@ build a fresh registry referencing copied paths instead of reusing absolute
 paths from the source registry. The query dataset and report assertions remain;
 the backend label is `copied-corpus-qmd-native`.
 
-The executable is explicitly trusted. Private directories and environment routing
+The executable is explicitly trusted and is not prevented from independently
+accessing the source tree. Private directories and environment routing
 are not a sandbox against arbitrary executable code or another process running
 as the same user. No new production resolver, adapter, retrieval ranking or
 schema behavior is introduced by this test-only helper.
@@ -46,10 +47,13 @@ and cannot interrupt blocking filesystem I/O; these bounds are not a hard
 wall-clock guarantee under a stalled filesystem.
 
 A successful worker reports zero tracked qmd groups and exits, closing its cached
-native handles. Only after validating that report and observing worker closure
-does the parent delete its exact owned root. Preparation failures remove only the
-partial owned copy. Nonzero exit, malformed report, timeout or uncertain process
-ownership retains scratch and returns its exact path for investigation. Worker
+native handles. After worker closure, the parent checks the report envelope and runs the
+configured caller validator before deleting its exact owned root. The explicit
+retrieval suite supplies all existing dataset/report assertions as that validator;
+a failed semantic assertion retains scratch. Other callers without a validator
+receive only the helper's minimal envelope check. Preparation failures remove only the
+partial owned copy. Nonzero worker exit, invalid envelope or caller validation failure, worker timeout
+or detected process ownership uncertainty retains scratch and returns its exact path for investigation. Worker
 closure alone is not evidence that every detached descendant is gone. This test
 adds no automatic purge or deletion capability for caller-supplied paths.
 
@@ -84,8 +88,10 @@ The entry-point control invokes the actual explicitly enabled retrieval suite
 against synthetic source indexes, registry and database sentinels. It requires
 all dataset/report assertions to pass, source bytes/inodes/mtime to stay the
 same, the source native index to remain absent and the worker's scratch to be
-removed. The earlier source-routing counterexample used the same real test lane
-with synthetic inputs and observed a newly created source native SQLite file.
+removed. An author-local earlier source-routing run used the same real test lane
+with synthetic inputs and observed a newly created source native SQLite file;
+the [published proof projection](https://github.com/jeremylongshore/bobs-big-brain-registrar/pull/408#issuecomment-6403873461)
+records the command, observation and artifact digests.
 These controls exercise ownership, not live-corpus retrieval quality or a security
 sandbox. Default collection and missing-configuration sentinel tests remain in
 `tests/support/live-test-isolation.test.ts`.
