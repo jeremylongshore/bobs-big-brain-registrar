@@ -133,5 +133,6 @@
 | 055 | OD-RNBK | human-escalation-hold                                 | Human-escalation hold runbook     |
 | 056 | AT-DSGN | contradiction-dry-run-planner                         | Contradiction dry-run boundary    |
 | 057 | AT-TEST | promoted-citation-integrity                           | Receipt-to-export integrity proof |
+| 058 | AT-TEST | generated-audit-chain-contracts                       | Generated audit-chain contracts   |
 
-## Next Available Sequence: 058
+## Next Available Sequence: 059
