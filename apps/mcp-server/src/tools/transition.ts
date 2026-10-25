@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
-import { validateTransition } from '@qmd-team-intent-kb/schema';
+import { TransitionRequest, Uuid, validateTransition } from '@qmd-team-intent-kb/schema';
 import { createDatabase, MemoryRepository, AuditRepository } from '@qmd-team-intent-kb/store';
 import type { McpServerConfig } from '../config.js';
 
@@ -10,6 +10,7 @@ interface TransitionInput {
   to: MemoryLifecycleState;
   reason: string;
   actor: string;
+  supersededBy?: string;
 }
 
 /** Result returned after a successful transition */
@@ -36,65 +37,72 @@ export function applyTransition(
   config: McpServerConfig,
   nowFn: () => string = () => new Date().toISOString(),
 ): TransitionResult {
-  // Validate UUID format before opening the DB connection
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!uuidPattern.test(input.memoryId)) {
-    throw new Error(`Invalid memoryId: "${input.memoryId}" is not a valid UUID`);
+  // Use the canonical schema, including current content-derived UUID v5 IDs.
+  if (!Uuid.safeParse(input.memoryId).success) {
+    throw new Error('Invalid memoryId: expected a UUID');
   }
+  const transitionRequest = TransitionRequest.parse({
+    reason: input.reason,
+    actor: { type: 'human', id: input.actor },
+    supersededBy: input.supersededBy,
+  });
 
   const db = createDatabase({ path: config.dbPath });
   try {
     const memoryRepo = new MemoryRepository(db);
     const auditRepo = new AuditRepository(db);
 
-    const memory = memoryRepo.findById(input.memoryId);
-    if (memory === null) {
-      throw new Error(`Memory not found: ${input.memoryId}`);
-    }
-
-    const transitionRequest = {
-      reason: input.reason,
-      actor: { type: 'human' as const, id: input.actor },
-    };
-
-    const validation = validateTransition(memory.lifecycle, input.to, transitionRequest);
-    if (!validation.valid) {
-      throw new Error(validation.error);
-    }
-
-    const now = nowFn();
-    const auditEventId = randomUUID();
-    const fromState = memory.lifecycle;
-
-    // Apply both writes in a single transaction for atomicity
-    const applyFn = db.transaction(() => {
-      memoryRepo.updateLifecycle(input.memoryId, input.to, now);
-      auditRepo.insert({
-        id: auditEventId,
-        action:
-          input.to === 'archived'
-            ? 'archived'
-            : input.to === 'superseded'
-              ? 'superseded'
-              : 'demoted',
-        memoryId: input.memoryId,
-        tenantId: memory.tenantId,
-        actor: { type: 'human', id: input.actor },
-        reason: input.reason,
-        details: { from: fromState, to: input.to },
-        timestamp: now,
-      });
-    });
-
-    applyFn();
-
-    return {
-      memoryId: input.memoryId,
-      from: fromState,
-      to: input.to,
-      auditEventId,
-      message: `Memory transitioned from "${fromState}" to "${input.to}"`,
-    };
+    // Read/validate both endpoints and write state/link/receipt under one lock.
+    return db
+      .transaction(() => {
+        const memory = memoryRepo.findById(input.memoryId);
+        if (memory === null) throw new Error(`Memory not found: ${input.memoryId}`);
+        const validation = validateTransition(memory.lifecycle, input.to, transitionRequest);
+        if (!validation.valid) throw new Error(validation.error);
+        const now = nowFn();
+        const auditEventId = randomUUID();
+        const fromState = memory.lifecycle;
+        if (input.to === 'superseded') {
+          // validateTransition above requires this field; no state-only fallback.
+          if (transitionRequest.supersededBy === undefined)
+            throw new Error('supersededBy is required');
+          memoryRepo.supersede(
+            input.memoryId,
+            transitionRequest.supersededBy,
+            transitionRequest.reason,
+            now,
+          );
+        } else {
+          memoryRepo.updateLifecycle(input.memoryId, input.to, now);
+        }
+        auditRepo.insert({
+          id: auditEventId,
+          action:
+            input.to === 'archived'
+              ? 'archived'
+              : input.to === 'superseded'
+                ? 'superseded'
+                : 'demoted',
+          memoryId: input.memoryId,
+          tenantId: memory.tenantId,
+          actor: transitionRequest.actor,
+          reason: transitionRequest.reason,
+          details: {
+            from: fromState,
+            to: input.to,
+            ...(input.to === 'superseded' ? { supersededBy: transitionRequest.supersededBy } : {}),
+          },
+          timestamp: now,
+        });
+        return {
+          memoryId: input.memoryId,
+          from: fromState,
+          to: input.to,
+          auditEventId,
+          message: `Memory transitioned from "${fromState}" to "${input.to}"`,
+        };
+      })
+      .immediate();
   } finally {
     db.close();
   }

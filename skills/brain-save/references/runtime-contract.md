@@ -20,7 +20,8 @@ requires the source-built `apps/mcp-server` with `TEAMKB_ROLE=admin`. `TEAMKB_TE
   a candidate UUID after a local spool write.
 - `teamkb_status`: no input. Returns local database counts, recent feedback, and `dbPath`.
 - `teamkb_transition`: required UUID `memoryId`, lifecycle `to`, non-empty `reason`, and non-empty
-  `actor`. Success returns old/new states and an audit-event UUID.
+  `actor`; optional UUID `supersededBy`, required when `to` is `superseded`. Success returns old/new
+  states and an audit-event UUID.
 
 `teamkb_status` reads curated database state and feedback. It does not inspect the spool, so it cannot
 confirm a proposal is governed or even visible to the curator yet.
@@ -39,7 +40,9 @@ authentication credential. Protect the local base directory through operating-sy
 `teamkb_propose` writes a proposal, not a promoted memory. A separate curator applies secret checks,
 deduplication, policy, and promotion.
 
-The current `teamkb_transition` surface cannot supply `supersededBy`, although domain validation
-requires that link for an `active` to `superseded` transition. Do not request that transition until the
-runtime defect tracked as Beads issue `qmd-team-intent-kb-ehi` is fixed. The other state-machine
-transitions listed in the skill are supported.
+For `active` to `superseded`, `supersededBy` must identify a distinct active curated memory in the
+same tenant. The lifecycle, `SupersessionLink` (replacement UUID, reason and time) and superseded audit
+event commit together, or all roll back. The replacement stays active. This does not create graph
+edges or rebuild a search index. The batch-transition CLI still refuses supersession because it has
+no per-memory replacement mapping. These contracts address `qmd-team-intent-kb-ehi`; deployments need
+the corresponding Registrar source build, not an older bundled runtime.

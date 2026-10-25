@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { MemoryRepository, AuditRepository } from '@qmd-team-intent-kb/store';
+import { InvalidSupersessionError } from '@qmd-team-intent-kb/store';
 import {
   AuditEvent,
   TransitionRequest,
@@ -92,7 +93,17 @@ export class MemoryService {
         }
 
         const now = new Date().toISOString();
-        this.memoryRepo.updateLifecycle(id, to, now);
+        if (to === 'superseded') {
+          if (parsed.data.supersededBy === undefined) throw badRequest('supersededBy is required');
+          try {
+            this.memoryRepo.supersede(id, parsed.data.supersededBy, parsed.data.reason, now);
+          } catch (error) {
+            if (error instanceof InvalidSupersessionError) throw badRequest(error.message);
+            throw error;
+          }
+        } else {
+          this.memoryRepo.updateLifecycle(id, to, now);
+        }
 
         const auditEvent = AuditEvent.parse({
           id: randomUUID(),
@@ -101,13 +112,17 @@ export class MemoryService {
           tenantId: memory.tenantId,
           actor: parsed.data.actor,
           reason: parsed.data.reason,
-          details: { from: memory.lifecycle, to },
+          details: {
+            from: memory.lifecycle,
+            to,
+            ...(to === 'superseded' ? { supersededBy: parsed.data.supersededBy } : {}),
+          },
           timestamp: now,
         });
         this.auditRepo.insert(auditEvent);
 
-        // Return the updated memory without a second DB fetch
-        return { ...memory, lifecycle: to, updatedAt: now };
+        // Read through the domain schema, including the stored supersession link.
+        return this.getById(id);
       })
       .immediate();
   }

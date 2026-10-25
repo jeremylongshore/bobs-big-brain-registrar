@@ -12,6 +12,7 @@ export {
 export {
   MemoryRepository,
   InvalidLifecycleTransitionError,
+  InvalidSupersessionError,
 } from './repositories/memory-repository.js';
 export type {
   RowDeserializationFailure,

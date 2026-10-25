@@ -213,9 +213,11 @@ describe('/api/memories', () => {
   });
 
   it('transition to superseded with supersededBy succeeds', async () => {
-    const replacementId = randomUUID();
     const memory = makeMemory({ lifecycle: 'active' });
+    const replacement = makeMemory({ tenantId: memory.tenantId });
+    const replacementId = replacement.id;
     memoryRepo.insert(memory);
+    memoryRepo.insert(replacement);
 
     const res = await app.inject({
       method: 'POST',
@@ -227,11 +229,60 @@ describe('/api/memories', () => {
         supersededBy: replacementId,
       },
     });
-    // Note: the lifecycle update succeeds but the supersession field
-    // on the record is not set here (that is the curator's job).
-    // The transition itself is valid per validateTransition.
     expect(res.statusCode).toBe(200);
     expect(res.json<{ lifecycle: string }>().lifecycle).toBe('superseded');
+    const reread = memoryRepo.findById(memory.id);
+    expect(reread?.supersession).toMatchObject({
+      supersededBy: replacementId,
+      reason: 'Replaced by newer approach',
+    });
+    expect(auditRepo.findByMemory(memory.id)[0]?.details).toMatchObject({
+      supersededBy: replacementId,
+    });
+  });
+
+  it.each(['nonexistent', 'self', 'cross-tenant', 'inactive'])(
+    'refuses %s supersession replacement without writes',
+    async (kind) => {
+      const memory = makeMemory();
+      const replacement = makeMemory({
+        tenantId: kind === 'cross-tenant' ? 'other-tenant' : memory.tenantId,
+        lifecycle: kind === 'inactive' ? 'deprecated' : 'active',
+      });
+      memoryRepo.insert(memory);
+      memoryRepo.insert(replacement);
+      const supersededBy =
+        kind === 'nonexistent' ? randomUUID() : kind === 'self' ? memory.id : replacement.id;
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/memories/${memory.id}/transition`,
+        payload: { to: 'superseded', ...makeTransitionBody(), supersededBy },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(memoryRepo.findById(memory.id)?.lifecycle).toBe('active');
+      expect(memoryRepo.findById(memory.id)?.supersession).toBeUndefined();
+      expect(auditRepo.findByMemory(memory.id)).toEqual([]);
+    },
+  );
+
+  it('rolls back the supersession link and lifecycle if the audit insert fails', async () => {
+    const memory = makeMemory();
+    const replacement = makeMemory({ tenantId: memory.tenantId });
+    memoryRepo.insert(memory);
+    memoryRepo.insert(replacement);
+    db.exec(
+      "CREATE TRIGGER refuse_supersession_receipt BEFORE INSERT ON audit_events WHEN NEW.action = 'superseded' BEGIN SELECT RAISE(ABORT, 'fixture-audit-refusal'); END",
+    );
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/memories/${memory.id}/transition`,
+      payload: { to: 'superseded', ...makeTransitionBody(), supersededBy: replacement.id },
+    });
+    expect(response.statusCode).toBe(500);
+    expect(memoryRepo.findById(memory.id)?.lifecycle).toBe('active');
+    expect(memoryRepo.findById(memory.id)?.supersession).toBeUndefined();
+    expect(memoryRepo.findById(memory.id)?.updatedAt).toBe(memory.updatedAt);
+    expect(auditRepo.findByMemory(memory.id)).toEqual([]);
   });
 
   it('transition preserves updatedAt after state change', async () => {

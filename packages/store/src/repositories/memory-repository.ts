@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type Database from 'better-sqlite3';
-import { CuratedMemory, isTransitionAllowed } from '@qmd-team-intent-kb/schema';
+import { CuratedMemory, SupersessionLink, isTransitionAllowed } from '@qmd-team-intent-kb/schema';
 import type { MemoryCategory, MemoryLifecycleState } from '@qmd-team-intent-kb/schema';
 import { assertMemoryEnumMembership } from './enum-membership.js';
 
@@ -16,6 +16,14 @@ export class InvalidLifecycleTransitionError extends Error {
   ) {
     super(`Invalid lifecycle transition: "${from}" -> "${to}" is not allowed`);
     this.name = 'InvalidLifecycleTransitionError';
+  }
+}
+
+/** Invalid replacement or metadata for an explicit supersession. */
+export class InvalidSupersessionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidSupersessionError';
   }
 }
 
@@ -221,6 +229,7 @@ export class MemoryRepository {
   private readonly stmtFindByLifecycle: Database.Statement;
   private readonly stmtUpdateLifecycle: Database.Statement;
   private readonly stmtGetLifecycle: Database.Statement;
+  private readonly stmtSupersede: Database.Statement;
   private readonly stmtUpdate: Database.Statement;
   private readonly stmtCount: Database.Statement;
   private readonly stmtAllHashes: Database.Statement;
@@ -291,6 +300,11 @@ export class MemoryRepository {
 
     this.stmtUpdateLifecycle = db.prepare(`
       UPDATE curated_memories SET lifecycle = @lifecycle, updated_at = @updated_at WHERE id = @id
+    `);
+
+    this.stmtSupersede = db.prepare(`
+      UPDATE curated_memories SET lifecycle = 'superseded',
+        supersession_json = @supersession_json, updated_at = @updated_at WHERE id = @id
     `);
 
     this.stmtGetLifecycle = db.prepare(`
@@ -461,8 +475,55 @@ export class MemoryRepository {
     if (current !== lifecycle && !isTransitionAllowed(current, lifecycle)) {
       throw new InvalidLifecycleTransitionError(current, lifecycle);
     }
+    if (current !== lifecycle && lifecycle === 'superseded') {
+      throw new InvalidSupersessionError(
+        'Supersession requires a validated replacement; use supersede()',
+      );
+    }
     const result = this.stmtUpdateLifecycle.run({ id, lifecycle, updated_at: updatedAt });
     return result.changes > 0;
+  }
+
+  /**
+   * Retire an active memory in favor of a distinct active memory in its tenant.
+   * State and SupersessionLink are written together. Callers wrap this operation
+   * and their audit insert in one immediate transaction on this connection.
+   * This method also takes an immediate transaction for standalone callers.
+   */
+  supersede(id: string, supersededBy: string, reason: string, now: string): boolean {
+    const parsed = SupersessionLink.safeParse({ supersededBy, reason, linkedAt: now });
+    if (!parsed.success) throw new InvalidSupersessionError('Invalid supersession metadata');
+    return this.db
+      .transaction(() => {
+        const memory = this.findById(id);
+        if (memory === null) return false;
+        if (!isTransitionAllowed(memory.lifecycle, 'superseded')) {
+          throw new InvalidLifecycleTransitionError(memory.lifecycle, 'superseded');
+        }
+        if (id.toLowerCase() === supersededBy.toLowerCase()) {
+          throw new InvalidSupersessionError(
+            'Supersession replacement must be distinct from the source',
+          );
+        }
+        const replacement = this.findById(supersededBy);
+        if (
+          replacement === null ||
+          replacement.tenantId !== memory.tenantId ||
+          replacement.lifecycle !== 'active'
+        ) {
+          throw new InvalidSupersessionError(
+            'Supersession replacement must be an existing active memory in the same tenant',
+          );
+        }
+        return (
+          this.stmtSupersede.run({
+            id,
+            supersession_json: JSON.stringify(parsed.data),
+            updated_at: now,
+          }).changes > 0
+        );
+      })
+      .immediate();
   }
 
   /**

@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Persist explicit MCP and HTTP supersession transitions with a canonical
+  replacement link and audit event in one transaction. Require an existing active,
+  distinct replacement in the same tenant; reject state-only supersession writes
+  and accept current content-derived UUIDs. Preserve curator promotion behavior
+  and the batch CLI's explicit supersession refusal (`qmd-team-intent-kb-ehi`).
+
 - Verify owned qmd artifact files through a reused bounded buffer and precompute
   layout lookups, preserving full-byte hashes, native-file verification and strict
   graph/layout checks. Reject files that change identity, size or recorded metadata

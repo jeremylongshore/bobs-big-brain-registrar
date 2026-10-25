@@ -16,6 +16,42 @@ describe('MemoryRepository', () => {
     repo = new MemoryRepository(db);
   });
 
+  it('refuses a state-only supersession that would make a domain-invalid row', () => {
+    const memory = makeMemory();
+    repo.insert(memory);
+    expect(() => repo.updateLifecycle(memory.id, 'superseded', LATER)).toThrow(
+      /supersession|replacement/i,
+    );
+    expect(repo.findById(memory.id)?.lifecycle).toBe('active');
+  });
+
+  it('writes a schema-valid supersession link atomically without changing the replacement', () => {
+    const memory = makeMemory();
+    const replacement = makeMemory({ tenantId: memory.tenantId });
+    repo.insert(memory);
+    repo.insert(replacement);
+    expect(repo.supersede(memory.id, replacement.id, 'Approved replacement', LATER)).toBe(true);
+    expect(repo.findById(memory.id)).toMatchObject({
+      lifecycle: 'superseded',
+      updatedAt: LATER,
+      supersession: {
+        supersededBy: replacement.id,
+        reason: 'Approved replacement',
+        linkedAt: LATER,
+      },
+    });
+    expect(repo.findById(replacement.id)?.lifecycle).toBe('active');
+  });
+
+  it('leaves missing source rows absent and refuses malformed metadata', () => {
+    expect(repo.supersede(randomUUID(), randomUUID(), 'Absent source', LATER)).toBe(false);
+    const memory = makeMemory();
+    repo.insert(memory);
+    expect(() => repo.supersede(memory.id, 'malformed', 'Invalid', LATER)).toThrow(/metadata/i);
+    expect(() => repo.supersede(memory.id, randomUUID(), ' ', LATER)).toThrow(/metadata/i);
+    expect(repo.findById(memory.id)?.lifecycle).toBe('active');
+  });
+
   it('inserts a memory and retrieves it by id', () => {
     const memory = makeMemory();
     repo.insert(memory);

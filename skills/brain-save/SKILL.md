@@ -55,11 +55,13 @@ configured. Keep `TEAMKB_API_URL` unset when the search and write sides must add
 
 1. Search for the memory and extract its UUID from a UUID-shaped citation filename such as
    `qmd://kb-curated/9c2e42f1-7b60-4ed2-a9dd-648d6c786d43.md`.
-2. Call `teamkb_transition` with `{ memoryId, to, reason, actor }`.
-3. Use only transitions the current tool can complete safely: `active` to `deprecated` or `archived`,
-   `deprecated` to `active` or `archived`, and `superseded` to `archived`.
-4. Do not request `active` to `superseded` through this version of the MCP tool; its input surface
-   cannot supply the required replacement-memory link.
+2. Call `teamkb_transition` with `{ memoryId, to, reason, actor }` for `active` to `deprecated` or
+   `archived`, `deprecated` to `active` or `archived`, or `superseded` to `archived`.
+3. For `active` to `superseded`, first identify a distinct, already active replacement in the same
+   tenant. Include its curated UUID as `supersededBy` in that call. A raw compiler source ID or queued
+   proposal is not a replacement memory.
+4. Report the returned audit-event UUID. Supersession stores the replacement link and lifecycle with
+   that receipt atomically; a missing, invalid, inactive or cross-tenant replacement is refused.
 
 ### Check local status
 
