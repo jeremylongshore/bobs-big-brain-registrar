@@ -33,8 +33,8 @@ The exporter intentionally omits confidential or restricted memories and
 memories intended for a narrower audience than the tenant. These promotions
 remain visible in the reported excluded denominator. They are not missing-export
 failures and must never be exported just to make the check pass. An empty or
-entirely excluded snapshot cannot establish passing acceptance. In that case,
-With zero failed entries, an empty or all-excluded denominator is insufficient
+entirely excluded snapshot cannot establish passing acceptance. With zero failed
+entries, an empty or all-excluded denominator is insufficient
 evidence. Zero eligible promotions can also accompany identity or memory failures;
 a nonzero failed count and entry codes identify those violations.
 
