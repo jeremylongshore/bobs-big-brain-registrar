@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include equal-watermark memories in incremental exports and persist the clock
   sampled before the memory read, rather than a completion timestamp. Preserve
   content comparison so boundary rechecks cause no duplicate file writes. This
-  fixes same-time insert/update/archive omissions and the generation-time cursor
-  gap; backdated or skewed timestamps still require explicit reconciliation
+  fixes visible equal-time insert/update/archive omissions and replaces the
+  completion-time watermark. This is not an atomic snapshot or logical commit
+  cursor; pre-start-timestamped, sufficiently late or backdated/skewed commits
+  still require explicit reconciliation
   (`compile-then-govern-6ps.22`).
 
 - Persist explicit MCP and HTTP supersession transitions with a canonical
