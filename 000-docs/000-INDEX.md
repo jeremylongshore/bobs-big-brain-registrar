@@ -131,5 +131,6 @@
 | 053 | AT-DECR | claim-level-audience-governance-k1                    | Audience governance decision     |
 | 054 | OD-RNBK | governed-redaction-and-audience-narrowing             | Redaction + narrowing runbook    |
 | 055 | OD-RNBK | human-escalation-hold                                 | Human-escalation hold runbook    |
+| 056 | AT-DSGN | contradiction-dry-run-planner                         | Contradiction dry-run boundary   |
 
-## Next Available Sequence: 056
+## Next Available Sequence: 057

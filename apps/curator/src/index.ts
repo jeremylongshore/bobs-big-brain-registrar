@@ -134,3 +134,13 @@ export type {
   ResolveHoldRefusalCode,
   ResolveHoldResult,
 } from './hold/resolve-hold.js';
+export { planContradictions } from './contradictions/contradiction-planner.js';
+export type {
+  CompilationLineage,
+  ContradictionEndpoint,
+  ContradictionAdvisory,
+  ContradictionPlannerInput,
+  ContradictionRefusalCode,
+  ContradictionProposal,
+  ContradictionPlan,
+} from './contradictions/contradiction-planner.js';
