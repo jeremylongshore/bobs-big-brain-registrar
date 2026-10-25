@@ -28,6 +28,12 @@ export type { SupersessionMatch, SupersessionPlan } from './supersession/superse
 export { promote } from './promotion/promoter.js';
 export type { PromotionInput } from './promotion/promoter.js';
 export { reject } from './rejection/rejector.js';
+export { rejectReviewedCandidate } from './rejection/reviewed-rejection.js';
+export type {
+  ReviewedRejectionInput,
+  ReviewedRejectionResult,
+  ReviewedRejectionRefusalCode,
+} from './rejection/reviewed-rejection.js';
 export { checkOriginAttestation, ORIGIN_ATTESTATION_RULE_TYPE } from './origin/origin-gate.js';
 export type { OriginGateResult, OriginRejectCode } from './origin/origin-gate.js';
 export {

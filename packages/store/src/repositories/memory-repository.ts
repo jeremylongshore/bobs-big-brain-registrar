@@ -222,6 +222,7 @@ export class MemoryRepository {
   private readonly hasFts5: boolean;
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindById: Database.Statement;
+  private readonly stmtExistsForCandidate: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByHash: Database.Statement;
   private readonly stmtFindByHashAndTenant: Database.Statement;
@@ -271,6 +272,9 @@ export class MemoryRepository {
 
     this.stmtFindById = db.prepare(`
       SELECT * FROM curated_memories WHERE id = ?
+    `);
+    this.stmtExistsForCandidate = db.prepare(`
+      SELECT 1 FROM curated_memories WHERE candidate_id = ? AND tenant_id = ? LIMIT 1
     `);
 
     this.stmtFindByTenant = db.prepare(`
@@ -418,6 +422,11 @@ export class MemoryRepository {
   findById(id: string): CuratedMemory | null {
     const row = this.stmtFindById.get(id);
     return row !== undefined ? rowToMemory(row) : null;
+  }
+
+  /** Whether this tenant has ever admitted the candidate, in any memory lifecycle. */
+  existsForCandidate(candidateId: string, tenantId: string): boolean {
+    return this.stmtExistsForCandidate.get(candidateId, tenantId) !== undefined;
   }
 
   /** Return all curated memories belonging to the given tenant. */
