@@ -50,7 +50,7 @@ describe('detectChanges', () => {
     expect(changeset.toArchive).toHaveLength(0);
   });
 
-  it('detects newly added memory after last export', () => {
+  it('detects newer memories and retains the equal-watermark boundary for content comparison', () => {
     const old = makeCuratedMemory({ updatedAt: NOW });
     memoryRepo.insert(old);
     exportStateRepo.set(TARGET_ID, NOW); // exported exactly at NOW
@@ -59,8 +59,10 @@ describe('detectChanges', () => {
     memoryRepo.insert(newMemory);
 
     const changeset = detectChanges(memoryRepo, exportStateRepo, makeConfig());
-    expect(changeset.toWrite).toHaveLength(1);
-    expect(changeset.toWrite[0]?.memory.id).toBe(newMemory.id);
+    expect(changeset.toWrite).toHaveLength(2);
+    expect(new Set(changeset.toWrite.map((item) => item.memory.id))).toEqual(
+      new Set([old.id, newMemory.id]),
+    );
   });
 
   it('detects memory updated after last export timestamp', () => {
