@@ -157,6 +157,21 @@ describe('promoted receipt → canonical memory → cited export integrity', () 
     }
   });
 
+  it('accepts an aliased export root while retaining the same canonical receipt mapping', async () => {
+    await promote();
+    const direct = check();
+    const alias = join(work, 'export-alias');
+    symlinkSync(exportDir, alias, 'dir');
+    const aliased = checkPromotedCitationIntegrity({
+      tenantId: TENANT,
+      exportDir: alias,
+      memoryRepo,
+      auditRepo,
+    });
+    expect(direct.passed).toBe(true);
+    expect(aliased).toEqual(direct);
+  });
+
   it('fails when any one of multiple promoted exports is absent', async () => {
     const first = await promote();
     await promote('decision');

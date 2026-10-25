@@ -67,7 +67,15 @@ export interface CitationIntegrityOptions {
 export function checkPromotedCitationIntegrity(
   options: CitationIntegrityOptions,
 ): CitationIntegrityReport {
-  const { tenantId, exportDir, auditRepo, memoryRepo } = options;
+  const { tenantId, auditRepo, memoryRepo } = options;
+  // Resolve a caller's root alias once; only redirects below this root are
+  // refused. Missing roots still produce per-receipt missing-export results.
+  let exportDir = resolve(options.exportDir);
+  try {
+    exportDir = realpathSync(exportDir);
+  } catch {
+    // File inspection reports an absent or unreadable export tree below.
+  }
   const receipts = auditRepo.findByTenantAndAction(tenantId, 'promoted');
   const entries: CitationIntegrityEntry[] = [];
   let eligiblePromotionCount = 0;
@@ -156,7 +164,7 @@ function inspectExportHeader(
 ): CitationFailureCode | undefined {
   let descriptor: number | undefined;
   try {
-    const root = realpathSync(exportDir);
+    const root = exportDir;
     const target = resolve(file);
     const confined = relative(root, target);
     if (

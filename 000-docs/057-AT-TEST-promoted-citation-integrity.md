@@ -10,8 +10,8 @@ or export content, repair state, or refresh an index.
 
 The composition belongs in the API application, which already consumes the
 store, git exporter and qmd adapter. The check adds no endpoint, read permission,
-schema migration or change to promotion. The governing task is
-`compile-then-govern-6ps.9`.
+schema migration or change to promotion. This fixture advances
+`compile-then-govern-6ps.9`; closure requires its recorded acceptance and review.
 
 ## Mapping and denominator
 
@@ -31,7 +31,9 @@ The exporter intentionally omits confidential or restricted memories and
 memories intended for a narrower audience than the tenant. These promotions
 remain visible in the reported excluded denominator. They are not missing-export
 failures and must never be exported just to make the check pass. An empty or
-entirely excluded snapshot cannot establish passing acceptance.
+entirely excluded snapshot cannot establish passing acceptance. In that case,
+`passed: false` with zero eligible promotions means insufficient evidence; the
+separate failed count and entry codes identify actual violations.
 
 Active category routing, bulk imports and retired memories use the existing
 export policy. Retired memories resolve through `kb-archive`; a previous promotion
@@ -55,12 +57,15 @@ Internal chain verification stays clean, while the earlier anchor exposes the
 rewrite. Reuse this positive control rather than copying its hash algorithm.
 
 Run the focused proof from the repository root using the shared private fixture
-configuration:
+configuration in [`vitest.config.ts`](../vitest.config.ts),
+[`fixture-global-setup.ts`](../tests/support/fixture-global-setup.ts) and
+[`fixture-environment.ts`](../tests/support/fixture-environment.ts):
 
 ```bash
 pnpm exec vitest run apps/api/src/__tests__/citation-integrity.test.ts packages/eval-surface/src/__tests__/eval-surface.test.ts
 ```
 
+The root [CI workflow](../.github/workflows/ci.yml) runs the collected suite.
 The owning repository's ordinary build, types, lint, coverage and architecture
 gates remain applicable. Test sources and a command are not execution evidence;
 the PR distinguishes executed commits from evidence carried forward over
@@ -76,7 +81,9 @@ It does not establish body entailment, factual truth, retrieval
 ranking, complete historical coverage, or full ALCE evaluation. It neither runs
 the live corpus nor certifies a deployed index.
 
-The caller supplies consistent store and export inputs. Report entries retain
+The caller supplies consistent store and export inputs. Its export-root alias is
+resolved once; symlinks below that canonical root are refused. The no-follow open
+flag is POSIX-specific; regular-file and descriptor identity checks also apply. Report entries retain
 repository result order; the checker does not normalize it. Path checks do not
 freeze files against a concurrent same-user writer, and they are not a new
 authorization boundary. The existing synthetic control demonstrates that

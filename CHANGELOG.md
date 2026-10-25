@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add a read-only promoted-receipt identity and export-header check, deterministic
-  for stable store/export inputs and fixed ordered repository results, with a
-  hermetic promotion-to-export proof. Resolve eligible memories through canonical
+- Add a read-only promoted-receipt identity and export-header check with a
+  hermetic promotion-to-export proof. Report order inherits the store query order;
+  the checker imposes no ordering. Resolve eligible memories through canonical
   export paths and qmd collections; fail on missing or unsafe files and substituted
   or foreign identity frontmatter. Body substitution is outside the check. Report
   intentionally restricted exports separately and refuse an empty acceptance
