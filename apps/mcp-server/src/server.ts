@@ -162,6 +162,11 @@ export function createServer(
       {
         memoryId: z.string().uuid().describe('UUID of the curated memory to transition'),
         to: MemoryLifecycleState.describe('Target lifecycle state'),
+        supersededBy: z
+          .string()
+          .uuid()
+          .optional()
+          .describe('Existing active replacement in the same tenant; required for superseded'),
         reason: z.string().min(1).describe('Human-readable reason for the transition'),
         actor: z
           .string()
@@ -173,6 +178,7 @@ export function createServer(
           {
             memoryId: params.memoryId,
             to: params.to,
+            supersededBy: params.supersededBy,
             reason: params.reason,
             actor: params.actor,
           },
