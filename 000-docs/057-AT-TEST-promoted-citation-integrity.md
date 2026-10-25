@@ -1,9 +1,10 @@
 # Promoted receipt citation integrity
 
 Given a stable caller-supplied store and export view, this check applies
-deterministic identity and export rules for a declared tenant. It follows each
-`promoted` audit receipt to its memory, derives the memory's canonical `qmd://`
-citation, and checks the corresponding export file. It does not create or certify
+deterministic identity and export rules for a declared tenant. It enumerates every
+`promoted` audit receipt, resolves its memory and reports unresolved or excluded
+entries. For resolved export-eligible memories, it derives the canonical `qmd://`
+citation and checks the corresponding export file. It does not create or certify
 an atomic snapshot. It does not run a model or qmd process, write store records
 or export content, repair state, or refresh an index.
 
@@ -47,7 +48,7 @@ collections. Missing files, foreign tenant identities, substituted frontmatter
 and escaped or nonregular files provide negative controls. The fixture must
 check every promotion receipt in its snapshot and a nonzero eligible denominator.
 
-The other half of the task already lives in
+A related existing re-hash-forward control lives in
 [`eval-surface.test.ts`](../packages/eval-surface/src/__tests__/eval-surface.test.ts):
 the re-hash-forward test edits a middle audit row and recomputes its successor.
 Internal chain verification stays clean, while the earlier anchor exposes the
@@ -62,13 +63,16 @@ pnpm exec vitest run apps/api/src/__tests__/citation-integrity.test.ts packages/
 
 The owning repository's ordinary build, types, lint, coverage and architecture
 gates remain applicable. Test sources and a command are not execution evidence;
-the PR records actual results against its exact commit.
+the PR distinguishes executed commits from evidence carried forward over
+unchanged source. Execution reports identify the commit or source hashes that
+actually ran.
 
 ## What the check establishes
 
 This is citation identity and export presence within a supplied current snapshot.
 Canonical frontmatter comparison also detects a file with the wrong memory or
-tenant metadata. It does not establish body entailment, factual truth, retrieval
+tenant metadata. Body replacement that preserves the canonical header is outside this check.
+It does not establish body entailment, factual truth, retrieval
 ranking, complete historical coverage, or full ALCE evaluation. It neither runs
 the live corpus nor certifies a deployed index.
 

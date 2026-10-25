@@ -43,8 +43,10 @@ describe('promoted receipt → canonical memory → cited export integrity', () 
   let memoryRepo: MemoryRepository;
   let auditRepo: AuditRepository;
   let exportStateRepo: ExportStateRepository;
+  let fixtureSequence: number;
 
   beforeEach(async () => {
+    fixtureSequence = 0;
     work = mkdtempSync(join(tmpdir(), 'citation-integrity-'));
     exportDir = join(work, 'export');
     db = createTestDatabase();
@@ -79,12 +81,14 @@ describe('promoted receipt → canonical memory → cited export integrity', () 
     category: CuratedMemory['category'] = 'reference',
     tenantId = TENANT,
   ): Promise<CuratedMemory> {
-    const nonce = randomUUID();
+    // Random UUID text can match the canonical phone-PII classifier. Keep
+    // synthetic content deterministic while real candidate IDs remain UUIDs.
+    const sequence = ++fixtureSequence;
     const candidate = makeCandidate({
       tenantId,
       category,
-      title: `Synthetic citation fixture ${nonce}`,
-      content: `Synthetic promotion ${nonce} requires inspecting the fixture ledger quarterly and retaining its receipt.`,
+      title: `Synthetic citation fixture ${sequence}`,
+      content: `Synthetic promotion sequence ${sequence} requires inspecting the fixture ledger quarterly and retaining its receipt.`,
     });
     new CandidateRepository(db).insert(candidate, computeContentHash(candidate.content));
     const response = await app.inject({
