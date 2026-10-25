@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a read-only promoted-receipt identity and export-header check with a
+  hermetic promotion-to-export proof. Report order inherits the store query order;
+  the checker imposes no ordering. Resolve eligible memories through canonical
+  export paths and qmd collections; fail on missing or unsafe files and substituted
+  or foreign identity frontmatter. Body substitution is outside the check. Report
+  intentionally restricted exports separately and refuse an empty acceptance
+  denominator (`compile-then-govern-6ps.9`).
+
 - Add a pure contradiction dry-run planner over caller-verified compilation
   lineage and explicit emission-to-promotion endpoint mappings. Eligible pairs
   retain source evidence and require review; malformed, ambiguous, cross-tenant,
