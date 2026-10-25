@@ -3,8 +3,9 @@
 Given a stable caller-supplied store and export view, this check applies
 deterministic identity and export rules for a declared tenant. It enumerates every
 `promoted` audit receipt, resolves its memory and reports unresolved or excluded
-entries. For resolved export-eligible memories, it derives the canonical `qmd://`
-citation and checks the corresponding export file. It does not create or certify
+entries. For resolved export-eligible memories, it constructs a `qmd://` citation
+under the adapter's current URI shape, requires the resolver/path round-trip to
+agree and checks the corresponding export file. It does not create or certify
 an atomic snapshot. It does not run a model or qmd process, write store records
 or export content, repair state, or refresh an index.
 
@@ -25,19 +26,28 @@ claiming to validate a citation already stored in the receipt:
 4. Derive the export path with `getRelativePath`, select its collection with
    `getExportableCollections`, and resolve the citation with `resolveCitationPath`.
 5. Require the exact expected regular file within the export tree and compare
-   its header with the canonical rendered memory frontmatter.
+   its prefix with the canonical rendered memory frontmatter plus the exporter's
+   current two-newline separator.
 
 The exporter intentionally omits confidential or restricted memories and
 memories intended for a narrower audience than the tenant. These promotions
 remain visible in the reported excluded denominator. They are not missing-export
 failures and must never be exported just to make the check pass. An empty or
 entirely excluded snapshot cannot establish passing acceptance. In that case,
-`passed: false` with zero eligible promotions means insufficient evidence; the
-separate failed count and entry codes identify actual violations.
+With zero failed entries, an empty or all-excluded denominator is insufficient
+evidence. Zero eligible promotions can also accompany identity or memory failures;
+a nonzero failed count and entry codes identify those violations.
 
 Active category routing, bulk imports and retired memories use the existing
 export policy. Retired memories resolve through `kb-archive`; a previous promotion
 does not imply that its memory should still appear in default search.
+
+The API maintains two explicit compatibility pins: the current adapter URI shape
+and the exporter's two-newline frontmatter framing. Collection/path mapping and
+frontmatter rendering remain owned by their existing packages; no canonical URI
+formatter or complete export-prefix builder is exported. Resolver/path divergence
+fails closed, and prefix/framing drift can report `HEADER_IDENTITY_MISMATCH`.
+This is compatibility validation, not a new authority for writing these formats.
 
 ## Hermetic proof
 
