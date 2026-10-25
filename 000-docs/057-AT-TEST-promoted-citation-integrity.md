@@ -31,7 +31,12 @@ claiming to validate a citation already stored in the receipt:
 
 The exporter intentionally omits confidential or restricted memories and
 memories intended for a narrower audience than the tenant. These promotions
-remain visible in the reported excluded denominator. They are not missing-export
+remain visible in the reported excluded denominator. The checker does not inspect
+excluded disk paths. A stale restricted copy does not affect `passed`; that flag
+certifies eligible identity/presence checks, not absence or privacy safety of the
+export tree. Canonical exporter reconcile owns removal of stale restricted copies;
+the fixture asserts both formerly eligible files exist before restriction and
+are absent after reconcile. They are not missing-export
 failures and must never be exported just to make the check pass. An empty or
 entirely excluded snapshot cannot establish passing acceptance. With zero failed
 entries, an empty or all-excluded denominator is insufficient

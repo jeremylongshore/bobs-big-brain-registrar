@@ -39,6 +39,7 @@ export interface CitationIntegrityEntry {
 }
 
 export interface CitationIntegrityReport {
+  /** Eligible identity/presence checks passed; excluded files are not inspected. */
   passed: boolean;
   totalPromotionCount: number;
   /** Same-tenant resolved identities permitted by the canonical export policy. */
@@ -63,6 +64,8 @@ export interface CitationIntegrityOptions {
  * and qmd collection mapping, then compare its canonical frontmatter on disk.
  * This checks identity/header consistency, not body truth, entailment, index
  * availability, audit-chain authenticity or safety against concurrent writers.
+ * Excluded files are not inspected: stale restricted copies do not affect passed.
+ * This is not an absence or privacy audit of the export tree.
  */
 export function checkPromotedCitationIntegrity(
   options: CitationIntegrityOptions,

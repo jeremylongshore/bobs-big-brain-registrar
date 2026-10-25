@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -251,9 +252,14 @@ describe('promoted receipt → canonical memory → cited export integrity', () 
   it('honors intentional sensitivity and audience exclusions without vacuous success', async () => {
     const confidential = await promote();
     const narrow = await promote('decision');
+    const previousPaths = [confidential, narrow].map((memory) =>
+      join(exportDir, getRelativePath(memory)),
+    );
+    for (const path of previousPaths) expect(existsSync(path)).toBe(true);
     memoryRepo.update({ ...confidential, sensitivity: 'confidential' });
     memoryRepo.update({ ...narrow, metadata: { ...narrow.metadata, audience: 'admins' } });
     reconcile();
+    for (const path of previousPaths) expect(existsSync(path)).toBe(false);
     const report = check();
     expect(report.passed).toBe(false);
     expect(report.totalPromotionCount).toBe(2);
