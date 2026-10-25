@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a pure contradiction dry-run planner over caller-verified compilation
+  lineage and explicit emission-to-promotion endpoint mappings. Eligible pairs
+  retain source evidence and require review; malformed, ambiguous, cross-tenant,
+  inactive, self, duplicate and exact-restatement pairs are refused. No graph,
+  lifecycle or search activation is included (`compile-then-govern-39z.1.1`).
+
 ### Fixed
 
 - Verify owned qmd artifact files through a reused bounded buffer and precompute
