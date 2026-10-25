@@ -1,0 +1,79 @@
+# Promoted receipt citation integrity
+
+This deterministic check covers a declared tenant's current store and export
+snapshot. It follows each `promoted` audit receipt to its memory, derives the
+memory's canonical `qmd://` citation, and checks the corresponding export file.
+It does not run a model or qmd process, change a memory, or refresh an index.
+
+The composition belongs in the API application, which already consumes the
+store, git exporter and qmd adapter. The check adds no endpoint, read permission,
+schema migration or change to promotion. The governing task is
+`compile-then-govern-6ps.9`.
+
+## Mapping and denominator
+
+Promotion receipts record `memoryId` and `tenantId`; they do not contain a
+literal citation field. The check establishes a derived mapping rather than
+claiming to validate a citation already stored in the receipt:
+
+1. Read every promotion receipt for the requested tenant.
+2. Resolve its memory and require the same tenant identity.
+3. Apply the exporter's existing sensitivity and audience restrictions.
+4. Derive the export path with `getRelativePath`, select its collection with
+   `getExportableCollections`, and resolve the citation with `resolveCitationPath`.
+5. Require the exact expected regular file within the export tree and compare
+   its header with the canonical rendered memory frontmatter.
+
+The exporter intentionally omits confidential or restricted memories and
+memories intended for a narrower audience than the tenant. These promotions
+remain visible in the reported excluded denominator. They are not missing-export
+failures and must never be exported just to make the check pass. An empty or
+entirely excluded snapshot cannot establish passing acceptance.
+
+Active category routing, bulk imports and retired memories use the existing
+export policy. Retired memories resolve through `kb-archive`; a previous promotion
+does not imply that its memory should still appear in default search.
+
+## Hermetic proof
+
+The ordinary root Vitest suite collects
+[`citation-integrity.test.ts`](../apps/api/src/__tests__/citation-integrity.test.ts).
+Its fixture promotes candidates through the real API with `app.inject` and uses
+the real exporter through an export-only refresher. It needs neither a listening
+server nor an available qmd binary. Positive fixtures cover the canonical export
+collections. Missing files, foreign tenant identities, substituted frontmatter
+and escaped or nonregular files provide negative controls. The fixture must
+check every promotion receipt in its snapshot and a nonzero eligible denominator.
+
+The other half of the task already lives in
+[`eval-surface.test.ts`](../packages/eval-surface/src/__tests__/eval-surface.test.ts):
+the re-hash-forward test edits a middle audit row and recomputes its successor.
+Internal chain verification stays clean, while the earlier anchor exposes the
+rewrite. Reuse this positive control rather than copying its hash algorithm.
+
+Run the focused proof from the repository root using the shared private fixture
+configuration:
+
+```bash
+pnpm exec vitest run apps/api/src/__tests__/citation-integrity.test.ts packages/eval-surface/src/__tests__/eval-surface.test.ts
+```
+
+The owning repository's ordinary build, types, lint, coverage and architecture
+gates remain applicable. Test sources and a command are not execution evidence;
+the PR records actual results against its exact commit.
+
+## What the check establishes
+
+This is citation identity and export presence within a supplied current snapshot.
+Canonical frontmatter comparison also detects a file with the wrong memory or
+tenant metadata. It does not establish body entailment, factual truth, retrieval
+ranking, complete historical coverage, or full ALCE evaluation. It neither runs
+the live corpus nor certifies a deployed index.
+
+The caller supplies consistent store and export inputs. Path checks do not freeze
+files against a concurrent same-user writer, and they are not a new authorization
+boundary. Local audit chains remain tamper-evident; an earlier independent anchor
+provides a separate witness for the re-hash-forward control.
+
+Rollback is a normal source revert. The checker has no durable-state mutation,
+automatic remediation or export-policy change to undo.

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a deterministic, read-only promoted-receipt citation integrity check and
+  hermetic promotion-to-export proof. Resolve eligible memories through the
+  canonical export path and qmd collection mapping; fail on missing, substituted
+  or foreign-tenant documents. Report intentionally restricted exports separately
+  and refuse an empty acceptance denominator (`compile-then-govern-6ps.9`).
+
 - Add a pure contradiction dry-run planner over caller-verified compilation
   lineage and explicit emission-to-promotion endpoint mappings. Eligible pairs
   retain source evidence and require review; malformed, ambiguous, cross-tenant,
