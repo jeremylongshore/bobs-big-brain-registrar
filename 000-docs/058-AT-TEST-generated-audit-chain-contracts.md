@@ -18,14 +18,21 @@ live corpus or change production hash, ordering, classification or anchor code.
 | Total order                       | The actual repository returns exact insertion/sequence order despite equal timestamps, reverse UUID order and deliberately out-of-order wall clocks.                                              |
 
 A raw pre-migration row with both hash columns null increases `unverifiedRows`,
-not `cleanRows`. The classifier accepts the verifier's break list, rather than its
-unverified-row counter; its `verified` flag must not be substituted for an overall
-provenance verdict. Tuple/reason drift directly tests classifier inputs; real
-in-memory SQLite covers repository ordering and retained-anchor rewrites.
+not `cleanRows`. The property invokes the classifier with verifier breaks and
+observes its local `verified` flag; it does not test an end-to-end provenance
+verdict. Live-tuple and manifest-entry drift directly test classifier inputs.
+Complete manifest file/hash validation remains covered by the existing owning
+loader tests. Real in-memory SQLite covers repository ordering and retained-anchor
+rewrites.
 
+The test-local differential oracle intentionally duplicates the currently frozen
+wire contract; it is not a canonical production implementation. Production
+`audit-chain.ts` versioned serializers remain authoritative under their existing
+versioned-migration rules. Intentional contract changes require the corresponding
+test-oracle update in that migration; this test adds no new writer authority.
 The generated wire oracle does not call the production serializer or hash helper.
-This makes it capable of detecting omitted fields and version drift rather than
-merely comparing the production helper to itself. SHA-256 collision resistance
+This can detect omitted fields and timestamp-rule drift for explicit versions
+1 and 2, rather than merely comparing the production helper to itself. SHA-256 collision resistance
 remains an assumption; these bounded tests are not an exhaustive proof.
 
 ## Bounds and replay
@@ -61,7 +68,8 @@ comparison. Each selected generated property must fail with a counterexample and
 seed/path output. These targeted controls are not a whole-repository mutation
 score; unrelated test cases filtered by `-t` are not claimed as executed there.
 
-A retained fixture anchor detects a rewrite only while that earlier anchor is
+An anchor snapshot created and retained locally during the same test run detects
+a rewrite only while that earlier anchor is
 preserved. This does not establish independent anchor storage, remote durability,
 a live audit result or protection against an actor rewriting both local records
 and their local anchors. Historical migration exceptions remain historical

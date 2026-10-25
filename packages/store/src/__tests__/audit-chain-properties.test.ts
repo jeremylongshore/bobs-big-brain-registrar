@@ -14,7 +14,9 @@ import { createTestDatabase } from '../database.js';
 import {
   classifyChainBreaks,
   computeManifestHash,
+  ExceptionManifestEntrySchema,
   type ExceptionManifest,
+  type ExceptionManifestEntry,
   type StoredRowTuple,
 } from '../exception-manifest.js';
 import { AuditRepository, type AuditChainRow } from '../repositories/audit-repository.js';
@@ -265,6 +267,10 @@ describe('generated audit-chain invariants (seed 0x6a10)', () => {
           ],
         };
         const forkPin = { ...body, manifestHash: computeManifestHash(body) };
+        expect(
+          ExceptionManifestEntrySchema.safeParse({ ...body.entries[0], reason: 'CHAIN_FORK' })
+            .success,
+        ).toBe(false);
         expect(partition(rows, forkPin)).toEqual(result);
         expect(JSON.stringify(rows)).toBe(before);
         rows[0]!.reason = (rows[0]!.reason ?? '') + '-changed';
@@ -326,6 +332,23 @@ describe('generated audit-chain invariants (seed 0x6a10)', () => {
           expect(result.tamperSignatures).toEqual(failures);
           expect(result.verified).toBe(false);
         }
+        const pin = body.entries[0]!;
+        const manifestDrifts: Partial<ExceptionManifestEntry>[] = [
+          { id: pin.id + '-unknown' },
+          { entryHash: cleared ? 'a'.repeat(64) : null },
+          { prevEntryHash: null },
+          { hashVersion: pin.hashVersion === 1 ? 2 : 1 },
+          { seq: pin.seq + 1 },
+          { reason: 'PREV_LINK_MISMATCH' },
+        ];
+        for (const drift of manifestDrifts) {
+          const changed = { ...body, entries: [{ ...pin, ...drift }] };
+          const changedManifest = { ...changed, manifestHash: computeManifestHash(changed) };
+          const result = partition(rows, changedManifest);
+          expect(result.documentedExceptions).toEqual([]);
+          expect(result.tamperSignatures).toEqual(failures);
+          expect(result.verified).toBe(false);
+        }
         const reasonDrift = failures.map((failure) => ({
           ...failure,
           reason: 'PREV_LINK_MISMATCH' as const,
@@ -369,7 +392,12 @@ describe('generated audit-chain invariants (seed 0x6a10)', () => {
             row.entry_hash = digest(row, version(row));
             update.run(row.reason, row.prev_entry_hash, row.entry_hash, row.id);
           }
-          expect(verifyAuditChain(repo).breaks).toEqual([]);
+          expect(verifyAuditChain(repo)).toEqual({
+            totalRows: rows.length,
+            unverifiedRows: 0,
+            cleanRows: rows.length,
+            breaks: [],
+          });
           const result = verifyAnchors(repo, anchor);
           expect(result.ok).toBe(false);
           expect(result.anchorBreaks.map((failure) => failure.reason)).toContain(
