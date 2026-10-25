@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import type { CandidateStatus } from '@qmd-team-intent-kb/schema';
+import type { Author, CandidateStatus } from '@qmd-team-intent-kb/schema';
 import {
   AuditRepository,
   CandidateRepository,
@@ -166,6 +166,50 @@ describe('person-reviewed pending rejection on a real file-backed store', () => 
       actor: { type: 'human', id: 'reviewer' },
       reason: 'Reviewed.',
     });
+  });
+
+  it.each([
+    ['missing_reason', { reason: undefined }],
+    ['missing_reason', { reason: null }],
+    ['missing_reason', { reason: 42 }],
+    ['missing_actor', { actor: undefined }],
+    ['missing_actor', { actor: null }],
+    ['missing_actor', { actor: { type: 'human' } }],
+    ['missing_actor', { actor: { type: 'human', id: 42 } }],
+    ['not_human', { actor: { type: 'ai' } }],
+  ] as const)('defensively refuses malformed review fields: %s (%j)', (code, overrides) => {
+    const id = seed();
+    // Deliberately bypass TS at a prospective JSON boundary; no repo writes.
+    const request = { ...input(id), ...overrides } as unknown as ReviewedRejectionInput;
+    const before = snapshot();
+    expect(rejectReviewedCandidate(request, db)).toEqual({ ok: false, candidateId: id, code });
+    expect(snapshot()).toEqual(before);
+  });
+
+  it('propagates canonical schema failure without changing the candidate', () => {
+    const id = seed();
+    const before = snapshot();
+    expect(() =>
+      rejectReviewedCandidate(
+        input(id, {
+          actor: { type: 'human', id: 'reviewer', name: null } as unknown as Author,
+        }),
+        db,
+      ),
+    ).toThrow();
+    expect(snapshot()).toEqual(before);
+  });
+
+  it('checks authority before repeat state when a later caller has lower standing', () => {
+    const id = seed({ metadata: { filePaths: [], tags: [], audience: 'owner' } });
+    expect(rejectReviewedCandidate(input(id), db).ok).toBe(true);
+    const before = snapshot();
+    expect(rejectReviewedCandidate(input(id, { role: 'admin' }), db)).toEqual({
+      ok: false,
+      candidateId: id,
+      code: 'audience_above_standing',
+    });
+    expect(snapshot()).toEqual(before);
   });
 
   it.each([

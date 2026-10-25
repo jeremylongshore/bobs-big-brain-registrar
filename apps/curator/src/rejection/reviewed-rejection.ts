@@ -13,7 +13,7 @@ export interface ReviewedRejectionInput {
   tenantId: string;
   /** Caller-declared identity, not proof that a physical person issued the call. */
   actor: Author;
-  /** The caller must establish this standing at its own trust boundary. */
+  /** Only admin/owner accepted; caller establishes identity, standing and tenant binding. */
   role: string;
   /** Recorded through the canonical audit schema; never supply credentials or private content. */
   reason: string;
@@ -37,7 +37,8 @@ export type ReviewedRejectionResult =
  * Retire one person-reviewed inbox candidate without changing its content or
  * creating a memory. All repositories are constructed on the supplied connection;
  * the locked re-read, status and canonical hash-chained receipt form one transaction.
- * A repeat returns `not_pending` and writes nothing. Holds use `resolveHold` instead.
+ * A repeat with unchanged authority returns `not_pending` and writes nothing.
+ * `not_pending` also covers linked memories; holds use `resolveHold` instead.
  * Expected refusals return codes; storage/schema failures throw and roll back.
  * This function does not append an external anchor or reconcile derived exports.
  */
@@ -51,9 +52,12 @@ export function rejectReviewedCandidate(
     candidateId,
     code,
   });
-  if (input.reason.trim() === '') return refuse('missing_reason');
-  if (input.actor.id.trim() === '') return refuse('missing_actor');
+  if (typeof input.reason !== 'string' || input.reason.trim() === '')
+    return refuse('missing_reason');
+  if (input.actor === undefined || input.actor === null) return refuse('missing_actor');
   if (input.actor.type !== 'human') return refuse('not_human');
+  if (typeof input.actor.id !== 'string' || input.actor.id.trim() === '')
+    return refuse('missing_actor');
   if (input.role !== 'owner' && input.role !== 'admin') return refuse('forbidden_role');
 
   const candidateRepo = new CandidateRepository(connection);
