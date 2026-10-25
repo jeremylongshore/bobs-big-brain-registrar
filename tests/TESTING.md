@@ -176,20 +176,24 @@ TEAMKB_TEST_LIVE_RERANK=1 \
   pnpm exec vitest run --config vitest.live.config.ts rerank-live-integration
 
 TEAMKB_TEST_LIVE_RETRIEVAL=1 \
-  TEAMKB_TEST_LIVE_BASE_PATH=/absolute/approved/brain \
+  TEAMKB_TEST_LIVE_BASE_PATH=/absolute/approved/source \
   TEAMKB_TEST_LIVE_TENANT_ID=approved-tenant \
   TEAMKB_TEST_LIVE_QMD_BIN=/absolute/approved/qmd \
   pnpm exec vitest run --config vitest.live.config.ts eval-retrieval-live
 ```
 
 The embedder/reranker URLs must match the existing pinned loopback endpoints.
-Missing requested configuration, service, executable or index fails preflight;
-it does not turn an opted-in run into a successful skip. Retrieval uses the
-explicit tenant registry/index and `--index index` to avoid ambient overrides
-and ancestor discovery. The production adapter may initialize or refresh qmd
-and native FTS5 sidecars. This lane is not a promise of zero filesystem writes
-or a pure BM25 backend. The query set, model configurations, assertions and
-ordinary coverage thresholds remain unchanged.
+Missing requested service configuration fails the requested lane rather than
+turning it into a successful skip. Explicit retrieval requires a source export
+tree and trusted executable, then copies regular exports into owned scratch and
+rebuilds derived qmd/native indexes there. Source indexes, registry and state DBs
+are excluded from copying and worker routing. Its worker has private HOME/XDG/cwd and explicit tenant
+`INDEX_PATH` / `QMD_CONFIG_DIR` before any probe. It reports a copied corpus rather
+than reproducing the source's existing live index; it is not a pure BM25 promise.
+The query set, model configurations, assertions and coverage thresholds remain
+unchanged. See [copy bounds, cleanup and proof scope](../000-docs/059-AT-TEST-disposable-retrieval-copy.md),
+including retained scratch when writer ownership is uncertain. Dense/rerank
+service lanes retain their separate explicit service configuration.
 
 Fixture-only real-qmd integrations use the workspace-pinned executable through
 shared test helpers, explicit tenant-owned `INDEX_PATH` / `QMD_CONFIG_DIR` and

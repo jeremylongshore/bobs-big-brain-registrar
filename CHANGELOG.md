@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Run explicitly enabled retrieval acceptance over an internally owned export
+  copy and rebuild qmd/native indexes in a private worker. Preserve source
+  indexes, registries and state databases; remove validated successful scratch
+  after worker exit and retain uncertain failure scratch for investigation.
+  Reports describe the copied corpus, with existing default-lane isolation and
+  dataset assertions retained (`compile-then-govern-39z.23`).
+
 - Include equal-watermark memories in incremental exports and persist the clock
   sampled before the memory read, rather than a completion timestamp. Preserve
   content comparison so boundary rechecks cause no duplicate file writes. This
