@@ -16,7 +16,7 @@ export const DEFAULT_MAX_ORPHAN_REMOVALS = 50;
  * Detect what has changed since the last export and build a changeset.
  *
  * - First run (no export state): returns all memories across all lifecycle states.
- * - Subsequent runs: only memories whose `updatedAt` is strictly after `lastExportedAt`.
+ * - Subsequent runs: only memories whose `updatedAt` is at or after `lastExportedAt` (equal-boundary rows are content-compared).
  * - Reconcile mode (`config.reconcile`): every memory, regardless of export state,
  *   plus `toRemove` for stale files on disk (see `findStaleFiles`).
  *
@@ -54,7 +54,7 @@ export function detectChanges(
   const reconcile = config.reconcile === true;
 
   if (exportState !== null && !reconcile) {
-    memories = memories.filter((m) => m.updatedAt > exportState.lastExportedAt);
+    memories = memories.filter((m) => m.updatedAt >= exportState.lastExportedAt);
   }
 
   const toWrite: ExportChangeset['toWrite'] = [];
