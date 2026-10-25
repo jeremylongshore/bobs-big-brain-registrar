@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add bounded generated audit-chain contracts with version-aware hash and
+  tamper checks, strict insertion ordering, exception tuple/reason pins and
+  retained-anchor rewrite controls. Use synthetic rows, private in-memory stores
+  and fixed-seed shrinking; preserve existing production formats and example
+  assertions (`compile-then-govern-6ps.10`).
+
 - Add a read-only promoted-receipt identity and export-header check with a
   hermetic promotion-to-export proof. Report order inherits the store query order;
   the checker imposes no ordering. Resolve eligible memories through canonical
