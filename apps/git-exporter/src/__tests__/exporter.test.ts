@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   createTestDatabase,
   MemoryRepository,
@@ -31,6 +31,8 @@ describe('runExport', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    db.close();
     rmSync(outputDir, { recursive: true, force: true });
   });
 
@@ -154,6 +156,130 @@ describe('runExport', () => {
     const result = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => LATER);
     expect(result.written).toHaveLength(1);
     expect(result.written[0]).toContain(m2.id);
+  });
+
+  it('exports a new memory committed at the exact previous watermark', () => {
+    const first = makeCuratedMemory({ updatedAt: NOW });
+    memoryRepo.insert(first);
+    runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    const second = makeCuratedMemory({ category: 'decision', updatedAt: NOW });
+    memoryRepo.insert(second);
+    const expectedPath = join(outputDir, 'decisions', `${second.id}.md`);
+    const incremental = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    const existedAfterIncremental = existsSync(expectedPath);
+    const recovered = runExport(
+      memoryRepo,
+      exportStateRepo,
+      { ...makeConfig(outputDir), reconcile: true },
+      () => NOW,
+    );
+    if (existedAfterIncremental) expect(recovered.written).not.toContain(expectedPath);
+    else expect(recovered.written).toContain(expectedPath);
+    expect(recovered.quarantined).toEqual([]);
+    expect(readFileSync(expectedPath, 'utf8')).toBe(formatMemoryAsMarkdown(second));
+    expect(incremental.written).toContain(expectedPath);
+    expect(existedAfterIncremental).toBe(true);
+  });
+
+  it('content-compares an unchanged same-boundary rerun without duplicate writes', () => {
+    const memory = makeCuratedMemory({ updatedAt: NOW });
+    memoryRepo.insert(memory);
+    const first = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    expect(first.written).toHaveLength(1);
+    const file = first.written[0]!;
+    const before = readFileSync(file, 'utf8');
+    const clock = vi.fn(() => NOW);
+    const repeated = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), clock);
+    expect(clock).toHaveBeenCalledTimes(1);
+    expect(repeated.written).toEqual([]);
+    expect(repeated.archived).toEqual([]);
+    expect(repeated.quarantined).toEqual([]);
+    expect(repeated.unchanged).toBe(1);
+    expect(readFileSync(file, 'utf8')).toBe(before);
+    expect(exportStateRepo.get('kb-export-default')?.lastExportedAt).toBe(NOW);
+  });
+
+  it('exports a same-watermark content update rather than retaining stale bytes', () => {
+    const memory = makeCuratedMemory({ updatedAt: NOW });
+    memoryRepo.insert(memory);
+    const first = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    const file = first.written[0]!;
+    const updated = makeCuratedMemory({
+      ...memory,
+      content: 'Updated synthetic export boundary content',
+      contentHash: undefined,
+      updatedAt: NOW,
+      version: 2,
+    });
+    memoryRepo.update(updated);
+    runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    const incrementalBytes = readFileSync(file, 'utf8');
+    runExport(
+      memoryRepo,
+      exportStateRepo,
+      { ...makeConfig(outputDir), reconcile: true },
+      () => NOW,
+    );
+    expect(readFileSync(file, 'utf8')).toBe(formatMemoryAsMarkdown(updated));
+    expect(incrementalBytes).toBe(formatMemoryAsMarkdown(updated));
+  });
+
+  it('archives a lifecycle change committed at the exact previous watermark', () => {
+    const memory = makeCuratedMemory({ category: 'decision', updatedAt: NOW });
+    memoryRepo.insert(memory);
+    const first = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    const originalPath = first.written[0]!;
+    const archived = makeCuratedMemory({
+      ...memory,
+      lifecycle: 'archived',
+      updatedAt: NOW,
+      version: 2,
+    });
+    memoryRepo.update(archived);
+    const archivePath = join(outputDir, 'archive', `${memory.id}.md`);
+    const incremental = runExport(memoryRepo, exportStateRepo, makeConfig(outputDir), () => NOW);
+    const activeAfterIncremental = existsSync(originalPath);
+    const archivedAfterIncremental = existsSync(archivePath);
+    runExport(
+      memoryRepo,
+      exportStateRepo,
+      { ...makeConfig(outputDir), reconcile: true },
+      () => NOW,
+    );
+    expect(existsSync(originalPath)).toBe(false);
+    expect(readFileSync(archivePath, 'utf8')).toBe(formatMemoryAsMarkdown(archived));
+    expect(incremental.archived).toContain(archivePath);
+    expect(activeAfterIncremental).toBe(false);
+    expect(archivedAfterIncremental).toBe(true);
+  });
+
+  it('does not skip a commit between the source snapshot and export completion', () => {
+    const first = makeCuratedMemory({ updatedAt: NOW });
+    const during = makeCuratedMemory({
+      category: 'decision',
+      updatedAt: '2026-01-15T12:00:00.000Z',
+    });
+    memoryRepo.insert(first);
+    let clock = NOW;
+    const originalRead = memoryRepo.findByTenantResilient.bind(memoryRepo);
+    const read = vi
+      .spyOn(memoryRepo, 'findByTenantResilient')
+      .mockImplementationOnce((tenantId) => {
+        const snapshot = originalRead(tenantId);
+        memoryRepo.insert(during);
+        clock = LATER;
+        return snapshot;
+      });
+    const config = makeConfig(outputDir, first.tenantId);
+    runExport(memoryRepo, exportStateRepo, config, () => clock);
+    read.mockRestore();
+    const expectedPath = join(outputDir, 'decisions', `${during.id}.md`);
+    const incremental = runExport(memoryRepo, exportStateRepo, config, () => LATER);
+    const existedAfterIncremental = existsSync(expectedPath);
+    runExport(memoryRepo, exportStateRepo, { ...config, reconcile: true }, () => LATER);
+    expect(readFileSync(expectedPath, 'utf8')).toBe(formatMemoryAsMarkdown(during));
+    expect(incremental.written).toContain(expectedPath);
+    expect(existedAfterIncremental).toBe(true);
   });
 
   it('memory updated after first export is re-written', () => {
