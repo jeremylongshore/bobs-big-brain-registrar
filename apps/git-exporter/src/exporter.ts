@@ -14,7 +14,7 @@ import { readFileSync, existsSync } from 'node:fs';
  * 2. Write new/updated files to their category directory
  * 3. Archive deprecated/superseded/archived files to `archive/`
  * 4. Remove deleted files (changeset `toRemove`)
- * 5. Record the current timestamp as the new export state
+ * 5. Record the pre-snapshot start timestamp as the new export state
  *
  * With `config.reconcile` the incremental `updatedAt` filter is dropped and the
  * export tree is reconciled against the DB as a whole (see `detectChanges`):
@@ -28,7 +28,12 @@ import { readFileSync, existsSync } from 'node:fs';
  * Does NOT run `git commit` or `git push` — file generation only.
  *
  * @param nowFn - Optional injectable clock, defaults to `new Date().toISOString()`.
+ *                Sampled once before reading memories, persisted after export.
  *                Pass a deterministic value in tests to avoid real-time skew.
+ *
+ * Incremental cursors assume comparable, nondecreasing memory/clock timestamps.
+ * They are not logical commit cursors: backdated writes or late commits carrying
+ * timestamps older than the sampled start still require explicit reconciliation.
  */
 export function runExport(
   memoryRepo: MemoryRepository,
@@ -36,6 +41,9 @@ export function runExport(
   config: ExportConfig,
   nowFn: () => string = () => new Date().toISOString(),
 ): ExportResult {
+  // A start cursor leaves updates timestamped during generation eligible next
+  // time; inclusive filtering also retains the equal-millisecond boundary.
+  const startedAt = nowFn();
   const changeset = detectChanges(memoryRepo, exportStateRepo, config);
 
   const written: string[] = [];
@@ -111,7 +119,7 @@ export function runExport(
     }
   }
 
-  exportStateRepo.set(config.targetId, nowFn());
+  exportStateRepo.set(config.targetId, startedAt);
 
   return {
     written,
