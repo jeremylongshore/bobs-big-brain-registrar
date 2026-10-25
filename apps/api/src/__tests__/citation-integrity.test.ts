@@ -63,6 +63,9 @@ describe('promoted receipt → canonical memory → cited export integrity', () 
             tenantId,
             outputDir: exportDir,
             targetId: `citation-test-${tenantId}`,
+            // This proof supplies a converged export snapshot. Incremental
+            // same-millisecond watermark freshness is tracked by 6ps.22.
+            reconcile: true,
           });
           return { ok: true };
         },

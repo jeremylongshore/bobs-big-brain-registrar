@@ -54,7 +54,10 @@ This is compatibility validation, not a new authority for writing these formats.
 The ordinary root Vitest suite collects
 [`citation-integrity.test.ts`](../apps/api/src/__tests__/citation-integrity.test.ts).
 Its fixture promotes candidates through the real API with `app.inject` and uses
-the real exporter through an export-only refresher. It needs neither a listening
+the real exporter in reconciliation mode through an export-only refresher.
+The supplied export snapshot is converged before checking. This does not prove
+incremental-refresh freshness: `compile-then-govern-6ps.22` tracks the separately
+observed equal-timestamp watermark omission. It needs neither a listening
 server nor an available qmd binary. Positive fixtures cover the canonical export
 collections. Missing files, foreign tenant identities, substituted frontmatter
 and escaped or nonregular files provide negative controls. The fixture must
