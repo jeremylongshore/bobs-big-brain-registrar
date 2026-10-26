@@ -27,7 +27,8 @@ const original = [
   'tests/TESTING.md',
   'vitest.config.ts',
 ];
-const required = [
+// Independent minimum-coverage regressions, not a second production selector.
+const minimum = [
   ...new Set([
     ...original,
     'package.json',
@@ -44,11 +45,12 @@ const manifestPaths = readFileSync(join(repo, '.harness-hash'), 'utf8')
   .split('\n')
   .map((line) => line.trim().split(/\s+/, 2)[1])
   .sort();
+const protectedPaths = [...new Set([...minimum, ...manifestPaths])].sort();
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'registrar-pin-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  for (const path of [...required, '.harness-hash']) {
+  for (const path of [...protectedPaths, '.harness-hash']) {
     const dest = join(root, path);
     mkdirSync(dirname(dest), { recursive: true });
     if (existsSync(join(repo, path))) copyFileSync(join(repo, path), dest);
@@ -62,20 +64,26 @@ function fixture(t) {
   return root;
 }
 
-function verify(root, stock = false, overrides = {}) {
+function command(root, mode, stock = false, overrides = {}) {
   const env = { ...process.env, ROOT: root, ...overrides };
   if (!Object.hasOwn(overrides, 'MANIFEST')) delete env.MANIFEST;
   const command = stock ? process.execPath : 'bash';
   const args = stock
-    ? [join(stockRoot, 'bin/audit-harness.js'), 'verify']
-    : [join(root, 'scripts/harness-pin.sh'), '--verify'];
+    ? [join(stockRoot, 'bin/audit-harness.js'), mode.slice(2)]
+    : [join(root, 'scripts/harness-pin.sh'), mode];
   const result = spawnSync(command, args, { cwd: root, env, encoding: 'utf8', timeout: 10_000 });
   assert.ifError(result.error);
   return result;
 }
 
-test('manifest retains all eight original policy paths and adds stock/enforcement inputs', () => {
-  assert.deepEqual(manifestPaths, required);
+function verify(root, stock = false, overrides = {}) {
+  return command(root, '--verify', stock, overrides);
+}
+
+test('manifest meets independent retained-policy and enforcement minimums', () => {
+  assert.equal(new Set(manifestPaths).size, manifestPaths.length);
+  for (const path of minimum)
+    assert.ok(manifestPaths.includes(path), `Missing protection: ${path}`);
 });
 
 test('owning wrapper and stock CLI accept the same intact private fixture', (t) => {
@@ -86,7 +94,7 @@ test('owning wrapper and stock CLI accept the same intact private fixture', (t) 
   }
 });
 
-for (const path of required) {
+for (const path of protectedPaths) {
   test(`both verifiers reject changed protected bytes: ${path}`, (t) => {
     const root = fixture(t);
     writeFileSync(
@@ -128,3 +136,52 @@ test('wrapper refuses a missing installed verifier without provisioning it', (t)
   assert.equal(verify(root).status, 3);
   assert.equal(existsSync(join(root, 'node_modules')), false);
 });
+
+test('a newly matched stock default requires a reviewed re-pin', (t) => {
+  const root = fixture(t);
+  writeFileSync(join(root, '.github/workflows/__fixture_added__.yml'), 'name: fixture-only\n', {
+    flag: 'wx',
+  });
+  for (const stock of [false, true]) assert.equal(verify(root, stock).status, 2);
+});
+
+test('a missing selector file refuses verification', (t) => {
+  const root = fixture(t);
+  rmSync(join(root, '.harness-hash-extra-patterns'));
+  for (const stock of [false, true]) assert.equal(verify(root, stock).status, 2);
+});
+
+test('explicit initialization and listing preserve canonical manifest semantics', (t) => {
+  const root = fixture(t);
+  const manifest = join(root, '.harness-hash');
+  const expected = readFileSync(manifest);
+  const sentinel = join(root, 'unrelated-sentinel');
+  writeFileSync(sentinel, 'retain this fixture sentinel\n');
+  for (const stock of [false, true]) {
+    rmSync(manifest);
+    const initialized = command(root, '--init', stock);
+    assert.equal(initialized.status, 0, initialized.stderr + initialized.stdout);
+    assert.deepEqual(readFileSync(manifest), expected);
+    assert.equal(verify(root, stock).status, 0);
+    const listed = command(root, '--list', stock);
+    assert.equal(listed.status, 0, listed.stderr + listed.stdout);
+    assert.deepEqual(listed.stdout.trim().split('\n').sort(), manifestPaths);
+    assert.equal(readFileSync(sentinel, 'utf8'), 'retain this fixture sentinel\n');
+  }
+});
+
+for (const args of [[], ['--verfy'], ['--verify', '--unsupported']]) {
+  test(`wrapper rejects unsupported command arguments: ${JSON.stringify(args)}`, (t) => {
+    const root = fixture(t);
+    const env = { ...process.env, ROOT: root };
+    delete env.MANIFEST;
+    const result = spawnSync('bash', [join(root, 'scripts/harness-pin.sh'), ...args], {
+      cwd: root,
+      env,
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 4, result.stdout + result.stderr);
+  });
+}

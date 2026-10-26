@@ -129,10 +129,18 @@ verifiers or manifests refuse verification without installing or initializing.
 
 `node --test scripts/harness-pin.node-test.mjs` runs in CI. Private copied-file
 fixtures check both commands against intact input, mutations of every protected
-file, removal of an extra pattern, missing manifests, an alternate manifest and
-a missing installed verifier. These tripwires detect unreviewed byte changes;
-a maintainer who changes the manifest or installed verifier remains inside the
-local trust boundary. They do not authenticate a physical reviewer.
+file, removal of an extra-pattern entry or selector file, newly matched default
+files, explicit initialization/listing, missing manifests, alternate manifests,
+unsupported arguments and a missing installed verifier. The tests assert an
+independent minimum of retained policy/enforcement paths; additional mutation
+inputs derive from the manifest. Adding a correctly selected custom path does
+not require a second complete test inventory. Production selection remains the
+stock defaults plus additive selector, with one hash manifest.
+
+These tripwires detect protected bytes that differ from the manifest. Approval
+of coordinated file-and-manifest updates remains a repository review and branch
+policy matter. A maintainer who changes the manifest or installed verifier remains
+inside the local trust boundary; the hashes do not authenticate physical reviewers.
 
 ## Frameworks
 
