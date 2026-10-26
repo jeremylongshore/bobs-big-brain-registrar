@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Isolate DenseIndexer HTTP fixtures on private Unix sockets so unrelated host
+  loopback requests cannot enter their strict rejection counters. Preserve the
+  original seven-request malformed-input assertion, explicitly test rejection of
+  a root request, and retain unchanged production-fetch TCP EmbedClient tests
+  (6ps.24). The earlier unexpected callers remain unidentified.
+
 - Run explicitly enabled retrieval acceptance over an internally owned export
   copy and rebuild qmd/native indexes in a private worker. Preserve source
   indexes, registries and state databases; remove validated successful scratch
