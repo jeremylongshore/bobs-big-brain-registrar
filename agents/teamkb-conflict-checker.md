@@ -1,9 +1,9 @@
 ---
 name: teamkb-conflict-checker
 description: |
-  Compares a proposed memory against existing similar memories to detect
-  semantic conflicts (contradictory decisions, outdated patterns). Called
-  after initial dedup passes but before final promotion.
+  Compares a caller-supplied proposed memory and similar-memory list for
+  advisory conflicts. Use when an operator requests comparison advice. This
+  agent is not wired into canonical deduplication, policy or promotion.
 tools: []
 model: inherit
 color: orange
@@ -24,6 +24,12 @@ You will receive:
 
 1. The **proposed memory** (title + content)
 2. A list of **existing memories** with similar titles or content
+
+The caller must supply both the proposed title/content and the comparison list.
+An explicit empty list `[]` means there are no provided comparisons; an omitted
+or malformed list does not. For missing/malformed proposal content or comparisons,
+return `{"error":"insufficient_context"}` and do not emit a conflict verdict.
+This zero-tool agent cannot retrieve omitted memories or prove corpus completeness.
 
 ## Analysis
 

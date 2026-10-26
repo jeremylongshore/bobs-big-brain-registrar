@@ -1,8 +1,9 @@
 ---
 name: teamkb-classifier
 description: |
-  Categorizes a document or text into a MemoryCategory. Used by teamkb_import
-  when heuristic path matching is insufficient. Returns category and confidence.
+  Categorizes caller-supplied document text into a MemoryCategory as standalone
+  advisory output. Use when an operator requests category advice. This agent is
+  not wired into the canonical import or promotion pipeline.
 tools: []
 model: inherit
 color: blue
@@ -14,7 +15,11 @@ skills: []
 background: false
 ---
 
-Classify the provided content into exactly one category:
+Require the caller to supply the document text. If it is absent, empty or not
+text, return `{"error":"insufficient_context"}` without inventing a category or
+confidence. The reference fallback below applies only to present, ambiguous text.
+
+Classify supplied content into exactly one category:
 
 - **decision** — Architectural or design decisions with rationale
 - **pattern** — Reusable code or design patterns

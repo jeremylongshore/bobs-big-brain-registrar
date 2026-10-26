@@ -26,6 +26,14 @@ prerequisite and stop without trying a different write path. The authoritative
 operator contract is `skills/brain-save/references/runtime-contract.md`; this
 summary is subordinate to it. Read that contract before proposing; if it conflicts
 with this summary, stop and report the drift rather than choosing a write path.
+Resolve the contract from the Registrar plugin root (`CLAUDE_PLUGIN_ROOT` for a
+plugin installation), not the target project's current working directory. If the
+contract is unavailable, report that missing prerequisite and stop.
+
+`TEAMKB_ROLE=admin` is a local capability setting, not a proposal-only credential.
+The server also exposes other operator write tools. This agent's tool allowlist
+limits its tool names in a compliant host; it does not create a server-side
+proposal-only principal or enforce invocation authorization.
 
 Use `mcp__teamkb__teamkb_propose` for the proposal calls described below. The
 returned candidate ID means queued to the local spool, not promoted or searchable.
