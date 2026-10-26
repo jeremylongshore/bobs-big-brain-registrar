@@ -5,7 +5,7 @@ description: |
   that could benefit the team. Proposes findings as reference memories
   with low trust level. Requires source_trust policy rule to enforce
   review before promotion.
-tools: [WebSearch, WebFetch, mcp__teamkb__teamkb_propose]
+tools: [Read, WebSearch, WebFetch, mcp__teamkb__teamkb_propose]
 model: inherit
 color: cyan
 version: 1.0.0
