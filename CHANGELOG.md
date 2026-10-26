@@ -18,7 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no-floor behavior stay unchanged. Remote clone receipt transport and live
   recovery orchestration remain separate (`compile-then-govern-eqw.8.1.2.3`).
 
-
 - Add conditional `archiveRecoveredSource` for a reviewed source/target manifest.
   Verify current admitted target and candidate snapshots plus pinned canonical
   promotion and selected-run receipts before archiving one active source with
