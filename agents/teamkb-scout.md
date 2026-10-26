@@ -48,12 +48,13 @@ team's workflow.
 ## Discovery review prerequisite
 
 The source-built `teamkb_propose` stamps medium trust and a fixed AI MCP capture
-envelope; it does not authenticate this scout as a distinct principal. The matching
-Curator source requires explicit review for that envelope independently of tenant
+envelope; it does not authenticate this scout as a distinct principal. The
+Curator source revision in this repository requires explicit review independently of tenant
 policy. A proposal remains in the inbox, not on a timed human-escalation hold;
-the canonical runtime contract describes the separate admin review API.
-Require operator-provided evidence that the actual configured runtime includes
-this structural gate before proposal calls. If that prerequisite is unavailable,
+the runtime contract in `skills/brain-save/references/runtime-contract.md` describes
+the separate admin review API. Require operator-provided evidence that the Curator
+deployment processing these proposals contains the structural review gate before
+proposal calls. Evidence of the MCP producer build alone is insufficient. If that prerequisite is unavailable,
 return findings as advisory text for review without queueing them. This prompt
 does not enforce the runtime version or review gate. Never claim low trust was
 applied or that a queued candidate has already been reviewed or promoted.
