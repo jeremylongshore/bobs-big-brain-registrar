@@ -12,10 +12,11 @@
  * They are removed with the last one, so a long-running host (API server, MCP server) keeps its
  * signal listeners between qmd calls. On a signal we SIGTERM every live
  * group (SIGKILL after a short blocking grace), then re-raise the signal only
- * if nobody else is listening for it — a host with its own handler keeps
- * control when another listener remains at that check. An earlier once-handler
- * has already removed itself by then; preserving that callback's control is a
- * separate follow-up. `uninstall` removes only our own listeners.
+ * if nobody else is listening for it. Prepending observes ordinary on/once host
+ * listeners before once wrappers remove themselves, preserving their control in
+ * either registration order. Cleanup precedes those callbacks and can block for
+ * the bounded grace. A later prepended host handler can run ahead of us; this
+ * does not promise arbitrary listener ordering. `uninstall` removes only ours.
  */
 const live = new Set<number>();
 let pendingSpawns = 0;
@@ -81,7 +82,7 @@ function install(): void {
   if (installed) return;
   installed = true;
   process.on('exit', onExit);
-  for (const s of FORWARDED) process.on(s, onSignal);
+  for (const s of FORWARDED) process.prependListener(s, onSignal);
 }
 
 function uninstall(): void {
