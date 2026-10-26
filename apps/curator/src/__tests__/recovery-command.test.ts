@@ -48,7 +48,7 @@ interface CommandOutput {
   postcommit: Record<string, string>;
 }
 function command(args: string[]): { code: number | null; output: CommandOutput; text: string } {
-  const child = spawnSync('/usr/bin/node', [cliPath, ...args], {
+  const child = spawnSync(process.execPath, [cliPath, ...args], {
     encoding: 'utf8',
     timeout: 5000,
     maxBuffer: 128 * 1024,
@@ -209,7 +209,7 @@ describe('actual recovery maintenance command', () => {
     const program = `import { openExistingDatabase } from ${JSON.stringify(opener)};
       try { openExistingDatabase({ path: process.argv[1], readonly: true }); process.exitCode=2; }
       catch { process.stdout.write('refused'); }`;
-    const child = spawnSync('/usr/bin/node', ['--input-type=module', '-e', program, fifo], {
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', program, fifo], {
       encoding: 'utf8',
       timeout: 5000,
     });
@@ -375,7 +375,7 @@ describe('actual recovery maintenance command', () => {
     const path = join(root, '.write.lock');
     const program =
       "const fs=require('node:fs'),cp=require('node:child_process');const fd=fs.openSync(process.argv[1],'a',0o600);const r=cp.spawnSync('/usr/bin/flock',['--exclusive','3'],{stdio:['ignore','ignore','ignore',fd]});if(r.status!==0)process.exit(2);process.stdout.write('held\\n');process.stdin.resume();process.stdin.on('end',()=>{fs.closeSync(fd);process.exit(0)});";
-    const holder = spawn('/usr/bin/node', ['-e', program, path], {
+    const holder = spawn(process.execPath, ['-e', program, path], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     try {
