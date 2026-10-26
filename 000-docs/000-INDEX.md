@@ -92,6 +92,10 @@ for the current documentation audit. Historical plans are not current acceptance
 - [031-AA-AACR-v0.6.0-release-aar](031-AA-AACR-v0.6.0-release-aar.md)
 - [063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26](063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26.md)
 
+### Reports and analysis
+
+- [064-RA-REPT-retrieval-model-decision-packet](064-RA-REPT-retrieval-model-decision-packet.md)
+
 ### Release
 
 - [039-RL-REPT-qmd-team-intent-kb-release-v0.7.0](039-RL-REPT-qmd-team-intent-kb-release-v0.7.0.md)
@@ -162,5 +166,6 @@ for the current documentation audit. Historical plans are not current acceptance
 | 061      | OD-RNBK | [061-OD-RNBK-strict-recovery-qmd-registry](061-OD-RNBK-strict-recovery-qmd-registry.md)                                                   |
 | 062      | AT-TEST | [062-AT-TEST-fast-uri-parent-major-contracts](062-AT-TEST-fast-uri-parent-major-contracts.md)                                             |
 | 063      | AA-AUDR | [063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26](063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26.md)     |
+| 064      | RA-REPT | [064-RA-REPT-retrieval-model-decision-packet](064-RA-REPT-retrieval-model-decision-packet.md)                                             |
 
-Next available sequence: 064.
+Next available sequence: 065.
