@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Share fixed spool-intake observation counters across the curator CLI and daemon,
+  including disclosure categories, tampered files and admission refusals. Preserve
+  detailed legacy output and existing policy/archive behavior; daemon observations
+  are unavailable on failed or skipped intake. Document retained raw refused
+  content and repeat-call limits; counters are not unique audit receipts.
+
 - Expose canonical anchor JSONL parsing and verification of captured records, so
   fixed recovery integrations can verify their bounded read without reopening a
   path. Existing path verification delegates to the same checks and retains its

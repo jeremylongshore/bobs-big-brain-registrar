@@ -186,6 +186,13 @@ describe('dispatch ingest — hand-crafted spool file', () => {
     expect(parsed['spool_dir']).toBe(spoolDir);
     expect(parsed['tenant_id']).toBe('demo-e2e');
     expect(parsed['ingested_count']).toBe(1);
+    expect(parsed['intake_summary']).toStrictEqual({
+      ingestedCandidates: 1,
+      disclosureRejectedCandidates: 0,
+      disclosureCategories: { pii: 0, compensation: 0, secret: 0, other: 0 },
+      tamperedFiles: 0,
+      admissionRejectedFiles: 0,
+    });
     const batch = parsed['batch'] as Record<string, unknown>;
     expect(batch['processed']).toBe(1);
     expect(batch['promoted']).toBe(1);
@@ -195,6 +202,43 @@ describe('dispatch ingest — hand-crafted spool file', () => {
     expect(parsed['tampered_count']).toBe(0);
     expect(parsed['tampered']).toEqual([]);
   });
+
+  it.each([true, false])(
+    'surfaces mixed intake observations in JSON=%s and preserves legacy diagnostics',
+    async (json) => {
+      const refusedId = '9edb9e72-d5ff-5077-a329-2b44f8c61c4b';
+      await writeSpoolFile('spool-mixed.jsonl', [
+        makeSpoolLine(),
+        makeSpoolLine({
+          id: refusedId,
+          content: 'his base salary was leaked here',
+        }),
+      ]);
+      const args = ['ingest', spoolDir, '--tenant', 'demo-e2e', ...(json ? ['--json'] : [])];
+      expect(await dispatch(args, testDeps)).toBe(0);
+      const expected = {
+        ingestedCandidates: 1,
+        disclosureRejectedCandidates: 1,
+        disclosureCategories: { pii: 0, compensation: 1, secret: 0, other: 0 },
+        tamperedFiles: 0,
+        admissionRejectedFiles: 0,
+      };
+      if (json) {
+        const parsed = JSON.parse(stdoutText());
+        expect(parsed.intake_summary).toStrictEqual(expected);
+        expect(parsed.disclosure_rejected).toEqual([
+          { candidateId: refusedId, category: 'compensation' },
+        ]);
+        expect(parsed.batch.promoted).toBe(1);
+      } else {
+        expect(stdoutText()).toContain(`Spool intake observations: ${JSON.stringify(expected)}`);
+        expect(stdoutText()).toMatch(/Promoted:\s+1/);
+        expect(stderrText()).toContain(refusedId);
+      }
+      expect(JSON.stringify(expected)).not.toContain(refusedId);
+      expect(stdoutText()).not.toContain('his base salary was leaked here');
+    },
+  );
 
   it('reports tampered_count + refuses ingest when a manifest mismatch is present (dmj.4)', async () => {
     const { createHash } = await import('node:crypto');
@@ -266,6 +310,13 @@ describe('dispatch ingest — hand-crafted spool file', () => {
     expect(rc).toBe(0);
     const parsed = JSON.parse(stdoutText().trim()) as Record<string, unknown>;
     expect(parsed['ingested_count']).toBe(1);
+    // Invalid input is skipped by the existing reader, outside these observations.
+    expect(parsed['intake_summary']).toMatchObject({
+      ingestedCandidates: 1,
+      disclosureRejectedCandidates: 0,
+      tamperedFiles: 0,
+      admissionRejectedFiles: 0,
+    });
   });
 
   it('returns BATCH_ADMISSION_REJECTED for bulk input without a receipt', async () => {

@@ -23,7 +23,7 @@ function httpGet(port: number, path: string): Promise<{ status: number; body: st
 const CYCLE_RESULT: CycleResult = {
   startedAt: '2026-01-15T10:00:00.000Z',
   completedAt: '2026-01-15T10:00:01.000Z',
-  ingest: { ingested: 2, errors: [] },
+  ingest: { ingested: 2, errors: [], summary: null },
   curation: null,
   staleness: null,
   export: null,
