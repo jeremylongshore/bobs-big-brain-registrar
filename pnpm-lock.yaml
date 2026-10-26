@@ -8,7 +8,8 @@ overrides:
   picomatch@2: ^2.3.2
   picomatch@4: ^4.0.4
   vite: ^8.3.3
-  fast-uri: ^3.1.9
+  fast-uri@3: ^3.1.9
+  fast-uri@4: ^4.2.3
   '@tobilu/qmd@2.5.3>zod': ^4.6.7
   '@intentsolutions/core@0.11.0>zod': ^4.6.7
   cmake-js@8.0.0>tar: ^7.5.21
@@ -2431,6 +2432,9 @@ packages:
   fast-uri@3.1.9:
     resolution: {integrity: sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==}
 
+  fast-uri@4.2.3:
+    resolution: {integrity: sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==}
+
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
 
@@ -4520,7 +4524,7 @@ snapshots:
     dependencies:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
-      fast-uri: 3.1.9
+      fast-uri: 4.2.3
 
   '@fastify/error@4.2.0': {}
 
@@ -6097,7 +6101,7 @@ snapshots:
       '@fastify/merge-json-schemas': 0.2.1
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
-      fast-uri: 3.1.9
+      fast-uri: 4.2.3
       json-schema-ref-resolver: 3.0.0
       rfdc: 1.4.1
 
@@ -6116,6 +6120,8 @@ snapshots:
       fast-string-truncated-width: 3.0.3
 
   fast-uri@3.1.9: {}
+
+  fast-uri@4.2.3: {}
 
   fast-wrap-ansi@0.2.2:
     dependencies:
