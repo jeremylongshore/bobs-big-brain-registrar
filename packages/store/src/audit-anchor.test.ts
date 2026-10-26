@@ -4,7 +4,13 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { appendAnchor, readAnchors, verifyAnchors } from './audit-anchor.js';
+import {
+  appendAnchor,
+  readAnchors,
+  verifyAnchors,
+  verifyAnchorRecords,
+  parseAnchorLog,
+} from './audit-anchor.js';
 import { computeEntryHash } from './audit-chain.js';
 import { verifyAuditChain } from './audit-verify.js';
 import type { AuditRepository, AuditChainRow } from './repositories/audit-repository.js';
@@ -141,4 +147,83 @@ describe('audit-anchor', () => {
     expect(result.ok).toBe(false);
     expect(result.anchorBreaks.map((b) => b.reason)).toContain('ANCHOR_HASH_MISMATCH');
   });
+
+  it('verifies the captured snapshot after its original path changes, without altering records', () => {
+    const repo = mockRepo(buildChain(['a', 'b', 'c']));
+    appendAnchor(repo, anchorPath, { tenantId: 'local' });
+    const bytes = readFileSync(anchorPath, 'utf8');
+    const records = parseAnchorLog(bytes);
+    const expected = verifyAnchors(repo, anchorPath);
+    for (const record of records) Object.freeze(record);
+    Object.freeze(records);
+    writeFileSync(anchorPath, 'invalid replacement snapshot');
+    expect(() => verifyAnchors(repo, anchorPath)).toThrow(SyntaxError);
+    expect(verifyAnchorRecords(repo, records)).toEqual(expected);
+    expect(JSON.stringify(records)).toBe(JSON.stringify(parseAnchorLog(bytes)));
+    expect(readFileSync(anchorPath, 'utf8')).toBe('invalid replacement snapshot');
+    rmSync(anchorPath);
+    expect(verifyAnchorRecords(repo, records)).toEqual(expected);
+    expect(existsSync(anchorPath)).toBe(false);
+  });
+
+  it.each(['', '\n \n\t\n'])('preserves canonical empty snapshot parsing for %j', (bytes) => {
+    const repo = mockRepo(buildChain(['a']));
+    writeFileSync(anchorPath, bytes);
+    expect(parseAnchorLog(bytes)).toEqual([]);
+    expect(verifyAnchorRecords(repo, parseAnchorLog(bytes))).toEqual(
+      verifyAnchors(repo, anchorPath),
+    );
+  });
+
+  it.each(['{', '{}\n{', 'not JSON'])(
+    'rejects malformed or truncated JSONL snapshots %j',
+    (bytes) => {
+      writeFileSync(anchorPath, bytes);
+      expect(() => parseAnchorLog(bytes)).toThrow(SyntaxError);
+      expect(() => readAnchors(anchorPath)).toThrow(SyntaxError);
+    },
+  );
+
+  it.each(['rewrite', 'truncate', 'anchor-edit', 'splice', 'fork'] as const)(
+    'shares canonical path and snapshot refusal for %s',
+    (kind) => {
+      const rows = buildChain(['a', 'b', 'c']);
+      const original = mockRepo(rows);
+      appendAnchor(original, anchorPath, { tenantId: 'local' });
+      appendAnchor(mockRepo(buildChain(['a', 'b', 'c', 'd'])), anchorPath, { tenantId: 'local' });
+      const records = readAnchors(anchorPath);
+      let current = mockRepo(buildChain(['a', 'b', 'c', 'd']));
+      if (kind === 'rewrite') current = mockRepo(buildChain(['changed', 'b', 'c', 'd']));
+      if (kind === 'truncate') current = mockRepo(buildChain(['a']));
+      if (kind === 'anchor-edit') records[0]!.chainHead = 'forged';
+      if (kind === 'splice') records.reverse();
+      if (kind === 'fork') {
+        const fork = buildChain(['a', 'b', 'c', 'd']);
+        fork[2]!.prev_entry_hash = fork[0]!.entry_hash;
+        fork[2]!.entry_hash = computeEntryHash(fork[2]!);
+        fork[3]!.prev_entry_hash = fork[2]!.entry_hash;
+        fork[3]!.entry_hash = computeEntryHash(fork[3]!);
+        current = mockRepo(fork);
+      }
+      const bytes = records.map((record) => JSON.stringify(record)).join('\n') + '\n';
+      writeFileSync(anchorPath, bytes);
+      const captured = parseAnchorLog(bytes);
+      const before = JSON.stringify(captured);
+      const result = verifyAnchorRecords(current, captured);
+      expect(result).toEqual(verifyAnchors(current, anchorPath));
+      expect(result.ok).toBe(false);
+      if (kind === 'fork')
+        expect(result.chain.breaks.some((entry) => entry.reason === 'CHAIN_FORK')).toBe(true);
+      else {
+        const reason = {
+          rewrite: 'HISTORY_REWRITTEN',
+          truncate: 'HISTORY_TRUNCATED',
+          'anchor-edit': 'ANCHOR_HASH_MISMATCH',
+          splice: 'ANCHOR_LINK_MISMATCH',
+        }[kind];
+        expect(result.anchorBreaks.some((entry) => entry.reason === reason)).toBe(true);
+      }
+      expect(JSON.stringify(captured)).toBe(before);
+    },
+  );
 });

@@ -137,6 +137,16 @@ it or reapply governance; the fixed postcommit integration must verify current
 readiness there, retaining `committed: true` when it refuses a known settlement.
 Pre-application readiness never replaces strict postcommit verification.
 
+For a bounded descriptor read, store exports `parseAnchorLog(snapshot)` and
+`verifyAnchorRecords(auditRepository, records)`. These reuse the canonical JSONL
+parser and the same anchor-verification loop as `readAnchors` and `verifyAnchors`.
+The snapshot verifier reads no filesystem path and recomputes the audit chain
+from the supplied repository. Existing path APIs retain their existing read
+behavior. The caller must bound the original read, establish file and directory
+identity, retain independent pins and recheck bindings; neither snapshot function
+establishes provenance, external publication or a filesystem read limit. Forks
+and anchor mismatches retain their existing verdicts.
+
 For this async API, `committed: true` means the core application returned a
 settlement or an existing non-drifted settlement was re-read. It includes a
 historical apply and does not establish storage durability after power loss.

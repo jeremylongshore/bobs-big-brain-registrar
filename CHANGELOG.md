@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Expose canonical anchor JSONL parsing and verification of captured records, so
+  fixed recovery integrations can verify their bounded read without reopening a
+  path. Existing path verification delegates to the same checks and retains its
+  existing read behavior; snapshot verification establishes no file binding or
+  external publication.
+
 - Recovery integrations can check synchronous readiness under the shared flock
   and the same immediate SQLite transaction before fresh application. Refusal
   leaves recovery unsettled; historical replay and repair keep their existing
