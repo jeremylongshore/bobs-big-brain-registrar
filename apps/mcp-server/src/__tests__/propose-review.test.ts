@@ -141,15 +141,26 @@ describe('Registrar MCP proposals require explicit review before admission', () 
     expect(result.outcomes).toEqual([{ candidateId: row.id, outcome: 'quarantined' }]);
     expect(memories.existsForCandidate(row.id, tenantId)).toBe(false);
     expect(candidates.findById(row.id)?.status).toBe('quarantined');
-    const receipts = audit.findByMemoryAndTenant(row.id, tenantId);
+    const receipts = audit.findByMemoryAndTenant(input.runId, tenantId);
+    expect(receipts).toEqual([
+      expect.objectContaining({
+        id: result.auditEventId,
+        action: 'governed',
+        actor: input.actor,
+        details: expect.objectContaining({
+          kind: 'selected-govern-v1',
+          outcomes: [{ candidateId: row.id, outcome: 'quarantined' }],
+        }),
+      }),
+    ]);
     expect(governSelectedCandidates(input, db)).toMatchObject({
       alreadySettled: true,
       outcomes: [{ candidateId: row.id, outcome: 'quarantined' }],
     });
-    expect(audit.findByMemoryAndTenant(row.id, tenantId)).toEqual(receipts);
+    expect(audit.findByMemoryAndTenant(input.runId, tenantId)).toEqual(receipts);
   });
 
-  it('preserves deliberate operator capture outside the fixed AI proposal surface', async () => {
+  it('admits a human-authored MCP envelope outside the fixed AI proposal classification', async () => {
     const row = await capture();
     const operatorCandidate = {
       ...row,

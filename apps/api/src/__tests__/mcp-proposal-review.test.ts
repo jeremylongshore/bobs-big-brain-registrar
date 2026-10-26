@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import {
   AuditRepository,
   CandidateRepository,
@@ -8,7 +9,11 @@ import {
   verifyAuditChain,
 } from '@qmd-team-intent-kb/store';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { Curator } from '@qmd-team-intent-kb/curator';
+import {
+  Curator,
+  candidateSnapshotDigest,
+  governSelectedCandidates,
+} from '@qmd-team-intent-kb/curator';
 import { buildApp } from '../app.js';
 import { makeCandidate, makePolicy } from './fixtures.js';
 
@@ -108,6 +113,44 @@ describe('explicit review of Registrar MCP AI proposals', () => {
       expect(audit.findByMemoryAndTenant(row.id, tenantId)).toHaveLength(0);
     });
   }
+
+  it('preserves explicit authenticated review after finite-governance quarantine', async () => {
+    const row = seed();
+    policies.insert(makePolicy({ tenantId }));
+    const selected = governSelectedCandidates(
+      {
+        runId: randomUUID(),
+        tenantId,
+        selections: [{ candidateId: row.id, snapshotDigest: candidateSnapshotDigest(row) }],
+        actor: { type: 'human', id: 'fixture-selector' },
+        role: 'owner',
+        reason: 'Synthetic selection, not proposal approval.',
+      },
+      db,
+    );
+    expect(selected.outcomes).toEqual([{ candidateId: row.id, outcome: 'quarantined' }]);
+    expect(memories.existsForCandidate(row.id, tenantId)).toBe(false);
+    const listed = await app.inject({
+      method: 'GET',
+      url: `/api/candidates?tenantId=${tenantId}&status=quarantined`,
+      headers: { authorization: 'Bearer fixture-admin' },
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.body).toContain(row.id);
+    const approved = await promote(row.id);
+    expect(approved.statusCode).toBe(200);
+    const memory = approved.json() as { id: string };
+    expect(audit.findByMemoryAndTenant(memory.id, tenantId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'promoted',
+          actor: { type: 'ai', id: 'fixture-reviewer' },
+        }),
+      ]),
+    );
+    expect(candidates.findById(row.id)?.status).toBe('promoted');
+    expect(verifyAuditChain(audit).breaks).toHaveLength(0);
+  });
 
   it('does not turn explicit review into a tenant-policy bypass', async () => {
     const row = seed();

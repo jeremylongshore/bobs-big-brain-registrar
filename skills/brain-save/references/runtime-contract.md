@@ -40,8 +40,10 @@ authentication credential. Protect the local base directory through operating-sy
 `teamkb_propose` writes a proposal, not a promoted memory. A separate curator applies secret checks,
 deduplication and structural gates. The source-built tool fixes `source: mcp` and
 `author: { type: ai, id: mcp-server }`; callers cannot override this envelope or
-its medium trust label. Direct and batch governance leave these proposals in the
-inbox with `registrar_mcp_review_required`, even with no enabled policy. Finite
+its medium trust label. Direct and batch governance return
+`flaggedBy: ['registrar_mcp_review_required']` and leave these proposals in the
+inbox, even with no enabled policy. That flag is a returned result, not a persisted
+candidate marker. Finite
 selected governance quarantines them through its existing receipted review path.
 Neither path admits them. Lowering a trust threshold does not bypass this gate.
 
@@ -51,13 +53,20 @@ finite selected governance) and explicitly reviews a
 selected row through admin-only `POST /api/candidates/<id>/promote?tenantId=<tenant>`.
 That API reruns disclosure, provenance, import, deduplication, policy and hold
 checks and records the authenticated reviewer on a successful promotion receipt.
+Those unchanged gates are implemented in
+[`PromotionService.promoteCandidate`](../../../apps/api/src/services/promotion-service.ts);
+the [candidate route](../../../apps/api/src/routes/candidates.ts) passes the
+server-authenticated actor ID. The shipped
+[marketplace configuration](../../../.mcp.json) selects the
+[search-only runtime](../../../plugin-runtime/teamkb-remote.cjs).
 It does not override policy failures or release a K6 hold. This is an API review
 operation, not an additional MCP tool; the shipped search-only proxy cannot
 perform it. The local runtime and a compatible API must be built/deployed by the
 operator; these source instructions do not attest an installed version.
 
 Other capture surfaces retain their existing behavior. The fixed AI envelope is
-capture-surface provenance, not authenticated scout identity or protection against
+capture-surface classification metadata, not authenticated origin or scout identity,
+and provides no protection against
 an owner rewriting the local spool. Existing filesystem and API authority
 boundaries still apply.
 
