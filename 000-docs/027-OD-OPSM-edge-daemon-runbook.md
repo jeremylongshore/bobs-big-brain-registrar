@@ -32,6 +32,48 @@ peer-to-peer coordination between daemon instances.
 
 ## Install
 
+### Spool intake observations and raw retention
+
+The daemon's `/last-cycle` result includes `ingest.summary`. The curator CLI's
+successful `ingest --json` envelope includes the same counters as `intake_summary`;
+text output labels them `Spool intake observations`. Both use the canonical
+`summarizeSpoolIntake` export from the curator package:
+
+- `ingestedCandidates`: newly inserted candidates, before daemon caps or repo filtering.
+- `disclosureRejectedCandidates` and fixed `disclosureCategories` buckets:
+  `pii`, `compensation`, `secret`, and `other` for unknown category strings.
+- `tamperedFiles`: observed manifest mismatches, including failed quarantine moves.
+- `admissionRejectedFiles`: observed admission refusals, including malformed
+  manifests and receipt/ledger failures.
+
+These counters contain no candidate IDs, paths, raw reasons, or matched values.
+Existing CLI detail arrays, daemon admission errors, and other diagnostics retain
+their previous detail; the aggregate does not sanitize the whole response or log.
+Counts describe one successful spool call across its input, rather than a tenant
+total, a complete input ledger, or durable unique refusal receipts. Existing IDs,
+unreadable input and malformed lines can be skipped without counters. A repeated
+call can report the same refused candidate again. When intake fails or is skipped,
+the daemon summary is `null`; failure can follow earlier inserts, so it does not
+mean that no durable write occurred. The legacy daemon `ingested` counter still
+describes candidates selected after caps and repo filtering.
+
+Disclosure-refused candidates never enter the candidate or memory tables, and
+intake creates no audit event for those refusals. Their original content still
+exists in the raw spool file. The daemon and curator CLI leave successful source
+files in place. Callers that set `archiveIngestedDir` move the entire read file,
+including refused candidates, and its manifest sidecar; archiving is not redaction.
+Moves are best-effort. After a successful source-file move, later top-level scans
+omit it; after a failed move, source observations can repeat while ID deduplication
+prevents another clean-candidate insert. A sidecar move can fail independently.
+No automatic purge or retention deadline is introduced. Treat raw source,
+quarantine and archive directories as sensitive retained input; this reporting
+change does not authorize deletion or change existing access controls.
+
+Regression coverage uses private synthetic spool files and real SQLite stores in
+`spool-intake-summary.test.ts`, plus daemon cycle and curator CLI tests. It covers
+mixed acceptance/refusal, fixed hostile category keys, byte-preserving archive and
+source retention, repeat observations, failed archive moves and partial failure.
+
 ### Prerequisites
 
 - Node.js >= 20 (check with `node --version`)

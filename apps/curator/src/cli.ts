@@ -81,6 +81,7 @@ import { cmdHolds } from './hold/holds-cli.js';
 import { Curator } from './curator.js';
 import { cmdRedact } from './redaction/redact-cli.js';
 import { ingestFromSpoolDetailed } from './intake/spool-intake.js';
+import { summarizeSpoolIntake } from './intake/spool-intake-summary.js';
 import { loadBrainignoreRuleset } from './import-exclusion/load-brainignore.js';
 import { mergeGovern } from './merge/merge-gate.js';
 import { walkProvenance } from './provenance/provenance-walk.js';
@@ -445,6 +446,7 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
       return 1;
     }
     const candidates = ingestResult.value.ingested;
+    const intakeSummary = summarizeSpoolIntake(ingestResult.value);
     const tampered = ingestResult.value.tampered;
     // Candidates refused at the disclosure / secret choke point (Epic 0).
     // Reported, never silently dropped — carries only id + category.
@@ -489,6 +491,7 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
           spool_dir: spoolDir,
           tenant_id: tenantId,
           ingested_count: candidates.length,
+          intake_summary: intakeSummary,
           tampered_count: tampered.length,
           tampered,
           admission_rejected_count: admissionRejected.length,
@@ -501,6 +504,7 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
     } else {
       process.stdout.write(
         `Ingested ${candidates.length} candidate(s) from ${spoolDir}\n` +
+          `Spool intake observations: ${JSON.stringify(intakeSummary)}\n` +
           `Tenant:    ${tenantId}\n` +
           `Processed: ${batch.processed}\n` +
           `Promoted:  ${batch.promoted}\n` +

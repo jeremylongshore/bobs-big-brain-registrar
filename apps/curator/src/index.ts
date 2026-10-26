@@ -19,6 +19,8 @@ export type {
 } from './recovery/selected-governance.js';
 export type { CuratorDependencies, HoldRelease } from './curator.js';
 export { ingestFromSpool, ingestFromSpoolDetailed } from './intake/spool-intake.js';
+export { summarizeSpoolIntake } from './intake/spool-intake-summary.js';
+export type { SpoolIntakeSummary } from './intake/spool-intake-summary.js';
 export type {
   IngestFromSpoolOptions,
   IngestResult,

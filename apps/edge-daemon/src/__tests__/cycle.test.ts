@@ -56,6 +56,13 @@ describe('runCycle', () => {
     expect(result.completedAt).toBe(NOW);
     expect(result.ingest.ingested).toBe(0);
     expect(result.ingest.errors).toHaveLength(0);
+    expect(result.ingest.summary).toStrictEqual({
+      ingestedCandidates: 0,
+      disclosureRejectedCandidates: 0,
+      disclosureCategories: { pii: 0, compensation: 0, secret: 0, other: 0 },
+      tamperedFiles: 0,
+      admissionRejectedFiles: 0,
+    });
     expect(result.curation).toBeNull();
     expect(result.export).toBeNull();
     expect(result.indexUpdate).toBeNull();
@@ -69,6 +76,7 @@ describe('runCycle', () => {
     const result = await runCycle(config, deps, logger);
     expect(result.ingest.ingested).toBe(0);
     expect(result.curation).toBeNull();
+    expect(result.ingest.summary).toBeNull();
     expect(
       logger.messages.some((entry) => entry.message.includes('disabled by enterprise settings')),
     ).toBe(true);
@@ -94,6 +102,96 @@ describe('runCycle', () => {
     expect(result.curation).not.toBeNull();
     expect(result.curation!.processed).toBe(1);
     expect(result.curation!.promoted).toBe(1);
+  });
+
+  it('surfaces spool-wide refusals while clean candidates proceed and repeated sources remain', async () => {
+    const clean = makeCandidate({
+      content: 'Architecture note about bounded cache eviction and retries.',
+    });
+    const refused = makeCandidate({
+      content: 'Synthetic disclosure fixture: salary keyword only; no person or amount.',
+    });
+    await writeSpoolFile(spoolDir, 'spool-mixed.jsonl', [clean, refused]);
+    await writeSpoolFile(spoolDir, 'spool-tampered.jsonl', [makeCandidate()]);
+    await writeFile(
+      join(spoolDir, 'spool-tampered.jsonl.manifest.json'),
+      JSON.stringify({
+        schemaVersion: '1',
+        spoolFileSha256: '0'.repeat(64),
+      }),
+    );
+    await writeSpoolFile(spoolDir, 'spool-malformed.jsonl', [makeCandidate()]);
+    await writeFile(join(spoolDir, 'spool-malformed.jsonl.manifest.json'), '{');
+    const result = await runCycle(config, deps, logger);
+    expect(result.ingest.summary).toStrictEqual({
+      ingestedCandidates: 1,
+      disclosureRejectedCandidates: 1,
+      disclosureCategories: { pii: 0, compensation: 1, secret: 0, other: 0 },
+      tamperedFiles: 1,
+      admissionRejectedFiles: 1,
+    });
+    expect(result.curation?.promoted).toBe(1);
+    expect(deps.candidateRepo.findById(refused.id)).toBeNull();
+    expect(db.prepare('SELECT count(*) AS n FROM curated_memories').get()).toEqual({ n: 1 });
+    const observation = logger.messages.find((m) =>
+      m.message.startsWith('Spool intake observations:'),
+    );
+    expect(observation?.level).toBe('warn');
+    expect(observation?.message).not.toContain(refused.id);
+    expect(observation?.message).not.toContain(spoolDir);
+    expect(observation?.message).not.toContain(refused.content);
+    const repeat = await runCycle(config, deps, logger);
+    expect(repeat.ingest.summary).toMatchObject({
+      ingestedCandidates: 0,
+      disclosureRejectedCandidates: 1,
+      tamperedFiles: 0,
+      admissionRejectedFiles: 1,
+    });
+    expect(repeat.curation).toBeNull();
+  });
+
+  it('reports unavailable observations after an unexpected intake failure with a prior insert', async () => {
+    const candidates = [
+      makeCandidate({ content: 'First clean note about cache invalidation and ordering.' }),
+      makeCandidate({ content: 'Second clean note about reliable retry and ordering.' }),
+    ];
+    await writeSpoolFile(spoolDir, 'spool-partial.jsonl', candidates);
+    const insert = deps.candidateRepo.insert.bind(deps.candidateRepo);
+    const spy = vi
+      .spyOn(deps.candidateRepo, 'insert')
+      .mockImplementationOnce(insert)
+      .mockImplementationOnce(() => {
+        throw new Error('fixture storage failure');
+      });
+    try {
+      const result = await runCycle(config, deps, logger);
+      expect(result.ingest.summary).toBeNull();
+      expect(result.ingest.errors).toContain('fixture storage failure');
+      expect(deps.candidateRepo.count()).toBe(1);
+      expect(result.curation).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('reports refusal-only intake while leaving governance and audit empty', async () => {
+    const refused = makeCandidate({
+      content: 'Synthetic disclosure fixture: SSN marker only; no identifying number.',
+    });
+    await writeSpoolFile(spoolDir, 'spool-refused.jsonl', [refused]);
+    const result = await runCycle(config, deps, logger);
+    expect(result.ingest.ingested).toBe(0);
+    expect(result.ingest.summary).toMatchObject({
+      ingestedCandidates: 0,
+      disclosureRejectedCandidates: 1,
+      disclosureCategories: { pii: 1, compensation: 0, secret: 0, other: 0 },
+    });
+    expect(result.curation).toBeNull();
+    expect(deps.candidateRepo.count()).toBe(0);
+    expect(db.prepare('SELECT count(*) AS n FROM audit_events').get()).toEqual({ n: 0 });
+    expect(logger.messages.some((m) => m.message.startsWith('Spool intake observations:'))).toBe(
+      true,
+    );
   });
 
   it('rejects candidates that fail policy', async () => {
@@ -131,6 +229,7 @@ describe('runCycle', () => {
 
     const result = await runCycle(limitedConfig, deps, logger);
     expect(result.ingest.ingested).toBe(3);
+    expect(result.ingest.summary?.ingestedCandidates).toBe(5);
     expect(result.curation!.processed).toBe(3);
     // Should have a capped warning
     const warnMessages = logger.messages.filter((m) => m.level === 'warn');

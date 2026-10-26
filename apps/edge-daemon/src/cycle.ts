@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import {
   ingestFromSpoolDetailed,
+  summarizeSpoolIntake,
   Curator,
   holdLimitsFromEnv,
   loadBrainignoreRuleset,
@@ -124,6 +125,16 @@ async function ingestStep(
       result.ingest.errors.push(ingestResult.error);
       logger.error(`Ingest failed: ${ingestResult.error}`);
       return [];
+    }
+
+    const summary = summarizeSpoolIntake(ingestResult.value);
+    result.ingest.summary = summary;
+    if (
+      summary.disclosureRejectedCandidates ||
+      summary.tamperedFiles ||
+      summary.admissionRejectedFiles
+    ) {
+      logger.warn(`Spool intake observations: ${JSON.stringify(summary)}`);
     }
 
     for (const rejection of ingestResult.value.admissionRejected) {
@@ -374,7 +385,7 @@ export async function runCycle(
   const result: CycleResult = {
     startedAt,
     completedAt: '',
-    ingest: { ingested: 0, errors: [] },
+    ingest: { ingested: 0, errors: [], summary: null },
     curation: null,
     staleness: null,
     export: null,

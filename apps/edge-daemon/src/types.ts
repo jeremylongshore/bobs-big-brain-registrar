@@ -1,4 +1,4 @@
-import type { CurationBatchResult } from '@qmd-team-intent-kb/curator';
+import type { CurationBatchResult, SpoolIntakeSummary } from '@qmd-team-intent-kb/curator';
 import type { ExportResult } from '@qmd-team-intent-kb/git-exporter';
 import type {
   CandidateRepository,
@@ -94,6 +94,8 @@ export interface DaemonDependencies {
 export interface IngestStepResult {
   ingested: number;
   errors: string[];
+  /** Spool-wide observations before caps/scoping; null when intake did not finish successfully. */
+  summary: SpoolIntakeSummary | null;
 }
 
 /** Result of a qmd index update step */

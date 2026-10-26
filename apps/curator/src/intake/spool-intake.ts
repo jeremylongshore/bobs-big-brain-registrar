@@ -36,7 +36,8 @@ export interface IngestFromSpoolOptions {
   quarantineDir?: string;
   /**
    * When set, each spool file is MOVED here after its candidates are
-   * successfully read + ingested (B1, bead compile-then-govern-jfv.2.1). Bounds
+   * read and attempted, including disclosure-refused candidates retained in
+   * the original raw file (B1, bead compile-then-govern-jfv.2.1). Bounds
    * the nightly sweep's re-read work and makes a re-run over unchanged input a
    * genuine no-op: the auto-govern job re-runs every night but `listSpoolFiles`
    * only lists the top-level spool dir, so an already-ingested file in the
@@ -360,10 +361,10 @@ export async function ingestFromSpoolDetailed(
 }
 
 /**
- * Move a fully-ingested spool file (and its `.manifest.json` sidecar, if present)
- * into the archive directory (B1). Best-effort: any I/O failure is swallowed after
- * a stderr note — the file simply stays in the spool dir and is skipped next run
- * via the candidate `findById` dedup, so correctness never depends on this move.
+ * Move an attempted raw spool file, including refused content, into the archive (B1).
+ * Source-file move failures log a stderr note and leave the source available for
+ * another scan. Inserted IDs deduplicate; refused candidates can be observed again.
+ * The manifest sidecar move is separate and may fail silently after the source moves.
  */
 async function archiveIngestedFile(spoolFilePath: string, archiveDir: string): Promise<void> {
   try {
