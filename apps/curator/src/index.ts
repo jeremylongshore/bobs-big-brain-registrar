@@ -192,3 +192,11 @@ export type {
   RecoveryPlanEntry,
   RecoveryPlan,
 } from './recovery/recovery-plan.js';
+
+export { applyRecoveryPlan, readRecoveryStatus } from './recovery/recovery-application.js';
+export type {
+  RecoveryApplicationOptions,
+  RecoveryApplicationResult,
+  RecoveryEntryStatus,
+  RecoveryStatus,
+} from './recovery/recovery-application.js';
