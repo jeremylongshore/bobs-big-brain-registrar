@@ -161,3 +161,12 @@ export type {
   ContradictionProposal,
   ContradictionPlan,
 } from './contradictions/contradiction-planner.js';
+
+export {
+  CandidateIntake,
+  CandidateIntakeError,
+  intakeCandidate,
+  applyIntakeOverrides,
+  DEFAULT_ALLOWED_ORIGIN_CHANNELS,
+} from './intake/candidate-intake.js';
+export type { IntakeActorContext, IntakeResult } from './intake/candidate-intake.js';

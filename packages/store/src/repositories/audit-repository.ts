@@ -208,7 +208,12 @@ export class AuditRepository {
   /** Atomic (BEGIN IMMEDIATE) prev-read + INSERT — see the constructor. */
   private readonly appendTxn: Database.Transaction<(p: AppendParams) => void>;
 
-  constructor(db: Database.Database) {
+  /** Connection identity for operations that must share one transaction. */
+  get connection(): Database.Database {
+    return this.db;
+  }
+
+  constructor(private readonly db: Database.Database) {
     // `seq` is assigned MAX(seq)+1 atomically within the INSERT — a monotonic,
     // gap-tolerant write-order key (the chain orders by it, not by the
     // random-UUID `id`; bead yxp). The prev-hash read and this INSERT run inside

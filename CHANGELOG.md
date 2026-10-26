@@ -48,6 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Commit audited candidate intake and its canonical proposal receipt together on
+  one SQLite connection. Verify candidate payload/hash and receipt readback so
+  aborted, ignored or drifted writes fail and roll back. The API reuses the shared
+  Curator intake boundary; schema, channel, disclosure, authority overrides,
+  tenant-scoped replay and redaction checks remain in use. Explicit unaudited
+  direct-service construction remains unreceipted; historical replays do not
+  fabricate missing receipts. Recovery orchestration and live transfer remain
+  separate (`compile-then-govern-eqw.8.1.2.1`).
+
 - Make API reviewer rejection atomic on one immediate SQLite transaction, with
   current candidate/hold/admitted-memory checks and verified status/receipt writes.
   Retain AI/system review of inbox and non-held quarantined proposals; refuse
