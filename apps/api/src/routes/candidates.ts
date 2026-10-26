@@ -142,7 +142,8 @@ export function registerCandidateRoutes(
           'Tier-A source of truth) and writes an audit receipt naming the acting reviewer + ' +
           'reason. The agent-review "this is noise" verdict (jfv.8 / 014-AT-DECR). Admin-only ' +
           '(write gate). Requires a non-empty `reason` in the body; 404 if the candidate is ' +
-          'missing, 400 if tenantId or reason is missing.',
+          'missing, 400 if tenantId or reason is missing. Held, terminal or already-admitted ' +
+          'candidates are refused (422); repeated rejection writes no additional receipt.',
       },
     },
     async (request, reply) => {

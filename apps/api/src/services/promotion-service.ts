@@ -22,12 +22,12 @@ import {
 } from '@qmd-team-intent-kb/curator';
 import { AuditEvent as AuditEventSchema } from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, Author } from '@qmd-team-intent-kb/schema';
-import type {
+import {
   CandidateRepository,
   MemoryRepository,
-  PolicyRepository,
+  type PolicyRepository,
   AuditRepository,
-  MemoryLinksRepository,
+  type MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
 import { badRequest, notFound, unprocessable } from '../errors.js';
 
@@ -327,43 +327,69 @@ export class PromotionService {
    *
    * @throws 404 if the candidate does not exist.
    * @throws 400 if the candidate belongs to a different tenant than requested.
+   * @throws 422 if held, terminal, or already linked to a governed memory.
+   * Status and receipt settle atomically, including nested transaction callers.
    */
   rejectCandidate(candidateId: string, tenantId: string, actor: Author, reason: string): void {
-    const candidate = this.candidateRepo.findById(candidateId);
-    if (candidate === null) {
-      throw notFound(`Candidate ${candidateId} not found`);
-    }
-    if (candidate.tenantId !== tenantId) {
-      throw badRequest('Candidate does not belong to the requested tenant scope');
-    }
-
-    // A candidate on a human-escalation hold (K6) is resolved by a person
-    // through `resolveHold`, never by this reviewer path (which an agent uses).
-    const hold = findActiveHold(candidateId, tenantId, {
-      candidateRepo: this.candidateRepo,
-      memoryRepo: this.memoryRepo,
-      auditRepo: this.auditRepo,
-    });
-    if (hold !== null) {
-      throw unprocessable(
-        'Candidate is on hold for human review. A person with admin or owner standing resolves it; ' +
-          'a reviewer may attach a recommendation. Nothing was changed.',
-        'on_hold',
-      );
-    }
-
-    this.candidateRepo.updateStatus(candidateId, 'rejected', tenantId);
-    this.auditRepo.insert(
-      AuditEventSchema.parse({
-        id: randomUUID(),
-        action: 'deleted',
-        memoryId: candidate.id,
-        tenantId,
-        actor,
-        reason,
-        details: { candidateId: candidate.id, disposition: 'rejected' },
-        timestamp: new Date().toISOString(),
-      }),
-    );
+    // Construct every repository from the one transaction connection. The API
+    // reviewer may be AI/system; human-only hold resolution remains separate.
+    const connection = this.memoryRepo.connection;
+    const candidateRepo = new CandidateRepository(connection);
+    const memoryRepo = new MemoryRepository(connection);
+    const auditRepo = new AuditRepository(connection);
+    connection
+      .transaction(() => {
+        const candidate = candidateRepo.findById(candidateId);
+        if (candidate === null) throw notFound(`Candidate ${candidateId} not found`);
+        if (candidate.tenantId !== tenantId) {
+          throw badRequest('Candidate does not belong to the requested tenant scope');
+        }
+        const hold = findActiveHold(candidateId, tenantId, {
+          candidateRepo,
+          memoryRepo,
+          auditRepo,
+        });
+        if (hold !== null) {
+          throw unprocessable(
+            'Candidate is on hold for human review. A person with admin or owner standing resolves it; ' +
+              'a reviewer may attach a recommendation. Nothing was changed.',
+            'on_hold',
+          );
+        }
+        // Member intake uses quarantined status without necessarily being on a
+        // human hold. Preserve that review path, but never reject admitted work
+        // (including older promotions whose candidate marker remained in inbox).
+        if (
+          (candidate.status !== 'inbox' && candidate.status !== 'quarantined') ||
+          memoryRepo.existsForCandidate(candidateId, tenantId)
+        ) {
+          throw unprocessable(
+            'Candidate is no longer pending review. Nothing was changed.',
+            'not_pending',
+          );
+        }
+        const receipt = AuditEventSchema.parse({
+          id: randomUUID(),
+          action: 'deleted',
+          memoryId: candidate.id,
+          tenantId,
+          actor,
+          reason,
+          details: { candidateId: candidate.id, disposition: 'rejected' },
+          timestamp: new Date().toISOString(),
+        });
+        if (candidateRepo.updateStatus(candidateId, 'rejected', tenantId) !== 1) {
+          throw new Error('Reviewer rejection status was not persisted');
+        }
+        auditRepo.insert(receipt);
+        if (
+          !auditRepo
+            .findByMemoryAndTenant(candidateId, tenantId)
+            .some((event) => event.id === receipt.id)
+        ) {
+          throw new Error('Reviewer rejection receipt was not persisted');
+        }
+      })
+      .immediate();
   }
 }
