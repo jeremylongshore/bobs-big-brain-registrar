@@ -29,7 +29,7 @@
  *
  * When a contributor intentionally changes the surface (adds a route,
  * tightens a schema), the test fails. They run `pnpm vitest run
- * apps/api/src/__tests__/openapi-contract.test.ts --update-snapshots`,
+ * apps/api/src/__tests__/openapi-contract.test.ts --update`,
  * the snapshot file changes, and the diff becomes a code-review signal.
  *
  * Forward trigger: when an external consumer repo emerges and is

@@ -126,3 +126,34 @@ query is the final confirmation.)
 - D27 (single remote brain, not the VPS): `intent-os decision-log/004-…`.
 - The unified plugin (local | team): `governed-second-brain-plugin`; decision `intent-os/000-docs/014-AT-DECR-…`.
 - The dogfood proof: `intent-os/000-docs/015-AA-AACR-…`.
+
+## Health diagnostic privacy and consumer migration
+
+At the source revision implementing `compile-then-govern-zgh`, anonymous
+`GET /api/health` returns only `status`, `uptime`, `dbConnected` and `version`.
+It no longer scans or returns tenant policy dormancy or global index freshness.
+The existing deploy script checks the HTTP status only and keeps using this
+liveness route; existing 200/503 behavior is preserved.
+
+Global diagnostics move to `GET /api/health/diagnostics`, requiring a valid
+**unscoped admin** bearer token. Members and tenant-scoped admins cannot read
+this global aggregation, including when naming an allowed tenant. This route
+does not offer a tenant-filtered view; do not broaden a monitoring token's
+tenant scope to work around a refusal. Existing loopback development no-auth
+mode retains its existing global administrative standing.
+
+Any diagnostic monitor reading `policyDormancy` or `indexStalenessSeconds`
+from the prior public response must migrate explicitly to the protected route
+and use existing approved global administrative credentials. Those fields
+are absent from public liveness; absence is not an empty/healthy diagnostic
+result. Repository consumers were inspected: the deploy script uses status
+only, and the optional promote/search integration fixture now reads the
+protected diagnostic route. External monitoring consumers and deployed
+versions remain unverified; this source change does not migrate their
+credentials, alter ACLs, or deploy a service. Before rollout, inventory those
+consumers and verify effective network exposure through the authorized
+operational gate.
+
+Rolling back source restores the prior anonymous diagnostic exposure. Do not
+use rollback as a credential or network recovery procedure. No persisted
+brain data or schema migration is involved.
