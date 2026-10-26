@@ -61,6 +61,9 @@ jobs:
       - name: Policy-artifact hash pin (harness-pin --verify)
         run: pnpm harness-pin
 
+      - name: Harness manifest mutation controls
+        run: node --test scripts/harness-pin.node-test.mjs
+
       - name: Test (with coverage)
         # Switched from pnpm test:ci to pnpm test:coverage so coverage/lcov.info
         # is produced for the Codecov upload step below. test:coverage runs the

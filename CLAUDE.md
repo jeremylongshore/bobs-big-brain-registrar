@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Testing SOP (Intent Solutions)
 
-Current enforcement is owned by `tests/TESTING.md`, `.husky/`, `scripts/harness-pin.sh`, and the checked-in workflows. The `@intentsolutions/audit-harness` dependency is installed; repository-specific policy pinning uses `pnpm harness-pin`, not the generic upstream manifest. Changing policy still requires its normal review and visible re-pin.
+Current enforcement is owned by `tests/TESTING.md`, `.husky/`, `scripts/harness-pin.sh`, and the checked-in workflows. The `@intentsolutions/audit-harness` dependency is installed; repository-specific policy pinning uses `pnpm harness-pin`, which delegates to the installed stock verifier with additive `.harness-hash-extra-patterns`; `pnpm exec audit-harness verify` checks the same manifest. Changing policy still requires its normal review and visible re-pin.
 
 The 2026-04-21 grade-C audit (119 test files and no enforcement) is historical. It does not describe the current coverage, architecture, policy-pin, secret-scan, or eval gates. See `tests/TESTING.md` for the dated audit history and `.github/workflows/ci.yml` for current commands. A documented gate is not a claim that a particular run passed.
 
