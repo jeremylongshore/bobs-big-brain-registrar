@@ -57,6 +57,10 @@ against metadata extracted from the SHA-256-pinned installed upstream CLI.
 Checked structured snapshots preserve values that JSON would alter or omit;
 Non-enumerable, symbol-keyed, inherited and accessor properties refuse rather
 than vanish.
+Only exact captured realm object/array prototypes (or null) are accepted, and
+their own property descriptors and parent links must stay unchanged during
+evaluation. This compares evaluated metadata values, not source text, AST or
+property-order identity.
 The sole intentional difference is owned `tokens: true`, required for the
 capability guard; upstream does not request tokens. Nonempty literal arguments
 and every other configuration field must match; unexpected top-level switches

@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { runInNewContext } from 'node:vm';
+import { createContext, runInContext, runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hostPlatform,
@@ -74,12 +74,19 @@ function ownedParseCall(source: string): string {
 }
 
 /** Reject properties structuredClone would omit or evaluate; preserve supported values. */
-function snapshotMetadata(value: unknown): Record<string, unknown> {
+function snapshotMetadata(
+  value: unknown,
+  prototypes: { object: object; array: object } = {
+    object: Object.prototype,
+    array: Array.prototype,
+  },
+): Record<string, unknown> {
   const active = new Set<object>();
   function inspect(node: unknown): void {
     if (node === null || typeof node !== 'object') return;
     const prototype = Object.getPrototypeOf(node);
-    if (!Array.isArray(node) && prototype !== null && Object.getPrototypeOf(prototype) !== null)
+    const expectedPrototype = Array.isArray(node) ? prototypes.array : prototypes.object;
+    if (prototype !== null && prototype !== expectedPrototype)
       throw new Error('Inherited parser metadata needs review');
     if (active.has(node)) throw new Error('Cyclic parser metadata needs review');
     active.add(node);
@@ -100,18 +107,50 @@ function snapshotMetadata(value: unknown): Record<string, unknown> {
 
 function parserConfiguration(program: string): Record<string, unknown> {
   const capture = vi.fn((_config: unknown) => ({ values: {}, positionals: [], tokens: [] }));
-  const args = ['mcp', '--index', 'fixture-index', '--', 'literal'];
-  runInNewContext(
-    program,
-    {
-      parseArgs: capture,
-      args,
-      process: { argv: ['node', 'qmd.js', ...args] },
-    },
+  const context = createContext({ parseArgs: capture });
+  const prototypes = runInContext(
+    '({ object: Object.prototype, array: Array.prototype })',
+    context,
+    { timeout: 1000 },
+  ) as { object: object; array: object };
+  // Use host inspection primitives and keep descriptor values/getters/setters by identity.
+  const intrinsicState = Object.values(prototypes).map((prototype) => ({
+    prototype,
+    parent: Object.getPrototypeOf(prototype),
+    descriptors: new Map(
+      Reflect.ownKeys(prototype).map((key) => [
+        key,
+        Object.getOwnPropertyDescriptor(prototype, key)!,
+      ]),
+    ),
+  }));
+  runInContext(
+    `const args = ['mcp', '--index', 'fixture-index', '--', 'literal'];
+     const process = { argv: ['node', 'qmd.js', ...args] };
+${program}`,
+    context,
     { timeout: 1000 },
   );
   expect(capture).toHaveBeenCalledTimes(1);
-  return capture.mock.calls[0]![0] as Record<string, unknown>;
+  for (const { prototype, parent, descriptors } of intrinsicState) {
+    expect(Object.getPrototypeOf(prototype)).toBe(parent);
+    expect(Reflect.ownKeys(prototype)).toStrictEqual([...descriptors.keys()]);
+    for (const [key, before] of descriptors) {
+      const current = Object.getOwnPropertyDescriptor(prototype, key)!;
+      for (const field of [
+        'configurable',
+        'enumerable',
+        'writable',
+        'value',
+        'get',
+        'set',
+      ] as const) {
+        expect(Object.hasOwn(current, field)).toBe(Object.hasOwn(before, field));
+        expect(current[field]).toBe(before[field]);
+      }
+    }
+  }
+  return snapshotMetadata(capture.mock.calls[0]![0], prototypes);
 }
 
 function parserGrammar(program: string) {
@@ -350,9 +389,22 @@ describe('owned parser metadata correspondence', () => {
     ['non-enumerable', "Object.defineProperty({ type: 'string' }, 'default', { value: false })"],
     ['symbol key', "{ type: 'string', [Symbol('hidden')]: false }"],
     ['inherited fields', "Object.assign(Object.create({ default: false }), { type: 'string' })"],
+    [
+      'null-prototype parent',
+      "Object.assign(Object.create(Object.assign(Object.create(null), { default: false })), { type: 'string' })",
+    ],
     ['accessor', "{ type: 'string', get default() { return false; } }"],
   ])('refuses unsupported property metadata rather than dropping it: %s', (_name, option) => {
     expect(() => parserGrammar(`parseArgs({ options: { sample: ${option} } });`)).toThrow();
+  });
+
+  it.each([
+    ['polluted Object prototype', 'Object.prototype.default = false;'],
+    ['reparented Array prototype', 'Object.setPrototypeOf(Array.prototype, { default: false });'],
+  ])('refuses altered VM intrinsic metadata: %s', (_name, mutation) => {
+    expect(() =>
+      parserGrammar(`${mutation} parseArgs({ options: { sample: { type: 'string' } } });`),
+    ).toThrow();
   });
 });
 
