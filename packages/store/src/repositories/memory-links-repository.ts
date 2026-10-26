@@ -53,11 +53,11 @@ export class MemoryLinksRepository {
   private readonly stmtDelete: Database.Statement;
   private readonly stmtDeleteByBatch: Database.Statement;
   private readonly stmtNeighbors: Database.Statement;
-  private readonly db: Database.Database;
+  private readonly stmtScopedNeighbors: Database.Statement;
+  private readonly stmtTraverse: Database.Statement;
+  private readonly stmtScopedTraverse: Database.Statement;
 
   constructor(db: Database.Database) {
-    this.db = db;
-
     this.stmtInsert = db.prepare(`
       INSERT INTO memory_links (
         id, source_memory_id, target_memory_id, link_type,
@@ -104,6 +104,16 @@ export class MemoryLinksRepository {
         FROM memory_links WHERE target_memory_id = ?
       ORDER BY weight DESC
     `);
+    this.stmtScopedNeighbors = db.prepare(`
+      SELECT ml.target_memory_id AS memoryId, ml.link_type AS linkType, ml.weight, 'outgoing' AS direction
+        FROM memory_links ml WHERE ml.source_memory_id = @start AND ${READABLE_ENDPOINTS_SQL}
+      UNION ALL
+      SELECT ml.source_memory_id AS memoryId, ml.link_type AS linkType, ml.weight, 'incoming' AS direction
+        FROM memory_links ml WHERE ml.target_memory_id = @start AND ${READABLE_ENDPOINTS_SQL}
+      ORDER BY weight DESC
+    `);
+    this.stmtTraverse = db.prepare(traversalSql(false));
+    this.stmtScopedTraverse = db.prepare(traversalSql(true));
   }
 
   /** Insert a new link. Throws on unique constraint violation. */
@@ -160,19 +170,10 @@ export class MemoryLinksRepository {
   /** Get all neighbors (both directions) of a memory. */
   neighbors(memoryId: string, scope?: GraphReadScope): Neighbor[] {
     if (scope === undefined) return this.stmtNeighbors.all(memoryId, memoryId) as Neighbor[];
-    return this.db
-      .prepare(
-        `
-      WITH ${READABLE_LINKS_CTE}
-      SELECT target_memory_id AS memoryId, link_type AS linkType, weight, 'outgoing' AS direction
-        FROM readable_links WHERE source_memory_id = @start
-      UNION ALL
-      SELECT source_memory_id AS memoryId, link_type AS linkType, weight, 'incoming' AS direction
-        FROM readable_links WHERE target_memory_id = @start
-      ORDER BY weight DESC
-    `,
-      )
-      .all({ start: memoryId, ...scopeParameters(scope) }) as Neighbor[];
+    return this.stmtScopedNeighbors.all({
+      start: memoryId,
+      ...scopeParameters(scope),
+    }) as Neighbor[];
   }
 
   /**
@@ -180,31 +181,8 @@ export class MemoryLinksRepository {
    * Returns all reachable nodes up to the given depth.
    */
   traverse(memoryId: string, maxDepth: number = 2, scope?: GraphReadScope): GraphNode[] {
-    const links = scope === undefined ? 'memory_links' : 'readable_links';
-    const sql = `
-      WITH RECURSIVE ${scope === undefined ? '' : `${READABLE_LINKS_CTE},`}
-      graph(memoryId, depth, linkType, weight) AS (
-        SELECT target_memory_id, 1, link_type, weight
-          FROM ${links} WHERE source_memory_id = @start
-        UNION ALL
-        SELECT ml.target_memory_id, g.depth + 1, ml.link_type, ml.weight
-          FROM ${links} ml
-          JOIN graph g ON ml.source_memory_id = g.memoryId
-          WHERE g.depth < @maxDepth
-      ),
-      ranked_paths AS (
-        SELECT
-          *,
-          ROW_NUMBER() OVER(PARTITION BY memoryId ORDER BY depth ASC, weight DESC) as rn
-        FROM graph
-        WHERE memoryId != @start
-      )
-      SELECT memoryId, depth, linkType, weight
-        FROM ranked_paths
-        WHERE rn = 1
-        ORDER BY depth ASC, weight DESC
-    `;
-    return this.db.prepare(sql).all({
+    const stmt = scope === undefined ? this.stmtTraverse : this.stmtScopedTraverse;
+    return stmt.all({
       start: memoryId,
       maxDepth,
       ...(scope === undefined ? {} : scopeParameters(scope)),
@@ -239,28 +217,49 @@ function rowToLink(row: RawLinkRow): MemoryLink {
   };
 }
 
-// Derive audience visibility from the canonical predicate, including legacy nulls.
-// Filter links before recursion: post-filtering would allow a hidden bridge to
-// expose descendants and to influence shortest-path depth/weight selection.
-const READABLE_LINKS_CTE = `
-  readable_memories AS (
-    SELECT id FROM curated_memories
-    WHERE (@tenantId IS NULL OR tenant_id = @tenantId)
-      AND (@allowedTenantIds IS NULL OR tenant_id IN (SELECT value FROM json_each(@allowedTenantIds)))
+// Root and traversal edges use their indexes; each endpoint is checked by ID.
+// Never materialize the entire readable graph or expand through a hidden bridge.
+// Column names below are fixed internal constants, never caller-provided SQL.
+const READABLE_ENDPOINTS_SQL = ['source_memory_id', 'target_memory_id']
+  .map(
+    (column) => `
+  EXISTS (
+    SELECT 1 FROM curated_memories m
+    WHERE m.id = ml.${column}
+      AND (@tenantId IS NULL OR m.tenant_id = @tenantId)
+      AND (@allowedTenantIds IS NULL OR m.tenant_id IN (SELECT value FROM json_each(@allowedTenantIds)))
       AND (
-        (json_extract(metadata_json, '$.audience') IS NULL AND @legacyVisible = 1)
+        (json_extract(m.metadata_json, '$.audience') IS NULL AND @legacyVisible = 1)
         OR (
-          json_type(metadata_json, '$.audience') = 'text'
-          AND json_extract(metadata_json, '$.audience') IN (SELECT value FROM json_each(@audiences))
+          json_type(m.metadata_json, '$.audience') = 'text'
+          AND json_extract(m.metadata_json, '$.audience') IN (SELECT value FROM json_each(@audiences))
         )
       )
-  ),
-  readable_links AS (
-    SELECT ml.* FROM memory_links ml
-    JOIN readable_memories source ON source.id = ml.source_memory_id
-    JOIN readable_memories target ON target.id = ml.target_memory_id
   )
-`;
+`,
+  )
+  .join(' AND ');
+
+function traversalSql(scoped: boolean): string {
+  const readable = scoped ? `AND ${READABLE_ENDPOINTS_SQL}` : '';
+  return `
+    WITH RECURSIVE graph(memoryId, depth, linkType, weight) AS (
+      SELECT ml.target_memory_id, 1, ml.link_type, ml.weight
+        FROM memory_links ml WHERE ml.source_memory_id = @start ${readable}
+      UNION ALL
+      SELECT ml.target_memory_id, g.depth + 1, ml.link_type, ml.weight
+        FROM memory_links ml
+        JOIN graph g ON ml.source_memory_id = g.memoryId
+        WHERE g.depth < @maxDepth ${readable}
+    ),
+    ranked_paths AS (
+      SELECT *, ROW_NUMBER() OVER(PARTITION BY memoryId ORDER BY depth ASC, weight DESC) AS rn
+        FROM graph WHERE memoryId != @start
+    )
+    SELECT memoryId, depth, linkType, weight FROM ranked_paths
+      WHERE rn = 1 ORDER BY depth ASC, weight DESC
+  `;
+}
 
 function scopeParameters(scope: GraphReadScope) {
   return {

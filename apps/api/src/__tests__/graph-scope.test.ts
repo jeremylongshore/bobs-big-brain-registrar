@@ -71,6 +71,15 @@ describe('graph read scope', () => {
   });
 
   for (const route of ['neighbors', 'graph']) {
+    it.each([
+      ['member', '?tenantId='],
+      ['member', '?tenantId=alpha&tenantId=beta'],
+      ['unscoped', '?tenantId='],
+      ['unscoped', '?tenantId=alpha&tenantId=beta'],
+    ])(`${route} rejects malformed tenant selection (%s %s)`, async (token, query) => {
+      expect((await read(alpha, route, token, query)).statusCode).toBe(400);
+    });
+
     it.each(['', '?tenantId=alpha'])(`${route} refuses a foreign root (%s)`, async (query) => {
       expect((await read(beta, route, 'member', query)).statusCode).toBe(404);
     });

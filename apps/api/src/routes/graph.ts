@@ -10,6 +10,14 @@ import type { MemoryRepository } from '@qmd-team-intent-kb/store';
 import { isAudienceVisibleToRole } from '@qmd-team-intent-kb/common';
 import { readerRoleOf } from '../middleware/api-key-auth.js';
 
+/** Validate before tenancy binding can replace an omitted/invalid selector. */
+async function validateGraphSelection(request: FastifyRequest): Promise<void> {
+  const tenantId = (request.query as { tenantId?: unknown }).tenantId;
+  if (tenantId !== undefined && (typeof tenantId !== 'string' || tenantId.trim().length === 0)) {
+    throw badRequest('tenantId must be one nonempty string');
+  }
+}
+
 /** Effective selection is injected/validated by the tenancy guard. Keep the
  * token allowlist as a second constraint and normalize its unscoped empty form.
  */
@@ -49,6 +57,7 @@ export function registerGraphRoutes(
   app.get(
     '/api/memories/:id/neighbors',
     {
+      preValidation: validateGraphSelection,
       schema: {
         tags: ['graph'],
         summary: 'Get direct neighbors of a memory',
@@ -82,6 +91,7 @@ export function registerGraphRoutes(
   app.get(
     '/api/memories/:id/graph',
     {
+      preValidation: validateGraphSelection,
       schema: {
         tags: ['graph'],
         summary: 'Traverse the memory graph from a starting node',
