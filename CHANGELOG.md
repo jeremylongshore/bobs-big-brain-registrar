@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve ordinary host `on`/`once` signal callback control when qmd forwards
+  shutdown to its tracked POSIX groups. Run bounded group cleanup before those
+  callbacks, including once callbacks registered before executor startup; retain
+  default termination when no host listener remains. Later prepended host
+  listeners and existing process-group limits remain outside this guarantee.
+
 ### Added
 
 - Share fixed spool-intake observation counters across the curator CLI and daemon,

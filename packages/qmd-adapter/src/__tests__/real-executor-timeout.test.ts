@@ -8,7 +8,7 @@
  * is exactly how a timed-out `qmd update` kept writing the index after the
  * wrapper reported failure. Every test asserts the grandchild PID is gone.
  */
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -27,6 +27,99 @@ import { IndexLifecycleManager } from '../index-manager/index-lifecycle.js';
 
 const POSIX = process.platform !== 'win32';
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+function waitHostExit(child: ChildProcess, ms = 5_000): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const release = () => {
+      clearTimeout(timer);
+      child.off('exit', onExit);
+      child.off('error', onError);
+    };
+    const onExit = () => {
+      release();
+      resolve();
+    };
+    const onError = (error: Error) => {
+      release();
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      release();
+      reject(new Error('fixture host exit deadline exceeded'));
+    }, ms);
+    child.once('exit', onExit);
+    child.once('error', onError);
+  });
+}
+
+interface FixtureIdentity {
+  pid: number;
+  parent: number;
+  group: number;
+  start: string;
+}
+
+/** Linux birth witness; other POSIX hosts use only the owned ChildProcess handle. */
+function fixtureIdentity(pid: number): FixtureIdentity | null {
+  if (process.platform !== 'linux' || !Number.isInteger(pid) || pid <= 1) return null;
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const fields = stat
+      .slice(stat.lastIndexOf(')') + 2)
+      .trim()
+      .split(/\s+/);
+    if (!/^\d+$/.test(fields[19] ?? '')) return null;
+    return { pid, parent: Number(fields[1]), group: Number(fields[2]), start: fields[19]! };
+  } catch {
+    return null;
+  }
+}
+
+function sameFixtureIdentity(witness: FixtureIdentity): boolean {
+  const current = fixtureIdentity(witness.pid);
+  return current?.start === witness.start && current.group === witness.group;
+}
+
+async function closeFixtureHost(
+  child: ChildProcess,
+  witnesses: readonly FixtureIdentity[],
+  observedPids: readonly number[],
+) {
+  if (child.exitCode === null && child.signalCode === null) {
+    if (child.connected) child.disconnect();
+    try {
+      await waitHostExit(child, 250);
+    } catch {
+      child.kill('SIGTERM');
+      try {
+        await waitHostExit(child, 3_500);
+      } catch {
+        child.kill('SIGKILL');
+        await waitHostExit(child, 3_000);
+      }
+    }
+  }
+  for (const witness of witnesses) {
+    if (sameFixtureIdentity(witness)) {
+      try {
+        process.kill(witness.pid, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+  const deadline = Date.now() + 3_000;
+  while (witnesses.some(sameFixtureIdentity)) {
+    if (Date.now() >= deadline) throw new Error('owned fixture descendant cleanup uncertain');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  // Read-only probes can report uncertainty on other POSIX hosts or PID reuse;
+  // they never turn an unverified numeric PID into a signal target.
+  for (const pid of observedPids) {
+    if (!(await waitGone(pid))) throw new Error('fixture descendant cleanup uncertain');
+  }
+}
 
 function alive(pid: number): boolean {
   try {
@@ -230,6 +323,109 @@ describe.skipIf(!POSIX)('RealQmdExecutor process-group ownership', () => {
     expect(exitSignal).toBe('SIGINT');
     expect(await waitGone(grandchild)).toBe(true);
   }, 30_000);
+
+  async function hostHandlerScenario(kind: 'on' | 'once' | 'removed', order: 'before' | 'after') {
+    const leaderFile = join(dir, 'handler-leader.pid');
+    const workerFile = join(dir, 'handler-worker.pid');
+    const readyFile = join(dir, 'handler-ready.json');
+    const closedFile = join(dir, 'handler-closed');
+    const probeFile = join(dir, 'handler-probe.json');
+    const fake = script(
+      'handler-qmd',
+      `echo $$ > "${leaderFile}"\nsleep 60 &\necho $! > "${workerFile}"\nwait`,
+    );
+    const host = join(dir, 'handler-host.mts');
+    const executorPath = resolve(HERE, '../executor/real-executor.ts');
+    const registryPath = resolve(HERE, '../executor/process-groups.ts');
+    writeFileSync(
+      host,
+      `
+      import { writeFileSync } from 'node:fs';
+      import { RealQmdExecutor } from ${JSON.stringify(executorPath)};
+      import { liveGroupCount } from ${JSON.stringify(registryPath)};
+      let calls = 0;
+      const handler = () => { calls++; };
+      const register = () => process[${JSON.stringify(kind === 'removed' ? 'on' : kind)}]('SIGINT', handler);
+      if (${JSON.stringify(order)} === 'before') register();
+      const pending = new RealQmdExecutor({ binary: ${JSON.stringify(fake)}, maintenanceTimeout: 60000 }).execute(['update']);
+      if (${JSON.stringify(order)} === 'after') register();
+      if (${JSON.stringify(kind)} === 'removed') process.off('SIGINT', handler);
+      process.on('message', message => {
+        if (message === 'probe') writeFileSync(${JSON.stringify(probeFile)}, JSON.stringify({ calls, groups: liveGroupCount() }));
+      });
+      writeFileSync(${JSON.stringify(readyFile)}, JSON.stringify({ listeners: process.listenerCount('SIGINT') }));
+      await pending;
+      writeFileSync(${JSON.stringify(closedFile)}, 'closed');
+    `,
+    );
+    const loader = pathToFileURL(resolve(HERE, '../../../../node_modules/tsx/dist/loader.mjs'));
+    const child = spawn(process.execPath, ['--import', loader.href, host], {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    });
+    const witnesses: FixtureIdentity[] = [];
+    const observedPids: number[] = [];
+    try {
+      const ready = JSON.parse(await waitForFile(readyFile, 10_000)) as { listeners: number };
+      expect(ready.listeners).toBe(kind === 'removed' ? 1 : 2);
+      const leader = Number(await waitForFile(leaderFile, 10_000));
+      const grandchild = Number(await waitForFile(workerFile, 10_000));
+      expect(Number.isSafeInteger(leader) && leader > 1).toBe(true);
+      expect(Number.isSafeInteger(grandchild) && grandchild > 1).toBe(true);
+      observedPids.push(leader, grandchild);
+      if (process.platform === 'linux') {
+        const leaderIdentity = fixtureIdentity(leader);
+        const workerIdentity = fixtureIdentity(grandchild);
+        expect(leaderIdentity).toMatchObject({ parent: child.pid, group: leader });
+        expect(workerIdentity).toMatchObject({ parent: leader, group: leader });
+        witnesses.push(leaderIdentity!, workerIdentity!);
+      }
+      expect(alive(grandchild)).toBe(true);
+      child.kill('SIGINT');
+      const deadline = Date.now() + 10_000;
+      while (!existsSync(closedFile) && child.exitCode === null && child.signalCode === null) {
+        if (Date.now() >= deadline) throw new Error('fixture host did not close its qmd execution');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(await waitGone(grandchild)).toBe(true);
+      if (kind === 'removed') {
+        await waitHostExit(child);
+        expect(child.signalCode).toBe('SIGINT');
+      } else {
+        expect(child.signalCode).toBeNull();
+        expect(child.exitCode).toBeNull();
+        expect(existsSync(closedFile)).toBe(true);
+        // A round trip after executor closure proves continued host event processing.
+        child.send('probe');
+        const probe = JSON.parse(await waitForFile(probeFile)) as { calls: number; groups: number };
+        expect(probe).toEqual({ calls: 1, groups: 0 });
+        expect(child.kill(0)).toBe(true);
+      }
+    } finally {
+      // No stale numeric group signal, including on the successful path.
+      await closeFixtureHost(child, witnesses, observedPids);
+    }
+  }
+
+  it.each([
+    ['on', 'before'],
+    ['on', 'after'],
+    ['once', 'before'],
+    ['once', 'after'],
+  ] as const)(
+    'preserves an ordinary host signal callback registered with %s %s executor startup',
+    async (kind, order) => {
+      await hostHandlerScenario(kind, order);
+    },
+    30_000,
+  );
+
+  it.each(['before', 'after'] as const)(
+    'restores default signal disposition for a removed host handler registered %s startup',
+    async (order) => {
+      await hostHandlerScenario('removed', order);
+    },
+    30_000,
+  );
 
   it('owns a child when SIGINT arrives before spawn returns to the executor', async () => {
     const fake = script('spawn-race-qmd', `sleep 300 &\necho $! > "${pidFile}"\nwait`);
