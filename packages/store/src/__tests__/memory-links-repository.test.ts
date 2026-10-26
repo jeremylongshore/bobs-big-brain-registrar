@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type Database from 'better-sqlite3';
 import { createTestDatabase } from '../database.js';
 import { MemoryLinksRepository } from '../repositories/memory-links-repository.js';
@@ -188,5 +188,94 @@ describe('MemoryLinksRepository', () => {
 
   it('traverse returns empty for isolated node', () => {
     expect(repo.traverse('m3')).toHaveLength(0);
+  });
+});
+
+describe('MemoryLinksRepository scoped reads', () => {
+  let db: Database.Database;
+  let repo: MemoryLinksRepository;
+  beforeEach(() => {
+    db = createTestDatabase();
+    repo = new MemoryLinksRepository(db);
+    for (const id of ['root', 'bridge', 'leaf']) insertMemory(db, id);
+    repo.insert(makeLink({ id: 'first', sourceMemoryId: 'root', targetMemoryId: 'bridge' }));
+    repo.insert(makeLink({ id: 'second', sourceMemoryId: 'bridge', targetMemoryId: 'leaf' }));
+  });
+  afterEach(() => db.close());
+
+  it.each([
+    ['absent', {}, true],
+    ['null', { audience: null }, true],
+    ['tenant', { audience: 'tenant' }, true],
+    ['admins', { audience: 'admins' }, false],
+    ['owner', { audience: 'owner' }, false],
+    ['unknown', { audience: 'future' }, false],
+    ['array', { audience: ['tenant'] }, false],
+    ['number', { audience: 0 }, false],
+  ] as const)(
+    'member traversal gates %s audience before expansion',
+    (_label, metadata, visible) => {
+      db.prepare('UPDATE curated_memories SET metadata_json = ? WHERE id = ?').run(
+        JSON.stringify(metadata),
+        'bridge',
+      );
+      const scope = { readerRole: 'member' as const, tenantId: 'tenant-1' };
+      expect(repo.neighbors('root', scope).map((n) => n.memoryId)).toEqual(
+        visible ? ['bridge'] : [],
+      );
+      expect(repo.traverse('root', 2, scope).map((n) => n.memoryId)).toEqual(
+        visible ? ['bridge', 'leaf'] : [],
+      );
+    },
+  );
+
+  it('intersects the selected tenant with the allowlist, including explicit denial', () => {
+    for (const scope of [
+      { readerRole: 'owner' as const, allowedTenantIds: [] },
+      { readerRole: 'owner' as const, allowedTenantIds: ['other'], tenantId: 'tenant-1' },
+      { readerRole: 'owner' as const, allowedTenantIds: ['tenant-1'], tenantId: 'other' },
+    ]) {
+      expect(repo.neighbors('root', scope)).toEqual([]);
+      expect(repo.traverse('root', 2, scope)).toEqual([]);
+    }
+  });
+  it('reuses prepared scoped graph queries across reads', () => {
+    const prepare = vi.spyOn(db, 'prepare');
+    const scoped = new MemoryLinksRepository(db);
+    const count = prepare.mock.calls.length;
+    for (let i = 0; i < 2; i++) {
+      scoped.neighbors('root', { readerRole: 'member' });
+      scoped.traverse('root', 2, { readerRole: 'member' });
+    }
+    expect(prepare.mock.calls).toHaveLength(count);
+    prepare.mockRestore();
+  });
+
+  it('uses root/edge and endpoint index lookups instead of scanning the whole graph', () => {
+    const prepare = vi.spyOn(db, 'prepare');
+    const scoped = new MemoryLinksRepository(db);
+    scoped.neighbors('root', { readerRole: 'member' });
+    scoped.traverse('root', 2, { readerRole: 'member' });
+    const queries = prepare.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => sql.includes('@audiences'));
+    prepare.mockRestore();
+    expect(queries).toHaveLength(2);
+    for (const query of queries) {
+      const parameters = {
+        start: 'root',
+        tenantId: null,
+        allowedTenantIds: null,
+        audiences: '["tenant"]',
+        legacyVisible: 1,
+        ...(query.includes('@maxDepth') ? { maxDepth: 2 } : {}),
+      };
+      const plan = db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(parameters) as Array<{
+        detail: string;
+      }>;
+      const details = plan.map((row) => row.detail).join('\n');
+      expect(details).not.toMatch(/SCAN (?:curated_memories|memory_links|ml\b|m\b)/);
+      expect(details).toMatch(/SEARCH ml USING .*INDEX/);
+    }
   });
 });

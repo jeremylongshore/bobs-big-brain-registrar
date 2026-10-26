@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- For API graph reads, enforce the selected tenant, API-derived token allowlist
+  and audience policy. Reject blank or repeated tenant selectors.
+  Constrain both link endpoints before recursive expansion so restricted tenant
+  or audience nodes cannot bridge to readable descendants or affect path ranking.
+  Indexed edge/endpoint lookups use cached statements. Unscoped API reads retain
+  cross-tenant access unless a tenant is selected; trusted repository calls that
+  omit scope retain prior behavior. No migration or deployment is included (`compile-then-govern-ion`).
+
 - Reconcile owning and stock harness verification using one installed verifier
   and additive patterns. Retain all eight existing protected policy paths and
   expand coverage to package/CI commands and verifier-selection controls, with
