@@ -98,19 +98,24 @@ function snapshotMetadata(value: unknown): Record<string, unknown> {
   return structuredClone(value) as Record<string, unknown>;
 }
 
-function parserGrammar(program: string) {
+function parserConfiguration(program: string): Record<string, unknown> {
   const capture = vi.fn((_config: unknown) => ({ values: {}, positionals: [], tokens: [] }));
+  const args = ['mcp', '--index', 'fixture-index', '--', 'literal'];
   runInNewContext(
     program,
     {
       parseArgs: capture,
-      args: [],
-      process: { argv: ['node', 'qmd.js'] },
+      args,
+      process: { argv: ['node', 'qmd.js', ...args] },
     },
     { timeout: 1000 },
   );
   expect(capture).toHaveBeenCalledTimes(1);
-  const config = capture.mock.calls[0]![0] as Record<string, unknown>;
+  return capture.mock.calls[0]![0] as Record<string, unknown>;
+}
+
+function parserGrammar(program: string) {
+  const config = parserConfiguration(program);
   // Strip VM prototypes only after checking every own data property.
   return {
     options: snapshotMetadata(config['options']),
@@ -120,9 +125,13 @@ function parserGrammar(program: string) {
 }
 
 function assertGrammarCorresponds(source: string): void {
-  expect(parserGrammar(ownedParseCall(source))).toStrictEqual(
-    parserGrammar(pinnedUpstreamParseCall()),
-  );
+  const owned = snapshotMetadata(parserConfiguration(ownedParseCall(source)));
+  const upstream = snapshotMetadata(parserConfiguration(pinnedUpstreamParseCall()));
+  // Token production is the one intentional launcher-specific configuration.
+  expect(Object.hasOwn(upstream, 'tokens')).toBe(false);
+  const { tokens, ...ownedComparable } = owned;
+  expect(tokens).toBe(true);
+  expect(ownedComparable).toStrictEqual(upstream);
 }
 
 const lock = () => ({
@@ -293,6 +302,9 @@ describe('owned parser metadata correspondence', () => {
     ['missing entry', "  port: { type: 'string' },\n", ''],
     ['strict', 'strict: false', 'strict: true'],
     ['positionals', 'allowPositionals: true', 'allowPositionals: false'],
+    ['argument forwarding', '      args,', '      args: args.slice(1),'],
+    ['token production', 'tokens: true', 'tokens: false'],
+    ['added parser switch', 'strict: false,', 'strict: false, allowNegative: true,'],
   ])('rejects deliberately changed copied %s metadata', (name, before, after) => {
     const source = launcher();
     expect(source.split(before)).toHaveLength(2);

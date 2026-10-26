@@ -52,11 +52,15 @@ new manifest digest before selecting this restriction.
 
 The source-only correspondence controls in
 [`tests/support/owned-qmd-runtime.test.ts`](../../tests/support/owned-qmd-runtime.test.ts)
-compare all 40 option entries and every field plus strict/positional settings
+compare all 40 option entries and every field plus the complete captured parser configuration
 against metadata extracted from the SHA-256-pinned installed upstream CLI.
 Checked structured snapshots preserve values that JSON would alter or omit;
 Non-enumerable, symbol-keyed, inherited and accessor properties refuse rather
 than vanish.
+The sole intentional difference is owned `tokens: true`, required for the
+capability guard; upstream does not request tokens. Nonempty literal arguments
+and every other configuration field must match; unexpected top-level switches
+refuse. Controls cover altered arguments, disabled tokens and an added switch.
 They execute only isolated metadata snippets, never import qmd or its native
 runtime, and reject deliberate copied-table mutations. The existing upstream
 byte tripwire and literal/greedy/unknown-option controls remain in place.
