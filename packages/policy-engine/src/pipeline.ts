@@ -1,3 +1,4 @@
+import { Sensitivity } from '@qmd-team-intent-kb/schema';
 import type { GovernancePolicy, MemoryCandidate, PolicyRuleType } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, PipelineResult, RuleResult } from './types.js';
 import { createRule } from './rules/index.js';
@@ -49,8 +50,11 @@ export class PolicyPipeline {
     candidate: MemoryCandidate,
     partialContext: Partial<EvaluationContext> = {},
   ): PipelineResult {
+    if (partialContext.minimumSensitivity !== undefined)
+      Sensitivity.parse(partialContext.minimumSensitivity);
     const context: EvaluationContext = {
       candidate,
+      minimumSensitivity: partialContext.minimumSensitivity,
       policy: this.policy,
       existingHashes: partialContext.existingHashes,
       tenantId: partialContext.tenantId,

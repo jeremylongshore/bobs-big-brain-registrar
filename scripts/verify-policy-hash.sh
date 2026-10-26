@@ -29,6 +29,7 @@ MANIFEST="${ROOT}/.policy-hash"
 # Engineer-curated list of governance policy files. Edits here are governance-
 # policy edits; require explicit engineer review + a fresh --init.
 FILES=(
+  "packages/policy-engine/src/sensitivity-constraint.ts"
   "packages/policy-engine/src/rules/secret-detection-rule.ts"
   "packages/policy-engine/src/rules/dedup-check-rule.ts"
   "packages/policy-engine/src/rules/relevance-score-rule.ts"

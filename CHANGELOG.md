@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bind reviewed recovery sensitivity floors into selected manifests and durable
+  candidate audit receipts. Preserve the strongest same-store floor through
+  policy evaluation, promotion, later member review and human hold release;
+  retain original classified-level policy refusals as well as effective-level
+  refusals. Promotion verifies the evaluated constraint again under its write
+  lock and records classified/minimum/effective levels. Candidate metadata and
+  no-floor behavior stay unchanged. Remote clone receipt transport and live
+  recovery orchestration remain separate (`compile-then-govern-eqw.8.1.2.3`).
+
 - Add conditional `archiveRecoveredSource` for a reviewed source/target manifest.
   Verify current admitted target and candidate snapshots plus pinned canonical
   promotion and selected-run receipts before archiving one active source with
