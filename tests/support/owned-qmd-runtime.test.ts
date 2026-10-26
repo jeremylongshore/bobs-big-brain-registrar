@@ -17,7 +17,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { runInNewContext } from 'node:vm';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hostPlatform,
   inventory,
@@ -32,9 +32,9 @@ import { copyRuntimeClosure } from '../../scripts/lib/copy-qmd-runtime.mjs';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const roots: string[] = [];
 
-function upstreamHasHttpOption(args: string[]): boolean {
+function pinnedUpstreamParseCall(): string {
   const source = readFileSync(join(repo, 'node_modules/@tobilu/qmd/dist/cli/qmd.js'), 'utf8');
-  // Review the pinned upstream grammar when its published CLI bytes change.
+  // Keep this explicit-upgrade tripwire even when all copied option fields agree.
   expect(sha256(Buffer.from(source))).toBe(
     '2fb0da8887e4cac6fca35a11895b3b9ce8f2ecd677ab7590c069bd564003939d',
   );
@@ -45,17 +45,57 @@ function upstreamHasHttpOption(args: string[]): boolean {
   const end = source.indexOf('\n    });', start);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
+  return source.slice(start, end + '\n    });'.length);
+}
+
+function upstreamHasHttpOption(args: string[]): boolean {
   // Evaluate only the published parseArgs call: no qmd module import or CLI startup.
   const values: unknown = runInNewContext(
-    `${source.slice(start, end + '\n    });'.length)}\nvalues`,
+    `${pinnedUpstreamParseCall()}\nvalues`,
     {
       parseArgs,
       process: { argv: ['node', 'qmd.js', ...args] },
     },
+    { timeout: 1000 },
   );
   if (values === null || typeof values !== 'object')
     throw new Error('Upstream parser returned no values');
   return Object.hasOwn(values, 'http');
+}
+
+function ownedParseCall(source: string): string {
+  const tableStart = source.indexOf('const cliOptions = {');
+  const tableEnd = source.indexOf('\n};', tableStart);
+  const callStart = source.indexOf('({ tokens } = parseArgs({', tableEnd);
+  const callEnd = source.indexOf('\n    }));', callStart);
+  if (tableStart < 0 || tableEnd < tableStart || callStart < tableEnd || callEnd < callStart)
+    throw new Error('Owned parser metadata extraction needs review');
+  return `${source.slice(tableStart, tableEnd + '\n};'.length)}\nlet tokens;\n${source.slice(callStart, callEnd + '\n    }));'.length)}`;
+}
+
+function parserGrammar(program: string) {
+  const capture = vi.fn((_config: unknown) => ({ values: {}, positionals: [], tokens: [] }));
+  runInNewContext(
+    program,
+    {
+      parseArgs: capture,
+      args: [],
+      process: { argv: ['node', 'qmd.js'] },
+    },
+    { timeout: 1000 },
+  );
+  expect(capture).toHaveBeenCalledTimes(1);
+  const config = capture.mock.calls[0]![0] as Record<string, unknown>;
+  // Strip VM prototypes. Compare every option field, including any future field.
+  return {
+    options: JSON.parse(JSON.stringify(config['options'])) as Record<string, unknown>,
+    strict: config['strict'],
+    allowPositionals: config['allowPositionals'],
+  };
+}
+
+function assertGrammarCorresponds(source: string): void {
+  expect(parserGrammar(ownedParseCall(source))).toEqual(parserGrammar(pinnedUpstreamParseCall()));
 }
 
 const lock = () => ({
@@ -202,6 +242,38 @@ describe('owned qmd candidate graph and inventory', () => {
   it('refuses an oversized candidate before reading its contents', () => {
     const f = fixture();
     expect(() => inventory(f.root, { maxBytes: 1 })).toThrow(/byte budget/);
+  });
+});
+
+describe('owned parser metadata correspondence', () => {
+  const launcher = () => readFileSync(join(repo, 'packages/qmd-runtime/bin/owned-qmd.mjs'), 'utf8');
+
+  it('matches all 40 pinned upstream option entries and strict/positional configuration without importing qmd', () => {
+    const grammar = parserGrammar(pinnedUpstreamParseCall());
+    expect(Object.keys(grammar.options)).toHaveLength(40);
+    assertGrammarCorresponds(launcher());
+  });
+
+  it.each([
+    ['type', "index: { type: 'string' }", "index: { type: 'boolean' }"],
+    ['alias', "short: 'c'", "short: 'z'"],
+    ['multiple', 'multiple: true', 'multiple: false'],
+    [
+      'default',
+      "'no-rerank': { type: 'boolean', default: false }",
+      "'no-rerank': { type: 'boolean', default: true }",
+    ],
+    ['missing entry', "  port: { type: 'string' },\n", ''],
+    ['strict', 'strict: false', 'strict: true'],
+    ['positionals', 'allowPositionals: true', 'allowPositionals: false'],
+  ])('rejects deliberately changed copied %s metadata', (name, before, after) => {
+    const source = launcher();
+    expect(source.split(before)).toHaveLength(2);
+    const changed = source.replace(before, after);
+    // Prove the counterexample is valid metadata, not an extraction/syntax failure.
+    const grammar = parserGrammar(ownedParseCall(changed));
+    expect(Object.keys(grammar.options)).toHaveLength(name === 'missing entry' ? 39 : 40);
+    expect(() => assertGrammarCorresponds(changed)).toThrow();
   });
 });
 

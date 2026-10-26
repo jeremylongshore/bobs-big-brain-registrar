@@ -50,6 +50,14 @@ explicit external/global binary is outside this control. Previously staged
 artifacts retain their original behavior; regenerate the candidate and review its
 new manifest digest before selecting this restriction.
 
+The source-only correspondence controls in
+[`tests/support/owned-qmd-runtime.test.ts`](../../tests/support/owned-qmd-runtime.test.ts)
+compare all 40 option entries and every field plus strict/positional settings
+against metadata extracted from the SHA-256-pinned installed upstream CLI.
+They execute only isolated metadata snippets, never import qmd or its native
+runtime, and reject deliberate copied-table mutations. The existing upstream
+byte tripwire and literal/greedy/unknown-option controls remain in place.
+
 The manifest is an integrity receipt, not an independent signature or trust
 anchor. Portability, clean-platform native provisioning, model execution,
 configured serving identity and deployed identity need separate evidence.
