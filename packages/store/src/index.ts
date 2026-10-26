@@ -43,7 +43,14 @@ export type {
 export { verifyAuditChain, type AuditVerifyResult, type AuditChainBreak } from './audit-verify.js';
 export { computeEntryHash, canonicalRowJson, CURRENT_AUDIT_HASH_VERSION } from './audit-chain.js';
 export type { CanonicalAuditRow, AuditHashVersion } from './audit-chain.js';
-export { appendAnchor, verifyAnchors, computeAnchorHash, readAnchors } from './audit-anchor.js';
+export {
+  appendAnchor,
+  verifyAnchors,
+  verifyAnchorRecords,
+  parseAnchorLog,
+  computeAnchorHash,
+  readAnchors,
+} from './audit-anchor.js';
 export {
   computeManifestHash,
   readManifest,

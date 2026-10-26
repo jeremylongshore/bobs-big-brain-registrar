@@ -75,7 +75,12 @@ function chainedRowsOf(repo: AuditRepository): AuditChainRow[] {
 /** Parse the append-only anchor log. Returns [] when the file is absent. */
 export function readAnchors(anchorPath: string): AnchorRecord[] {
   if (!existsSync(anchorPath)) return [];
-  return readFileSync(anchorPath, 'utf8')
+  return parseAnchorLog(readFileSync(anchorPath, 'utf8'));
+}
+
+/** Parse an already captured JSONL snapshot. The caller owns read bounds and binding. */
+export function parseAnchorLog(snapshot: string): AnchorRecord[] {
+  return snapshot
     .split('\n')
     .filter((l) => l.trim().length > 0)
     .map((l) => JSON.parse(l) as AnchorRecord);
@@ -167,6 +172,26 @@ export interface AnchorVerifyResult {
 export function verifyAnchors(repo: AuditRepository, anchorPath: string): AnchorVerifyResult {
   const chain = verifyAuditChain(repo);
   const anchors = readAnchors(anchorPath);
+  return verifyCapturedAnchors(repo, chain, anchors);
+}
+
+/**
+ * Verify an already captured anchor snapshot without reading a filesystem path.
+ * This shares the path verifier's canonical checks; it does not establish the
+ * snapshot's origin, read bounds, file binding or external publication.
+ */
+export function verifyAnchorRecords(
+  repo: AuditRepository,
+  anchors: readonly AnchorRecord[],
+): AnchorVerifyResult {
+  return verifyCapturedAnchors(repo, verifyAuditChain(repo), anchors);
+}
+
+function verifyCapturedAnchors(
+  repo: AuditRepository,
+  chain: AuditVerifyResult,
+  anchors: readonly AnchorRecord[],
+): AnchorVerifyResult {
   const rows = chainedRowsOf(repo);
   const anchorBreaks: AnchorBreak[] = [];
 
