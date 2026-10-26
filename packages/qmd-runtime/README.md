@@ -54,6 +54,9 @@ The source-only correspondence controls in
 [`tests/support/owned-qmd-runtime.test.ts`](../../tests/support/owned-qmd-runtime.test.ts)
 compare all 40 option entries and every field plus strict/positional settings
 against metadata extracted from the SHA-256-pinned installed upstream CLI.
+Checked structured snapshots preserve values that JSON would alter or omit;
+Non-enumerable, symbol-keyed, inherited and accessor properties refuse rather
+than vanish.
 They execute only isolated metadata snippets, never import qmd or its native
 runtime, and reject deliberate copied-table mutations. The existing upstream
 byte tripwire and literal/greedy/unknown-option controls remain in place.

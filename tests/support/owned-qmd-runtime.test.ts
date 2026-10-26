@@ -73,6 +73,31 @@ function ownedParseCall(source: string): string {
   return `${source.slice(tableStart, tableEnd + '\n};'.length)}\nlet tokens;\n${source.slice(callStart, callEnd + '\n    }));'.length)}`;
 }
 
+/** Reject properties structuredClone would omit or evaluate; preserve supported values. */
+function snapshotMetadata(value: unknown): Record<string, unknown> {
+  const active = new Set<object>();
+  function inspect(node: unknown): void {
+    if (node === null || typeof node !== 'object') return;
+    const prototype = Object.getPrototypeOf(node);
+    if (!Array.isArray(node) && prototype !== null && Object.getPrototypeOf(prototype) !== null)
+      throw new Error('Inherited parser metadata needs review');
+    if (active.has(node)) throw new Error('Cyclic parser metadata needs review');
+    active.add(node);
+    for (const key of Reflect.ownKeys(node)) {
+      const property = Object.getOwnPropertyDescriptor(node, key)!;
+      if (Array.isArray(node) && key === 'length') continue;
+      if (typeof key !== 'string' || !property.enumerable || !Object.hasOwn(property, 'value'))
+        throw new Error('Unsupported parser metadata property needs review');
+      inspect(property.value);
+    }
+    active.delete(node);
+  }
+  inspect(value);
+  // Unlike JSON, structuredClone preserves undefined, NaN, infinities, BigInt and -0.
+  // Function/symbol values refuse instead of being silently omitted.
+  return structuredClone(value) as Record<string, unknown>;
+}
+
 function parserGrammar(program: string) {
   const capture = vi.fn((_config: unknown) => ({ values: {}, positionals: [], tokens: [] }));
   runInNewContext(
@@ -86,16 +111,18 @@ function parserGrammar(program: string) {
   );
   expect(capture).toHaveBeenCalledTimes(1);
   const config = capture.mock.calls[0]![0] as Record<string, unknown>;
-  // Strip VM prototypes. Compare every option field, including any future field.
+  // Strip VM prototypes only after checking every own data property.
   return {
-    options: JSON.parse(JSON.stringify(config['options'])) as Record<string, unknown>,
+    options: snapshotMetadata(config['options']),
     strict: config['strict'],
     allowPositionals: config['allowPositionals'],
   };
 }
 
 function assertGrammarCorresponds(source: string): void {
-  expect(parserGrammar(ownedParseCall(source))).toEqual(parserGrammar(pinnedUpstreamParseCall()));
+  expect(parserGrammar(ownedParseCall(source))).toStrictEqual(
+    parserGrammar(pinnedUpstreamParseCall()),
+  );
 }
 
 const lock = () => ({
@@ -274,6 +301,46 @@ describe('owned parser metadata correspondence', () => {
     const grammar = parserGrammar(ownedParseCall(changed));
     expect(Object.keys(grammar.options)).toHaveLength(name === 'missing entry' ? 39 : 40);
     expect(() => assertGrammarCorresponds(changed)).toThrow();
+  });
+  it.each([
+    [
+      'undefined default',
+      "index: { type: 'string' }",
+      "index: { type: 'string', default: undefined }",
+    ],
+    [
+      'undefined extra property',
+      "index: { type: 'string' }",
+      "index: { type: 'string', future: undefined }",
+    ],
+  ])('rejects lossless metadata counterexample: %s', (_name, before, after) => {
+    const changed = launcher().replace(before, after);
+    expect(() => assertGrammarCorresponds(changed)).toThrow();
+  });
+
+  it('preserves lossless metadata values that JSON would drop or alter', () => {
+    const grammar = parserGrammar(`parseArgs({ options: { sample: {
+      type: 'string', default: undefined, nan: NaN, limit: Infinity, integer: 2n, zero: -0
+    } }, strict: false, allowPositionals: true });`);
+    expect(grammar.options).toStrictEqual({
+      sample: {
+        type: 'string',
+        default: undefined,
+        nan: NaN,
+        limit: Infinity,
+        integer: 2n,
+        zero: -0,
+      },
+    });
+  });
+
+  it.each([
+    ['non-enumerable', "Object.defineProperty({ type: 'string' }, 'default', { value: false })"],
+    ['symbol key', "{ type: 'string', [Symbol('hidden')]: false }"],
+    ['inherited fields', "Object.assign(Object.create({ default: false }), { type: 'string' })"],
+    ['accessor', "{ type: 'string', get default() { return false; } }"],
+  ])('refuses unsupported property metadata rather than dropping it: %s', (_name, option) => {
+    expect(() => parserGrammar(`parseArgs({ options: { sample: ${option} } });`)).toThrow();
   });
 });
 
