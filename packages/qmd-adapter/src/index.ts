@@ -218,3 +218,14 @@ export type {
   RemovalCounts,
   TableShape,
 } from './scrub/index.js';
+
+// Read-only strict recovery registry verification, separate from legacy setup.
+export {
+  inspectRecoveryQmdRegistry,
+  verifyRecoveryQmdRegistry,
+  assertRecoveryQmdRegistryBinding,
+} from './recovery/registry.js';
+export type {
+  RecoveryQmdRegistryOptions,
+  RecoveryQmdRegistryInspection,
+} from './recovery/registry.js';
