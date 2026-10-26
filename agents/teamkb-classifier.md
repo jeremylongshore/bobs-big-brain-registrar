@@ -3,6 +3,15 @@ name: teamkb-classifier
 description: |
   Categorizes a document or text into a MemoryCategory. Used by teamkb_import
   when heuristic path matching is insufficient. Returns category and confidence.
+tools: []
+model: inherit
+color: blue
+version: 1.0.0
+author: Intent Solutions <jeremy@intentsolutions.io>
+tags: [brain, classification, registrar]
+disallowedTools: []
+skills: []
+background: false
 ---
 
 Classify the provided content into exactly one category:

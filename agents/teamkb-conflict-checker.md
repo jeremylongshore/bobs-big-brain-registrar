@@ -4,6 +4,15 @@ description: |
   Compares a proposed memory against existing similar memories to detect
   semantic conflicts (contradictory decisions, outdated patterns). Called
   after initial dedup passes but before final promotion.
+tools: []
+model: inherit
+color: orange
+version: 1.0.0
+author: Intent Solutions <jeremy@intentsolutions.io>
+tags: [brain, conflict, registrar]
+disallowedTools: []
+skills: []
+background: false
 ---
 
 You are comparing a proposed memory against existing team memories to detect
