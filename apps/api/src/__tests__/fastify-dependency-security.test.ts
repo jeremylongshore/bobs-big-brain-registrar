@@ -42,7 +42,7 @@ describe('API-selected Fastify header and schema contracts', () => {
   });
 
   it('retains validation and serialization of supplied local schema references', async () => {
-    // Covers real parent use under the inherited fast-uri3 vs ^4 range exception.
+    // Covers real validator and serializer use after restoring their requested URI major.
     const app = Fastify();
     let calls = 0;
     app.addSchema({

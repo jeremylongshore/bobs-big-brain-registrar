@@ -139,4 +139,6 @@
 
 | 061 | OD-RNBK | strict-recovery-qmd-registry | Strict recovery registry contract |
 
-## Next Available Sequence: 062
+| 062 | AT-TEST | fast-uri-parent-major-contracts | URI dependency major contracts |
+
+## Next Available Sequence: 063

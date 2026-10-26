@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Scope `fast-uri` overrides by requested major: AJV and Swagger retain patched
+  3.1.9, while Fastify validation and serialization receive supported patched
+  4.2.3. Preserve real header, schema, SDK and URI security controls across both
+  selected lines (`compile-then-govern-1io.1.12`).
+
+### Fixed
+
 - Preserve ordinary host `on`/`once` signal callback control when qmd forwards
   shutdown to its tracked POSIX groups. Run bounded group cleanup before those
   callbacks, including once callbacks registered before executor startup; retain

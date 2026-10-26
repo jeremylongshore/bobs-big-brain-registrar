@@ -20,15 +20,35 @@ const sdkRequires = [appRequire, qmdRequire].map((require) =>
 const apiRequire = createRequire(join(repo, 'apps/api/package.json'));
 const fastifyRequire = createRequire(apiRequire.resolve('fastify'));
 const uriParents = [
-  createRequire(strykerRequire.resolve('ajv')),
-  ...sdkRequires.map((require) => createRequire(require.resolve('ajv'))),
-  createRequire(fastifyRequire.resolve('@fastify/ajv-compiler')),
-  createRequire(fastifyRequire.resolve('fast-json-stringify')),
-  createRequire(
-    createRequire(apiRequire.resolve('@fastify/swagger')).resolve('json-schema-resolver'),
-  ),
-];
-const uri = uriParents[0]!('fast-uri');
+  { label: 'Stryker AJV', consumer: strykerRequire, name: 'ajv', major: 3, range: '^3.0.1' },
+  { label: 'app SDK AJV', consumer: sdkRequires[0]!, name: 'ajv', major: 3, range: '^3.0.1' },
+  { label: 'qmd SDK AJV', consumer: sdkRequires[1]!, name: 'ajv', major: 3, range: '^3.0.1' },
+  {
+    label: 'Fastify validator',
+    consumer: fastifyRequire,
+    name: '@fastify/ajv-compiler',
+    major: 4,
+    range: '^4.0.0',
+  },
+  {
+    label: 'Fastify serializer',
+    consumer: fastifyRequire,
+    name: 'fast-json-stringify',
+    major: 4,
+    range: '^4.0.0',
+  },
+  {
+    label: 'Swagger resolver',
+    consumer: createRequire(apiRequire.resolve('@fastify/swagger')),
+    name: 'json-schema-resolver',
+    major: 3,
+    range: '^3.0.5',
+  },
+].map(({ consumer, name, ...contract }) => {
+  const metadata = consumer(`${name}/package.json`);
+  const require = createRequire(consumer.resolve(`${name}/package.json`));
+  return { ...contract, metadata, require };
+});
 
 describe('Stryker-selected qs security and URL compatibility', () => {
   it('preserves repeated query values and scalar encoding through the real client', () => {
@@ -64,13 +84,30 @@ describe('Stryker-selected qs security and URL compatibility', () => {
   });
 });
 
-describe('actual parent-selected URI parser contracts', () => {
-  it('binds tooling, SDK, validation, serialization and Swagger paths to the same parser', () => {
-    for (const require of uriParents) {
-      expect(require.resolve('fast-uri')).toBe(uriParents[0]!.resolve('fast-uri'));
-      expect(require('fast-uri')).toBe(uri);
-    }
+describe('actual parent-selected URI parser bindings', () => {
+  it.each(uriParents)('$label keeps its requested patched parser major', (parent) => {
+    expect(parent.metadata.dependencies['fast-uri']).toBe(parent.range);
+    const version: string = parent.require('fast-uri/package.json').version;
+    const [major, minor, patch] = version.split('.').map(Number);
+    expect(major).toBe(parent.major);
+    const [floorMinor, floorPatch] = parent.major === 3 ? [1, 9] : [2, 3];
+    expect(minor! > floorMinor! || (minor === floorMinor && patch! >= floorPatch!)).toBe(true);
+    const sameMajor = uriParents.find((other) => other.major === parent.major)!;
+    expect(parent.require.resolve('fast-uri')).toBe(sameMajor.require.resolve('fast-uri'));
+    expect(parent.require('fast-uri')).toBe(sameMajor.require('fast-uri'));
   });
+
+  it('keeps the independently selected major lines distinct', () => {
+    expect(uriParents[0]!.require.resolve('fast-uri')).not.toBe(
+      uriParents[3]!.require.resolve('fast-uri'),
+    );
+  });
+});
+
+// Exercise every existing advisory assertion on each actual selected major.
+// The six parent bindings above separately prove which consumer receives it.
+describe.each([uriParents[0]!, uriParents[3]!])('$label URI parser contracts', (parent) => {
+  const uri = parent.require('fast-uri');
 
   it.each(['%6Aavascript:alert(1)', '%u006Aavascript:alert(1)'])(
     'does not activate an encoded scheme (%s)',
