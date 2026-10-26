@@ -1,10 +1,9 @@
-import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createServer, request, type IncomingMessage, type Server } from 'node:http';
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DenseVecIndex } from '../dense/dense-index.js';
 import { DenseIndexer, type DenseIndexerOptions } from '../dense/dense-indexer.js';
@@ -30,7 +29,9 @@ class StubEmbedder {
   rejectedRequestCount = 0;
   readonly rejectedRequests: Array<{ method: string; path: string; reason: string }> = [];
   private embedRequests = 0;
-  private baseUrl = '';
+  private readonly socketRoot = mkdtempSync(join(tmpdir(), 'dense-http-'));
+  private readonly socketPath = join(this.socketRoot, 'fixture.sock');
+  private readonly baseUrl = 'http://dense-fixture.invalid';
 
   get embeddingRequestCount(): number {
     return this.embedRequests;
@@ -138,21 +139,74 @@ class StubEmbedder {
     return raw.map((c) => c / norm);
   }
 
+  /** Use a real HTTP Unix socket in an owned directory instead of a host TCP
+   * port. Host loopback discovery cannot issue requests into this fixture.
+   * The test adapter only transports this file's string-body requests; separate
+   * embed-client tests retain the production fetch/TCP transport contract.
+   */
   listen(): Promise<string> {
-    return new Promise((resolve) => {
-      this.server.listen(0, '127.0.0.1', () => {
-        const { port } = this.server.address() as AddressInfo;
-        this.baseUrl = `http://127.0.0.1:${port}`;
+    return new Promise((resolve, reject) => {
+      this.server.once('error', reject);
+      this.server.listen(this.socketPath, () => {
+        this.server.off('error', reject);
+        vi.stubGlobal('fetch', this.fetch.bind(this));
         resolve(this.baseUrl);
       });
     });
   }
 
-  close(): Promise<void> {
+  private async fetch(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
+    if (input instanceof Request) throw new Error('Fixture Request objects are unsupported');
+    const target = new URL(input);
+    if (target.origin !== this.baseUrl) throw new Error('Fixture transport refuses another origin');
+    if (init.body !== undefined && typeof init.body !== 'string') {
+      throw new Error('Fixture transport requires a string body');
+    }
     return new Promise((resolve, reject) => {
-      this.server.close((error) => (error ? reject(error) : resolve()));
-      this.server.closeAllConnections();
+      const req = request(
+        {
+          socketPath: this.socketPath,
+          path: target.pathname + target.search,
+          method: init.method ?? 'GET',
+          headers: Object.fromEntries(new Headers(init.headers)),
+          signal: init.signal ?? undefined,
+          agent: false,
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('error', reject);
+          res.on('end', () =>
+            resolve(
+              new Response(Buffer.concat(chunks), {
+                status: res.statusCode ?? 500,
+                headers: Object.fromEntries(
+                  Object.entries(res.headers).flatMap(([key, value]) =>
+                    value === undefined
+                      ? []
+                      : [[key, Array.isArray(value) ? value.join(', ') : value]],
+                  ),
+                ),
+              }),
+            ),
+          );
+        },
+      );
+      req.on('error', reject);
+      req.end(init.body);
     });
+  }
+
+  async close(): Promise<void> {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        this.server.close((error) => (error ? reject(error) : resolve()));
+        this.server.closeAllConnections();
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      rmSync(this.socketRoot, { recursive: true, force: true });
+    }
   }
 }
 
@@ -257,6 +311,16 @@ describe('DenseIndexer (B4) — incremental embed sweep over the export tree', (
       { method: 'POST', path: '/not-an-embedding-route', reason: 'route' },
       { method: 'GET', path: '/v1/embeddings', reason: 'route' },
     ]);
+  });
+
+  it('retains strict rejection accounting for an explicitly issued root request', async () => {
+    expectedRejections = 1;
+    expect(typeof stub.server.address()).toBe('string');
+    const reply = await fetch(`${url}/`);
+    expect(reply.status).toBe(404);
+    await reply.arrayBuffer();
+    expect(stub.rejectedRequests).toEqual([{ method: 'GET', path: '/', reason: 'route' }]);
+    expect(stub.embeddingRequestCount).toBe(0);
   });
 
   it('first sync embeds every exportable doc with qmd:// citation ids', async () => {
