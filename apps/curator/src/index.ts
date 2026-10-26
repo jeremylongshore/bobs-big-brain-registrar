@@ -6,6 +6,17 @@ export type {
   HoldReport,
 } from './types.js';
 export { Curator } from './curator.js';
+export {
+  governSelectedCandidates,
+  candidateSnapshotDigest,
+} from './recovery/selected-governance.js';
+export type {
+  SelectedCandidateBinding,
+  SelectedGovernanceInput,
+  SelectedGovernanceOptions,
+  SelectedGovernanceResult,
+  SelectedOutcome,
+} from './recovery/selected-governance.js';
 export type { CuratorDependencies, HoldRelease } from './curator.js';
 export { ingestFromSpool, ingestFromSpoolDetailed } from './intake/spool-intake.js';
 export type {
