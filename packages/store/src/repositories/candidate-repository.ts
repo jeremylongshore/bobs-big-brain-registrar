@@ -163,7 +163,12 @@ export class CandidateRepository {
   private readonly stmtReadText: Database.Statement;
   private readonly stmtIsRedactedHash: Database.Statement;
 
-  constructor(db: Database.Database) {
+  /** Connection identity for operations that must share one transaction. */
+  get connection(): Database.Database {
+    return this.db;
+  }
+
+  constructor(private readonly db: Database.Database) {
     this.stmtInsert = db.prepare(`
       INSERT INTO candidates (
         id, status, source, content, title, category,
