@@ -16,8 +16,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { runInNewContext } from 'node:vm';
-import { afterEach, describe, expect, it } from 'vitest';
+import { createContext, runInContext, runInNewContext } from 'node:vm';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hostPlatform,
   inventory,
@@ -32,9 +32,9 @@ import { copyRuntimeClosure } from '../../scripts/lib/copy-qmd-runtime.mjs';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const roots: string[] = [];
 
-function upstreamHasHttpOption(args: string[]): boolean {
+function pinnedUpstreamParseCall(): string {
   const source = readFileSync(join(repo, 'node_modules/@tobilu/qmd/dist/cli/qmd.js'), 'utf8');
-  // Review the pinned upstream grammar when its published CLI bytes change.
+  // Keep this explicit-upgrade tripwire even when all copied option fields agree.
   expect(sha256(Buffer.from(source))).toBe(
     '2fb0da8887e4cac6fca35a11895b3b9ce8f2ecd677ab7590c069bd564003939d',
   );
@@ -45,17 +45,132 @@ function upstreamHasHttpOption(args: string[]): boolean {
   const end = source.indexOf('\n    });', start);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
+  return source.slice(start, end + '\n    });'.length);
+}
+
+function upstreamHasHttpOption(args: string[]): boolean {
   // Evaluate only the published parseArgs call: no qmd module import or CLI startup.
   const values: unknown = runInNewContext(
-    `${source.slice(start, end + '\n    });'.length)}\nvalues`,
+    `${pinnedUpstreamParseCall()}\nvalues`,
     {
       parseArgs,
       process: { argv: ['node', 'qmd.js', ...args] },
     },
+    { timeout: 1000 },
   );
   if (values === null || typeof values !== 'object')
     throw new Error('Upstream parser returned no values');
   return Object.hasOwn(values, 'http');
+}
+
+function ownedParseCall(source: string): string {
+  const tableStart = source.indexOf('const cliOptions = {');
+  const tableEnd = source.indexOf('\n};', tableStart);
+  const callStart = source.indexOf('({ tokens } = parseArgs({', tableEnd);
+  const callEnd = source.indexOf('\n    }));', callStart);
+  if (tableStart < 0 || tableEnd < tableStart || callStart < tableEnd || callEnd < callStart)
+    throw new Error('Owned parser metadata extraction needs review');
+  return `${source.slice(tableStart, tableEnd + '\n};'.length)}\nlet tokens;\n${source.slice(callStart, callEnd + '\n    }));'.length)}`;
+}
+
+/** Reject properties structuredClone would omit or evaluate; preserve supported values. */
+function snapshotMetadata(
+  value: unknown,
+  prototypes: { object: object; array: object } = {
+    object: Object.prototype,
+    array: Array.prototype,
+  },
+): Record<string, unknown> {
+  const active = new Set<object>();
+  function inspect(node: unknown): void {
+    if (node === null || typeof node !== 'object') return;
+    const prototype = Object.getPrototypeOf(node);
+    const expectedPrototype = Array.isArray(node) ? prototypes.array : prototypes.object;
+    if (prototype !== null && prototype !== expectedPrototype)
+      throw new Error('Inherited parser metadata needs review');
+    if (active.has(node)) throw new Error('Cyclic parser metadata needs review');
+    active.add(node);
+    for (const key of Reflect.ownKeys(node)) {
+      const property = Object.getOwnPropertyDescriptor(node, key)!;
+      if (Array.isArray(node) && key === 'length') continue;
+      if (typeof key !== 'string' || !property.enumerable || !Object.hasOwn(property, 'value'))
+        throw new Error('Unsupported parser metadata property needs review');
+      inspect(property.value);
+    }
+    active.delete(node);
+  }
+  inspect(value);
+  // Unlike JSON, structuredClone preserves undefined, NaN, infinities, BigInt and -0.
+  // Function/symbol values refuse instead of being silently omitted.
+  return structuredClone(value) as Record<string, unknown>;
+}
+
+function parserConfiguration(program: string): Record<string, unknown> {
+  const capture = vi.fn((_config: unknown) => ({ values: {}, positionals: [], tokens: [] }));
+  const context = createContext({ parseArgs: capture });
+  const prototypes = runInContext(
+    '({ object: Object.prototype, array: Array.prototype })',
+    context,
+    { timeout: 1000 },
+  ) as { object: object; array: object };
+  // Use host inspection primitives and keep descriptor values/getters/setters by identity.
+  const intrinsicState = Object.values(prototypes).map((prototype) => ({
+    prototype,
+    parent: Object.getPrototypeOf(prototype),
+    descriptors: new Map(
+      Reflect.ownKeys(prototype).map((key) => [
+        key,
+        Object.getOwnPropertyDescriptor(prototype, key)!,
+      ]),
+    ),
+  }));
+  runInContext(
+    `const args = ['mcp', '--index', 'fixture-index', '--', 'literal'];
+     const process = { argv: ['node', 'qmd.js', ...args] };
+${program}`,
+    context,
+    { timeout: 1000 },
+  );
+  expect(capture).toHaveBeenCalledTimes(1);
+  for (const { prototype, parent, descriptors } of intrinsicState) {
+    expect(Object.getPrototypeOf(prototype)).toBe(parent);
+    expect(Reflect.ownKeys(prototype)).toStrictEqual([...descriptors.keys()]);
+    for (const [key, before] of descriptors) {
+      const current = Object.getOwnPropertyDescriptor(prototype, key)!;
+      for (const field of [
+        'configurable',
+        'enumerable',
+        'writable',
+        'value',
+        'get',
+        'set',
+      ] as const) {
+        expect(Object.hasOwn(current, field)).toBe(Object.hasOwn(before, field));
+        expect(current[field]).toBe(before[field]);
+      }
+    }
+  }
+  return snapshotMetadata(capture.mock.calls[0]![0], prototypes);
+}
+
+function parserGrammar(program: string) {
+  const config = parserConfiguration(program);
+  // Strip VM prototypes only after checking every own data property.
+  return {
+    options: snapshotMetadata(config['options']),
+    strict: config['strict'],
+    allowPositionals: config['allowPositionals'],
+  };
+}
+
+function assertGrammarCorresponds(source: string): void {
+  const owned = snapshotMetadata(parserConfiguration(ownedParseCall(source)));
+  const upstream = snapshotMetadata(parserConfiguration(pinnedUpstreamParseCall()));
+  // Token production is the one intentional launcher-specific configuration.
+  expect(Object.hasOwn(upstream, 'tokens')).toBe(false);
+  const { tokens, ...ownedComparable } = owned;
+  expect(tokens).toBe(true);
+  expect(ownedComparable).toStrictEqual(upstream);
 }
 
 const lock = () => ({
@@ -202,6 +317,94 @@ describe('owned qmd candidate graph and inventory', () => {
   it('refuses an oversized candidate before reading its contents', () => {
     const f = fixture();
     expect(() => inventory(f.root, { maxBytes: 1 })).toThrow(/byte budget/);
+  });
+});
+
+describe('owned parser metadata correspondence', () => {
+  const launcher = () => readFileSync(join(repo, 'packages/qmd-runtime/bin/owned-qmd.mjs'), 'utf8');
+
+  it('matches all 40 pinned upstream option entries and strict/positional configuration without importing qmd', () => {
+    const grammar = parserGrammar(pinnedUpstreamParseCall());
+    expect(Object.keys(grammar.options)).toHaveLength(40);
+    assertGrammarCorresponds(launcher());
+  });
+
+  it.each([
+    ['type', "index: { type: 'string' }", "index: { type: 'boolean' }"],
+    ['alias', "short: 'c'", "short: 'z'"],
+    ['multiple', 'multiple: true', 'multiple: false'],
+    [
+      'default',
+      "'no-rerank': { type: 'boolean', default: false }",
+      "'no-rerank': { type: 'boolean', default: true }",
+    ],
+    ['missing entry', "  port: { type: 'string' },\n", ''],
+    ['strict', 'strict: false', 'strict: true'],
+    ['positionals', 'allowPositionals: true', 'allowPositionals: false'],
+    ['argument forwarding', '      args,', '      args: args.slice(1),'],
+    ['token production', 'tokens: true', 'tokens: false'],
+    ['added parser switch', 'strict: false,', 'strict: false, allowNegative: true,'],
+  ])('rejects deliberately changed copied %s metadata', (name, before, after) => {
+    const source = launcher();
+    expect(source.split(before)).toHaveLength(2);
+    const changed = source.replace(before, after);
+    // Prove the counterexample is valid metadata, not an extraction/syntax failure.
+    const grammar = parserGrammar(ownedParseCall(changed));
+    expect(Object.keys(grammar.options)).toHaveLength(name === 'missing entry' ? 39 : 40);
+    expect(() => assertGrammarCorresponds(changed)).toThrow();
+  });
+  it.each([
+    [
+      'undefined default',
+      "index: { type: 'string' }",
+      "index: { type: 'string', default: undefined }",
+    ],
+    [
+      'undefined extra property',
+      "index: { type: 'string' }",
+      "index: { type: 'string', future: undefined }",
+    ],
+  ])('rejects lossless metadata counterexample: %s', (_name, before, after) => {
+    const changed = launcher().replace(before, after);
+    expect(() => assertGrammarCorresponds(changed)).toThrow();
+  });
+
+  it('preserves lossless metadata values that JSON would drop or alter', () => {
+    const grammar = parserGrammar(`parseArgs({ options: { sample: {
+      type: 'string', default: undefined, nan: NaN, limit: Infinity, integer: 2n, zero: -0
+    } }, strict: false, allowPositionals: true });`);
+    expect(grammar.options).toStrictEqual({
+      sample: {
+        type: 'string',
+        default: undefined,
+        nan: NaN,
+        limit: Infinity,
+        integer: 2n,
+        zero: -0,
+      },
+    });
+  });
+
+  it.each([
+    ['non-enumerable', "Object.defineProperty({ type: 'string' }, 'default', { value: false })"],
+    ['symbol key', "{ type: 'string', [Symbol('hidden')]: false }"],
+    ['inherited fields', "Object.assign(Object.create({ default: false }), { type: 'string' })"],
+    [
+      'null-prototype parent',
+      "Object.assign(Object.create(Object.assign(Object.create(null), { default: false })), { type: 'string' })",
+    ],
+    ['accessor', "{ type: 'string', get default() { return false; } }"],
+  ])('refuses unsupported property metadata rather than dropping it: %s', (_name, option) => {
+    expect(() => parserGrammar(`parseArgs({ options: { sample: ${option} } });`)).toThrow();
+  });
+
+  it.each([
+    ['polluted Object prototype', 'Object.prototype.default = false;'],
+    ['reparented Array prototype', 'Object.setPrototypeOf(Array.prototype, { default: false });'],
+  ])('refuses altered VM intrinsic metadata: %s', (_name, mutation) => {
+    expect(() =>
+      parserGrammar(`${mutation} parseArgs({ options: { sample: { type: 'string' } } });`),
+    ).toThrow();
   });
 });
 

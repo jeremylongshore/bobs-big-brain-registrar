@@ -50,6 +50,26 @@ explicit external/global binary is outside this control. Previously staged
 artifacts retain their original behavior; regenerate the candidate and review its
 new manifest digest before selecting this restriction.
 
+The source-only correspondence controls in
+[`tests/support/owned-qmd-runtime.test.ts`](../../tests/support/owned-qmd-runtime.test.ts)
+compare all 40 option entries and every field plus the complete captured parser configuration
+against metadata extracted from the SHA-256-pinned installed upstream CLI.
+Checked structured snapshots preserve values that JSON would alter or omit;
+Non-enumerable, symbol-keyed, inherited and accessor properties refuse rather
+than vanish.
+Only exact captured realm object/array prototypes (or null) are accepted. Their
+own property descriptors and immediate parent links must match before and after
+evaluation; transient changes that are restored are not monitored. This compares
+evaluated metadata values, not source text, AST or
+property-order identity.
+The sole intentional difference is owned `tokens: true`, required for the
+capability guard; upstream does not request tokens. Nonempty literal arguments
+and every other configuration field must match; unexpected top-level switches
+refuse. Controls cover altered arguments, disabled tokens and an added switch.
+They execute only isolated metadata snippets, never import qmd or its native
+runtime, and reject deliberate copied-table mutations. The existing upstream
+byte tripwire and literal/greedy/unknown-option controls remain in place.
+
 The manifest is an integrity receipt, not an independent signature or trust
 anchor. Portability, clean-platform native provisioning, model execution,
 configured serving identity and deployed identity need separate evidence.
