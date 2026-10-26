@@ -86,6 +86,47 @@ known commit reports `committed: true`. Inspect status and canonical receipts
 before retrying. An unchanged settled plan replays without writes; drift refuses
 replay. Unexpected transactional failures roll back source and target changes.
 
+## Trusted asynchronous integration
+
+`executeRecoveryEnvelope` is the public programmatic boundary for a fixed
+integration that needs the real write lock during asynchronous postprocessing.
+It takes `operation: apply | repair`, the private `planPath`, independently
+reviewed `expectedDigest`, optional explicit `originSecretFile` for apply and a
+bounded optional `lockTimeoutMs`. Repair refuses key inputs. This API adds no
+CLI shell hook or automatic operation on import.
+
+A fresh committed apply, including a legitimate partial outcome, runs the awaited
+trusted callback. Apply replay skips it. Explicit repair requires an existing,
+non-drifted apply receipt and performs no intake, governance or archival. The
+callback receives the existing database capability, fixed run/digest/tenant/store
+identities, a copied settlement status, sanitized warning codes and
+`assertStillBound()`. It receives no source body, HMAC or key field. The database
+is a trusted programmatic capability; this is not a sandbox for untrusted code.
+
+The integration calls `assertStillBound()` between its concrete external stages.
+The boundary also checks centrally after callback completion, comparing against
+its own settlement authority. Operation identity is captured before await, so
+caller mutation cannot relabel the result. Its connection and actual kernel lock
+remain owned until the callback finishes and cleanup completes. The callback must
+await termination of every writer; racing a timeout and returning while qmd still
+writes would violate this contract.
+
+For this async API, `committed: true` means a verified durable recovery settlement
+exists, including a historical apply. `appliedNow` identifies a new memory
+transaction in this invocation. Preflight refusals report false; unexpected core
+faults and repair of drifted settlement report unknown. Callback/cleanup failures
+retain a known commit and return a sanitized `failedStage`. Failure results do
+not present an old settlement snapshot as a fresh status proof. The synchronous
+CLI retains its existing per-invocation commit reporting.
+
+`postcommit.state: completed` describes callback completion only. The generic
+boundary always returns `recoveryComplete: false`, even if a callback returns a
+value claiming success. Concrete plugin anchor/export/index integration must
+establish its own evidence: both source and target tenant exports, tenant-exclusive
+index roots, actual selected qmd command provenance and explicit postcommit repair
+without new governance receipts. That integration and the private-copy rehearsal
+remain open under the parent recovery work.
+
 ## Completion and rollback boundaries
 
 This command does not yet execute postcommit anchor/export/index work. It grants

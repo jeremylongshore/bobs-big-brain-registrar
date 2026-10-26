@@ -47,7 +47,7 @@ function object(value: unknown, keys: readonly string[]): Record<string, unknown
   return value as Record<string, unknown>;
 }
 
-function readEnvelope(path: string, expectedDigest: string): RecoveryEnvelope {
+export function readRecoveryEnvelope(path: string, expectedDigest: string): RecoveryEnvelope {
   const raw = object(JSON.parse(readPrivateRecoveryFile(path)) as unknown, [
     'schemaVersion',
     'plan',
@@ -167,7 +167,10 @@ function planCommand(values: Map<string, string>): unknown {
 
 function statusCommand(values: Map<string, string>): unknown {
   allowedOptions(values, ['--plan', '--digest']);
-  const envelope = readEnvelope(requireOption(values, '--plan'), requireOption(values, '--digest'));
+  const envelope = readRecoveryEnvelope(
+    requireOption(values, '--plan'),
+    requireOption(values, '--digest'),
+  );
   requireRecoveryStore(envelope.store);
   const db = openExistingDatabase({ path: envelope.store.databasePath, readonly: true });
   try {
@@ -192,7 +195,10 @@ interface CommitObservation {
 
 function applyCommand(values: Map<string, string>, observation: CommitObservation): unknown {
   allowedOptions(values, ['--plan', '--digest', '--origin-secret-file', '--lock-timeout-ms']);
-  const envelope = readEnvelope(requireOption(values, '--plan'), requireOption(values, '--digest'));
+  const envelope = readRecoveryEnvelope(
+    requireOption(values, '--plan'),
+    requireOption(values, '--digest'),
+  );
   const secret = originSecret(values);
   const timeout = values.has('--lock-timeout-ms') ? Number(values.get('--lock-timeout-ms')) : 8000;
   const lock = acquireRecoveryWriteLock(envelope.store, timeout);

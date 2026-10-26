@@ -203,3 +203,11 @@ export type {
 
 export { runRecoveryCommand } from './recovery/command.js';
 export type { RecoveryCommandIO } from './recovery/command.js';
+
+export { executeRecoveryEnvelope } from './recovery/recovery-execution.js';
+export type {
+  RecoveryExecutionRequest,
+  RecoveryExecutionResult,
+  RecoveryPostcommitContext,
+  TrustedRecoveryPostcommit,
+} from './recovery/recovery-execution.js';
