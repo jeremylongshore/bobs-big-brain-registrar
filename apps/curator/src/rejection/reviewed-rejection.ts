@@ -91,6 +91,10 @@ export function rejectReviewedCandidate(
         throw new Error('Reviewed rejection status was not persisted');
       }
       auditRepo.insert(receipt);
+      const persisted = auditRepo.findByMemoryAndTenant(candidateId, input.tenantId);
+      if (!persisted.some((event) => event.id === auditEventId)) {
+        throw new Error('Reviewed rejection receipt was not persisted');
+      }
       return { ok: true, candidateId, auditEventId };
     })
     .immediate();

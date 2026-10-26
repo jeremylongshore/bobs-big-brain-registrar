@@ -306,6 +306,24 @@ describe('person-reviewed pending rejection on a real file-backed store', () => 
     expect(verifyAuditChain(audit)).toMatchObject({ totalRows: 2, cleanRows: 2, breaks: [] });
   });
 
+  it('rolls back a silently ignored audit insert and preserves the prior chain tip', () => {
+    expect(rejectReviewedCandidate(input(seed()), db).ok).toBe(true);
+    const id = seed();
+    const before = snapshot();
+    db.exec(
+      'CREATE TRIGGER fixture_audit_ignore BEFORE INSERT ON audit_events BEGIN SELECT RAISE(IGNORE); END',
+    );
+    expect(() => rejectReviewedCandidate(input(id), db)).toThrow(
+      'Reviewed rejection receipt was not persisted',
+    );
+    expect(snapshot()).toEqual(before);
+    expect(verifyAuditChain(audit)).toMatchObject({ totalRows: 1, cleanRows: 1, breaks: [] });
+    db.exec('DROP TRIGGER fixture_audit_ignore');
+    expect(rejectReviewedCandidate(input(id), db).ok).toBe(true);
+    expect(audit.findByTenant(TENANT)).toHaveLength(2);
+    expect(verifyAuditChain(audit)).toMatchObject({ totalRows: 2, cleanRows: 2, breaks: [] });
+  });
+
   it.each(['ABORT', 'IGNORE'] as const)(
     'writes no success receipt if a status trigger uses %s',
     (mode) => {
