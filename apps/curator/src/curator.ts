@@ -1,3 +1,4 @@
+import { resolveCandidateMinimumSensitivity } from './recovery/sensitivity-constraint.js';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import {
   PolicyPipeline,
@@ -5,7 +6,12 @@ import {
   unresolvedFlagsAfterRelease,
 } from '@qmd-team-intent-kb/policy-engine';
 import type { HoldDecision, PipelineResult } from '@qmd-team-intent-kb/policy-engine';
-import type { Author, GovernancePolicy, MemoryCandidate } from '@qmd-team-intent-kb/schema';
+import type {
+  Author,
+  GovernancePolicy,
+  MemoryCandidate,
+  Sensitivity,
+} from '@qmd-team-intent-kb/schema';
 import type {
   CandidateRepository,
   MemoryRepository,
@@ -112,6 +118,7 @@ export class Curator {
     existingHashes?: Set<string>,
     release?: HoldRelease,
   ): CurationResult {
+    const minimumSensitivity = resolveCandidateMinimumSensitivity(candidate, this.deps.auditRepo);
     const contentHash = computeContentHash(candidate.content);
 
     // Tenant-scoped dedup (B1): never treat another tenant's memory as a duplicate.
@@ -206,7 +213,7 @@ export class Curator {
     const pipelineResult: PipelineResult =
       policy === undefined
         ? { candidateId: candidate.id, outcome: 'approved', evaluations: [] }
-        : this.evaluatePolicy(candidate, policy, existingHashes);
+        : this.evaluatePolicy(candidate, policy, existingHashes, minimumSensitivity);
 
     if (pipelineResult.outcome === 'rejected') {
       const reason = reject(candidate, pipelineResult, this.deps.auditRepo, suppressReject);
@@ -244,7 +251,14 @@ export class Curator {
       };
     }
 
-    return this.promoteCandidate(candidate, contentHash, pipelineResult, release, releasedFlags);
+    return this.promoteCandidate(
+      candidate,
+      contentHash,
+      pipelineResult,
+      release,
+      releasedFlags,
+      minimumSensitivity,
+    );
   }
 
   /** Run the tenant's policy pipeline over one candidate (tenant-scoped context). */
@@ -252,6 +266,7 @@ export class Curator {
     candidate: MemoryCandidate,
     policy: GovernancePolicy,
     existingHashes?: Set<string>,
+    minimumSensitivity?: Sensitivity,
   ): PipelineResult {
     const pipeline = new PolicyPipeline(policy);
     // Runtime completeness check (5bm.2): fire the anti-dormancy gate against the
@@ -273,6 +288,7 @@ export class Curator {
       existingHashes ??
       new Set(this.deps.memoryRepo.getContentHashesByTenant(this.config.tenantId));
     return pipeline.evaluate(candidate, {
+      minimumSensitivity,
       existingHashes: hashSet,
       tenantId: this.config.tenantId,
       // contradiction_check lookup (E1): tenant-scoped ACTIVE memories filtered
@@ -413,6 +429,7 @@ export class Curator {
     pipelineResult: PipelineResult,
     release?: HoldRelease,
     releasedFlags?: readonly string[],
+    minimumSensitivity?: Sensitivity,
   ): CurationResult {
     const plan = planSupersession(candidate, this.deps.memoryRepo, {
       threshold: this.config.supersessionThreshold ?? DEFAULT_SUPERSESSION_THRESHOLD,
@@ -453,6 +470,7 @@ export class Curator {
         candidate,
         contentHash,
         pipelineResult,
+        ...(minimumSensitivity !== undefined ? { minimumSensitivity } : {}),
         supersessions: toApply,
         ...(release !== undefined
           ? { promotedBy: release.promotedBy, promotionReason: release.promotionReason }

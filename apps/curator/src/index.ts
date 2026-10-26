@@ -181,3 +181,5 @@ export type {
   RecoverySourceArchiveResult,
   RecoverySnapshotBinding,
 } from './recovery/source-archive.js';
+
+export { resolveCandidateMinimumSensitivity } from './recovery/sensitivity-constraint.js';

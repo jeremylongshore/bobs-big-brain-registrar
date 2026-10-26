@@ -77,3 +77,5 @@ export type { ContentClassification } from '@qmd-team-intent-kb/claude-runtime';
  * network, no clock. Its counterpart for DETECTION is {@link scanTextForSecrets}.
  */
 export { redactSecrets } from '@qmd-team-intent-kb/claude-runtime';
+
+export { effectiveSensitivity } from './sensitivity-constraint.js';

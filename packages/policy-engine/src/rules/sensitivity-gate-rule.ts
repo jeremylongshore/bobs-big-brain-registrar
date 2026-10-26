@@ -2,6 +2,7 @@ import { classifyContent } from '@qmd-team-intent-kb/claude-runtime';
 import { Sensitivity } from '@qmd-team-intent-kb/schema';
 import type { MemoryCandidate, PolicyRule } from '@qmd-team-intent-kb/schema';
 import type { EvaluationContext, RuleResult } from '../types.js';
+import { effectiveSensitivity } from '../sensitivity-constraint.js';
 
 type SensitivityLevel = Sensitivity;
 
@@ -30,19 +31,30 @@ function parseBlockedLevels(params: Record<string, unknown> | undefined): Sensit
 export function evaluateSensitivityGate(
   candidate: MemoryCandidate,
   rule: PolicyRule,
-  _context: EvaluationContext,
+  context: EvaluationContext,
 ): RuleResult {
   const classification = classifyContent(candidate.content);
   const blockedLevels = parseBlockedLevels(rule.parameters);
 
-  const isBlocked = blockedLevels.includes(classification.sensitivityLevel);
+  const effective = effectiveSensitivity(
+    classification.sensitivityLevel,
+    context.minimumSensitivity,
+  );
+  // Custom blocked sets need not be monotonic: raising a floor must never
+  // turn an originally blocked classification into an allowed decision.
+  const isBlocked =
+    blockedLevels.includes(classification.sensitivityLevel) || blockedLevels.includes(effective);
+  const assessed =
+    context.minimumSensitivity === undefined
+      ? classification.sensitivityLevel
+      : `${classification.sensitivityLevel} (reviewed minimum ${context.minimumSensitivity}, effective ${effective})`;
 
   if (!isBlocked) {
     return {
       ruleId: rule.id,
       ruleType: rule.type,
       outcome: 'pass',
-      reason: `Content sensitivity level '${classification.sensitivityLevel}' is allowed`,
+      reason: `Content sensitivity level '${assessed}' is allowed`,
     };
   }
 
@@ -50,6 +62,6 @@ export function evaluateSensitivityGate(
     ruleId: rule.id,
     ruleType: rule.type,
     outcome: 'fail',
-    reason: `Content blocked — sensitivity level '${classification.sensitivityLevel}' is restricted. Matched patterns: ${classification.matchedPatterns.join(', ')}`,
+    reason: `Content blocked — sensitivity level '${assessed}' is restricted. Matched patterns: ${classification.matchedPatterns.join(', ')}`,
   };
 }

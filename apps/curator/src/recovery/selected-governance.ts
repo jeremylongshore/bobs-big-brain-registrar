@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
+import { classifyContent, effectiveSensitivity } from '@qmd-team-intent-kb/policy-engine';
+import { resolveCandidateMinimumSensitivity } from './sensitivity-constraint.js';
 import { computeContentHash, isAudienceVisibleToRole } from '@qmd-team-intent-kb/common';
 import {
   AuditEvent,
   MemoryCandidate,
   Sha256Hash,
+  Sensitivity,
   TenantId,
   Uuid,
 } from '@qmd-team-intent-kb/schema';
@@ -20,6 +23,7 @@ import {
 import type Database from 'better-sqlite3';
 
 import { Curator } from '../curator.js';
+import { recordCandidateMinimumSensitivity } from './sensitivity-constraint.js';
 import type { CuratorDependencies } from '../curator.js';
 import { findActiveHold } from '../hold/hold.js';
 import type { CurationResult, CuratorConfig } from '../types.js';
@@ -28,6 +32,8 @@ export interface SelectedCandidateBinding {
   candidateId: string;
   /** Digest of the complete schema-normalized candidate, including metadata and status. */
   snapshotDigest: string;
+  /** Reviewed source floor; persisted for later review in this same store. */
+  minimumSensitivity?: Sensitivity;
 }
 
 export interface SelectedGovernanceInput {
@@ -100,6 +106,7 @@ function requireInput(input: SelectedGovernanceInput): void {
   for (const binding of input.selections) {
     Uuid.parse(binding.candidateId);
     Sha256Hash.parse(binding.snapshotDigest);
+    if (binding.minimumSensitivity !== undefined) Sensitivity.parse(binding.minimumSensitivity);
     if (ids.has(binding.candidateId)) throw new Error('Duplicate selected candidate binding');
     ids.add(binding.candidateId);
   }
@@ -122,7 +129,17 @@ export function governSelectedCandidates(
 ): SelectedGovernanceResult {
   requireInput(input);
   const manifestDigest = createHash('sha256')
-    .update(stableJson({ tenantId: input.tenantId, selections: input.selections }))
+    .update(
+      stableJson({
+        tenantId: input.tenantId,
+        selections: input.selections,
+        // Version the constrained manifest: older code accepted unknown binding
+        // keys without applying them. Such a historical run cannot claim a floor.
+        ...(input.selections.some((binding) => binding.minimumSensitivity !== undefined)
+          ? { sensitivityConstraintVersion: 1 }
+          : {}),
+      }),
+    )
     .digest('hex');
   const candidateRepo = new CandidateRepository(connection);
   const memoryRepo = new MemoryRepository(connection);
@@ -172,6 +189,21 @@ export function governSelectedCandidates(
       const receiptWitnesses = new Map<string, AuditEvent>();
       for (const binding of input.selections) {
         const candidate = validateSelection(binding, input, deps);
+        if (binding.minimumSensitivity !== undefined) {
+          recordCandidateMinimumSensitivity(
+            candidate,
+            binding.minimumSensitivity,
+            {
+              runId: input.runId,
+              manifestDigest,
+              candidateSnapshotDigest: binding.snapshotDigest,
+              actor: input.actor,
+              role: input.role,
+              reason: input.reason,
+            },
+            auditRepo,
+          );
+        }
         const outcome = settleCandidate(candidate, deps, config, curator, hashes);
         outcomes.push(outcome);
         for (const memoryId of [candidate.id, outcome.memoryId]) {
@@ -279,6 +311,15 @@ function verifyPromotion(
   tenantId: string,
 ): void {
   const memory = memoryId === undefined ? null : deps.memoryRepo.findById(memoryId);
+  const minimum = resolveCandidateMinimumSensitivity(candidate, deps.auditRepo);
+  if (
+    minimum !== undefined &&
+    memory !== null &&
+    memory.sensitivity !==
+      effectiveSensitivity(classifyContent(candidate.content).sensitivityLevel, minimum)
+  ) {
+    throw new Error('Selected promotion lost its reviewed sensitivity floor');
+  }
   if (
     memory === null ||
     memory.candidateId !== candidate.id ||

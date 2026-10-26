@@ -13,6 +13,7 @@ import type {
   MemoryLinksRepository,
   MemoryRepository,
 } from '@qmd-team-intent-kb/store';
+import { resolveCandidateMinimumSensitivity } from '../recovery/sensitivity-constraint.js';
 import { promote } from '../promotion/promoter.js';
 
 /**
@@ -342,6 +343,9 @@ export function mergeGovern(
     //     content hash already present, or already promoted earlier in this pass)
     //     is rejected by the dedup_check rule; a secret/policy violation by its
     //     rule. Either way: quarantine, never write.
+    // This reads only constraints already present in the destination store;
+    // clone memory rows do not transport their source constraint receipts.
+    const minimumSensitivity = resolveCandidateMinimumSensitivity(candidate, deps.auditRepo);
     let pipelineResult: PipelineResult | undefined;
     if (pipeline !== undefined) {
       // NOTE (E1): `getActiveMemoriesInCategory` is deliberately NOT injected
@@ -353,6 +357,7 @@ export function mergeGovern(
       // earlier in this same pass). Contradiction review belongs to first
       // promotion (curator / promotion service), not the re-govern fold.
       pipelineResult = pipeline.evaluate(candidate, {
+        minimumSensitivity,
         existingHashes,
         tenantId: options.tenantId,
       });
@@ -383,7 +388,12 @@ export function mergeGovern(
     //    detection or wiki-link edges in the merge path - the union is a re-govern,
     //    not a fresh authoring event, so linksRepo is intentionally NOT passed.
     const memoryRow = promote(
-      { candidate, contentHash, pipelineResult },
+      {
+        candidate,
+        contentHash,
+        pipelineResult,
+        ...(minimumSensitivity !== undefined ? { minimumSensitivity } : {}),
+      },
       deps.memoryRepo,
       deps.auditRepo,
       dryRun,

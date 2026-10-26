@@ -3,6 +3,7 @@ import type {
   GovernancePolicy,
   PolicyRule,
   MemoryCategory,
+  Sensitivity,
 } from '@qmd-team-intent-kb/schema';
 import type { DeterministicScore } from './deterministic-score.js';
 
@@ -33,6 +34,8 @@ export interface ActiveMemorySnapshot {
 /** Context provided to rule evaluators */
 export interface EvaluationContext {
   candidate: MemoryCandidate;
+  /** Resolved from reviewed durable candidate constraints by the caller. */
+  minimumSensitivity?: Sensitivity;
   policy: GovernancePolicy;
   existingHashes?: Set<string>; // for dedup checking
   tenantId?: string; // for tenant match validation

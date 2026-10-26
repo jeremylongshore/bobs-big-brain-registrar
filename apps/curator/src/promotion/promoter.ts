@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
   deriveMemoryId,
   deriveAuditEventId,
@@ -16,13 +17,19 @@ import type {
   CuratedMemory,
   PolicyEvaluation,
   Author,
+  Sensitivity,
 } from '@qmd-team-intent-kb/schema';
 import type {
   MemoryRepository,
   AuditRepository,
   MemoryLinksRepository,
 } from '@qmd-team-intent-kb/store';
-import { classifyContent, type PipelineResult } from '@qmd-team-intent-kb/policy-engine';
+import { resolveCandidateMinimumSensitivity } from '../recovery/sensitivity-constraint.js';
+import {
+  classifyContent,
+  effectiveSensitivity,
+  type PipelineResult,
+} from '@qmd-team-intent-kb/policy-engine';
 import type { SupersessionMatch } from '../supersession/supersession-detector.js';
 import { extractWikiLinks } from '../import/wikilink-parser.js';
 
@@ -30,6 +37,8 @@ import { extractWikiLinks } from '../import/wikilink-parser.js';
 export interface PromotionInput {
   candidate: MemoryCandidate;
   contentHash: string;
+  /** Exact durable floor used for this policy evaluation; never a caller bypass. */
+  minimumSensitivity?: Sensitivity;
   pipelineResult: PipelineResult;
   supersession?: SupersessionMatch;
   /**
@@ -186,8 +195,14 @@ export function promote(
   // confidential/restricted skip effective (dead code while every memory was
   // 'internal') so PII-bearing memories are not written into the general
   // searchable corpus. Existing rows are unaffected; this classifies new
-  // promotions only.
-  const sensitivity = classifyContent(input.candidate.content).sensitivityLevel;
+  // promotions only. A reviewed durable recovery floor can raise this level;
+  // it never weakens classifier findings or alters candidate metadata.
+  const minimumSensitivity = resolveCandidateMinimumSensitivity(input.candidate, auditRepo);
+  if (minimumSensitivity !== input.minimumSensitivity) {
+    throw new Error('Sensitivity constraint changed since policy evaluation; retry governance');
+  }
+  const classified = classifyContent(input.candidate.content).sensitivityLevel;
+  const sensitivity = effectiveSensitivity(classified, minimumSensitivity);
 
   const memory = CuratedMemorySchema.parse({
     id: memoryId,
@@ -225,6 +240,11 @@ export function promote(
     // a savepoint inside this outer transaction (bead yxp).
     memoryRepo.connection
       .transaction((): void => {
+        if (resolveCandidateMinimumSensitivity(input.candidate, auditRepo) !== minimumSensitivity) {
+          throw new Error(
+            'Sensitivity constraint changed before promotion commit; retry governance',
+          );
+        }
         for (const sup of supersessions) {
           const oldMemory = memoryRepo.findById(sup.supersededMemoryId);
           if (oldMemory !== null) {
@@ -340,6 +360,15 @@ export function promote(
             // cross-clone entry_hash reproducibility (8da.5/8da.6) holds.
             details: {
               candidateId: input.candidate.id,
+              ...(minimumSensitivity !== undefined
+                ? {
+                    sensitivityConstraint: {
+                      classified,
+                      minimum: minimumSensitivity,
+                      effective: sensitivity,
+                    },
+                  }
+                : {}),
               ...(input.humanResolvedFlags !== undefined && input.humanResolvedFlags.length > 0
                 ? { humanResolvedFlags: [...input.humanResolvedFlags] }
                 : {}),
@@ -391,6 +420,23 @@ export function promote(
           } catch {
             // Eval emission is best-effort; the promotion itself has already
             // succeeded. Do not let an eval-surface fault corrupt the curation path.
+          }
+        }
+        if (minimumSensitivity !== undefined) {
+          const stored = memoryRepo.findById(memory.id);
+          const receipt = auditRepo
+            .findByMemoryAndTenant(memory.id, memory.tenantId)
+            .find((event) => event.id === deriveAuditEventId(memory.id, 'promoted'));
+          if (
+            resolveCandidateMinimumSensitivity(input.candidate, auditRepo) !== minimumSensitivity ||
+            stored?.sensitivity !== sensitivity ||
+            !isDeepStrictEqual(receipt?.details['sensitivityConstraint'], {
+              classified,
+              minimum: minimumSensitivity,
+              effective: sensitivity,
+            })
+          ) {
+            throw new Error('Promoted sensitivity constraint or its receipt was not retained');
           }
         }
       })

@@ -11,6 +11,7 @@ import {
 } from '@qmd-team-intent-kb/policy-engine';
 import {
   promote,
+  resolveCandidateMinimumSensitivity,
   placeHold,
   findActiveHold,
   type HoldLimits,
@@ -208,6 +209,7 @@ export class PromotionService {
 
     // Run the tenant's enabled policy (or auto-approve when none), exactly as the
     // curator batch pipeline does — but with a tenant-scoped existing-hash set.
+    const minimumSensitivity = resolveCandidateMinimumSensitivity(candidate, this.auditRepo);
     const policy = this.policyRepo.findByTenant(tenantId).find((p) => p.enabled);
     let pipelineResult: PipelineResult;
     if (policy === undefined) {
@@ -215,6 +217,7 @@ export class PromotionService {
     } else {
       const pipeline = new PolicyPipeline(policy);
       pipelineResult = pipeline.evaluate(candidate, {
+        minimumSensitivity,
         existingHashes: new Set(tenantMemories.map((m) => m.contentHash)),
         tenantId,
         // contradiction_check lookup (E1): reuse the tenant-scoped memory load
@@ -295,6 +298,7 @@ export class PromotionService {
         candidate,
         contentHash,
         pipelineResult,
+        ...(minimumSensitivity !== undefined ? { minimumSensitivity } : {}),
         supersessions: supersessionPlan.matches,
         promotedBy,
         promotionReason,
