@@ -108,7 +108,7 @@ export function createServer(
     // teamkb_propose — queue a memory candidate for governance review
     server.tool(
       'teamkb_propose',
-      'Queue a new memory candidate for governance review. Writes to the spool only — the curator promotes it after policy checks pass.',
+      'Queue a new memory proposal for explicit review. Writes to the spool only. Requires a compatible Curator deployment with the Registrar MCP review gate; the producer build alone does not prove that gate is installed. An authorized administrator reviews the pending candidate through the candidate API.',
       {
         title: z.string().min(1).describe('Short descriptive title for the memory'),
         content: z.string().min(1).describe('Full content of the memory'),

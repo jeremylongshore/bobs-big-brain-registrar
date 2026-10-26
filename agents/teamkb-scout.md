@@ -47,14 +47,18 @@ team's workflow.
 
 ## Discovery review prerequisite
 
-The current generic `teamkb_propose` implementation stamps candidates with medium
-trust and exposes no trust override. The default `source_trust` evaluator accepts
-medium trust; naming that rule does not establish review-before-promotion.
-Require operator-provided evidence of an applicable server-side review gate
-before proposal calls. If that prerequisite is unavailable, return findings as
-advisory text for human review and do not queue them. This prompt instruction is
-not itself a server-enforced review boundary. Never claim low trust was applied
-or that a queued candidate is held merely because it came from this agent.
+The source-built `teamkb_propose` stamps medium trust and a fixed AI MCP capture
+envelope; it does not authenticate this scout as a distinct principal. The
+Curator source revision in this repository requires explicit review independently of tenant
+policy. Direct/batch governance leaves the proposal in the inbox, not on a timed
+human-escalation hold. Finite selected governance quarantines it pending review;
+the runtime contract in `skills/brain-save/references/runtime-contract.md` describes
+the separate admin review API. Require operator-provided evidence that the Curator
+deployment processing these proposals contains the structural review gate before
+proposal calls. Evidence of the MCP producer build alone is insufficient. If that prerequisite is unavailable,
+return findings as advisory text for review without queueing them. This prompt
+does not enforce the runtime version or review gate. Never claim low trust was
+applied or that a queued candidate has already been reviewed or promoted.
 
 ## Discovery Scope
 

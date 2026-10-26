@@ -22,7 +22,8 @@ interface ProposeResult {
  * Propose a new memory candidate and write it to the spool.
  *
  * Does NOT touch SQLite. The curator reads from the spool on its next cycle
- * and applies governance policy before promotion.
+ * and requires explicit admin review for this fixed AI MCP capture surface.
+ * Caller-supplied author, trust, source or review hints are never copied.
  */
 export async function propose(
   input: ProposeInput,
@@ -62,6 +63,6 @@ export async function propose(
 
   return {
     candidateId,
-    message: `Candidate ${candidateId} queued for governance review`,
+    message: `Candidate ${candidateId} queued; admission requires a compatible Curator deployment with the Registrar MCP review gate`,
   };
 }
