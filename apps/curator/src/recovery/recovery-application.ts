@@ -562,6 +562,9 @@ export function applyRecoveryPlan(
         },
         connection,
         {
+          ...(options.onDormantPolicy === undefined
+            ? {}
+            : { onDormantPolicy: options.onDormantPolicy }),
           ...(options.originSecret === undefined ? {} : { originSecret: options.originSecret }),
           ...(options.importExclusions === undefined
             ? {}

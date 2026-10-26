@@ -1,0 +1,442 @@
+import { randomUUID } from 'node:crypto';
+import { spawn, spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { once } from 'node:events';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  createDatabase,
+  openExistingDatabase,
+  MemoryRepository,
+  CandidateRepository,
+  PolicyRepository,
+} from '@qmd-team-intent-kb/store';
+import { computeContentHash } from '@qmd-team-intent-kb/common';
+import { makeCandidate, makeMemory, makePolicy, TENANT } from './fixtures.js';
+import { memorySnapshotDigest } from '../recovery/source-archive.js';
+import { runRecoveryCommand } from '../recovery/command.js';
+import { acquireRecoveryWriteLock, inspectRecoveryStore } from '../recovery/filesystem-boundary.js';
+import { readPrivateRecoveryFile } from '../recovery/private-files.js';
+
+let root: string;
+let databasePath: string;
+let requestPath: string;
+let planPath: string;
+let keyPath: string;
+const cliPath = resolve('apps/curator/dist/recovery/main.js');
+const SECRET = 'fixture-command-origin';
+interface CommandOutput {
+  ok: boolean;
+  reviewedDigest: string;
+  committed: boolean | string;
+  alreadyApplied: boolean;
+  warnings: string[];
+  status: { state: string; entries: { archived: boolean }[] };
+  recoveryComplete: boolean;
+  postcommit: Record<string, string>;
+}
+function command(args: string[]): { code: number | null; output: CommandOutput; text: string } {
+  const child = spawnSync('/usr/bin/node', [cliPath, ...args], {
+    encoding: 'utf8',
+    timeout: 5000,
+    maxBuffer: 128 * 1024,
+  });
+  expect(child.error).toBeUndefined();
+  expect(child.stderr).toBe('');
+  return {
+    code: child.status,
+    output: JSON.parse(child.stdout) as CommandOutput,
+    text: child.stdout,
+  };
+}
+function plan(fresh = true): string {
+  const result = command([
+    'plan',
+    '--request',
+    requestPath,
+    '--out',
+    planPath,
+    ...(fresh ? ['--origin-secret-file', keyPath, '--origin-channel', 'local-mcp'] : []),
+  ]);
+  expect(result.code).toBe(0);
+  expect(result.output.ok).toBe(true);
+  return result.output.reviewedDigest;
+}
+function apply(digest: string) {
+  return command([
+    'apply',
+    '--plan',
+    planPath,
+    '--digest',
+    digest,
+    '--origin-secret-file',
+    keyPath,
+  ]);
+}
+function snapshot(): unknown {
+  const db = openExistingDatabase({ path: databasePath, readonly: true });
+  try {
+    return Object.fromEntries(
+      ['candidates', 'curated_memories', 'audit_events', 'memory_links', 'governance_policies'].map(
+        (table) => [table, db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()],
+      ),
+    );
+  } finally {
+    db.close();
+  }
+}
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'recovery-command-'));
+  databasePath = join(root, 'teamkb.db');
+  requestPath = join(root, 'request.json');
+  planPath = join(root, 'plan.json');
+  keyPath = join(root, 'origin.key');
+  const db = createDatabase({ path: databasePath });
+  const memories = new MemoryRepository(db);
+  new PolicyRepository(db).insert(makePolicy({ name: 'Private orchard policy marker' }));
+  const source = makeMemory({
+    tenantId: 'local',
+    source: 'import',
+    title: 'Orchard water guide',
+    content: 'Water orchard trees regularly.',
+    sensitivity: 'internal',
+    metadata: { filePaths: ['orchard.md'], tags: ['orchard'], audience: 'owner' },
+  });
+  const excluded = makeMemory({
+    tenantId: 'local',
+    title: 'Excluded tidal guide',
+    content: 'Retain the tidal guide.',
+  });
+  memories.insert(source);
+  memories.insert(excluded);
+  const queued = makeCandidate({ content: 'Keep the other inbox candidate queued.' });
+  new CandidateRepository(db).insert(queued, computeContentHash(queued.content));
+  db.close();
+  writeFileSync(
+    requestPath,
+    JSON.stringify({
+      runId: randomUUID(),
+      createdAt: '2026-10-26T04:40:00.000Z',
+      storeLocator: databasePath,
+      sourceTenantId: 'local',
+      targetTenantId: TENANT,
+      selections: [{ id: source.id, snapshotDigest: memorySnapshotDigest(source) }],
+      exclusions: [{ id: excluded.id, snapshotDigest: memorySnapshotDigest(excluded) }],
+      actor: { type: 'human', id: 'fixture-operator' },
+      role: 'owner',
+      reason: 'Review explicit command fixture recovery.',
+    }),
+    { mode: 0o600 },
+  );
+  writeFileSync(keyPath, SECRET, { mode: 0o600 });
+});
+afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+describe('actual recovery maintenance command', () => {
+  it('plans, applies and reports status through compiled command without exposing content or tokens', () => {
+    const before = snapshot();
+    const digest = plan();
+    expect(snapshot()).toEqual(before);
+    const envelope = JSON.parse(readFileSync(planPath, 'utf8')) as {
+      plan: { entries: { proposal: { origin: { tokenHmac: string } } }[] };
+    };
+    expect(statSync(planPath).mode & 0o777).toBe(0o600);
+    expect(existsSync(join(root, '.write.lock'))).toBe(false);
+    const result = apply(digest);
+    expect(result.code).toBe(0);
+    expect(result.output.committed).toBe(true);
+    expect(result.output.warnings).toEqual(['dormant_policy_rules']);
+    expect(result.text).not.toContain('Private orchard policy marker');
+    expect(result.output.status.state).toBe('complete');
+    expect(result.output.recoveryComplete).toBe(false);
+    expect(result.output.postcommit).toEqual({
+      anchor: 'pending',
+      exports: 'pending',
+      index: 'pending',
+    });
+    expect(result.text).not.toContain(SECRET);
+    expect(result.text).not.toContain('Water orchard');
+    expect(result.text).not.toContain(envelope.plan.entries[0]!.proposal.origin.tokenHmac);
+    const after = snapshot();
+    const replay = apply(digest);
+    expect(replay.code).toBe(0);
+    expect(replay.output.alreadyApplied).toBe(true);
+    expect(replay.output.committed).toBe(false);
+    expect(snapshot()).toEqual(after);
+    const status = command(['status', '--plan', planPath, '--digest', digest]);
+    expect(status.output.status.state).toBe('complete');
+    expect(status.output.recoveryComplete).toBe(false);
+  });
+  it('plan/status preserve database bytes and modes, ignored default key modes and absence of lock file', () => {
+    const implicitKey = join(root, '.origin-secret');
+    writeFileSync(implicitKey, 'intentionally-unread-key', { mode: 0o640 });
+    const hash = computeContentHash(readFileSync(databasePath).toString('hex'));
+    const dbMode = statSync(databasePath).mode;
+    const digest = plan(false);
+    expect(command(['status', '--plan', planPath, '--digest', digest]).code).toBe(0);
+    expect(computeContentHash(readFileSync(databasePath).toString('hex'))).toBe(hash);
+    expect(statSync(databasePath).mode).toBe(dbMode);
+    expect(statSync(implicitKey).mode & 0o777).toBe(0o640);
+    expect(existsSync(join(root, '.write.lock'))).toBe(false);
+  });
+  it('refuses writerless FIFO request, plan, key and database files without blocking', () => {
+    const fifo = join(root, 'private.fifo');
+    expect(spawnSync('/usr/bin/mkfifo', ['-m', '600', fifo]).status).toBe(0);
+    const digest = plan();
+    for (const args of [
+      ['plan', '--request', fifo, '--out', join(root, 'fifo-plan.json')],
+      ['status', '--plan', fifo, '--digest', digest],
+      ['apply', '--plan', fifo, '--digest', digest],
+      ['apply', '--plan', planPath, '--digest', digest, '--origin-secret-file', fifo],
+    ]) {
+      expect(command(args).code).toBe(1);
+    }
+    // The exported opener is exercised in its own bounded process: a regression
+    // must fail the test rather than indefinitely block the test worker.
+    const opener = resolve('packages/store/dist/index.js');
+    const program = `import { openExistingDatabase } from ${JSON.stringify(opener)};
+      try { openExistingDatabase({ path: process.argv[1], readonly: true }); process.exitCode=2; }
+      catch { process.stdout.write('refused'); }`;
+    const child = spawnSync('/usr/bin/node', ['--input-type=module', '-e', program, fifo], {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    expect(child.error).toBeUndefined();
+    expect(child.status).toBe(0);
+    expect(child.stdout).toBe('refused');
+    expect(child.stderr).toBe('');
+    expect(existsSync(join(root, '.write.lock'))).toBe(false);
+    expect(existsSync(join(root, 'fifo-plan.json'))).toBe(false);
+  });
+  it('refuses permissive explicit keys without chmod or plan creation', () => {
+    chmodSync(keyPath, 0o640);
+    const before = snapshot();
+    const result = command([
+      'plan',
+      '--request',
+      requestPath,
+      '--out',
+      planPath,
+      '--origin-secret-file',
+      keyPath,
+      '--origin-channel',
+      'local-mcp',
+    ]);
+    expect(result.code).toBe(1);
+    expect(statSync(keyPath).mode & 0o777).toBe(0o640);
+    expect(existsSync(planPath)).toBe(false);
+    expect(snapshot()).toEqual(before);
+  });
+  it.each(['digest', 'body', 'mode', 'symlink'] as const)(
+    'refuses %s plan tampering before application',
+    (kind) => {
+      let digest = plan();
+      if (kind === 'digest') digest = '0'.repeat(64);
+      if (kind === 'body') {
+        const data = JSON.parse(readFileSync(planPath, 'utf8')) as { plan: { reason: string } };
+        data.plan.reason = 'Changed review';
+        writeFileSync(planPath, JSON.stringify(data));
+      }
+      if (kind === 'mode') chmodSync(planPath, 0o644);
+      if (kind === 'symlink') {
+        renameSync(planPath, planPath + '.original');
+        symlinkSync(planPath + '.original', planPath);
+      }
+      const before = snapshot();
+      expect(apply(digest).code).toBe(1);
+      expect(snapshot()).toEqual(before);
+      expect(existsSync(join(root, '.write.lock'))).toBe(false);
+    },
+  );
+  it.each(['missing', 'symlink', 'replacement'] as const)(
+    'refuses %s database identity before acquiring lock',
+    (kind) => {
+      const digest = plan();
+      renameSync(databasePath, databasePath + '.original');
+      if (kind === 'symlink') symlinkSync(databasePath + '.original', databasePath);
+      if (kind === 'replacement') {
+        const db = createDatabase({ path: databasePath });
+        db.close();
+      }
+      expect(apply(digest).code).toBe(1);
+      expect(existsSync(join(root, '.write.lock'))).toBe(false);
+      if (kind === 'missing') expect(existsSync(databasePath)).toBe(false);
+    },
+  );
+  it('refuses a replaced parent directory even when the database inode is retained', () => {
+    const digest = plan();
+    const old = root + '-old';
+    renameSync(root, old);
+    try {
+      const copiedPlan = JSON.parse(readFileSync(join(old, 'plan.json'), 'utf8')) as unknown;
+      // Recreate the same pathname; moving the original database retains its inode.
+      mkdirSync(root, { mode: 0o700 });
+      renameSync(join(old, 'teamkb.db'), databasePath);
+      writeFileSync(planPath, JSON.stringify(copiedPlan), { mode: 0o600 });
+      renameSync(join(old, 'origin.key'), keyPath);
+      expect(apply(digest).code).toBe(1);
+      expect(existsSync(join(root, '.write.lock'))).toBe(false);
+    } finally {
+      rmSync(old, { recursive: true, force: true });
+    }
+  });
+  it('refuses existing output, oversized private inputs and duplicate options', () => {
+    const digest = plan();
+    const original = readFileSync(planPath);
+    expect(command(['plan', '--request', requestPath, '--out', planPath]).code).toBe(1);
+    expect(readFileSync(planPath)).toEqual(original);
+    expect(
+      command(['status', '--plan', planPath, '--digest', digest, '--digest', digest]).code,
+    ).toBe(1);
+    expect(() => readPrivateRecoveryFile(requestPath, 1)).toThrow();
+  });
+  it('retains canonical partial outcomes with explicit uncompleted postprocessing', () => {
+    const digest = plan();
+    writeFileSync(keyPath, 'wrong-fixture-key');
+    const result = apply(digest);
+    expect(result.code).toBe(0);
+    expect(result.output.committed).toBe(true);
+    expect(result.output.status.state).toBe('partial');
+    expect(result.output.status.entries.every((entry) => !entry.archived)).toBe(true);
+    expect(result.output.recoveryComplete).toBe(false);
+  });
+  it('rolls back a command fault and retries the identical envelope after removal', () => {
+    const digest = plan();
+    let db = openExistingDatabase({ path: databasePath, readonly: false });
+    db.exec(
+      "CREATE TRIGGER command_fault BEFORE INSERT ON audit_events WHEN NEW.action='archived' BEGIN SELECT RAISE(ABORT,'fixture'); END",
+    );
+    db.close();
+    const before = snapshot();
+    const result = apply(digest);
+    expect(result.code).toBe(1);
+    expect(result.output.committed).toBe('unknown');
+    expect(snapshot()).toEqual(before);
+    db = openExistingDatabase({ path: databasePath, readonly: false });
+    db.exec('DROP TRIGGER command_fault');
+    db.close();
+    expect(apply(digest).output.status.state).toBe('complete');
+  });
+  it('does not claim rollback when output fails after the actual commit', () => {
+    const digest = plan();
+    const output: unknown[] = [];
+    let first = true;
+    const code = runRecoveryCommand(
+      ['apply', '--plan', planPath, '--digest', digest, '--origin-secret-file', keyPath],
+      {
+        output(value) {
+          if (first) {
+            first = false;
+            throw new Error('simulated output failure');
+          }
+          output.push(value);
+        },
+      },
+    );
+    expect(code).toBe(1);
+    expect(output).toEqual([
+      {
+        ok: false,
+        command: 'apply',
+        committed: true,
+        error: 'recovery_refused',
+        recoveryComplete: false,
+      },
+    ]);
+    expect(command(['status', '--plan', planPath, '--digest', digest]).output.status.state).toBe(
+      'complete',
+    );
+  });
+  it('retains the actual kernel lock until release and excludes an independent contender', () => {
+    const lock = acquireRecoveryWriteLock(inspectRecoveryStore(databasePath), 0);
+    const path = join(root, '.write.lock');
+    try {
+      expect(spawnSync('/usr/bin/flock', ['--nonblock', path, '/usr/bin/true']).status).toBe(1);
+      lock.verify();
+    } finally {
+      lock.release();
+    }
+    expect(spawnSync('/usr/bin/flock', ['--nonblock', path, '/usr/bin/true']).status).toBe(0);
+  });
+  it('refuses an apply command while an independent process holds the shared flock', async () => {
+    const digest = plan();
+    const path = join(root, '.write.lock');
+    const program =
+      "const fs=require('node:fs'),cp=require('node:child_process');const fd=fs.openSync(process.argv[1],'a',0o600);const r=cp.spawnSync('/usr/bin/flock',['--exclusive','3'],{stdio:['ignore','ignore','ignore',fd]});if(r.status!==0)process.exit(2);process.stdout.write('held\\n');process.stdin.resume();process.stdin.on('end',()=>{fs.closeSync(fd);process.exit(0)});";
+    const holder = spawn('/usr/bin/node', ['-e', program, path], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    try {
+      await once(holder.stdout, 'data');
+      const before = snapshot();
+      const result = command([
+        'apply',
+        '--plan',
+        planPath,
+        '--digest',
+        digest,
+        '--origin-secret-file',
+        keyPath,
+        '--lock-timeout-ms',
+        '20',
+      ]);
+      expect(result.code).toBe(1);
+      expect(result.output.committed).toBe(false);
+      expect(snapshot()).toEqual(before);
+      const exited = once(holder, 'exit');
+      holder.stdin.end();
+      await exited;
+    } finally {
+      if (holder.exitCode === null) {
+        holder.kill('SIGTERM');
+        await once(holder, 'exit');
+      }
+    }
+    expect(apply(digest).output.status.state).toBe('complete');
+  });
+  it('refuses symlink lock files and releases after a detected lock replacement', () => {
+    const witness = inspectRecoveryStore(databasePath);
+    const path = join(root, '.write.lock');
+    symlinkSync(keyPath, path);
+    expect(() => acquireRecoveryWriteLock(witness, 0)).toThrow();
+    rmSync(path);
+    const lock = acquireRecoveryWriteLock(witness, 0);
+    renameSync(path, path + '.old');
+    writeFileSync(path, '', { mode: 0o600 });
+    try {
+      expect(() => lock.verify()).toThrow();
+    } finally {
+      lock.release();
+    }
+  });
+  it('opens existing schema without chmod and refuses missing or outdated stores without migration', () => {
+    chmodSync(databasePath, 0o640);
+    const db = openExistingDatabase({ path: databasePath, readonly: false });
+    db.close();
+    expect(statSync(databasePath).mode & 0o777).toBe(0o640);
+    expect(() =>
+      openExistingDatabase({ path: join(root, 'missing.db'), readonly: false }),
+    ).toThrow();
+    expect(existsSync(join(root, 'missing.db'))).toBe(false);
+    const current = openExistingDatabase({ path: databasePath, readonly: false });
+    current.exec(
+      'DELETE FROM schema_migrations WHERE version=(SELECT MAX(version) FROM schema_migrations)',
+    );
+    current.close();
+    const hash = computeContentHash(readFileSync(databasePath).toString('hex'));
+    expect(() => openExistingDatabase({ path: databasePath, readonly: false })).toThrow();
+    expect(computeContentHash(readFileSync(databasePath).toString('hex'))).toBe(hash);
+  });
+});

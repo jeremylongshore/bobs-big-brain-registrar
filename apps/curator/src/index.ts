@@ -200,3 +200,6 @@ export type {
   RecoveryEntryStatus,
   RecoveryStatus,
 } from './recovery/recovery-application.js';
+
+export { runRecoveryCommand } from './recovery/command.js';
+export type { RecoveryCommandIO } from './recovery/command.js';

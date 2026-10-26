@@ -98,3 +98,6 @@ export { MemoryLinksRepository } from './repositories/memory-links-repository.js
 export type { MemoryLink, Neighbor, GraphNode } from './repositories/memory-links-repository.js';
 export { ImportBatchRepository } from './repositories/import-batch-repository.js';
 export type { ImportBatch } from './repositories/import-batch-repository.js';
+
+export { openExistingDatabase } from './existing-database.js';
+export type { ExistingDatabaseOptions } from './existing-database.js';
