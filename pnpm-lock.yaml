@@ -31,8 +31,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@intentsolutions/audit-harness':
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.5.1
+        version: 1.5.1
       '@qmd-team-intent-kb/store':
         specifier: workspace:*
         version: link:packages/store
@@ -1038,8 +1038,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@intentsolutions/audit-harness@1.4.0':
-    resolution: {integrity: sha512-Fl9rqD05GQcIa1MSIFKVVEFntmiGtXGmcbYRNZ7tr6sWHPE7yA0BAdWuUgK7HAGZ6XZnBvXbw98SjiqiQdKRrQ==}
+  '@intentsolutions/audit-harness@1.5.1':
+    resolution: {integrity: sha512-7TI7i8iKHNwYQ1ZPH8/23Y4Dp7z5ZBBo7HTbgihuCK4e4ZNbiCSpe/vgYRDTS0xhgk2T8mGOYFegTXWKNob8uA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -4739,7 +4739,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 26.6.4
 
-  '@intentsolutions/audit-harness@1.4.0': {}
+  '@intentsolutions/audit-harness@1.5.1': {}
 
   '@intentsolutions/core@0.11.0':
     dependencies:
