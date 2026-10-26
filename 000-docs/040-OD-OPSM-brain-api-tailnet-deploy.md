@@ -126,3 +126,35 @@ query is the final confirmation.)
 - D27 (single remote brain, not the VPS): `intent-os decision-log/004-…`.
 - The unified plugin (local | team): `governed-second-brain-plugin`; decision `intent-os/000-docs/014-AT-DECR-…`.
 - The dogfood proof: `intent-os/000-docs/015-AA-AACR-…`.
+
+## Health diagnostic privacy and consumer migration
+
+At the source revision implementing `compile-then-govern-zgh`, anonymous
+`GET /api/health` returns only `status`, `uptime`, `dbConnected` and `version`.
+It no longer scans or returns tenant policy dormancy or global index freshness.
+The existing deploy script checks the HTTP status only and keeps using this
+liveness route; existing 200/503 behavior is preserved.
+
+Outside the existing loopback development no-auth mode, global diagnostics
+at `GET /api/health/diagnostics` require a valid **unscoped admin** bearer token. Members and tenant-scoped admins cannot read
+this global aggregation, including when naming an allowed tenant. This route
+does not offer a tenant-filtered view; do not broaden a monitoring token's
+tenant scope to work around a refusal. Existing loopback development no-auth
+mode retains its existing global administrative standing.
+
+Any diagnostic monitor reading `policyDormancy` or `indexStalenessSeconds`
+from the prior public response must migrate explicitly to the protected route
+and use existing approved global administrative credentials. Those fields
+are absent from public liveness; absence is not an empty/healthy diagnostic
+result. Repository consumers were inspected: the deploy script uses status
+only, and the optional promote/search integration fixture now reads the
+protected diagnostic route. External monitoring consumers and deployed
+versions remain unverified; this source change does not migrate their
+credentials, alter ACLs, or deploy a service. Before rollout, inventory those
+consumers and verify effective network exposure through the authorized
+operational gate.
+
+Reverting this change restores the prior anonymous diagnostic behavior in source;
+building and deploying that revision would restore the exposure in the service. Do not
+use rollback as a credential or network recovery procedure. No persisted
+brain data or schema migration is involved.

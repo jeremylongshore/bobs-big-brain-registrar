@@ -52,13 +52,13 @@ describe('GET /api/health', () => {
   // ─── Policy dormancy surfacing (5bm.10) ────────────────────────────────────
 
   it('reports no policy dormancy when no policy exists', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
   });
 
   it('reports zero dormancy for the complete recommended policy', async () => {
     new PolicyRepository(db).insert(buildRecommendedPolicy('acme', NOW));
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
     expect(res.statusCode).toBe(200); // dormancy never degrades liveness
   });
@@ -71,7 +71,7 @@ describe('GET /api/health', () => {
     );
     new PolicyRepository(db).insert({ ...partial, rules: twoRules });
 
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     const body = res.json<{
       status: string;
       policyDormancy: Array<{ policyName: string; dormantRuleTypes: string[] }>;
@@ -96,20 +96,20 @@ describe('GET /api/health', () => {
   it('ignores a disabled policy for dormancy', async () => {
     const partial = buildRecommendedPolicy('acme', NOW);
     new PolicyRepository(db).insert({ ...partial, rules: [], enabled: false });
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(res.json<{ policyDormancy: unknown[] }>().policyDormancy).toEqual([]);
   });
 
   // ─── Index staleness surfacing (D2) ────────────────────────────────────────
 
   it('reports indexStalenessSeconds null before measurement starts', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(res.json<{ indexStalenessSeconds: number | null }>().indexStalenessSeconds).toBeNull();
   });
 
   it('reports 0 staleness when the index has absorbed every promotion', async () => {
     new IndexStateRepository(db).markIndexed('acme', NOW);
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(res.json<{ indexStalenessSeconds: number | null }>().indexStalenessSeconds).toBe(0);
   });
 
@@ -119,7 +119,7 @@ describe('GET /api/health', () => {
     new MemoryRepository(db).insert(
       makeMemory({ tenantId: 'acme', promotedAt: '2026-07-17T00:00:00.001Z' }),
     );
-    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const res = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     const body = res.json<{ status: string; indexStalenessSeconds: number | null }>();
     expect(body.indexStalenessSeconds).toBeGreaterThan(0);
     expect(body.status).toBe('healthy'); // staleness is an operator signal, not an outage

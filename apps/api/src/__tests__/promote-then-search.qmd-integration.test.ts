@@ -123,7 +123,7 @@ describe.skipIf(!HAS_QMD)('promote → search immediately (D1, real qmd)', () =>
     // And the health surfaces agree end-to-end.
     const health = await adapter.health();
     expect(health.stalenessSeconds).toBe(0);
-    const apiHealth = await app.inject({ method: 'GET', url: '/api/health' });
+    const apiHealth = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(apiHealth.json<{ indexStalenessSeconds: number | null }>().indexStalenessSeconds).toBe(
       0,
     );

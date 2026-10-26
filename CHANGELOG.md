@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restrict global policy dormancy and index freshness diagnostics to unscoped
+  administrators at `GET /api/health/diagnostics`. Anonymous `GET /api/health`
+  retains liveness, DB connectivity, uptime and version, with no tenant or policy
+  metadata. Diagnostic consumers must migrate to the authenticated route;
+  no service deployment is performed (`compile-then-govern-zgh`).
+
 - Reconcile source documentation for retrieval defaults, package/API/MCP inventories,
   CI commands, and historical decision authority; repair the document index and links
   (`compile-then-govern-eqw.6.3`). No runtime or model-selection change.

@@ -11,12 +11,16 @@ interface PolicyDormancy {
   dormantRuleTypes: string[];
 }
 
-/** Payload returned by the health endpoint. */
-interface HealthStatus {
+/** Minimal public liveness; contains no tenant or policy diagnostics. */
+interface LivenessStatus {
   status: 'healthy' | 'degraded';
   uptime: number;
   dbConnected: boolean;
   version: string;
+}
+
+/** Global operational diagnostics, restricted to unscoped administrators. */
+interface HealthStatus extends LivenessStatus {
   /**
    * Per-policy dormancy (5bm.10): any ENABLED policy that leaves registered
    * rules inert. Empty means every active policy enforces the full registry.
@@ -44,8 +48,8 @@ export class HealthService {
 
   constructor(private readonly db: Database.Database) {}
 
-  /** Perform a health check and return the current status. */
-  check(): HealthStatus {
+  /** Public probe: no policy/index scan or cross-tenant diagnostic payload. */
+  checkLiveness(): LivenessStatus {
     let dbConnected = false;
     try {
       this.db.prepare('SELECT 1').get();
@@ -59,8 +63,16 @@ export class HealthService {
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       dbConnected,
       version: '0.4.0',
-      policyDormancy: dbConnected ? this.checkPolicyDormancy() : [],
-      indexStalenessSeconds: dbConnected ? this.checkIndexStaleness() : null,
+    };
+  }
+
+  /** Full diagnostics; callers must enforce global administrative standing. */
+  check(): HealthStatus {
+    const liveness = this.checkLiveness();
+    return {
+      ...liveness,
+      policyDormancy: liveness.dbConnected ? this.checkPolicyDormancy() : [],
+      indexStalenessSeconds: liveness.dbConnected ? this.checkIndexStaleness() : null,
     };
   }
 
