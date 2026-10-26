@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Recovery integrations can check synchronous readiness under the shared flock
+  and the same immediate SQLite transaction before fresh application. Refusal
+  leaves recovery unsettled; historical replay and repair keep their existing
+  commit reporting and still require postcommit verification.
+
 - Add strict recovery-only qmd2.5.3 registry inspection for an explicit owned
   runtime. Compare YAML and SQLite collection names, source roots and behavior;
   refuse hooks, filters, conflicting paths and file replacement. Distinguish

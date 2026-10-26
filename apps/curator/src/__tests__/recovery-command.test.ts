@@ -28,6 +28,10 @@ import { makeCandidate, makeMemory, makePolicy, TENANT } from './fixtures.js';
 import { memorySnapshotDigest } from '../recovery/source-archive.js';
 import { runRecoveryCommand } from '../recovery/command.js';
 import { executeRecoveryEnvelope } from '../recovery/recovery-execution.js';
+import type {
+  RecoveryReadinessContext,
+  TrustedRecoveryReadiness,
+} from '../recovery/recovery-execution.js';
 import { acquireRecoveryWriteLock, inspectRecoveryStore } from '../recovery/filesystem-boundary.js';
 import { readPrivateRecoveryFile } from '../recovery/private-files.js';
 
@@ -455,6 +459,214 @@ describe('locked asynchronous recovery integration', () => {
     return spawnSync('/usr/bin/flock', ['--nonblock', join(root, '.write.lock'), '/usr/bin/true'])
       .status;
   }
+  it('refuses readiness before settlement while holding both writer locks', async () => {
+    const digest = plan();
+    const before = snapshot();
+    let checked = false;
+    let postprocessed = false;
+    const result = await executeRecoveryEnvelope(
+      request(digest),
+      async () => {
+        postprocessed = true;
+      },
+      (context) => {
+        checked = true;
+        expect(context.database.inTransaction).toBe(true);
+        expect(contender()).toBe(1);
+        const competitor = openExistingDatabase({ path: databasePath, readonly: false });
+        try {
+          competitor.pragma('busy_timeout = 0');
+          expect(() => competitor.exec('BEGIN IMMEDIATE')).toThrow(/locked/);
+        } finally {
+          competitor.close();
+        }
+        context.assertStillBound();
+        throw new Error('Private audit reason must not escape');
+      },
+    );
+    expect(checked).toBe(true);
+    expect(postprocessed).toBe(false);
+    expect(result).toMatchObject({
+      ok: false,
+      committed: false,
+      appliedNow: false,
+      failedStage: 'preflight',
+      postcommit: { state: 'not_run' },
+    });
+    expect(snapshot()).toEqual(before);
+    expect(contender()).toBe(0);
+    expect(JSON.stringify(result)).not.toContain('Private audit reason');
+  });
+  it('rolls back writes attempted by a refusing trusted readiness checker', async () => {
+    const digest = plan();
+    const before = snapshot();
+    const result = await executeRecoveryEnvelope(
+      request(digest),
+      async () => undefined,
+      (context) => {
+        context.database.prepare('DELETE FROM governance_policies').run();
+        throw new Error('refuse after attempted write');
+      },
+    );
+    expect(result).toMatchObject({ ok: false, committed: false, appliedNow: false });
+    expect(snapshot()).toEqual(before);
+  });
+  it('centrally refuses lock replacement during readiness before any settlement', async () => {
+    const digest = plan();
+    const before = snapshot();
+    const lockPath = join(root, '.write.lock');
+    const originalLock = join(root, '.write.lock.original');
+    let postprocessed = false;
+    const result = await executeRecoveryEnvelope(
+      request(digest),
+      async () => {
+        postprocessed = true;
+      },
+      () => {
+        renameSync(lockPath, originalLock);
+        writeFileSync(lockPath, 'replacement-lock-sentinel', { mode: 0o600 });
+      },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      committed: false,
+      appliedNow: false,
+      failedStage: 'preflight',
+    });
+    expect(postprocessed).toBe(false);
+    expect(snapshot()).toEqual(before);
+    expect(readFileSync(lockPath, 'utf8')).toBe('replacement-lock-sentinel');
+    expect(spawnSync('/usr/bin/flock', ['--nonblock', originalLock, '/usr/bin/true']).status).toBe(
+      0,
+    );
+  });
+  it('settles canonical recovery after successful synchronous readiness', async () => {
+    const digest = plan();
+    let checked = 0;
+    const result = await executeRecoveryEnvelope(
+      request(digest),
+      async () => 'postcommit',
+      (context) => {
+        checked++;
+        expect(context.runId).toBeTypeOf('string');
+        expect(context.sourceTenantId).toBe('local');
+        expect(context.targetTenantId).toBe(TENANT);
+        expect(context.database.inTransaction).toBe(true);
+        context.assertStillBound();
+      },
+    );
+    expect(checked).toBe(1);
+    expect(result).toMatchObject({
+      ok: true,
+      committed: true,
+      appliedNow: true,
+      status: { state: 'complete' },
+      postcommit: { state: 'completed', value: 'postcommit' },
+    });
+    expect(contender()).toBe(0);
+  });
+  it('preserves historical replay and repair without rerunning fresh readiness', async () => {
+    const digest = plan();
+    expect(apply(digest).code).toBe(0);
+    const before = snapshot();
+    let checks = 0;
+    const readiness: TrustedRecoveryReadiness = () => {
+      checks++;
+      throw new Error('fresh readiness must not run');
+    };
+    const replay = await executeRecoveryEnvelope(
+      request(digest),
+      async () => {
+        throw new Error('no replay maintenance');
+      },
+      readiness,
+    );
+    expect(replay).toMatchObject({
+      ok: true,
+      committed: true,
+      appliedNow: false,
+      postcommit: { state: 'skipped_replay' },
+    });
+    const repaired = await executeRecoveryEnvelope(
+      { operation: 'repair', planPath, expectedDigest: digest },
+      async () => {
+        throw new Error('strict repair refuses');
+      },
+      readiness,
+    );
+    expect(repaired).toMatchObject({
+      ok: false,
+      committed: true,
+      appliedNow: false,
+      failedStage: 'postcommit',
+    });
+    expect(checks).toBe(0);
+    expect(snapshot()).toEqual(before);
+  });
+  it('refuses native async readiness before invoking it or settling', async () => {
+    const digest = plan();
+    const before = snapshot();
+    let called = false;
+    const invalid = (async () => {
+      called = true;
+    }) as unknown as TrustedRecoveryReadiness;
+    const result = await executeRecoveryEnvelope(request(digest), async () => undefined, invalid);
+    expect(result).toMatchObject({
+      ok: false,
+      committed: false,
+      appliedNow: false,
+      failedStage: 'preflight',
+    });
+    expect(called).toBe(false);
+    expect(snapshot()).toEqual(before);
+  });
+  it('refuses a returned promise and rolls back synchronous checker writes', async () => {
+    const digest = plan();
+    const before = snapshot();
+    const invalid = ((context: RecoveryReadinessContext) => {
+      context.database.prepare('DELETE FROM governance_policies').run();
+      return Promise.resolve();
+    }) as unknown as TrustedRecoveryReadiness;
+    const result = await executeRecoveryEnvelope(request(digest), async () => undefined, invalid);
+    expect(result).toMatchObject({ ok: false, committed: false, appliedNow: false });
+    expect(snapshot()).toEqual(before);
+  });
+  it('sanitizes rejected promise misuse without an unhandled rejection in a real process', () => {
+    const digest = plan();
+    const before = snapshot();
+    const script = `
+      const {executeRecoveryEnvelope} = await import(process.argv[1]);
+      const result = await executeRecoveryEnvelope(JSON.parse(process.argv[2]),
+        async () => undefined, () => Promise.reject(new Error('private-readiness-rejection')));
+      console.log(JSON.stringify(result));
+    `;
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        script,
+        resolve('apps/curator/dist/recovery/recovery-execution.js'),
+        JSON.stringify(request(digest)),
+      ],
+      {
+        encoding: 'utf8',
+        timeout: 5000,
+        maxBuffer: 128 * 1024,
+      },
+    );
+    expect(child.error).toBeUndefined();
+    expect(child.status).toBe(0);
+    expect(child.stderr).toBe('');
+    expect(JSON.parse(child.stdout)).toMatchObject({
+      ok: false,
+      committed: false,
+      appliedNow: false,
+      failedStage: 'preflight',
+    });
+    expect(child.stdout).not.toContain('private-readiness-rejection');
+    expect(snapshot()).toEqual(before);
+  });
   it('retains the actual flock through an awaited integration and exposes only callback completion', async () => {
     const digest = plan();
     const result = await executeRecoveryEnvelope(request(digest), async (context) => {
