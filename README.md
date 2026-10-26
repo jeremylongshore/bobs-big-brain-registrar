@@ -27,8 +27,8 @@ Turn ephemeral Claude Code session insights into persistent, governed, team-wide
 
 This project has a clear separation of responsibilities:
 
-- **qmd** is one of two local retrieval backends. It does one thing well: fast, offline full-text search.
-- **Bob's Big Brain Registrar** provides everything around it: orchestration, governance, lifecycle management, deduplication, analytics, the team-shared memory model, and hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via deterministic reciprocal-rank fusion, then reranked by freshness and category. Serving stays model-free and deterministic; a semantic (sqlite-vec) backend is deferred behind the retrieval eval gate.
+- **qmd** is one of two lexical retrieval backends. It does one thing well: fast, offline full-text search.
+- **Bob's Big Brain Registrar** provides everything around it: orchestration, governance, lifecycle management, deduplication, analytics, the team-shared memory model, and hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via deterministic reciprocal-rank fusion, then reranked by freshness and category. The production entrypoints fuse qmd BM25, native FTS5, and a default-enabled sqlite-vec dense arm using reciprocal-rank fusion, then apply freshness and category ranking. The optional loopback embedder is separate infrastructure; unavailable dense retrieval fails open to lexical results. Direct library callers must supply dense configuration. Governance and receipt verification use no retrieval model.
 - **Enterprise-capable from day one.** Tenant isolation, audit trails, and governance policies are architectural requirements, not afterthoughts.
 
 ## Architecture Thesis
@@ -66,6 +66,9 @@ bobs-big-brain-registrar/
 │   ├── claude-runtime/      # Claude Code session capture
 │   ├── policy-engine/       # Memory governance policy evaluation
 │   ├── eval-surface/        # Govern-decision + provenance CI evals
+│   ├── qmd-runtime/       # Owned qmd runtime tooling
+│   ├── test-fixtures/     # Shared synthetic test data
+│   ├── store/             # SQLite repositories and migrations
 │   ├── repo-resolver/       # Multi-repo context resolution
 │   └── common/              # Shared utilities
 ├── kb-export/               # Git-exported curated knowledge output
@@ -78,14 +81,14 @@ bobs-big-brain-registrar/
 
 ### Applications
 
-| Package             | Purpose                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`          | Control plane REST API. Memory CRUD, search delegation, governance admin, authentication. The central authority for canonical memory state.                                                                                                                                                                                                               |
-| `apps/curator`      | Memory promotion engine. Validates candidates against policy, deduplicates, detects supersession, assigns lifecycle states.                                                                                                                                                                                                                               |
-| `apps/edge-daemon`  | Local sync daemon with spool watch, curation cycle, staleness sweep, PID locking, and graceful shutdown. Replicates to local qmd indexes.                                                                                                                                                                                                                 |
-| `apps/git-exporter` | Publishes curated knowledge to git repos in structured Markdown + frontmatter. Incremental export only.                                                                                                                                                                                                                                                   |
-| `apps/mcp-server`   | MCP server exposing the brain to Claude Code. Read tools (`teamkb_search`, `teamkb_status`, `teamkb_neighbors`) always register; write tools (`teamkb_propose`, `teamkb_import`, `teamkb_transition`, `teamkb_sync`) are admin-gated. Runs local (in-process qmd) or team mode (proxy to the remote brain over the tailnet when `TEAMKB_API_URL` is set). |
-| `apps/reporting`    | Analytics, lifecycle reporting, governance audit trails, and team knowledge dashboards.                                                                                                                                                                                                                                                                   |
+| Package             | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/api`          | Control plane REST API. Memory CRUD, search delegation, governance admin, authentication. The central authority for canonical memory state.                                                                                                                                                                                                                                                                                               |
+| `apps/curator`      | Memory promotion engine. Validates candidates against policy, deduplicates, detects supersession, assigns lifecycle states.                                                                                                                                                                                                                                                                                                               |
+| `apps/edge-daemon`  | Local sync daemon with spool watch, curation cycle, staleness sweep, PID locking, and graceful shutdown. Replicates to local qmd indexes.                                                                                                                                                                                                                                                                                                 |
+| `apps/git-exporter` | Publishes curated knowledge to git repos in structured Markdown + frontmatter. Incremental export only.                                                                                                                                                                                                                                                                                                                                   |
+| `apps/mcp-server`   | MCP server exposing the brain to Claude Code. Three read tools always register; eight additional tools are gated by `canWrite` (admin by default), including import, transition, recategorization, vault preview/import/rollback and sync. See the exact names in [CLAUDE.md](CLAUDE.md#retrieval-and-mcp-inventory). Runs local (in-process qmd) or team mode (proxy to the remote brain over the tailnet when `TEAMKB_API_URL` is set). |
+| `apps/reporting`    | Analytics, lifecycle reporting, governance audit trails, and team knowledge dashboards.                                                                                                                                                                                                                                                                                                                                                   |
 
 ### Libraries
 
@@ -96,34 +99,36 @@ bobs-big-brain-registrar/
 | `packages/claude-runtime` | Captures memory proposals from Claude Code sessions. Hooks into session events, applies pre-policy secret filtering.                                                                                                                                                                           |
 | `packages/policy-engine`  | Evaluates candidates against governance rules. Secret detection, dedup scoring, relevance, tenant isolation. All deterministic. Ships a recommended full-coverage policy + an anti-dormancy gate that flags uncovered rule types.                                                              |
 | `packages/eval-surface`   | Deterministic evaluation surface — govern-decision precision/recall (fail-closed on a missed secret/PII) and provenance-integrity evals, run as named CI gates.                                                                                                                                |
-| `packages/store`          | SQLite persistence layer via better-sqlite3. WAL mode, 7 repository classes, in-memory test database helper. Enum-membership backstop + CHECK constraints on `curated_memories`; lifecycle state-graph enforced at the write path.                                                             |
+| `packages/store`          | SQLite persistence layer via better-sqlite3. WAL mode, 8 repository classes, in-memory test database helper. Enum-membership backstop + CHECK constraints on `curated_memories`; lifecycle state-graph enforced at the write path.                                                             |
 | `packages/repo-resolver`  | Multi-repo context resolution. Determines project/team ownership and enforces tenant boundaries.                                                                                                                                                                                               |
+| `packages/qmd-runtime`    | Owned qmd runtime tooling and artifact verification.                                                                                                                                                                                                                                           |
+| `packages/test-fixtures`  | Shared synthetic fixtures for tests and evaluations.                                                                                                                                                                                                                                           |
 | `packages/common`         | Shared utilities: Result<T, E> type, SHA-256 content hashing, path-safety validation, freshness scoring with reranking.                                                                                                                                                                        |
 
 ## Status
 
-**v0.7.0 — Production-ready platform with full Intent Solutions Testing SOP enforced in CI.**
+**Root manifest: v0.8.0.** Source on `main` also contains changes after that release; a source capability is not evidence of an installed or released channel. The six apps and ten library workspaces retain independent manifest versions (`0.1.0`, except `repo-resolver` at `0.0.0`).
 
-**v0.7.0 marquee:** hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), reranked by freshness + category, model-free · a stratified Recall@10/nDCG@10 eval harness that gates ranking changes in CI · MCP tool surface (`teamkb_search` / `teamkb_status` / `teamkb_neighbors` read; `teamkb_propose` / `teamkb_transition` write, admin-gated) with local and team-brain modes · hash-chained tamper-evident audit receipts with an external chain-head anchor.
+**Current source capabilities:** hybrid retrieval — the qmd binary fused with a native in-process FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), reranked by freshness + category, with default-enabled local dense retrieval when its separate embedder is available · a stratified Recall@10/nDCG@10 eval harness that gates ranking changes in CI · MCP tool surface (`teamkb_search` / `teamkb_status` / `teamkb_neighbors` read; `teamkb_propose` / `teamkb_transition` write, admin-gated) with local and team-brain modes · hash-chained tamper-evident governance receipts. The plugin coordinates external chain-head git witnessing; Registrar signed merge anchors are a separate mechanism. Search citations identify retrieved sources; they are not new governance receipts.
 
-All core subsystems functional. 1,900+ unit tests + a testcontainers-based L4 integration suite (postgres forward-compat) passing. The per-PR CI (`ci.yml`) enforces: format → lint → typecheck → architecture (dependency-cruiser) → complexity (CRAP) → policy-artifact hash pin (`harness-pin --verify`) → unit tests + coverage (80% line / 70% branch) → govern-decision & provenance-integrity evals → retrieval ratchet (stratified Recall@10) → L4 integration (testcontainers). Weekly/nightly workflows (`security.yml`, `nightly.yml`) add gitleaks, Semgrep, and npm audit. Policy artifacts are hash-pinned via `scripts/harness-pin.sh` so the testing SOP is self-defending against silent AI policy edits.
+Validation is defined by the checked-in workflows; passing results belong to a specific commit and run, not this capability list. The per-PR CI (`ci.yml`) includes: format → lint → typecheck → architecture (dependency-cruiser) → complexity (CRAP) → policy-artifact hash pin (`harness-pin --verify`) → unit tests + coverage (80% line / 70% branch) → govern-decision & provenance-integrity evals → retrieval ratchet (stratified Recall@10) → L4 integration (testcontainers). `security.yml` runs on main pushes, PRs, and dispatch; Semgrep is advisory (`continue-on-error`). `nightly.yml` runs at 04:00 UTC or dispatch and includes `pnpm validate` and additional eval/audit checks. The PR workflow invokes its individual gates rather than `pnpm validate`. Policy artifacts are hash-pinned via `scripts/harness-pin.sh` so the testing SOP is self-defending against silent AI policy edits.
 
 Highlights:
 
-- **Schema & Domain Model** — Zod schemas, lifecycle state machine, 12 enum types (Phase 1)
-- **Claude Runtime Capture** — Session capture, local JSONL spool, 11-pattern secret detection (Phase 2)
+- **Schema & Domain Model** — Zod schemas, lifecycle state machine, 17 enum definitions in `packages/schema/src/enums.ts`
+- **Claude Runtime Capture** — Session capture, local JSONL spool, 17 secret patterns plus 6 PII patterns in the current scanner
 - **qmd Adapter** — CLI wrapper, curated-only default search, tenant-isolated indexes (Phase 3)
-- **Policy Engine** — 8 deterministic rule evaluators with short-circuit pipeline (Phase 4A)
-- **SQLite Store** — 5 repositories, WAL mode, in-memory test support (Phase 4B)
+- **Policy Engine** — 10 deterministic rule evaluators with short-circuit pipeline (Phase 4A)
+- **SQLite Store** — 8 repository classes and 8 domain tables plus migration bookkeeping, WAL mode, in-memory test support (Phase 4B)
 - **Control Plane API** — Fastify 5, candidate intake, memory lifecycle, policy CRUD, audit trail (Phase 4C)
-- **Curator Engine** — Spool intake, dedup, Jaccard supersession detection, dry-run mode (Phase 5)
+- **Curator Engine** — Spool intake, dedup, subject-keyed supersession with a same-category title-Jaccard fallback, dry-run mode (Phase 5)
 - **Git Exporter** — Incremental Markdown export, YAML frontmatter, category routing (Phase 6)
 - **Reporting** — Lifecycle analytics, aggregators, formatters (Phase 7)
 - **Security Hardening** — API middleware (rate-limiter, auth, input sanitizer), content classifier, export gating, path-safety (Phase 8)
 - **Repo Resolver** — Multi-repo context resolution with monorepo detection, tenant derivation, and caching (Phase 9)
 - **OpenAPI Documentation** — Generated OpenAPI 3.1 spec at `/openapi.json` and Swagger UI at `/docs` (Phase 10)
 - **Supply-Chain Security** — Cosign keyless signing + SLSA Level 3 provenance for container images (Phase 10)
-- **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (semantic sqlite-vec path deferred behind the eval gate)
+- **Hybrid Retrieval** — qmd binary fused with a native FTS5 (BM25) backend via reciprocal-rank fusion (RRF, k=60), freshness + category rerank, and a stratified Recall@10/nDCG@10 eval ratchet gating ranking changes in CI (default-enabled sqlite-vec dense arm; separate loopback service, with lexical fallback)
   If all strict and dense arms yield no usable hits (including qmd failure),
   unquoted English question-shaped queries can use a
   native fallback for 2–12 distinct topical terms, with up to 200 returned candidates within
@@ -144,8 +149,8 @@ Highlights:
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 9.15+
+- Node.js 22+
+- pnpm 9.15.4 (the pinned `packageManager`; use Corepack)
 
 ### Setup
 
@@ -155,7 +160,8 @@ git clone https://github.com/jeremylongshore/bobs-big-brain-registrar.git
 cd bobs-big-brain-registrar
 
 # Install dependencies
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 
 # Run the full validation suite (format, lint, typecheck, test)
 pnpm validate
@@ -182,5 +188,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for branching model, commit conventions
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting, threat model, and security practices.
 
 ## License
+
+The repository code uses the license below. Optional model weights are separate artifacts; the code license does not license them. The shipped EmbeddingGemma configuration and the older model-selection decision disagree; see [the dated decision-status note](000-docs/044-AT-DECR-wave0-retrieval-reconciliation.md#current-implementation-status-2026-10-26) before making a combined-product license claim.
 
 [Apache License 2.0](./LICENSE) -- Copyright 2026 Jeremy Longshore

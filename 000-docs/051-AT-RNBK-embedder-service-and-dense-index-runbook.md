@@ -1,5 +1,7 @@
 # Embedder Service + Dense Index Runbook — `bbb-embedder` (B4)
 
+> **Authority clarification — 2026-10-26:** This runbook describes the implemented EmbeddingGemma arm and dated operational measurements. It is not a superseding decision record for [044’s model-selection constraint](044-AT-DECR-wave0-retrieval-reconciliation.md#current-implementation-status-2026-10-26). Current code wiring, completed rollout, current host health, and model-license approval are separate evidence classes; this documentation reconciliation performs no installation, deployment, model invocation, or approval.
+
 **Doc:** 051-AT-RNBK · **Status:** Active · **Date:** 2026-07-20
 **Scope:** the local embedding runtime (llama.cpp `llama-server` + EmbeddingGemma-300M), the sqlite-vec sidecar index, and the adapter dense arm that consumes them.
 **Decision records:** [`038-AT-DECR`](038-AT-DECR-retrieval-backend-decision-2026-06-18.md) (sqlite-vec + EmbeddingGemma-300M only; skip qmd's 2.2 GB hybrid) · [`044-AT-DECR`](044-AT-DECR-wave0-retrieval-reconciliation.md) (Wave-0 ship order). Gate evidence that pulled B4 forward: [`050-AT-RNBK §9`](050-AT-RNBK-reranker-service-runbook.md) (20/28 semantic queries retrieve ≤1 fused candidate — the wall is candidate GENERATION, which a reranker cannot fix). Seam firewall: B2 (`packages/policy-engine/src/deterministic-score.ts`) extended by `dense-seam-firewall.test.ts`.

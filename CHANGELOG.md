@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reconcile source documentation for retrieval defaults, package/API/MCP inventories,
+  CI commands, and historical decision authority; repair the document index and links
+  (`compile-then-govern-eqw.6.3`). No runtime or model-selection change.
+
 - Scope `fast-uri` overrides by requested major: AJV and Swagger retain patched
   3.1.9, while Fastify validation and serialization receive supported patched
   4.2.3. Preserve real header, schema, SDK and URI security controls across both

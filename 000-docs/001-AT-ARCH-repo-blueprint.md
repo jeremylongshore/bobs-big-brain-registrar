@@ -1,5 +1,7 @@
 # Repository Blueprint
 
+> **Implementation note — 2026-10-26:** This is the original blueprint, not the current inventory or license statement. The project is now Bob’s Big Brain Registrar; root `package.json` requires Node.js 22+ and declares Apache-2.0, matching `LICENSE`. There are six app and ten library workspaces. See [README](../README.md) and [the source reconciliation](063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26.md) for current source boundaries; the original plan below is retained.
+
 ## Repository Identity
 
 - **Name**: qmd-team-intent-kb

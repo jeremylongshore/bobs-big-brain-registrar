@@ -9,7 +9,7 @@
 ### 1. Find or Create a Task
 
 - Check open issues on GitHub and the Beads board (`bd ready`)
-- Look at the current phase in [004-phase-plan.md](./004-phase-plan.md) for prioritized work
+- Look at the current phase in [004-phase-plan.md](./004-PP-RMAP-phase-plan.md) for prioritized work
 - If no existing task covers what you want to do, create one in Beads
 
 ### 2. Claim the Task
@@ -40,15 +40,15 @@ git checkout -b fix/critical-issue main
 
 **Branch naming conventions**:
 
-| Prefix      | Use For                                                                                                  |
-| ----------- | -------------------------------------------------------------------------------------------------------- |
-| `feat/`     | New features, new capabilities                                                                           |
-| `fix/`      | Bug fixes                                                                                                |
-| `docs/`     | Documentation-only changes                                                                               |
-| `refactor/` | Code restructuring without behavior change                                                               |
-| `test/`     | Test additions or improvements                                                                           |
-| `chore/`    | Build, CI, dependency updates                                                                            |
-| `release/`  | Release preparation (see [008-release-and-versioning-policy.md](./008-release-and-versioning-policy.md)) |
+| Prefix      | Use For                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `feat/`     | New features, new capabilities                                                                               |
+| `fix/`      | Bug fixes                                                                                                    |
+| `docs/`     | Documentation-only changes                                                                                   |
+| `refactor/` | Code restructuring without behavior change                                                                   |
+| `test/`     | Test additions or improvements                                                                               |
+| `chore/`    | Build, CI, dependency updates                                                                                |
+| `release/`  | Release preparation (see [008-release-and-versioning-policy.md](./008-OD-RELS-release-versioning-policy.md)) |
 
 ---
 
@@ -140,7 +140,7 @@ Use the PR template. Every PR must include:
 
 ### 3. Add a Changelog Entry
 
-If the PR includes user-facing changes, add an entry to the `[Unreleased]` section of `CHANGELOG.md`. See [008-release-and-versioning-policy.md](./008-release-and-versioning-policy.md) for format and rules.
+If the PR includes user-facing changes, add an entry to the `[Unreleased]` section of `CHANGELOG.md`. See [008-release-and-versioning-policy.md](./008-OD-RELS-release-versioning-policy.md) for format and rules.
 
 Changes that do NOT need a changelog entry:
 
@@ -242,9 +242,9 @@ Changes that affect the system architecture require an RFC (Request for Comments
 3. **After approval**, implement in separate PR(s)
    - Reference the RFC document in implementation PRs
 4. **Update related docs** after implementation:
-   - [002-architecture-overview.md](./002-architecture-overview.md)
-   - [004-phase-plan.md](./004-phase-plan.md)
-   - [007-data-model-draft.md](./007-data-model-draft.md) (if schema changes)
+   - [002-architecture-overview.md](./002-AT-ARCH-architecture-overview.md)
+   - [004-phase-plan.md](./004-PP-RMAP-phase-plan.md)
+   - [007-data-model-draft.md](./007-AT-DSGN-data-model-draft.md) (if schema changes)
 
 ---
 
@@ -263,7 +263,7 @@ For changes that only affect documentation:
 
 When it is time to ship a release:
 
-1. Review [008-release-and-versioning-policy.md](./008-release-and-versioning-policy.md) for the full process
+1. Review [008-release-and-versioning-policy.md](./008-OD-RELS-release-versioning-policy.md) for the full process
 2. Create a `release/*` branch
 3. Use the `/release` skill for guided execution
 4. Follow the release checklist in the policy document
