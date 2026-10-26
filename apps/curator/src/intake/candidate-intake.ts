@@ -147,6 +147,66 @@ export function applyIntakeOverrides(
  */
 export const DEFAULT_ALLOWED_ORIGIN_CHANNELS: readonly string[] = ['team-mcp', 'local-mcp'];
 
+/** Canonical schema, channel, actor overrides and disclosure checks, without I/O. */
+export function prepareIntakeCandidate(
+  data: unknown,
+  ctx: IntakeActorContext = {},
+  allowedChannels: readonly string[] = DEFAULT_ALLOWED_ORIGIN_CHANNELS,
+): MemoryCandidate {
+  const parsed = MemoryCandidate.safeParse(data);
+  if (!parsed.success) {
+    throw invalidIntake(`Invalid candidate: ${parsed.error.message}`);
+  }
+
+  // Authorized-channel gate (GSB Wave-2 H3): a capture that CLAIMS an origin
+  // channel this deployment does not recognize is refused with a distinct,
+  // stable 422 code before any override/scan/insert work. A candidate with NO
+  // `origin` skips this entirely (pre-H1 clients stay compatible; it governs
+  // later as `unattested`). Note this checks the channel CLAIM only — the
+  // token HMAC is verified at promotion time, where the govern path holds the
+  // installation secret.
+  if (parsed.data.origin !== undefined && !allowedChannels.includes(parsed.data.origin.channel)) {
+    throw disallowedIntake(
+      `Candidate rejected: origin channel '${parsed.data.origin.channel}' is not an authorized capture channel on this deployment.`,
+      'unrecognized_channel',
+    );
+  }
+
+  // R8 (bead compile-then-govern-jfv.6.7): never trust the team-mode client for
+  // the trust-bearing fields. Re-derive author / trustLevel / tenantId /
+  // prePolicyFlags from the SERVER token identity and stamp the quarantine
+  // marker BEFORE the disclosure gate + insert, so what is scanned and stored is
+  // exactly the server-owned candidate.
+  const candidate = applyIntakeOverrides(parsed.data, ctx);
+
+  // Disclosure gate: enforce the no-compensation / no-PII / no-secret rule at
+  // the boundary so the API returns a clean 422 (the same gate is also enforced
+  // at the repository choke point as the real backstop — see
+  // CandidateRepository.insert). The matched value is never echoed back
+  // (PII non-leak).
+  //
+  // R10 fix (010-AT-RISK · bead compile-then-govern-e06.3): the scanned set is
+  // derived STRUCTURALLY via `collectFreeTextFields(candidate)` — the exact same
+  // walker the repository backstop uses — so every persisted free-text surface
+  // (content, title, tenantId, every tag, all ContentMetadata free-text, and the
+  // author free-text) is scanned and future schema additions are covered
+  // automatically with no manual list to drift.
+  const violation = scanDisclosureFields(collectFreeTextFields(candidate));
+  if (violation !== null) {
+    const kind =
+      violation.category === 'pii'
+        ? 'PII'
+        : violation.category === 'secret'
+          ? 'a credential / secret'
+          : 'compensation / comp-split';
+    throw disallowedIntake(
+      `Candidate rejected: content contains disallowed ${kind} material and cannot enter the governed brain.`,
+    );
+  }
+
+  return candidate;
+}
+
 /** Outcome of {@link CandidateIntake.intake} — safety vs knowledge (created ≠ replay). */
 export type IntakeResult = {
   candidate: MemoryCandidate;
@@ -215,59 +275,7 @@ export class CandidateIntake {
   }
 
   private intakeValidated(data: unknown, ctx: IntakeActorContext): IntakeResult {
-    const parsed = MemoryCandidate.safeParse(data);
-    if (!parsed.success) {
-      throw invalidIntake(`Invalid candidate: ${parsed.error.message}`);
-    }
-
-    // Authorized-channel gate (GSB Wave-2 H3): a capture that CLAIMS an origin
-    // channel this deployment does not recognize is refused with a distinct,
-    // stable 422 code before any override/scan/insert work. A candidate with NO
-    // `origin` skips this entirely (pre-H1 clients stay compatible; it governs
-    // later as `unattested`). Note this checks the channel CLAIM only — the
-    // token HMAC is verified at promotion time, where the govern path holds the
-    // installation secret.
-    if (
-      parsed.data.origin !== undefined &&
-      !this.allowedChannels.includes(parsed.data.origin.channel)
-    ) {
-      throw disallowedIntake(
-        `Candidate rejected: origin channel '${parsed.data.origin.channel}' is not an authorized capture channel on this deployment.`,
-        'unrecognized_channel',
-      );
-    }
-
-    // R8 (bead compile-then-govern-jfv.6.7): never trust the team-mode client for
-    // the trust-bearing fields. Re-derive author / trustLevel / tenantId /
-    // prePolicyFlags from the SERVER token identity and stamp the quarantine
-    // marker BEFORE the disclosure gate + insert, so what is scanned and stored is
-    // exactly the server-owned candidate.
-    const candidate = applyIntakeOverrides(parsed.data, ctx);
-
-    // Disclosure gate: enforce the no-compensation / no-PII / no-secret rule at
-    // the boundary so the API returns a clean 422 (the same gate is also enforced
-    // at the repository choke point as the real backstop — see
-    // CandidateRepository.insert). The matched value is never echoed back
-    // (PII non-leak).
-    //
-    // R10 fix (010-AT-RISK · bead compile-then-govern-e06.3): the scanned set is
-    // derived STRUCTURALLY via `collectFreeTextFields(candidate)` — the exact same
-    // walker the repository backstop uses — so every persisted free-text surface
-    // (content, title, tenantId, every tag, all ContentMetadata free-text, and the
-    // author free-text) is scanned and future schema additions are covered
-    // automatically with no manual list to drift.
-    const violation = scanDisclosureFields(collectFreeTextFields(candidate));
-    if (violation !== null) {
-      const kind =
-        violation.category === 'pii'
-          ? 'PII'
-          : violation.category === 'secret'
-            ? 'a credential / secret'
-            : 'compensation / comp-split';
-      throw disallowedIntake(
-        `Candidate rejected: content contains disallowed ${kind} material and cannot enter the governed brain.`,
-      );
-    }
+    const candidate = prepareIntakeCandidate(data, ctx, this.allowedChannels);
 
     // (1) Id-first: session-stable / frozen-outbox replays share the same id even
     // when distillation text differs. Tenant must match so a cross-tenant UUID
