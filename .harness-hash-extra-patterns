@@ -1,0 +1,9 @@
+# Add to stock defaults; retain the original repository-specific policy pins.
+tests/RTM.md
+tests/PERSONAS.md
+tests/JOURNEYS.md
+scripts/crap-score.ts
+# Protect the selector, compatibility wrapper and mutation-control implementation.
+.harness-hash-extra-patterns
+scripts/harness-pin.sh
+scripts/harness-pin.node-test.mjs

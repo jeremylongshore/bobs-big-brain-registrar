@@ -81,18 +81,28 @@ The integration test suite lives at `tests/integration/`, runs under `pnpm test:
 
 ## Hash manifest
 
-`scripts/harness-pin.sh` maintains `.harness-hash` — a SHA-256 manifest of every engineer-owned policy artifact in this repo. Files pinned:
+`scripts/harness-pin.sh` delegates to the installed stock audit-harness verifier.
+Both `pnpm harness-pin` and `pnpm exec audit-harness verify` check the same
+`.harness-hash`. Stock defaults plus `.harness-hash-extra-patterns` select the
+protected files. All eight original policy paths remain covered:
 
-| Pinned file               | Why it's policy                            |
-| ------------------------- | ------------------------------------------ |
-| `tests/TESTING.md`        | Thresholds, classification, waivers        |
-| `tests/RTM.md`            | Requirements with MoSCoW tags              |
-| `tests/PERSONAS.md`       | Persona declarations + critical-tier flags |
-| `tests/JOURNEYS.md`       | End-to-end journey contracts               |
-| `.dependency-cruiser.cjs` | Architecture rules (Wall 7)                |
-| `stryker.config.mjs`      | Mutation-testing thresholds                |
-| `vitest.config.ts`        | Coverage thresholds                        |
-| `scripts/crap-score.ts`   | CRAP complexity threshold                  |
+| Original pinned file      | Why it is policy                             |
+| ------------------------- | -------------------------------------------- |
+| `tests/TESTING.md`        | Thresholds, classification, waivers          |
+| `tests/RTM.md`            | Requirements with MoSCoW tags                |
+| `tests/PERSONAS.md`       | Persona declarations and critical-tier flags |
+| `tests/JOURNEYS.md`       | End-to-end journey contracts                 |
+| `.dependency-cruiser.cjs` | Architecture rules                           |
+| `stryker.config.mjs`      | Mutation-testing thresholds                  |
+| `vitest.config.ts`        | Coverage thresholds                          |
+| `scripts/crap-score.ts`   | Complexity threshold                         |
+
+The stock defaults additionally protect `package.json` and the checked-in
+`.github/workflows/*.yml` / `*.yaml` files. The additive selector, compatibility
+wrapper and Node mutation-control script are pinned too. The checked-in
+manifest is the exact current inventory; matching new default-pattern files
+also require an explicit reviewed re-pin. This consolidation changes protection
+coverage, not existing test thresholds, requirements, personas or waivers.
 
 ### Why this matters
 
@@ -108,9 +118,29 @@ git commit -m "policy: <what changed and why>"
 
 The diff in the commit makes the policy change visible at code-review time. An AI-proposed PR that touches a pinned file without also updating `.harness-hash` fails CI.
 
-### Why a repo-local script
+### One verifier and explicit initialization
 
-The upstream `@intentsolutions/audit-harness` ships `harness-hash.sh` with a hardcoded PATTERNS array that pins only generic patterns (Java/CS arch tests, `.c8rc.json`, etc.) and misses this repo's actual policy files. No env override or config file. Repo-local `scripts/harness-pin.sh` encodes the correct pin set for THIS repo. Upstreaming pattern-configurability is tracked in `qmd-team-intent-kb-tpp`.
+The former local pattern implementation is retired. Installed audit-harness
+1.5.1 supports additive extra patterns, so retaining a separate implementation
+would let the owning and stock commands disagree. The small wrapper preserves
+the existing `--verify`, `--init` and `--list` entrypoints. It refuses alternate
+`MANIFEST` values; use `ROOT` to select an isolated fixture checkout. Missing
+verifiers or manifests refuse verification without installing or initializing.
+
+`node --test scripts/harness-pin.node-test.mjs` runs in CI. Private copied-file
+fixtures check both commands against intact input, mutations of every protected
+file, removal of an extra-pattern entry or selector file, newly matched default
+files, explicit initialization/listing, missing manifests, alternate manifests,
+unsupported arguments and a missing installed verifier. The tests assert an
+independent minimum of retained policy/enforcement paths; additional mutation
+inputs derive from the manifest. Adding a correctly selected custom path does
+not require a second complete test inventory. Production selection remains the
+stock defaults plus additive selector, with one hash manifest.
+
+These tripwires detect protected bytes that differ from the manifest. Approval
+of coordinated file-and-manifest updates remains a repository review and branch
+policy matter. A maintainer who changes the manifest or installed verifier remains
+inside the local trust boundary; the hashes do not authenticate physical reviewers.
 
 ## Frameworks
 

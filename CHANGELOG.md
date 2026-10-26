@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reconcile owning and stock harness verification using one installed verifier
+  and additive patterns. Retain all eight existing protected policy paths and
+  expand coverage to package/CI commands and verifier-selection controls, with
+  copied-file mutation checks in CI. Existing thresholds and waivers are unchanged;
+  manifest changes require explicit review (`compile-then-govern-ba9`).
+
 - Restrict global policy dormancy and index freshness diagnostics to unscoped
   administrators at `GET /api/health/diagnostics`. Anonymous `GET /api/health`
   retains liveness, DB connectivity, uptime and version, with no tenant or policy
