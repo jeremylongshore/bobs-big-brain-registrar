@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "curator-cli": "./dist/main.js"
+    "curator-cli": "./dist/main.js",
+    "curator-recovery": "./dist/recovery/main.js"
   },
   "exports": {
     ".": {

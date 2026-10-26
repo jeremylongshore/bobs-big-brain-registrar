@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `curator-recovery plan`, `apply` and `status` for explicit private,
+  current-schema stores. Pin reviewed plans to physical directory/database
+  identities, refuse special-file inputs without blocking, and hold the actual
+  brain `.write.lock` across canonical application. Keep plan/status read-only,
+  require explicit private origin-key files, sanitize policy warnings and report
+  database settlement separately from pending anchors, exports and indexes.
+  Postcommit integration and private-copy/live recovery remain parent work
+  (`compile-then-govern-eqw.8.1.2.6`).
+
 - Add atomic same-store application and read-only status for frozen recovery
   plans. Bind actual intake identities, selected governance with source floors,
   verified conditional archival and final receipt to the complete reviewed plan.

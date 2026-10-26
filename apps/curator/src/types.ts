@@ -72,6 +72,8 @@ export interface CurationBatchResult {
 /** Configuration for a Curator instance */
 export interface CuratorConfig {
   tenantId: string;
+  /** Optional diagnostic sink; receives registered rule types, never policy names or ids. */
+  onDormantPolicy?: (ruleTypes: readonly string[]) => void;
   /** When true, all pipeline logic runs but nothing is persisted to the database */
   dryRun?: boolean;
   /**

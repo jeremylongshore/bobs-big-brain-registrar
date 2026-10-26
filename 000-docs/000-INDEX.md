@@ -135,5 +135,6 @@
 | 057 | AT-TEST | promoted-citation-integrity                           | Receipt-to-export integrity proof  |
 | 058 | AT-TEST | generated-audit-chain-contracts                       | Generated audit-chain contracts    |
 | 059 | AT-TEST | disposable-retrieval-copy                             | Disposable retrieval copy boundary |
+| 060 | OD-RNBK | reviewed-recovery-command                             | Reviewed recovery command boundary |
 
-## Next Available Sequence: 060
+## Next Available Sequence: 061

@@ -275,12 +275,15 @@ export class Curator {
     // an operator sees which registered rules gate nothing on the running store.
     if (pipeline.dormantRuleTypes.length > 0 && !this.warnedDormantPolicies.has(policy.id)) {
       this.warnedDormantPolicies.add(policy.id);
-      console.warn(
-        `[curator] governance policy "${policy.name}" (${policy.id}) leaves ` +
-          `${pipeline.dormantRuleTypes.length} registered rule(s) dormant: ` +
-          `${pipeline.dormantRuleTypes.join(', ')}. They gate nothing on this store. ` +
-          `See buildRecommendedPolicy / bead qmd-team-intent-kb-5bm.10.`,
-      );
+      if (this.config.onDormantPolicy !== undefined) {
+        this.config.onDormantPolicy([...pipeline.dormantRuleTypes]);
+      } else
+        console.warn(
+          `[curator] governance policy "${policy.name}" (${policy.id}) leaves ` +
+            `${pipeline.dormantRuleTypes.length} registered rule(s) dormant: ` +
+            `${pipeline.dormantRuleTypes.join(', ')}. They gate nothing on this store. ` +
+            `See buildRecommendedPolicy / bead qmd-team-intent-kb-5bm.10.`,
+        );
     }
     // Tenant-scoped existing-hash set (B1) — mirrors the API promotion-service so
     // the policy dedup rule sees only this tenant's memories.

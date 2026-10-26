@@ -63,7 +63,7 @@ export interface SelectedGovernanceResult {
 
 export type SelectedGovernanceOptions = Pick<
   CuratorConfig,
-  'originSecret' | 'importExclusions' | 'holdLimits'
+  'originSecret' | 'importExclusions' | 'holdLimits' | 'onDormantPolicy'
 >;
 
 /** Stable JSON object-key ordering; arrays retain their order. Inputs come from schemas. */
@@ -177,6 +177,9 @@ export function governSelectedCandidates(
       // tenant, dry-run or receipt-suppression overrides through an object spread.
       const config: CuratorConfig = {
         tenantId: input.tenantId,
+        ...(options.onDormantPolicy === undefined
+          ? {}
+          : { onDormantPolicy: options.onDormantPolicy }),
         ...(options.originSecret !== undefined ? { originSecret: options.originSecret } : {}),
         ...(options.importExclusions !== undefined
           ? { importExclusions: options.importExclusions }
