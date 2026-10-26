@@ -108,7 +108,9 @@ describe('runCycle', () => {
     const clean = makeCandidate({
       content: 'Architecture note about bounded cache eviction and retries.',
     });
-    const refused = makeCandidate({ content: 'his base salary was leaked here' });
+    const refused = makeCandidate({
+      content: 'Synthetic disclosure fixture: salary keyword only; no person or amount.',
+    });
     await writeSpoolFile(spoolDir, 'spool-mixed.jsonl', [clean, refused]);
     await writeSpoolFile(spoolDir, 'spool-tampered.jsonl', [makeCandidate()]);
     await writeFile(
@@ -173,7 +175,9 @@ describe('runCycle', () => {
   });
 
   it('reports refusal-only intake while leaving governance and audit empty', async () => {
-    const refused = makeCandidate({ content: 'applicant ssn 123-45-6789 on file' });
+    const refused = makeCandidate({
+      content: 'Synthetic disclosure fixture: SSN marker only; no identifying number.',
+    });
     await writeSpoolFile(spoolDir, 'spool-refused.jsonl', [refused]);
     const result = await runCycle(config, deps, logger);
     expect(result.ingest.ingested).toBe(0);

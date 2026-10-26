@@ -211,7 +211,7 @@ describe('dispatch ingest — hand-crafted spool file', () => {
         makeSpoolLine(),
         makeSpoolLine({
           id: refusedId,
-          content: 'his base salary was leaked here',
+          content: 'Synthetic disclosure fixture: salary keyword only; no person or amount.',
         }),
       ]);
       const args = ['ingest', spoolDir, '--tenant', 'demo-e2e', ...(json ? ['--json'] : [])];
@@ -236,7 +236,9 @@ describe('dispatch ingest — hand-crafted spool file', () => {
         expect(stderrText()).toContain(refusedId);
       }
       expect(JSON.stringify(expected)).not.toContain(refusedId);
-      expect(stdoutText()).not.toContain('his base salary was leaked here');
+      expect(stdoutText()).not.toContain(
+        'Synthetic disclosure fixture: salary keyword only; no person or amount.',
+      );
     },
   );
 

@@ -58,9 +58,16 @@ describe('real spool refusal retention and repeated observations', () => {
       content: 'A clean note about cache eviction and retry backoff.',
     });
     const refused = [
-      makeCandidate({ content: 'applicant ssn 123-45-6789 on file' }),
-      makeCandidate({ content: 'his base salary was leaked here' }),
-      makeCandidate({ content: 'token leaked: ghp_' + '1234567890abcdefghijklmnopqrstuvwxyz12' }),
+      makeCandidate({
+        content: 'Synthetic disclosure fixture: SSN marker only; no identifying number.',
+      }),
+      makeCandidate({
+        content: 'Synthetic disclosure fixture: salary keyword only; no person or amount.',
+      }),
+      makeCandidate({
+        content:
+          'Synthetic disclosure fixture: -----BEGIN PRIVATE KEY----- marker only; no key material.',
+      }),
     ];
     const source = join(root, 'spool-mixed.jsonl');
     const bytes = Buffer.from([clean, ...refused].map((c) => JSON.stringify(c)).join('\n') + '\n');
