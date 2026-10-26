@@ -46,7 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repeated or already-admitted rejection without another receipt. Candidate content
   survives, and silently ignored or aborted writes roll back (6ps.23).
 
-
 - Isolate DenseIndexer HTTP fixtures on private Unix sockets so unrelated host
   loopback requests cannot enter their strict rejection counters. Preserve the
   original seven-request malformed-input assertion, explicitly test rejection of
