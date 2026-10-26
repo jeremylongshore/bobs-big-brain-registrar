@@ -26,6 +26,7 @@ import { Curator } from '../curator.js';
 import { recordCandidateMinimumSensitivity } from './sensitivity-constraint.js';
 import type { CuratorDependencies } from '../curator.js';
 import { findActiveHold } from '../hold/hold.js';
+import { requiresRegistrarMcpReview } from '../review/registrar-mcp-review.js';
 import type { CurationResult, CuratorConfig } from '../types.js';
 
 export interface SelectedCandidateBinding {
@@ -350,7 +351,7 @@ function settleCandidate(
   curator: Curator,
   hashes: Set<string>,
 ): SelectedOutcome {
-  if (candidate.metadata.proposedByRole === 'member') {
+  if (candidate.metadata.proposedByRole === 'member' || requiresRegistrarMcpReview(candidate)) {
     setSelectedStatus(deps.candidateRepo, config.tenantId, candidate, 'quarantined');
     return { candidateId: candidate.id, outcome: 'quarantined' };
   }

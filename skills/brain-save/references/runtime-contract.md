@@ -38,7 +38,28 @@ authentication credential. Protect the local base directory through operating-sy
 ## Security and known limitation
 
 `teamkb_propose` writes a proposal, not a promoted memory. A separate curator applies secret checks,
-deduplication, policy, and promotion.
+deduplication and structural gates. The source-built tool fixes `source: mcp` and
+`author: { type: ai, id: mcp-server }`; callers cannot override this envelope or
+its medium trust label. Direct and batch governance leave these proposals in the
+inbox with `registrar_mcp_review_required`, even with no enabled policy. Finite
+selected governance quarantines them through its existing receipted review path.
+Neither path admits them. Lowering a trust threshold does not bypass this gate.
+
+An authorized reviewer lists pending rows with
+`GET /api/candidates?tenantId=<tenant>&status=inbox` (or `status=quarantined` after
+finite selected governance) and explicitly reviews a
+selected row through admin-only `POST /api/candidates/<id>/promote?tenantId=<tenant>`.
+That API reruns disclosure, provenance, import, deduplication, policy and hold
+checks and records the authenticated reviewer on a successful promotion receipt.
+It does not override policy failures or release a K6 hold. This is an API review
+operation, not an additional MCP tool; the shipped search-only proxy cannot
+perform it. The local runtime and a compatible API must be built/deployed by the
+operator; these source instructions do not attest an installed version.
+
+Other capture surfaces retain their existing behavior. The fixed AI envelope is
+capture-surface provenance, not authenticated scout identity or protection against
+an owner rewriting the local spool. Existing filesystem and API authority
+boundaries still apply.
 
 For `active` to `superseded`, `supersededBy` must identify a distinct active curated memory in the
 same tenant. The lifecycle, `SupersessionLink` (replacement UUID, reason and time) and superseded audit

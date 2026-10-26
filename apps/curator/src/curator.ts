@@ -37,6 +37,7 @@ import { reject } from './rejection/rejector.js';
 import { checkOriginAttestation } from './origin/origin-gate.js';
 import { checkImportExclusion } from './import-exclusion/import-exclusion-gate.js';
 import { placeHold } from './hold/hold.js';
+import { requiresRegistrarMcpReview } from './review/registrar-mcp-review.js';
 import type { PlaceHoldResult } from './hold/hold.js';
 
 /** Default per-run budget of subject-key retirements (see CuratorConfig.maxSupersedesPerRun). */
@@ -204,6 +205,27 @@ export class Curator {
         outcome: 'rejected',
         pipelineResult: importGate.pipelineResult,
         reason,
+      };
+    }
+
+    // The generic Registrar MCP tool fixes this capture envelope server-side.
+    // It cannot distinguish a discovery agent from other model callers, so all
+    // proposals on that surface require explicit review. This is structural:
+    // absent, disabled or permissive tenant policy must not admit them. A flag
+    // leaves the inbox row available to the existing admin review endpoint; no
+    // timed hold, false member identity or repeated rejection receipt is added.
+    // This identifies a capture surface, not an authenticated human/agent.
+    if (requiresRegistrarMcpReview(candidate)) {
+      return {
+        candidateId: candidate.id,
+        outcome: 'flagged',
+        reason: 'Registrar MCP proposals require explicit review before admission.',
+        pipelineResult: {
+          candidateId: candidate.id,
+          outcome: 'flagged',
+          evaluations: [],
+          flaggedBy: ['registrar_mcp_review_required'],
+        },
       };
     }
 
