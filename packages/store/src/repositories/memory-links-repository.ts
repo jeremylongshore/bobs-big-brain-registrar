@@ -1,5 +1,14 @@
 import type Database from 'better-sqlite3';
+import { AUDIENCE_RANK, isAudienceVisibleToRole } from '@qmd-team-intent-kb/common';
+import type { ReaderRole } from '@qmd-team-intent-kb/common';
 import type { LinkType, LinkSource } from '@qmd-team-intent-kb/schema';
+
+/** Read constraints applied to both endpoints before graph expansion. */
+export interface GraphReadScope {
+  tenantId?: string;
+  allowedTenantIds?: readonly string[];
+  readerRole: ReaderRole;
+}
 
 /** Domain representation of a memory link */
 export interface MemoryLink {
@@ -149,22 +158,37 @@ export class MemoryLinksRepository {
   }
 
   /** Get all neighbors (both directions) of a memory. */
-  neighbors(memoryId: string): Neighbor[] {
-    return this.stmtNeighbors.all(memoryId, memoryId) as Neighbor[];
+  neighbors(memoryId: string, scope?: GraphReadScope): Neighbor[] {
+    if (scope === undefined) return this.stmtNeighbors.all(memoryId, memoryId) as Neighbor[];
+    return this.db
+      .prepare(
+        `
+      WITH ${READABLE_LINKS_CTE}
+      SELECT target_memory_id AS memoryId, link_type AS linkType, weight, 'outgoing' AS direction
+        FROM readable_links WHERE source_memory_id = @start
+      UNION ALL
+      SELECT source_memory_id AS memoryId, link_type AS linkType, weight, 'incoming' AS direction
+        FROM readable_links WHERE target_memory_id = @start
+      ORDER BY weight DESC
+    `,
+      )
+      .all({ start: memoryId, ...scopeParameters(scope) }) as Neighbor[];
   }
 
   /**
    * Recursive CTE graph traversal from a starting memory.
    * Returns all reachable nodes up to the given depth.
    */
-  traverse(memoryId: string, maxDepth: number = 2): GraphNode[] {
+  traverse(memoryId: string, maxDepth: number = 2, scope?: GraphReadScope): GraphNode[] {
+    const links = scope === undefined ? 'memory_links' : 'readable_links';
     const sql = `
-      WITH RECURSIVE graph(memoryId, depth, linkType, weight) AS (
+      WITH RECURSIVE ${scope === undefined ? '' : `${READABLE_LINKS_CTE},`}
+      graph(memoryId, depth, linkType, weight) AS (
         SELECT target_memory_id, 1, link_type, weight
-          FROM memory_links WHERE source_memory_id = @start
+          FROM ${links} WHERE source_memory_id = @start
         UNION ALL
         SELECT ml.target_memory_id, g.depth + 1, ml.link_type, ml.weight
-          FROM memory_links ml
+          FROM ${links} ml
           JOIN graph g ON ml.source_memory_id = g.memoryId
           WHERE g.depth < @maxDepth
       ),
@@ -180,7 +204,11 @@ export class MemoryLinksRepository {
         WHERE rn = 1
         ORDER BY depth ASC, weight DESC
     `;
-    return this.db.prepare(sql).all({ start: memoryId, maxDepth }) as GraphNode[];
+    return this.db.prepare(sql).all({
+      start: memoryId,
+      maxDepth,
+      ...(scope === undefined ? {} : scopeParameters(scope)),
+    }) as GraphNode[];
   }
 }
 
@@ -208,5 +236,42 @@ function rowToLink(row: RawLinkRow): MemoryLink {
     source: row.source as LinkSource,
     importBatchId: row.import_batch_id,
     createdAt: row.created_at,
+  };
+}
+
+// Derive audience visibility from the canonical predicate, including legacy nulls.
+// Filter links before recursion: post-filtering would allow a hidden bridge to
+// expose descendants and to influence shortest-path depth/weight selection.
+const READABLE_LINKS_CTE = `
+  readable_memories AS (
+    SELECT id FROM curated_memories
+    WHERE (@tenantId IS NULL OR tenant_id = @tenantId)
+      AND (@allowedTenantIds IS NULL OR tenant_id IN (SELECT value FROM json_each(@allowedTenantIds)))
+      AND (
+        (json_extract(metadata_json, '$.audience') IS NULL AND @legacyVisible = 1)
+        OR (
+          json_type(metadata_json, '$.audience') = 'text'
+          AND json_extract(metadata_json, '$.audience') IN (SELECT value FROM json_each(@audiences))
+        )
+      )
+  ),
+  readable_links AS (
+    SELECT ml.* FROM memory_links ml
+    JOIN readable_memories source ON source.id = ml.source_memory_id
+    JOIN readable_memories target ON target.id = ml.target_memory_id
+  )
+`;
+
+function scopeParameters(scope: GraphReadScope) {
+  return {
+    tenantId: scope.tenantId ?? null,
+    allowedTenantIds:
+      scope.allowedTenantIds === undefined ? null : JSON.stringify(scope.allowedTenantIds),
+    audiences: JSON.stringify(
+      Object.keys(AUDIENCE_RANK).filter((audience) =>
+        isAudienceVisibleToRole(audience, scope.readerRole),
+      ),
+    ),
+    legacyVisible: Number(isAudienceVisibleToRole(undefined, scope.readerRole)),
   };
 }

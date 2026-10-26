@@ -1,19 +1,35 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError, notFound, badRequest } from '../errors.js';
-import type { MemoryLinksRepository, Neighbor, GraphNode } from '@qmd-team-intent-kb/store';
+import type {
+  MemoryLinksRepository,
+  Neighbor,
+  GraphNode,
+  GraphReadScope,
+} from '@qmd-team-intent-kb/store';
 import type { MemoryRepository } from '@qmd-team-intent-kb/store';
 import { isAudienceVisibleToRole } from '@qmd-team-intent-kb/common';
-import type { ReaderRole } from '@qmd-team-intent-kb/common';
 import { readerRoleOf } from '../middleware/api-key-auth.js';
 
-/**
- * Claim-level audience gate for graph reads (K2). True when the memory exists
- * AND the caller may read it; a link to a memory the caller is not cleared for
- * is dropped, so the graph never names a memory the caller could not fetch.
+/** Effective selection is injected/validated by the tenancy guard. Keep the
+ * token allowlist as a second constraint and normalize its unscoped empty form.
  */
-function isReadable(memoryRepo: MemoryRepository, id: string, role: ReaderRole): boolean {
+function graphScope(request: FastifyRequest): GraphReadScope {
+  const tenantId = (request.query as { tenantId?: unknown }).tenantId;
+  return {
+    tenantId: typeof tenantId === 'string' && tenantId.length > 0 ? tenantId : undefined,
+    allowedTenantIds: request.tenants?.length ? request.tenants : undefined,
+    readerRole: readerRoleOf(request),
+  };
+}
+
+function isReadable(memoryRepo: MemoryRepository, id: string, scope: GraphReadScope): boolean {
   const memory = memoryRepo.findById(id);
-  return memory !== null && isAudienceVisibleToRole(memory.metadata.audience, role);
+  return (
+    memory !== null &&
+    (scope.tenantId === undefined || memory.tenantId === scope.tenantId) &&
+    (scope.allowedTenantIds === undefined || scope.allowedTenantIds.includes(memory.tenantId)) &&
+    isAudienceVisibleToRole(memory.metadata.audience, scope.readerRole)
+  );
 }
 
 const MAX_DEPTH = 5;
@@ -45,14 +61,14 @@ export function registerGraphRoutes(
       try {
         const { id } = request.params as { id: string };
 
-        const role = readerRoleOf(request);
-        if (!isReadable(memoryRepo, id, role)) {
+        const scope = graphScope(request);
+        if (!isReadable(memoryRepo, id, scope)) {
           throw notFound(`Memory ${id} not found`);
         }
 
         const neighbors: Neighbor[] = linksRepo
-          .neighbors(id)
-          .filter((n) => isReadable(memoryRepo, n.memoryId, role));
+          .neighbors(id, scope)
+          .filter((n) => isReadable(memoryRepo, n.memoryId, scope));
         return reply.send(neighbors);
       } catch (err) {
         if (err instanceof ApiError) {
@@ -93,14 +109,14 @@ export function registerGraphRoutes(
           throw badRequest(`depth exceeds maximum allowed value of ${MAX_DEPTH}`);
         }
 
-        const role = readerRoleOf(request);
-        if (!isReadable(memoryRepo, id, role)) {
+        const scope = graphScope(request);
+        if (!isReadable(memoryRepo, id, scope)) {
           throw notFound(`Memory ${id} not found`);
         }
 
         const nodes: GraphNode[] = linksRepo
-          .traverse(id, depth)
-          .filter((n) => isReadable(memoryRepo, n.memoryId, role));
+          .traverse(id, depth, scope)
+          .filter((n) => isReadable(memoryRepo, n.memoryId, scope));
         return reply.send(nodes);
       } catch (err) {
         if (err instanceof ApiError) {

@@ -190,3 +190,53 @@ describe('MemoryLinksRepository', () => {
     expect(repo.traverse('m3')).toHaveLength(0);
   });
 });
+
+describe('MemoryLinksRepository scoped reads', () => {
+  let db: Database.Database;
+  let repo: MemoryLinksRepository;
+  beforeEach(() => {
+    db = createTestDatabase();
+    repo = new MemoryLinksRepository(db);
+    for (const id of ['root', 'bridge', 'leaf']) insertMemory(db, id);
+    repo.insert(makeLink({ id: 'first', sourceMemoryId: 'root', targetMemoryId: 'bridge' }));
+    repo.insert(makeLink({ id: 'second', sourceMemoryId: 'bridge', targetMemoryId: 'leaf' }));
+  });
+  afterEach(() => db.close());
+
+  it.each([
+    ['absent', {}, true],
+    ['null', { audience: null }, true],
+    ['tenant', { audience: 'tenant' }, true],
+    ['admins', { audience: 'admins' }, false],
+    ['owner', { audience: 'owner' }, false],
+    ['unknown', { audience: 'future' }, false],
+    ['array', { audience: ['tenant'] }, false],
+    ['number', { audience: 0 }, false],
+  ] as const)(
+    'member traversal gates %s audience before expansion',
+    (_label, metadata, visible) => {
+      db.prepare('UPDATE curated_memories SET metadata_json = ? WHERE id = ?').run(
+        JSON.stringify(metadata),
+        'bridge',
+      );
+      const scope = { readerRole: 'member' as const, tenantId: 'tenant-1' };
+      expect(repo.neighbors('root', scope).map((n) => n.memoryId)).toEqual(
+        visible ? ['bridge'] : [],
+      );
+      expect(repo.traverse('root', 2, scope).map((n) => n.memoryId)).toEqual(
+        visible ? ['bridge', 'leaf'] : [],
+      );
+    },
+  );
+
+  it('intersects the selected tenant with the allowlist, including explicit denial', () => {
+    for (const scope of [
+      { readerRole: 'owner' as const, allowedTenantIds: [] },
+      { readerRole: 'owner' as const, allowedTenantIds: ['other'], tenantId: 'tenant-1' },
+      { readerRole: 'owner' as const, allowedTenantIds: ['tenant-1'], tenantId: 'other' },
+    ]) {
+      expect(repo.neighbors('root', scope)).toEqual([]);
+      expect(repo.traverse('root', 2, scope)).toEqual([]);
+    }
+  });
+});

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Enforce the selected tenant and token allowlist for graph roots and links.
+  Constrain both link endpoints before recursive expansion so restricted tenant
+  or audience nodes cannot bridge to readable descendants or affect path ranking.
+  Unscoped reads retain cross-tenant access unless a tenant is selected; no data
+  migration or deployment is included (`compile-then-govern-ion`).
+
 - Reconcile owning and stock harness verification using one installed verifier
   and additive patterns. Retain all eight existing protected policy paths and
   expand coverage to package/CI commands and verifier-selection controls, with
