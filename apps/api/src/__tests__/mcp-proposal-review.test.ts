@@ -48,12 +48,13 @@ describe('explicit review of Registrar MCP AI proposals', () => {
     db.close();
   });
 
-  function seed() {
+  function seed(content?: string) {
     const row = makeCandidate({
       tenantId,
       source: 'mcp',
       author: { type: 'ai', id: 'mcp-server' },
       trustLevel: 'medium',
+      ...(content === undefined ? {} : { content }),
     });
     candidates.insert(row, computeContentHash(row.content));
     return row;
@@ -149,6 +150,73 @@ describe('explicit review of Registrar MCP AI proposals', () => {
       ]),
     );
     expect(candidates.findById(row.id)?.status).toBe('promoted');
+    expect(verifyAuditChain(audit).breaks).toHaveLength(0);
+  });
+
+  it('requires a human to resolve a policy hold encountered during explicit MCP review', async () => {
+    const row = seed(
+      'Escalate billing questions to dana.whitfield@customer-example.com before Friday.',
+    );
+    policies.insert(
+      makePolicy({
+        tenantId,
+        rules: [
+          {
+            id: 'fixture-secret',
+            type: 'secret_detection',
+            action: 'reject',
+            enabled: true,
+            priority: 0,
+            parameters: {},
+          },
+          {
+            id: 'fixture-sensitivity',
+            type: 'sensitivity_gate',
+            action: 'flag',
+            enabled: true,
+            priority: 1,
+            parameters: {},
+          },
+          {
+            id: 'fixture-audience',
+            type: 'audience_narrowing',
+            action: 'flag',
+            enabled: true,
+            priority: 2,
+            parameters: {},
+          },
+        ],
+      }),
+    );
+    const held = await promote(row.id);
+    expect(held.statusCode).toBe(422);
+    expect(held.json()).toMatchObject({ code: 'held_for_review' });
+    expect(memories.existsForCandidate(row.id, tenantId)).toBe(false);
+    const resolve = (actorType: 'ai' | 'human') =>
+      app.inject({
+        method: 'POST',
+        url: `/api/holds/${row.id}/resolve?tenantId=${tenantId}`,
+        headers: { authorization: 'Bearer fixture-admin' },
+        payload: {
+          resolution: 'release',
+          audience: 'admins',
+          reason: 'Reviewed synthetic contact scope.',
+          actorType,
+        },
+      });
+    expect((await resolve('ai')).statusCode).toBe(403);
+    expect(memories.existsForCandidate(row.id, tenantId)).toBe(false);
+    const reviewed = await resolve('human');
+    expect(reviewed.statusCode).toBe(200);
+    expect(candidates.findById(row.id)?.status).toBe('promoted');
+    expect(audit.findByMemoryAndTenant(row.id, tenantId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: 'hold_resolved',
+          actor: { type: 'human', id: 'fixture-reviewer' },
+        }),
+      ]),
+    );
     expect(verifyAuditChain(audit).breaks).toHaveLength(0);
   });
 

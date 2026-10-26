@@ -120,6 +120,12 @@ describe('Registrar MCP proposals require explicit review before admission', () 
         expect(result.pipelineResult?.flaggedBy).toContain('registrar_mcp_review_required');
         expect(curator().processBatch([row])).toMatchObject({ promoted: 0, flagged: 1 });
       }
+      expect(
+        curator().processSingle(row, undefined, {
+          promotedBy: { type: 'ai', id: 'fixture-upgrade-attempt' },
+          promotionReason: 'An AI release hint is not human review.',
+        }).outcome,
+      ).toBe('flagged');
       expect(memories.existsForCandidate(row.id, tenantId)).toBe(false);
       expect(candidates.findById(row.id)).toEqual(row);
       expect(audit.findByMemoryAndTenant(row.id, tenantId)).toEqual(receipts);

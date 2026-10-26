@@ -215,7 +215,13 @@ export class Curator {
     // leaves the inbox row available to the existing admin review endpoint; no
     // timed hold, false member identity or repeated rejection receipt is added.
     // This identifies a capture surface, not an authenticated human/agent.
-    if (requiresRegistrarMcpReview(candidate)) {
+    // resolveHold's existing trusted human-release context is explicit review:
+    // it has already checked standing and reruns disclosure before reaching us.
+    // Ordinary sweeps and AI release hints still require review.
+    if (
+      requiresRegistrarMcpReview(candidate) &&
+      (release === undefined || release.promotedBy.type !== 'human')
+    ) {
       return {
         candidateId: candidate.id,
         outcome: 'flagged',

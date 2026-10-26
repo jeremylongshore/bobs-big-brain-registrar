@@ -59,7 +59,10 @@ the [candidate route](../../../apps/api/src/routes/candidates.ts) passes the
 server-authenticated actor ID. The shipped
 [marketplace configuration](../../../.mcp.json) selects the
 [search-only runtime](../../../plugin-runtime/teamkb-remote.cjs).
-It does not override policy failures or release a K6 hold. This is an API review
+It does not override policy failures or release a K6 hold. If explicit API review
+encounters a K6 hold, a person with standing must use the existing hold-resolution
+route. Its trusted human-release context satisfies review while rechecking the
+remaining gates; AI resolution requests remain refused. This is an API review
 operation, not an additional MCP tool; the shipped search-only proxy cannot
 perform it. The local runtime and a compatible API must be built/deployed by the
 operator; these source instructions do not attest an installed version.
