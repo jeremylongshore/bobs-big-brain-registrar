@@ -2,8 +2,9 @@
 name: teamkb-conflict-checker
 description: |
   Compares a caller-supplied proposed memory and similar-memory list for
-  advisory conflicts. Use when an operator requests comparison advice. This
-  agent is not wired into canonical deduplication, policy or promotion.
+  advisory conflicts. Use only for operator-requested comparison advice; the
+  caller must supply the proposal and comparisons. This definition does not
+  establish a caller.
 tools: []
 model: inherit
 color: orange

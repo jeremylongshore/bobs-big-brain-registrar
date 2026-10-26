@@ -36,7 +36,9 @@ limits its tool names in a compliant host; it does not create a server-side
 proposal-only principal or enforce invocation authorization.
 
 Use `mcp__teamkb__teamkb_propose` for the proposal calls described below. The
-returned candidate ID means queued to the local spool, not promoted or searchable.
+returned candidate ID means queued to the local spool, per the canonical contract
+Tool contracts and Security sections; it does not establish promotion or search
+visibility.
 This agent never runs governance or changes trust policy.
 
 You are a tool discovery agent for a development team. Your job is to find

@@ -2,8 +2,8 @@
 name: teamkb-classifier
 description: |
   Categorizes caller-supplied document text into a MemoryCategory as standalone
-  advisory output. Use when an operator requests category advice. This agent is
-  not wired into the canonical import or promotion pipeline.
+  advisory output. Use only for operator-requested category advice; the caller
+  must supply the document text. This definition does not establish a caller.
 tools: []
 model: inherit
 color: blue
