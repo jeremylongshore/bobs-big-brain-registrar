@@ -27,6 +27,7 @@ import { computeContentHash } from '@qmd-team-intent-kb/common';
 import { makeCandidate, makeMemory, makePolicy, TENANT } from './fixtures.js';
 import { memorySnapshotDigest } from '../recovery/source-archive.js';
 import { runRecoveryCommand } from '../recovery/command.js';
+import { executeRecoveryEnvelope } from '../recovery/recovery-execution.js';
 import { acquireRecoveryWriteLock, inspectRecoveryStore } from '../recovery/filesystem-boundary.js';
 import { readPrivateRecoveryFile } from '../recovery/private-files.js';
 
@@ -438,5 +439,264 @@ describe('actual recovery maintenance command', () => {
     const hash = computeContentHash(readFileSync(databasePath).toString('hex'));
     expect(() => openExistingDatabase({ path: databasePath, readonly: false })).toThrow();
     expect(computeContentHash(readFileSync(databasePath).toString('hex'))).toBe(hash);
+  });
+});
+
+describe('locked asynchronous recovery integration', () => {
+  function request(digest: string) {
+    return {
+      operation: 'apply' as const,
+      planPath,
+      expectedDigest: digest,
+      originSecretFile: keyPath,
+    };
+  }
+  function contender(): number | null {
+    return spawnSync('/usr/bin/flock', ['--nonblock', join(root, '.write.lock'), '/usr/bin/true'])
+      .status;
+  }
+  it('retains the actual flock through an awaited integration and exposes only callback completion', async () => {
+    const digest = plan();
+    const result = await executeRecoveryEnvelope(request(digest), async (context) => {
+      expect(context.sourceTenantId).toBe('local');
+      expect(context.targetTenantId).toBe(TENANT);
+      expect(context.warnings).toEqual(['dormant_policy_rules']);
+      expect(contender()).toBe(1);
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      expect(contender()).toBe(1);
+      context.assertStillBound();
+      return { recoveryComplete: true };
+    });
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(true);
+    expect(result.appliedNow).toBe(true);
+    expect(result.postcommit).toEqual({ state: 'completed', value: { recoveryComplete: true } });
+    expect(result.recoveryComplete).toBe(false);
+    expect(contender()).toBe(0);
+    expect(JSON.stringify(result)).not.toContain('Private orchard policy marker');
+    expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+  it('never invokes postprocessing for a historical apply replay', async () => {
+    const digest = plan();
+    expect(apply(digest).code).toBe(0);
+    const before = snapshot();
+    let called = false;
+    const result = await executeRecoveryEnvelope(request(digest), async () => {
+      called = true;
+    });
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(true);
+    expect(result.appliedNow).toBe(false);
+    expect(result.postcommit).toEqual({ state: 'skipped_replay' });
+    expect(called).toBe(false);
+    expect(snapshot()).toEqual(before);
+    expect(contender()).toBe(0);
+  });
+  it('repairs existing settlement explicitly without adding candidate, governance or archive writes', async () => {
+    const digest = plan();
+    expect(apply(digest).code).toBe(0);
+    const before = snapshot();
+    let count = 0;
+    const result = await executeRecoveryEnvelope(
+      { operation: 'repair', planPath, expectedDigest: digest },
+      async (context) => {
+        context.assertStillBound();
+        count++;
+        return 'refreshed';
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(true);
+    expect(result.appliedNow).toBe(false);
+    expect(result.postcommit).toEqual({ state: 'completed', value: 'refreshed' });
+    expect(count).toBe(1);
+    expect(snapshot()).toEqual(before);
+    expect(contender()).toBe(0);
+  });
+  it('refuses repair without an apply receipt and refuses an origin key on repair', async () => {
+    const digest = plan();
+    const before = snapshot();
+    let count = 0;
+    const callback = async () => {
+      count++;
+    };
+    const missing = await executeRecoveryEnvelope(
+      { operation: 'repair', planPath, expectedDigest: digest },
+      callback,
+    );
+    expect(missing.ok).toBe(false);
+    expect(missing.committed).toBe(false);
+    expect(missing.postcommit.state).toBe('not_run');
+    const key = await executeRecoveryEnvelope(
+      { ...request(digest), operation: 'repair' },
+      callback,
+    );
+    expect(key.ok).toBe(false);
+    expect(count).toBe(0);
+    expect(snapshot()).toEqual(before);
+  });
+  it('postprocesses committed partial outcomes without claiming recovery completion', async () => {
+    const digest = plan();
+    const wrongKey = join(root, 'wrong.key');
+    writeFileSync(wrongKey, 'different-fixture-origin', { mode: 0o600 });
+    let count = 0;
+    const result = await executeRecoveryEnvelope(
+      { ...request(digest), originSecretFile: wrongKey },
+      async (context) => {
+        expect(context.status.state).toBe('partial');
+        expect(context.status.entries.every((entry) => !entry.archived)).toBe(true);
+        count++;
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.committed).toBe(true);
+    expect(result.recoveryComplete).toBe(false);
+    expect(count).toBe(1);
+  });
+  it('keeps committed recovery after a stage failure and permits explicit repair', async () => {
+    const digest = plan();
+    const failed = await executeRecoveryEnvelope(request(digest), async () => {
+      throw new Error(SECRET);
+    });
+    expect(failed.ok).toBe(false);
+    expect(failed.committed).toBe(true);
+    expect(failed.appliedNow).toBe(true);
+    expect(failed.postcommit.state).toBe('failed');
+    expect(JSON.stringify(failed)).not.toContain(SECRET);
+    const before = snapshot();
+    const repaired = await executeRecoveryEnvelope(
+      { operation: 'repair', planPath, expectedDigest: digest },
+      async () => 'repaired',
+    );
+    expect(repaired.ok).toBe(true);
+    expect(repaired.committed).toBe(true);
+    expect(repaired.appliedNow).toBe(false);
+    expect(snapshot()).toEqual(before);
+    expect(contender()).toBe(0);
+  });
+  it('refuses preflight drift and never runs a stage after a rolled-back core fault', async () => {
+    const digest = plan();
+    const db = openExistingDatabase({ path: databasePath, readonly: false });
+    db.exec(
+      "CREATE TRIGGER async_fault BEFORE INSERT ON audit_events WHEN NEW.action='archived' BEGIN SELECT RAISE(ABORT,'fixture'); END",
+    );
+    db.close();
+    const before = snapshot();
+    let called = false;
+    const callback = async () => {
+      called = true;
+    };
+    const wrong = await executeRecoveryEnvelope(
+      { ...request(digest), expectedDigest: '0'.repeat(64) },
+      callback,
+    );
+    expect(wrong.ok).toBe(false);
+    expect(wrong.committed).toBe(false);
+    const fault = await executeRecoveryEnvelope(request(digest), callback);
+    expect(fault.ok).toBe(false);
+    expect(fault.committed).toBe('unknown');
+    expect(fault.appliedNow).toBe('unknown');
+    expect(called).toBe(false);
+    expect(snapshot()).toEqual(before);
+    expect(contender()).toBe(0);
+  });
+  it('refuses a drifted existing settlement during repair', async () => {
+    const digest = plan();
+    expect(apply(digest).code).toBe(0);
+    const db = openExistingDatabase({ path: databasePath, readonly: false });
+    db.prepare('UPDATE curated_memories SET title=? WHERE tenant_id=?').run(
+      'Changed after settlement',
+      TENANT,
+    );
+    db.close();
+    const before = snapshot();
+    let called = false;
+    const result = await executeRecoveryEnvelope(
+      { operation: 'repair', planPath, expectedDigest: digest },
+      async () => {
+        called = true;
+      },
+    );
+    expect(result.ok).toBe(false);
+    expect(result.committed).toBe('unknown');
+    expect(called).toBe(false);
+    expect(snapshot()).toEqual(before);
+  });
+  it('checks the store centrally after an awaited callback, retaining known commit on base replacement', async () => {
+    const digest = plan();
+    const moved = root + '.moved';
+    try {
+      const result = await executeRecoveryEnvelope(request(digest), async () => {
+        renameSync(root, moved);
+      });
+      expect(result.ok).toBe(false);
+      expect(result.committed).toBe(true);
+      expect(result.appliedNow).toBe(true);
+      expect(result.postcommit.state).toBe('failed');
+    } finally {
+      if (existsSync(moved)) renameSync(moved, root);
+    }
+    expect(command(['status', '--plan', planPath, '--digest', digest]).output.status.state).toBe(
+      'complete',
+    );
+    expect(contender()).toBe(0);
+  });
+  it('detects replaced lock paths between stages without losing a known commit', async () => {
+    const digest = plan();
+    const result = await executeRecoveryEnvelope(request(digest), async (context) => {
+      const path = join(root, '.write.lock');
+      renameSync(path, path + '.old');
+      writeFileSync(path, '', { mode: 0o600 });
+      context.assertStillBound();
+    });
+    expect(result.ok).toBe(false);
+    expect(result.committed).toBe(true);
+    expect(result.postcommit.state).toBe('failed');
+  });
+  it('refuses selected-row drift caused by postprocessing without reporting a rollback', async () => {
+    const digest = plan();
+    const result = await executeRecoveryEnvelope(request(digest), async (context) => {
+      context.database
+        .prepare('UPDATE curated_memories SET title=? WHERE tenant_id=?')
+        .run('Unexpected postprocessing mutation', TENANT);
+    });
+    expect(result.ok).toBe(false);
+    expect(result.committed).toBe(true);
+    expect(result.postcommit.state).toBe('failed');
+    expect(contender()).toBe(0);
+  });
+  it('does not let a mutable request change the operation reported after commit', async () => {
+    const digest = plan();
+    const input = request(digest);
+    const result = await executeRecoveryEnvelope(input, async () => {
+      (input as { operation: string }).operation = 'repair';
+    });
+    expect(result.ok).toBe(true);
+    expect(result.operation).toBe('apply');
+    expect(result.committed).toBe(true);
+    expect(result.appliedNow).toBe(true);
+  });
+  it('does not let callback snapshot mutation replace validation authority', async () => {
+    const digest = plan();
+    const result = await executeRecoveryEnvelope(request(digest), async (context) => {
+      context.status.state = 'not_applied';
+      context.status.entries.length = 0;
+      context.assertStillBound();
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status.state).toBe('complete');
+      expect(result.status.entries).toHaveLength(1);
+    }
+  });
+  it('preserves known settlement through finalization faults and still releases the lock', async () => {
+    const digest = plan();
+    const result = await executeRecoveryEnvelope(request(digest), async (context) => {
+      context.database.close();
+    });
+    expect(result.ok).toBe(false);
+    expect(result.committed).toBe(true);
+    expect(result.appliedNow).toBe(true);
+    expect(contender()).toBe(0);
   });
 });

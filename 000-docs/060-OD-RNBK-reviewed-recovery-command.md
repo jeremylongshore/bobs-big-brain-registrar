@@ -86,6 +86,55 @@ known commit reports `committed: true`. Inspect status and canonical receipts
 before retrying. An unchanged settled plan replays without writes; drift refuses
 replay. Unexpected transactional failures roll back source and target changes.
 
+## Trusted asynchronous integration
+
+`executeRecoveryEnvelope` is the public programmatic boundary for a fixed
+integration that needs the recovery store’s kernel flock during asynchronous
+postprocessing. It takes `operation: apply | repair`, the private `planPath`, an
+independently supplied `expectedDigest`, optional explicit `originSecretFile` for
+apply and optional `lockTimeoutMs`. The lock helper validates an integer timeout
+from zero through 30,000 milliseconds. Repair refuses key inputs. This API adds no
+CLI shell hook or automatic operation on import.
+
+A fresh committed apply, including a legitimate partial outcome, runs the awaited
+trusted callback. Apply replay skips it. Explicit repair requires an existing,
+non-drifted apply receipt and performs no intake, governance or archival. The
+callback receives the existing database capability, fixed run/digest/tenant/store
+identities, a copied settlement status, sanitized warning codes and
+`assertStillBound()`. It receives no source body, HMAC or key field. The database
+is a trusted programmatic capability; this is not a sandbox for untrusted code.
+
+A future fixed integration must call `assertStillBound()` between external stages.
+The boundary also checks centrally after callback completion, comparing against
+its own settlement authority. Operation identity is captured before await, so
+caller mutation cannot relabel the result. The boundary retains the connection
+and acquired lock through the callback and attempts both close and release during
+cleanup. Path replacement is detected at the next binding check; holding a file
+descriptor does not prevent replacement. A future integration must await every
+writer’s termination before returning. This API provides no callback timeout or
+child-process termination enforcement.
+
+For this async API, `committed: true` means the core application returned a
+settlement or an existing non-drifted settlement was re-read. It includes a
+historical apply and does not establish storage durability after power loss.
+`appliedNow` identifies a new memory transaction in this invocation. Refusals
+detected before the core application starts report false; errors raised inside
+the core application and repair of drifted settlement report unknown. Callback/cleanup failures
+retain a known commit and return a sanitized `failedStage`. Failure results do
+not present an old settlement snapshot as a fresh status proof. The synchronous
+CLI retains its existing per-invocation commit reporting.
+
+`postcommit.state: completed` describes callback completion only. The generic
+boundary always returns `recoveryComplete: false`, even if a callback returns a
+value claiming success. The callback’s value is passed through verbatim: the
+integrator must sanitize it. Only the boundary’s own error fields omit raw
+exceptions; the database capability permits trusted code to read private data.
+Concrete plugin anchor/export/index integration must
+establish its own evidence: both source and target tenant exports, tenant-exclusive
+index roots, actual selected qmd command provenance and explicit postcommit repair
+without new governance receipts. That integration and the private-copy rehearsal
+remain open under the parent recovery work.
+
 ## Completion and rollback boundaries
 
 This command does not yet execute postcommit anchor/export/index work. It grants
@@ -94,7 +143,7 @@ restore-checked backup. The parent recovery work must complete those requirement
 and a source-bound private-copy demonstration before any approved live run.
 
 Before settlement, a refused plan leaves database rows unchanged. After a known
-commit, rollback requires the separately reviewed restore procedure and backup;
+commit, rollback requires a restore procedure and backup reviewed for that run;
 do not undo recovery by deleting receipts or rewriting the audit chain. Local
 audit evidence is tamper-evident.
 
