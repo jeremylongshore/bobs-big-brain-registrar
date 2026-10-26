@@ -229,3 +229,52 @@ pnpm vitest run packages/eval-surface/src/__tests__/hold-escalation.test.ts
 - **Rollback.** Reverting this change leaves held candidates as ordinary `quarantined` rows. Code
   older than this change cannot parse the three new audit actions, so revert before any hold is
   placed, or keep the enum members when reverting.
+
+## 12. Pending inbox rejection library
+
+The public curator export `rejectReviewedCandidate(input, connection)` provides
+an atomic rejection primitive for a person-operated review surface. It accepts
+`candidateId`, `tenantId`, an `Author` with `type: 'human'`, a string `role`
+(only `admin` or `owner` accepted) and a nonblank `reason`. Other role strings
+return `forbidden_role`. It checks the current candidate under `BEGIN IMMEDIATE`,
+requires inbox status, no linked memory in any lifecycle and audience standing,
+and refuses active holds. A direct Curator promotion may leave inbox status while
+already creating a memory; the tenant-scoped linked-memory check refuses that
+case too. Held work
+still goes through `resolveHold`; this operation cannot release or reject a hold.
+
+The function constructs all repositories on the supplied SQLite connection. It
+retains candidate content and metadata, marks status `rejected`, and appends one
+canonical `deleted` receipt naming the declared person, role and reason. A repeat
+with the same authority returns `not_pending` with no new receipt. A later
+caller with lower standing can instead receive `audience_above_standing`;
+authority is checked first. `not_pending` covers non-inbox status or an existing
+same-tenant memory whose `candidate_id` matches, not proof of prior human rejection.
+Unknown and foreign-tenant IDs both
+return `not_found`. Storage/schema failures throw and roll back both writes;
+ordinary refusals return `{ ok: false, candidateId, code }`.
+
+The typed library call expects a valid input object. Missing/non-string reasons
+and missing/malformed human actor IDs defensively return refusal codes; this is
+not a general JSON decoder. Other schema errors still throw without committing.
+
+The caller must establish identity, standing and tenant binding at its own trust boundary. Local
+self-declaration cannot distinguish a person from an agent with shell access.
+Actor fields and reasons pass through the canonical audit schema, including its
+whitespace normalization: do not put credentials or private source content in
+reasons. This API does not authenticate a physical person, re-evaluate policy,
+promote candidates, append external anchors or refresh derived exports/indexes.
+It introduces no CLI, MCP tool or team API route. Installed plugin review and
+hold resolution remain separate work (`compile-then-govern-eqw.10`).
+
+Focused reproduction:
+
+```bash
+pnpm vitest run apps/curator/src/__tests__/reviewed-rejection.test.ts
+```
+
+The file-backed fixtures cover retained rows and exact receipt attribution,
+read-only reopen, tenant/role/audience/status/hold refusals, repeated calls and SQL
+trigger failures during status or audit insertion. Reverting the new module and
+export removes this API; existing rejected rows and receipts remain valid and
+must be preserved. No schema or data rollback is needed.
