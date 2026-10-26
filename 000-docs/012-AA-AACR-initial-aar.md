@@ -145,7 +145,7 @@ All of Phase 0 was produced in a concentrated effort. While this ensures consist
 
 ## Risks Identified
 
-See [011-risk-register.md](./011-risk-register.md) for the full risk register. Key risks surfaced during Phase 0:
+See [011-risk-register.md](./011-PM-RISK-risk-register.md) for the full risk register. Key risks surfaced during Phase 0:
 
 1. **Schema design decisions in Phase 1 will constrain everything downstream.** The data model draft is a starting point, but the Zod implementation will force concrete decisions about optionality, defaults, and validation that will be hard to change later. This is the biggest near-term risk.
 
@@ -161,7 +161,7 @@ See [011-risk-register.md](./011-risk-register.md) for the full risk register. K
 
 The immediate next phase focuses on:
 
-1. Define Zod schemas for all entities in [007-data-model-draft.md](./007-data-model-draft.md)
+1. Define Zod schemas for all entities in [007-data-model-draft.md](./007-AT-DSGN-data-model-draft.md)
 2. Generate TypeScript types from Zod schemas
 3. Write comprehensive validation tests
 4. Establish schema versioning strategy

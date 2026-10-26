@@ -138,7 +138,7 @@ The `/release` operation provides a guided release preparation workflow.
 
 ### Purpose
 
-Ensures releases are prepared consistently, following the policies in [008-release-and-versioning-policy.md](./008-release-and-versioning-policy.md).
+Ensures releases are prepared consistently, following the policies in [008-release-and-versioning-policy.md](./008-OD-RELS-release-versioning-policy.md).
 
 ### What It Does
 
@@ -192,7 +192,7 @@ AARs provide honest retrospectives on what happened during a milestone. They are
 
 ### When to Produce
 
-- After completing a phase (as defined in [004-phase-plan.md](./004-phase-plan.md))
+- After completing a phase (as defined in [004-phase-plan.md](./004-PP-RMAP-phase-plan.md))
 - After a significant incident or unexpected difficulty
 - After completing a complex epic
 - At any point where there are meaningful lessons to capture

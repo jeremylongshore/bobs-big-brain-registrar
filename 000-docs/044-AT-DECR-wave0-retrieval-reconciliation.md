@@ -12,6 +12,12 @@ license: Apache-2.0
 
 # Governed Second Brain: Wave-0 Retrieval Reconciliation
 
+## Current implementation status (2026-10-26)
+
+This binding decision remains the record of intended model selection; this note does **not** supersede it. Current source differs: `getDefaultDenseConfig()` enables the dense arm in production entrypoints, `packages/qmd-adapter/src/weights/weights-manifest.ts` names EmbeddingGemma-300M, and [runbook 051](051-AT-RNBK-embedder-service-and-dense-index-runbook.md) records the later dense implementation and measurements. The library remains explicit-by-config and unavailable dense retrieval falls open to lexical serving. The optional cross-encoder is a separate stage.
+
+Runbook measurements establish observed implementation and their stated measurement scope. They do not, by themselves, ratify the model-selection or licensing change required by this record. No later superseding DECR was found in the repository during this reconciliation. The conflict therefore remains explicit: do not describe the combined code-plus-model product as all Apache/MIT or treat this documentation update as approval of a model, license, deployment, or new download. Repository code licensing and model-weight permissions are separate. The original decision and its historical rationale below are preserved.
+
 ## What this is
 
 The Wave-0 decision that unblocks all retrieval work in `019-PP-PLAN` (bead A1). Two prior

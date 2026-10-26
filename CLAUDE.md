@@ -22,38 +22,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Testing SOP (Intent Solutions)
 
-This repo follows the Intent Solutions Testing SOP (see `~/000-projects/CLAUDE.md` § "Intent Solutions Testing SOP"):
+Current enforcement is owned by `tests/TESTING.md`, `.husky/`, `scripts/harness-pin.sh`, and the checked-in workflows. The `@intentsolutions/audit-harness` dependency is installed; repository-specific policy pinning uses `pnpm harness-pin`, not the generic upstream manifest. Changing policy still requires its normal review and visible re-pin.
 
-- **Harness package:** `@intentsolutions/audit-harness` (pending install per issues #90–#103)
-- **Audit skill:** `/audit-tests` — run for repo-level diagnostics
-- **Install skill:** `/implement-tests` — run to install missing layers
-
-### Current audit state (2026-04-21 baseline)
-
-Grade C (~65/100). 119 test files exist but no enforcement:
-
-- P0 gaps: `tests/TESTING.md` missing · no coverage thresholds · no pre-commit hooks · no `tests/RTM.md`
-- P1 gaps: no Stryker mutation · no dep-cruiser · no gitleaks · no Semgrep · no testcontainers · no PERSONAS/JOURNEYS
-- Full tracking: GitHub issues #90–#103 (see meta issue #103 for roadmap)
-- Beads: 12 issues under `qmd-team-intent-kb-*`
-
-### Once audit-harness is installed
-
-Replace `~/.claude/` references in hooks/CI with in-repo commands:
-
-```bash
-pnpm exec audit-harness verify
-pnpm exec audit-harness escape-scan --staged
-pnpm exec audit-harness init          # only after engineer-reviewed policy edits
-```
-
-See `.husky/pre-commit` + `.github/workflows/ci.yml` for wiring patterns.
+The 2026-04-21 grade-C audit (119 test files and no enforcement) is historical. It does not describe the current coverage, architecture, policy-pin, secret-scan, or eval gates. See `tests/TESTING.md` for the dated audit history and `.github/workflows/ci.yml` for current commands. A documented gate is not a claim that a particular run passed.
 
 ## Build Commands
 
 ```
-pnpm install          # Install all dependencies
-pnpm validate         # Run format:check + lint + typecheck + test (gate for all PRs)
+pnpm install --frozen-lockfile # Install pinned workspace dependencies
+pnpm validate         # Run format:check + lint + typecheck + test (local aggregate; CI runs individual gates)
 pnpm lint             # ESLint across all packages
 pnpm format           # Prettier format
 pnpm format:check     # Prettier check without writing
@@ -78,7 +55,7 @@ pnpm vitest run packages/schema/
 To run apps in dev mode (any app with tsx watch):
 
 ```
-cd apps/api && pnpm dev    # tsx watch src/index.ts
+cd apps/api && pnpm dev    # tsx watch src/main.ts
 ```
 
 ## Architecture & Data Flow
@@ -104,9 +81,9 @@ Claude Code session
 schema (Zod domain model — base of everything)
   └→ common (Result<T,E>, hashing, paths)
        ├→ claude-runtime (capture, spool, secret detection)
-       │    └→ policy-engine (8 deterministic rule evaluators)
+       │    └→ policy-engine (10 deterministic rule evaluators)
        │         └→ api (Fastify REST) + curator (promotion pipeline)
-       ├→ store (SQLite via better-sqlite3, 5 repositories)
+       ├→ store (SQLite via better-sqlite3, 8 repository classes)
        │    └→ api + curator + git-exporter + reporting
        └→ qmd-adapter (CLI wrapper, search, index lifecycle)
             └→ api (search delegation)
@@ -121,7 +98,7 @@ Core types defined as Zod schemas with derived TypeScript types:
 - **MemoryCandidate** — Raw proposals in the inbox (status: inbox)
 - **CuratedMemory** — Promoted, governed knowledge with lifecycle state
 - **GovernancePolicy** — Configurable rule sets per tenant
-- **AuditEvent** — Immutable trail of all memory operations
+- **AuditEvent** — Tamper-evident governance trail; search accesses are logged separately
 - **SearchQuery/SearchResult** — Typed search with scope control
 
 Key enums: `MemoryLifecycleState` (active/deprecated/superseded/archived), `Sensitivity` (public/internal/confidential/restricted), `MemoryCategory`, `TrustLevel`, `CandidateStatus`, `SearchScope`
@@ -147,7 +124,7 @@ archived → [] (terminal)
 
 ### Store (packages/store)
 
-SQLite via better-sqlite3 with 5 tables: `candidates`, `curated_memories`, `governance_policies`, `audit_events`, `export_state`. Each has a repository class. Use `createTestDatabase()` for in-memory test databases.
+SQLite via better-sqlite3 with 8 domain tables: `candidates`, `curated_memories`, `governance_policies`, `audit_events`, `export_state`, `memory_links`, `import_batches`, and `index_state`, plus `schema_migrations` bookkeeping. Eight repository classes own those domain tables. Use `createTestDatabase()` for in-memory test databases.
 
 ### Policy Engine (packages/policy-engine)
 
@@ -157,7 +134,7 @@ SQLite via better-sqlite3 with 5 tables: `candidates`, `curated_memories`, `gove
 
 ### API (apps/api)
 
-Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware stack: rate-limiter → api-key-auth → input-sanitizer. Routes: `/api/candidates`, `/api/holds`, `/api/memories`, `/api/policies`, `/api/audit`, `/api/search`, `/health`.
+Fastify 5 with dependency injection via `buildApp(deps: AppDependencies)`. Middleware registration order: rate-limiter → api-key-auth → write-gate → tenancy-guard → capture-quota → input-sanitizer. OpenAPI is registered before route loading. Route families: `/api/candidates` (including promote/reject), `/api/holds` (recommend/resolve), `/api/memories` (by-hash, transition, narrow-audience, recategorize), `/api/policies`, `/api/audit` and `/api/audit/receipt-tip`, `/api/search`, `/api/import` (preview/batches/rollback), `/api/auth/revoke`, `/api/auth/revoke-actor`, and `/api/health`. Graph reads are `GET /api/memories/:id/neighbors` and `GET /api/memories/:id/graph`. See `apps/api/src/routes/` for exact methods and schemas.
 
 #### Cited-query report (brain adoption KPI)
 
@@ -173,7 +150,7 @@ The aggregator (`cited-queries.ts`) is pure and source-agnostic; the CLI (`weekl
 
 ### Curator (apps/curator)
 
-Orchestrates the full promotion pipeline: spool intake → policy evaluation → dedup check (content hash) → human-escalation hold (K6) → supersession detection (Jaccard title similarity) → promote or reject. Supports dry-run mode.
+Orchestrates the full promotion pipeline: spool intake → policy evaluation → dedup check (content hash) → human-escalation hold (K6) → subject-keyed supersession (same-category title-Jaccard fallback for unkeyed memories) → promote or reject. Supports dry-run mode.
 
 **Secret sweep** (`curator-cli secret-sweep --db <path> --tenant <id> [--pattern <id>]... [--json]`, `apps/curator/src/secret-sweep/`): read-only whole-brain re-run of `scanTextForSecrets` (policy-engine — the same function the `secret_detection` rule calls) over every curated memory in every lifecycle state. Output is id, title, lifecycle, category and pattern names only — never matched text. Exit 0 clean · 3 findings · 2 usage · 1 I/O. Secret patterns live in `packages/claude-runtime/src/secrets/patterns.ts`; a pattern may carry an `accept` value predicate (placeholder exclusion) that the scanner and the redactor both honour.
 
@@ -195,6 +172,7 @@ Tenant execution binds `INDEX_PATH` to `<base>/qmd-index/<tenant>/cache/qmd/inde
 - `apps/curator/` — Memory promotion, dedupe, supersession engine
 - `apps/edge-daemon/` — Local qmd sync daemon (cycle, lock, health, CLI subcommands)
 - `apps/git-exporter/` — Git mirror/export service
+- `apps/mcp-server/` — Local/team MCP server (11 registered tool names; role-dependent availability)
 - `apps/reporting/` — Analytics and lifecycle reporting
 - `packages/schema/` — Zod domain model, lifecycle state machine
 - `packages/store/` — SQLite persistence layer (better-sqlite3)
@@ -202,6 +180,9 @@ Tenant execution binds `INDEX_PATH` to `<base>/qmd-index/<tenant>/cache/qmd/inde
 - `packages/claude-runtime/` — Session capture, secret scanning, spool
 - `packages/policy-engine/` — Deterministic governance rule pipeline
 - `packages/repo-resolver/` — Multi-repo context resolver (resolveRepoContext, tenant derivation, monorepo detection, cache)
+- `packages/eval-surface/` — Governance/provenance evals
+- `packages/qmd-runtime/` — Owned qmd runtime tooling
+- `packages/test-fixtures/` — Shared synthetic fixtures
 - `packages/common/` — Result type, hashing, path utilities
 
 **All packages and apps are now implemented.** Edge-daemon production hardening (HTTP health, structured logging, retry/backoff, deploy artifacts) tracked under epic `qmd-team-intent-kb-1x6`.
@@ -219,17 +200,29 @@ Tenant execution binds `INDEX_PATH` to `<base>/qmd-index/<tenant>/cache/qmd/inde
 
 - Unit tests: Vitest, co-located with source in `__tests__/` dirs
 - Integration tests: `tests/` directory at repo root
-- All PRs must pass `pnpm validate` before merge
+- Local aggregate: `pnpm validate`. PR checks run the individual commands and additional named gates in `.github/workflows/ci.yml`; do not substitute the aggregate for the complete required-check set.
 - Test database helper: `createTestDatabase()` from `packages/store` for in-memory SQLite
 - Temp directories via `mkdtempSync` for spool/file system tests
 
 ## CI/CD
 
-- **ci.yml** — Format → Lint → Typecheck → Test (on push to main/develop, PRs to main)
-- **gemini-review.yml** — AI code review via GCP Workload Identity Federation
-- **release.yml** — Dispatch or tag-triggered, validates CHANGELOG and placeholder detection
-- **security.yml** — Weekly npm audit, lockfile integrity, secret scanning
-- **nightly.yml** — Full validation, dependency audit, outdated packages
+- **ci.yml** — PRs to main and pushes to main/develop: frozen install, pinned qmd on PATH, format, lint, typecheck, architecture, CRAP, policy hash pin and coverage in `validate`; separately named `moat-evals`, `retrieval-eval`, and Docker/Testcontainers `integration` jobs. `pnpm validate` alone does not run this complete set.
+- **minimax-review.yml** — Two advisory review lanes (`Review`, `Adversarial review`), configured via repository secrets/variables. A failed provider request is not a review verdict.
+- **docs-quality.yml** — Markdownlint, Vale, links, and frontmatter.
+- **security.yml** — Main pushes, PRs, and dispatch: npm audit and gitleaks, plus advisory Semgrep.
+- **nightly.yml** — 04:00 UTC daily or dispatch: aggregate validation, build, additional evals, corpus-accounting and dependency checks.
+- **release.yml** — Dispatch/tag release validation, image publication and provenance; not invoked by routine documentation edits.
+- **seam-independence.yml** — Named delete-Compile, swap-model and model-free receipt-verification checks.
+- **emit-evidence.yml** — Main-push/dispatch evidence publication.
+- **notify-umbrella-changelog.yml** — Notify the umbrella to refresh its derived changelog.
+
+## Retrieval and MCP inventory
+
+The production entrypoints fuse qmd BM25, native FTS5, and a default-enabled sqlite-vec dense arm using reciprocal-rank fusion, then apply freshness and category ranking. The optional loopback embedder is separate infrastructure; unavailable dense retrieval fails open to lexical results. Direct library callers must supply dense configuration. Governance and receipt verification use no retrieval model.
+
+The separate cross-encoder reranker is configured explicitly; freshness/category ranking is not a model call. See `000-docs/050-AT-RNBK-reranker-service-runbook.md` and `051-AT-RNBK-embedder-service-and-dense-index-runbook.md` (under `000-docs/`) for dated operational evidence. Decision 044 still conflicts with the shipped embedder selection; its dated note distinguishes observed implementation from decision authority.
+
+`apps/mcp-server/src/server.ts` registers three read tools (`teamkb_search`, `teamkb_status`, `teamkb_neighbors`) and eight tools inside `canWrite`: `teamkb_propose`, `teamkb_import`, `teamkb_transition`, `teamkb_recategorize`, `teamkb_vault_preview`, `teamkb_vault_import`, `teamkb_vault_rollback`, `teamkb_sync`. `canWrite` defaults to the configured admin role but is an explicit server option. This is the Registrar surface, separate from the plugin's `brain_*` tools.
 
 ## Rules for Working in This Repo
 
@@ -252,8 +245,8 @@ Tenant execution binds `INDEX_PATH` to `<base>/qmd-index/<tenant>/cache/qmd/inde
 
 - Never code without first marking a Beads task as in_progress
 - Never finish work without closing the Beads task with evidence
-- Always `bd sync` after closing
-- Workflow: `bd update <id> --status in_progress` → work → `bd close <id> --reason "evidence"` → `bd sync`
+- Always `bd dolt push` after closing
+- Workflow: `bd update <id> --status in_progress` → work → `bd close <id> --reason "evidence"` → `bd dolt push`
 
 ### Git hooks and Beads
 
@@ -284,7 +277,7 @@ This repository keeps `core.hooksPath=.husky/_` so Husky's lint-staged and polic
 ### Enterprise Mode Standards
 
 - All code must pass lint, format, and type checks
-- All PRs require review (human + Gemini automated review)
+- Follow the active review policy in `REVIEW.md` and the advisory `minimax-review.yml`; address supported findings and require the actual deterministic checks before merging.
 - Security considerations documented for every new subsystem
 - Dependency updates reviewed, not auto-merged
 
@@ -298,15 +291,15 @@ ICO (compile) → spool → INTKB (govern, dedupe, score) → qmd (retrieve) →
 
 The canonical reference for this positioning is the peer-reviewed thesis paper:
 
-- `000-docs/034-AT-NTRP-ecosystem-thesis.md` — **"Compile, Then Govern: A Two-Layer Local-First Architecture for Team Institutional Memory"** (2026-05-23). Byte-identical copy lives in `intentional-cognition-os/000-docs/034-AT-NTRP-ecosystem-thesis.md`. Cross-repo epic: bead `qmd-team-intent-kb-oaa` ↔ `intentional-cognition-os-ziz`. GitHub: this-repo#140 ↔ ICO#99. Plane: INTKB-6 ↔ ICOS-23.
+- `000-docs/034-AT-NTRP-ecosystem-thesis.md` — **"Compile, Then Govern: A Two-Layer Local-First Architecture for Team Institutional Memory"** (2026-05-23). The Compiler maintains its own copy at `000-docs/034-AT-NTRP-ecosystem-thesis.md`; the copies have diverged and are not byte-identical. Cross-repo epic: bead `qmd-team-intent-kb-oaa` ↔ `intentional-cognition-os-ziz`. GitHub: this-repo#140 ↔ ICO#99. Plane: INTKB-6 ↔ ICOS-23.
 
 When making INTKB-side architectural decisions, the thesis paper is load-bearing: it names the 7 thesis properties + 7 design principles INTKB commits to, the spool-boundary discipline that defines the ICO → INTKB hand-off, and the why-not-just-git / why-not-just-prompt-memory arguments. New design work should not contradict the thesis without an explicit ADR.
 
-The ICO → INTKB spool bridge itself is currently deferred (`qmd-team-intent-kb-pw9` → `vj6`, Epic 16). The thesis is honest about this gap.
+The original thesis described the spool bridge as deferred. That is historical: the bridge subsequently shipped, as the dated note below records. Reverse-direction feedback has its own scope and must be checked separately.
 
 **Note (2026-05-24):** the spool wire shipped via Build Item A — `qmd-team-intent-kb-oaa.3` (reader + cross-repo contract test) + `intentional-cognition-os-ziz.3` (writer). Only the reverse-direction feedback loop (`vj6`) remains deferred. The thesis §6.2 prose is one day stale on this point.
 
-## Current cross-repo build — proof-of-work demo (next milestone)
+## Historical cross-repo proof-of-work tracking (2026-05)
 
 Twin cross-repo epic with ICO. The end-to-end proof-of-work demo drives a real corpus through ICO compile → INTKB curator → qmd index → MCP retrieval → audit verify. Tracked as:
 
@@ -316,4 +309,4 @@ Twin cross-repo epic with ICO. The end-to-end proof-of-work demo drives a real c
 
 Parallel hygiene epic on INTKB only: `qmd-team-intent-kb-2x0` / GH `#150` — wire every `tests/JOURNEYS.md` step to its proving test via JSDoc annotations + rebuild via `journey-mapper-agent`. Closes the 42-of-43 unlinked journey-step gap.
 
-When `66t` ships, the demo doubles as the nightly CI smoke that prevents regression of any link in the ICO → INTKB → qmd chain.
+The Compiler now contains `scripts/demo-e2e.sh` and a nightly smoke workflow. The historical IDs above preserve the original plan; they are not a current open-work inventory or a new demo execution receipt.

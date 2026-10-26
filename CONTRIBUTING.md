@@ -58,15 +58,15 @@ Every PR must include:
 
 1. **Description.** What does this change do and why? Not just "fixes stuff."
 2. **Link to Beads task.** Reference the task ID that this work addresses.
-3. **Passing checks.** `pnpm validate` must pass (format, lint, typecheck, test).
+3. **Passing checks.** Run `pnpm validate` locally (format, lint, typecheck, test). PR CI runs individual commands plus the separately named eval, integration, security and documentation gates; all required checks must pass.
 4. **Changelog entry.** Add an entry to the `[Unreleased]` section of `CHANGELOG.md` under the appropriate category.
 5. **Test coverage.** New logic requires tests. No exceptions.
 6. **Documentation updates.** If you change architecture, behavior, or phase intent, update the relevant docs in `000-docs/`.
 
 ### PR Review Process
 
-- At least **one approval** is required before merge.
-- **Gemini code review** runs automatically on all PRs via GitHub Actions.
+- Required review counts come from the active branch rules; the 2026-10-26 main-branch snapshot requires zero approving reviews. This is an observation, not a protection change. Follow `REVIEW.md`, address supported findings, and use the normal merge guard.
+- **MiniMax review** runs in two advisory lanes via `minimax-review.yml`; see `REVIEW.md` for reviewer guidance. Provider errors do not constitute review approval.
 - Address all review comments before merging. Do not dismiss reviews without discussion.
 - Squash merge is preferred for feature branches to keep `main` history clean.
 
@@ -108,7 +108,7 @@ This project uses [Beads](https://github.com/jeremylongshore/beads) (`bd`) for t
 
 1. **Never code without marking a task.** Run `bd update <id> --status in_progress` before starting work.
 2. **Never finish without closing.** Run `bd close <id> --reason "evidence of completion"` with concrete evidence.
-3. **Always sync.** Run `bd sync` after closing tasks to push state.
+3. **Always sync.** Run `bd dolt push` after closing tasks to push the authoritative Dolt state; `.beads/issues.jsonl` is a passive export.
 
 Use `bd ready` to see available tasks. Use `bd list --status in_progress` to see what you should be working on.
 

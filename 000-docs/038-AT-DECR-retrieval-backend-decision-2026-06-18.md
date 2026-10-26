@@ -14,6 +14,8 @@ license: Apache-2.0
 
 # Governed Second Brain — Retrieval Backend Decision
 
+> **Status note — 2026-10-26:** This is the June decision. [Decision 044](044-AT-DECR-wave0-retrieval-reconciliation.md) later superseded its retrieval-arm/model elements; [runbook 051](051-AT-RNBK-embedder-service-and-dense-index-runbook.md) records a later dense implementation that conflicts with 044’s model selection. See 044’s dated implementation-status note for that unresolved authority distinction. Current production entrypoints enable dense configuration by default, with lexical fallback; the BM25-only and blocked-work descriptions below are historical, not a current feature inventory.
+
 ## 0. Context
 
 The Governed Second Brain (the public `governed-second-brain` plugin + the ICO/INTKB
