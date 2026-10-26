@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are unavailable on failed or skipped intake. Document retained raw refused
   content and repeat-call limits; counters are not unique audit receipts.
 
+- Check every copied owned-launcher option field and parser configuration against
+  the SHA-256-pinned qmd2.5.3 CLI metadata without importing qmd. Regression
+  controls reject altered types, aliases, defaults, multiplicity, missing entries
+  and strict/positional drift; runtime behavior and dependencies are unchanged.
+
 - Expose canonical anchor JSONL parsing and verification of captured records, so
   fixed recovery integrations can verify their bounded read without reopening a
   path. Existing path verification delegates to the same checks and retains its
