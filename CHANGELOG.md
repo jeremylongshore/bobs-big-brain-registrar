@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add trusted asynchronous recovery composition that keeps the reviewed physical
-  store, existing database and actual flock bound through awaited postprocessing.
+- Add trusted asynchronous recovery composition that keeps the validated physical
+  store, existing database and acquired kernel flock bound through awaited postprocessing.
   Fresh partial applies run that stage; apply replay skips it, while explicit
   repair requires verified existing settlement and never governs. Keep known
   commits after callback or cleanup faults, recheck store/settlement between

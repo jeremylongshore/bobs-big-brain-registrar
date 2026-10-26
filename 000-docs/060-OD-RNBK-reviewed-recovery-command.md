@@ -89,10 +89,11 @@ replay. Unexpected transactional failures roll back source and target changes.
 ## Trusted asynchronous integration
 
 `executeRecoveryEnvelope` is the public programmatic boundary for a fixed
-integration that needs the real write lock during asynchronous postprocessing.
-It takes `operation: apply | repair`, the private `planPath`, independently
-reviewed `expectedDigest`, optional explicit `originSecretFile` for apply and a
-bounded optional `lockTimeoutMs`. Repair refuses key inputs. This API adds no
+integration that needs the recovery store’s kernel flock during asynchronous
+postprocessing. It takes `operation: apply | repair`, the private `planPath`, an
+independently supplied `expectedDigest`, optional explicit `originSecretFile` for
+apply and optional `lockTimeoutMs`. The lock helper validates an integer timeout
+from zero through 30,000 milliseconds. Repair refuses key inputs. This API adds no
 CLI shell hook or automatic operation on import.
 
 A fresh committed apply, including a legitimate partial outcome, runs the awaited
@@ -103,25 +104,32 @@ identities, a copied settlement status, sanitized warning codes and
 `assertStillBound()`. It receives no source body, HMAC or key field. The database
 is a trusted programmatic capability; this is not a sandbox for untrusted code.
 
-The integration calls `assertStillBound()` between its concrete external stages.
+A future fixed integration must call `assertStillBound()` between external stages.
 The boundary also checks centrally after callback completion, comparing against
 its own settlement authority. Operation identity is captured before await, so
-caller mutation cannot relabel the result. Its connection and actual kernel lock
-remain owned until the callback finishes and cleanup completes. The callback must
-await termination of every writer; racing a timeout and returning while qmd still
-writes would violate this contract.
+caller mutation cannot relabel the result. The boundary retains the connection
+and acquired lock through the callback and attempts both close and release during
+cleanup. Path replacement is detected at the next binding check; holding a file
+descriptor does not prevent replacement. A future integration must await every
+writer’s termination before returning. This API provides no callback timeout or
+child-process termination enforcement.
 
-For this async API, `committed: true` means a verified durable recovery settlement
-exists, including a historical apply. `appliedNow` identifies a new memory
-transaction in this invocation. Preflight refusals report false; unexpected core
-faults and repair of drifted settlement report unknown. Callback/cleanup failures
+For this async API, `committed: true` means the core application returned a
+settlement or an existing non-drifted settlement was re-read. It includes a
+historical apply and does not establish storage durability after power loss.
+`appliedNow` identifies a new memory transaction in this invocation. Refusals
+detected before the core application starts report false; errors raised inside
+the core application and repair of drifted settlement report unknown. Callback/cleanup failures
 retain a known commit and return a sanitized `failedStage`. Failure results do
 not present an old settlement snapshot as a fresh status proof. The synchronous
 CLI retains its existing per-invocation commit reporting.
 
 `postcommit.state: completed` describes callback completion only. The generic
 boundary always returns `recoveryComplete: false`, even if a callback returns a
-value claiming success. Concrete plugin anchor/export/index integration must
+value claiming success. The callback’s value is passed through verbatim: the
+integrator must sanitize it. Only the boundary’s own error fields omit raw
+exceptions; the database capability permits trusted code to read private data.
+Concrete plugin anchor/export/index integration must
 establish its own evidence: both source and target tenant exports, tenant-exclusive
 index roots, actual selected qmd command provenance and explicit postcommit repair
 without new governance receipts. That integration and the private-copy rehearsal
@@ -135,7 +143,7 @@ restore-checked backup. The parent recovery work must complete those requirement
 and a source-bound private-copy demonstration before any approved live run.
 
 Before settlement, a refused plan leaves database rows unchanged. After a known
-commit, rollback requires the separately reviewed restore procedure and backup;
+commit, rollback requires a restore procedure and backup reviewed for that run;
 do not undo recovery by deleting receipts or rewriting the audit chain. Local
 audit evidence is tamper-evident.
 

@@ -28,7 +28,7 @@ export interface RecoveryPostcommitContext {
   /** Snapshot at settlement; a copy, not mutable validation authority. */
   status: RecoveryStatus;
   warnings: readonly string[];
-  /** Fixed integration calls this between external stages to stop on drift. */
+  /** A fixed integration must call this between external stages to stop on drift. */
   assertStillBound(): void;
 }
 
@@ -49,7 +49,7 @@ export type RecoveryExecutionResult<T> =
   | {
       ok: true;
       operation: Operation;
-      /** A verified durable settlement, including a previous apply. */
+      /** Core settlement returned or existing settlement re-read, including prior apply. */
       committed: true;
       appliedNow: boolean;
       status: RecoveryStatus;
@@ -92,14 +92,15 @@ function readApplySecret(path: string | undefined): string | undefined {
 }
 
 /**
- * Own the reviewed physical store, connection and actual kernel flock through
- * an awaited fixed integration. Fresh partial applies also need postprocessing.
+ * Retain the validated physical store, connection and acquired kernel flock
+ * through an awaited trusted callback. Fresh partial applies also need postprocessing.
  * Apply replay skips it; repair requires existing non-drifted settlement and
  * never invokes intake/govern/archive. No implicit key, store or shell lookup.
  *
  * Do not race a timeout against the callback and then unlock: its writers must
- * have terminated before it resolves or rejects. The fixed stage owns bounded
- * child termination. Callback completion is not anchor/export/index proof.
+ * have terminated before it resolves or rejects. A future fixed integration must
+ * own child termination; this API does not enforce it or sanitize callback values.
+ * Callback completion is not anchor/export/index proof.
  */
 export async function executeRecoveryEnvelope<T>(
   request: RecoveryExecutionRequest,
