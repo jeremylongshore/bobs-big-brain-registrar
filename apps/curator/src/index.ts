@@ -164,6 +164,7 @@ export type {
 
 export {
   CandidateIntake,
+  prepareIntakeCandidate,
   CandidateIntakeError,
   intakeCandidate,
   applyIntakeOverrides,
@@ -183,3 +184,11 @@ export type {
 } from './recovery/source-archive.js';
 
 export { resolveCandidateMinimumSensitivity } from './recovery/sensitivity-constraint.js';
+
+export { planMemoryRecovery, validateRecoveryPlan } from './recovery/recovery-plan.js';
+export type {
+  RecoveryPlanInput,
+  RecoveryPlanOptions,
+  RecoveryPlanEntry,
+  RecoveryPlan,
+} from './recovery/recovery-plan.js';
