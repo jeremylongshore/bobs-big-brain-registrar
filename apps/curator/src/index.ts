@@ -170,3 +170,14 @@ export {
   DEFAULT_ALLOWED_ORIGIN_CHANNELS,
 } from './intake/candidate-intake.js';
 export type { IntakeActorContext, IntakeResult } from './intake/candidate-intake.js';
+
+export {
+  archiveRecoveredSource,
+  memorySnapshotDigest,
+  auditEventSnapshotDigest,
+} from './recovery/source-archive.js';
+export type {
+  RecoverySourceArchiveInput,
+  RecoverySourceArchiveResult,
+  RecoverySnapshotBinding,
+} from './recovery/source-archive.js';
