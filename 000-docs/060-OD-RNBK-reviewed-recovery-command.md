@@ -114,6 +114,29 @@ descriptor does not prevent replacement. A future integration must await every
 writer’s termination before returning. This API provides no callback timeout or
 child-process termination enforcement.
 
+The optional third argument, `TrustedRecoveryReadiness`, lets a fixed integration
+check prerequisites before a fresh apply. It runs synchronously under the same
+kernel flock, connection and outer `BEGIN IMMEDIATE` as the nested canonical
+application. This prevents another SQLite writer from changing the checked state
+between readiness and application. Refusal before application returns
+`committed: false`, `appliedNow: false` and `failedStage: preflight`; the outer
+transaction rolls back any writes attempted by a refusing checker. The checker
+receives store/run/tenant bindings and `assertStillBound`, with no settlement
+snapshot because settlement does not yet exist.
+
+This is trusted programmatic code, not a sandbox or user-configured hook. It must
+read only, return `undefined` and schedule no asynchronous work. Native async
+functions are refused before invocation; any non-undefined return also refuses.
+These checks cannot prevent trusted code from scheduling detached work. Do not
+pass an untrusted callback. The synchronous CLI does not expose this capability.
+Existing integrations with two arguments retain their behavior.
+
+Readiness is for fresh application only: an existing apply replay skips it and
+still reports historical settlement with `skipped_replay`. Repair does not invoke
+it or reapply governance; the fixed postcommit integration must verify current
+readiness there, retaining `committed: true` when it refuses a known settlement.
+Pre-application readiness never replaces strict postcommit verification.
+
 For this async API, `committed: true` means the core application returned a
 settlement or an existing non-drifted settlement was re-read. It includes a
 historical apply and does not establish storage durability after power loss.

@@ -1,4 +1,4 @@
-import { isDeepStrictEqual } from 'node:util';
+import { isDeepStrictEqual, types } from 'node:util';
 import type Database from 'better-sqlite3';
 import { openExistingDatabase } from '@qmd-team-intent-kb/store';
 import { readRecoveryEnvelope } from './command.js';
@@ -33,6 +33,20 @@ export interface RecoveryPostcommitContext {
 }
 
 export type TrustedRecoveryPostcommit<T> = (context: RecoveryPostcommitContext) => Promise<T>;
+
+export type RecoveryReadinessContext = Pick<
+  RecoveryPostcommitContext,
+  | 'database'
+  | 'store'
+  | 'runId'
+  | 'planDigest'
+  | 'sourceTenantId'
+  | 'targetTenantId'
+  | 'assertStillBound'
+>;
+
+/** Trusted synchronous checker; must not schedule work or mutate the store. */
+export type TrustedRecoveryReadiness = (context: RecoveryReadinessContext) => undefined;
 
 type Operation = RecoveryExecutionRequest['operation'];
 type Stage = 'preflight' | 'database' | 'postcommit' | 'finalization';
@@ -105,6 +119,7 @@ function readApplySecret(path: string | undefined): string | undefined {
 export async function executeRecoveryEnvelope<T>(
   request: RecoveryExecutionRequest,
   postcommit: TrustedRecoveryPostcommit<T>,
+  beforeApply?: TrustedRecoveryReadiness,
 ): Promise<RecoveryExecutionResult<T>> {
   const observed: Observation = {
     operation: 'unknown',
@@ -123,7 +138,9 @@ export async function executeRecoveryEnvelope<T>(
     observed.operation = operation;
     if (
       typeof postcommit !== 'function' ||
-      (operation === 'repair' && request.originSecretFile !== undefined)
+      (operation === 'repair' && request.originSecretFile !== undefined) ||
+      (beforeApply !== undefined &&
+        (typeof beforeApply !== 'function' || types.isAsyncFunction(beforeApply)))
     )
       throw new Error('Invalid recovery composition');
     const envelope = readRecoveryEnvelope(request.planPath, request.expectedDigest);
@@ -132,23 +149,58 @@ export async function executeRecoveryEnvelope<T>(
     lock.verify();
     database = openExistingDatabase({ path: envelope.store.databasePath, readonly: false });
     lock.verify();
-    observed.stage = 'database';
     let status: RecoveryStatus;
     let replay = false;
     if (operation === 'apply') {
-      observed.committed = 'unknown';
-      observed.appliedNow = 'unknown';
-      const result = applyRecoveryPlan(envelope.plan, envelope.plan.digest, database, {
-        ...(secret === undefined ? {} : { originSecret: secret }),
-        onDormantPolicy: () => {
-          if (!observed.warnings.includes('dormant_policy_rules'))
-            observed.warnings.push('dormant_policy_rules');
-        },
-      });
+      const apply = () => {
+        observed.stage = 'database';
+        observed.committed = 'unknown';
+        observed.appliedNow = 'unknown';
+        return applyRecoveryPlan(envelope.plan, envelope.plan.digest, database!, {
+          ...(secret === undefined ? {} : { originSecret: secret }),
+          onDormantPolicy: () => {
+            if (!observed.warnings.includes('dormant_policy_rules'))
+              observed.warnings.push('dormant_policy_rules');
+          },
+        });
+      };
+      const result =
+        beforeApply === undefined
+          ? apply()
+          : database
+              .transaction(() => {
+                // The reserved writer lock covers readiness AND the nested canonical
+                // transaction. Historical settlement replay needs no new readiness.
+                if (
+                  readRecoveryStatus(envelope.plan, envelope.plan.digest, database!).state ===
+                  'not_applied'
+                ) {
+                  const value: unknown = beforeApply({
+                    database: database!,
+                    store: Object.freeze({ ...envelope.store }),
+                    runId: envelope.plan.runId,
+                    planDigest: envelope.plan.digest,
+                    sourceTenantId: envelope.plan.sourceTenantId,
+                    targetTenantId: envelope.plan.targetTenantId,
+                    assertStillBound: () => lock!.verify(),
+                  });
+                  if (types.isPromise(value)) {
+                    // Observe rejection without awaiting unsupported asynchronous
+                    // work or leaking its private error as an unhandled rejection.
+                    void Promise.prototype.then.call(value, undefined, () => undefined);
+                  }
+                  if (value !== undefined)
+                    throw new Error('Recovery readiness must be synchronous');
+                  lock!.verify();
+                }
+                return apply();
+              })
+              .immediate();
       status = result.status;
       replay = result.alreadyApplied;
       observed.appliedNow = !replay;
     } else {
+      observed.stage = 'database';
       status = readRecoveryStatus(envelope.plan, envelope.plan.digest, database);
       if (status.state === 'drifted') observed.committed = 'unknown';
       if (

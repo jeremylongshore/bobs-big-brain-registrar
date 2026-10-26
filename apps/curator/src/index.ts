@@ -210,4 +210,6 @@ export type {
   RecoveryExecutionResult,
   RecoveryPostcommitContext,
   TrustedRecoveryPostcommit,
+  RecoveryReadinessContext,
+  TrustedRecoveryReadiness,
 } from './recovery/recovery-execution.js';
