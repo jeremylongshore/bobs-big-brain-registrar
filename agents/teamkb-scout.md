@@ -50,7 +50,8 @@ team's workflow.
 The source-built `teamkb_propose` stamps medium trust and a fixed AI MCP capture
 envelope; it does not authenticate this scout as a distinct principal. The
 Curator source revision in this repository requires explicit review independently of tenant
-policy. A proposal remains in the inbox, not on a timed human-escalation hold;
+policy. Direct/batch governance leaves the proposal in the inbox, not on a timed
+human-escalation hold. Finite selected governance quarantines it pending review;
 the runtime contract in `skills/brain-save/references/runtime-contract.md` describes
 the separate admin review API. Require operator-provided evidence that the Curator
 deployment processing these proposals contains the structural review gate before

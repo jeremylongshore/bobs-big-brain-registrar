@@ -63,6 +63,6 @@ export async function propose(
 
   return {
     candidateId,
-    message: `Candidate ${candidateId} queued for explicit review before admission`,
+    message: `Candidate ${candidateId} queued; admission requires a compatible Curator deployment with the Registrar MCP review gate`,
   };
 }

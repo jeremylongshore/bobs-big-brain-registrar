@@ -217,7 +217,7 @@ export class Curator {
     // This identifies a capture surface, not an authenticated human/agent.
     // A supplied human HoldRelease satisfies this gate. Authenticity is the
     // programmatic caller's responsibility, not verified here. resolveHold is
-    // the current production construction site and checks standing/disclosure.
+    // the existing source-tree construction site and checks standing/disclosure.
     // Ordinary sweeps and AI release hints still require review.
     if (
       requiresRegistrarMcpReview(candidate) &&
