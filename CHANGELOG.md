@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   administrators at `GET /api/health/diagnostics`. Anonymous `GET /api/health`
   retains liveness, DB connectivity, uptime and version, with no tenant or policy
   metadata. Diagnostic consumers must migrate to the authenticated route;
-  deployment status is unchanged (`compile-then-govern-zgh`).
+  no service deployment is performed (`compile-then-govern-zgh`).
 
 - Reconcile source documentation for retrieval defaults, package/API/MCP inventories,
   CI commands, and historical decision authority; repair the document index and links

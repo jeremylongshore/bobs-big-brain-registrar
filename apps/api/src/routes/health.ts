@@ -12,6 +12,7 @@ export function registerHealthRoutes(app: FastifyInstance, service: HealthServic
       schema: {
         tags: ['health'],
         summary: 'Liveness and database reachability probe',
+        security: [],
         description:
           'Returns `healthy` with uptime and version when the database is reachable, `degraded` (503) otherwise.',
       },
@@ -28,8 +29,9 @@ export function registerHealthRoutes(app: FastifyInstance, service: HealthServic
       schema: {
         tags: ['health'],
         summary: 'Global operational diagnostics — unscoped administrators only',
+        security: [{ bearerAuth: [] }],
         description:
-          'Includes cross-tenant policy dormancy and index freshness. Tenant-scoped tokens are refused, even when naming an allowed tenant.',
+          'Includes cross-tenant policy dormancy and index freshness. Requires an unscoped admin bearer token outside existing loopback development no-auth mode. Tenant-scoped tokens are refused, even when naming an allowed tenant.',
       },
     },
     async (request, reply) => {

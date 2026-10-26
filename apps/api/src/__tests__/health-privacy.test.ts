@@ -59,6 +59,31 @@ describe('anonymous liveness and global diagnostics standing', () => {
     expect(result.body).not.toContain('private-beta');
   });
 
+  it('documents bearer authentication for diagnostics and public liveness', async () => {
+    const result = await app.inject({ method: 'GET', url: '/openapi.json' });
+    expect(result.statusCode).toBe(200);
+    const paths = result.json().paths;
+    expect(paths['/api/health/diagnostics'].get.security).toEqual([{ bearerAuth: [] }]);
+    expect(paths['/api/health'].get.security).toEqual([]);
+  });
+
+  it('preserves existing loopback development no-auth administrative diagnostics', async () => {
+    const previous = process.env['NODE_ENV'];
+    delete process.env['NODE_ENV'];
+    let local: FastifyInstance | undefined;
+    try {
+      local = buildApp({ db, silent: true, bindHost: '127.0.0.1' });
+      await local.ready();
+      const result = await local.inject({ method: 'GET', url: '/api/health/diagnostics' });
+      expect(result.statusCode).toBe(200);
+      expect(result.json().policyDormancy).toHaveLength(2);
+    } finally {
+      await local?.close();
+      if (previous === undefined) delete process.env['NODE_ENV'];
+      else process.env['NODE_ENV'] = previous;
+    }
+  });
+
   it('requires authentication for diagnostics', async () => {
     const result = await app.inject({ method: 'GET', url: '/api/health/diagnostics' });
     expect(result.statusCode).toBe(401);

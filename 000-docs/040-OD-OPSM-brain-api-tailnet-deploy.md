@@ -135,8 +135,8 @@ It no longer scans or returns tenant policy dormancy or global index freshness.
 The existing deploy script checks the HTTP status only and keeps using this
 liveness route; existing 200/503 behavior is preserved.
 
-Global diagnostics move to `GET /api/health/diagnostics`, requiring a valid
-**unscoped admin** bearer token. Members and tenant-scoped admins cannot read
+Outside the existing loopback development no-auth mode, global diagnostics
+at `GET /api/health/diagnostics` require a valid **unscoped admin** bearer token. Members and tenant-scoped admins cannot read
 this global aggregation, including when naming an allowed tenant. This route
 does not offer a tenant-filtered view; do not broaden a monitoring token's
 tenant scope to work around a refusal. Existing loopback development no-auth
@@ -154,6 +154,7 @@ credentials, alter ACLs, or deploy a service. Before rollout, inventory those
 consumers and verify effective network exposure through the authorized
 operational gate.
 
-Rolling back source restores the prior anonymous diagnostic exposure. Do not
+Reverting this change restores the prior anonymous diagnostic behavior in source;
+building and deploying that revision would restore the exposure in the service. Do not
 use rollback as a credential or network recovery procedure. No persisted
 brain data or schema migration is involved.
