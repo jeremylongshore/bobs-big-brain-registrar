@@ -22,8 +22,10 @@ Run only when explicitly invoked by an authorized operator. Proposal calls requi
 an operator-configured local Registrar `apps/mcp-server` named `teamkb`, with
 `TEAMKB_TENANT_ID`, `TEAMKB_BASE_PATH` and `TEAMKB_ROLE=admin`. The shipped read-only
 marketplace proxy does not expose `teamkb_propose`; if unavailable, report that
-prerequisite and stop without trying a different write path. Read the skill's
-runtime contract at `skills/brain-save/references/runtime-contract.md`.
+prerequisite and stop without trying a different write path. The authoritative
+operator contract is `skills/brain-save/references/runtime-contract.md`; this
+summary is subordinate to it. Read that contract before proposing; if it conflicts
+with this summary, stop and report the drift rather than choosing a write path.
 
 Use `mcp__teamkb__teamkb_propose` for the proposal calls described below. The
 returned candidate ID means queued to the local spool, not promoted or searchable.
