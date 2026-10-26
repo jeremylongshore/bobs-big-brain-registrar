@@ -31,11 +31,12 @@
     "@qmd-team-intent-kb/schema": "workspace:*",
     "@qmd-team-intent-kb/store": "workspace:*",
     "better-sqlite3": "^13.0.3",
-    "sqlite-vec": "^0.1.9"
+    "sqlite-vec": "^0.1.9",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@qmd-team-intent-kb/policy-engine": "workspace:*",
-    "@types/better-sqlite3": "^9.6.0",
-    "@qmd-team-intent-kb/test-fixtures": "workspace:*"
+    "@qmd-team-intent-kb/test-fixtures": "workspace:*",
+    "@types/better-sqlite3": "^9.6.0"
   }
 }

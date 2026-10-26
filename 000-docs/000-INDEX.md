@@ -137,4 +137,6 @@
 | 059 | AT-TEST | disposable-retrieval-copy                             | Disposable retrieval copy boundary |
 | 060 | OD-RNBK | reviewed-recovery-command                             | Reviewed recovery command boundary |
 
-## Next Available Sequence: 061
+| 061 | OD-RNBK | strict-recovery-qmd-registry | Strict recovery registry contract |
+
+## Next Available Sequence: 062
