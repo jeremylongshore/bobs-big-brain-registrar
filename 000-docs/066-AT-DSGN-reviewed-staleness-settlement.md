@@ -49,8 +49,10 @@ Deprecation reruns the detector with the reviewed applicability assessment and
 requires a retirement candidate. Renames, external scope and ambiguous narrative
 matches cannot become deprecations through this path.
 
-Each lifecycle change uses the canonical repository and adds a deterministic
-per-memory audit event (`demoted` or `promoted`). A final `governed` run event binds
+Each lifecycle change uses the canonical repository and adds a per-memory audit
+event (`demoted` or `promoted`) with a deterministically derived ID. Receipt
+timestamps depend on execution time and are pinned during exact replay.
+A final `governed` run event binds
 all transition receipt digests. Receipts retain rule and manifest hashes, state
 digests, source-reference hashes and the declared actor. Review reason and scope
 reference text are hashed; source bytes are not copied into receipts. The manifest
@@ -92,4 +94,4 @@ No live invalidation is included. Caller integration still needs authenticated
 review authority, current policy evidence, approval of the exact finite live
 selection, physical database identity and the shared write lock. Anchoring,
 export/index refresh and measured corpus effects remain outside this transaction.
-The parent bead's deployment probes, FAMA and Recall@10 acceptance remain open.
+This source unit does not exercise deployment probes, FAMA or Recall@10 acceptance.
