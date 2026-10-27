@@ -27,7 +27,8 @@
     "@qmd-team-intent-kb/common": "workspace:*",
     "@qmd-team-intent-kb/policy-engine": "workspace:*",
     "@qmd-team-intent-kb/schema": "workspace:*",
-    "@qmd-team-intent-kb/store": "workspace:*"
+    "@qmd-team-intent-kb/store": "workspace:*",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@qmd-team-intent-kb/test-fixtures": "workspace:*"

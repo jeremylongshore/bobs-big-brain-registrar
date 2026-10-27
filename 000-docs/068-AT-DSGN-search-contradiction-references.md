@@ -63,7 +63,8 @@ Older API responses remain supported. The existing local raw-hit sensitivity
 fallback and unknown-citation behavior remain separate from this graph evidence
 boundary; this change is not a claim to replace every legacy retrieval guard.
 Standalone Bob's Big Brain Plugin consumers are a separate owning repository.
-No frozen Plugin payload, live index, service or installation is changed here.
+The Registrar-owned remote-client bundle is refreshed. No separately frozen
+standalone Plugin consumer payload, live index, service or installation is changed.
 
 The remote artifact imports the canonical metadata validator through a narrow
 schema export. `pnpm build:plugin-runtime` first builds that schema package,

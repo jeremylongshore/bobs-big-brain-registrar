@@ -77,3 +77,12 @@ export type {
   Perturbation,
 } from './groundedness/types.js';
 export type { EvaluatorResult, RetrievalProbe, DedupProbe } from './types.js';
+export {
+  scoreReviewJudgments,
+  REVIEW_LABELS,
+  type ReviewLabel,
+  type ReviewJudgmentCase,
+  type ReviewJudgmentPrediction,
+  type ReviewRecallFloors,
+  type ReviewClassMetrics,
+} from './review-agent-judgment.js';

@@ -46,6 +46,7 @@ for the current documentation audit. Historical plans are not current acceptance
 - [005-TQ-TEST-testing-ci-strategy](005-TQ-TEST-testing-ci-strategy.md)
 - [006-TQ-SECU-security-governance](006-TQ-SECU-security-governance.md)
 - [048-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor](048-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor.md)
+- [069-AT-DSGN-review-agent-judgment-scoring](069-AT-DSGN-review-agent-judgment-scoring.md)
 
 ### Operations and deployment
 
@@ -178,5 +179,6 @@ for the current documentation audit. Historical plans are not current acceptance
 | 067 | AT-DSGN | [067-AT-DSGN-reviewed-contradiction-settlement](067-AT-DSGN-reviewed-contradiction-settlement.md) |
 
 | 068 | AT-DSGN | [068-AT-DSGN-search-contradiction-references](068-AT-DSGN-search-contradiction-references.md) |
+| 069 | AT-DSGN | [069-AT-DSGN-review-agent-judgment-scoring](069-AT-DSGN-review-agent-judgment-scoring.md) |
 
-Next available sequence: 069.
+Next available sequence: 070.
