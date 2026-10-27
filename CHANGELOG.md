@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add pure review-agent promote/hold/reject judgment scoring with independent
+  recall floors, explicit missing-prediction misses, full class confusion
+  metrics and a separate paraphrase-duplicate rejection gate. This scores
+  supplied labels only; frozen human labels, the runner and operational
+  acceptance remain unfinished under `compile-then-govern-6ps.13`.
+
 - Surface optional visible contradiction references on Registrar search hits,
   including API cited/SQLite responses and owning MCP mappings. Read-only current
   tenant/audience/sensitivity checks guard both endpoints; unavailable graph
