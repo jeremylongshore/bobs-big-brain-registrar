@@ -173,7 +173,9 @@ describe('disposable copied retrieval boundary', () => {
     expect(() => createRetrievalCopy(source)).toThrow('Injected copy read failure');
     expect(io.reads).toBe(2);
     expect(io.copyRoots.every((owned) => !existsSync(owned))).toBe(true);
-    expect(readFileSync(file)).toEqual(original);
+    // Native byte equality keeps this 300 KiB preservation control exact without
+    // spending the normal test deadline recursively comparing Buffer properties.
+    expect(readFileSync(file).equals(original)).toBe(true);
     expect(lstatSync(file).ino).toBe(before.ino);
     expect(lstatSync(file).mtimeMs).toBe(before.mtimeMs);
   });

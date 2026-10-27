@@ -84,3 +84,8 @@ edge, and decide how search surfaces unresolved conflicts. Neither this unit nor
 the compiler's advisory output establishes that a proposed pair is true. No
 migration, index rebuild or operator action is required. Rollback removes the
 unused planner/export; existing graph/search behavior is unchanged.
+
+The separate internal [finite settlement core](067-AT-DSGN-reviewed-contradiction-settlement.md)
+now implements reviewed transactional edge writes. It does not alter this
+planner's pure interface or supply live activation, semantic review or search
+surfacing for the parent task.

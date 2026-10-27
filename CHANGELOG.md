@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add an internal finite reviewed contradiction-edge settlement core. Explicit
+  pairs bind captured compiler evidence, current memory/promotion snapshots and
+  independent approval; one immediate transaction writes deterministic edges
+  with canonical receipts, exact raw readback, full-store preservation checks
+  and strict no-write replay. No CLI/API activation, lifecycle change, search
+  surfacing or live conflict acceptance is included (`compile-then-govern-39z.1.2`).
+
 - Add an internal finite reviewed staleness settlement and separately reviewed
   reactivation core. It binds canonical and complete stored-row snapshots, rule
   definitions, captured evidence bytes and an independently supplied manifest
