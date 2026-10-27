@@ -60,24 +60,34 @@ The integration test suite lives at `tests/integration/`, runs under `pnpm test:
 
 ## Installed gates
 
-| Gate           | Tool                                 | Status                                                                                                                                                                   |
-| -------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Harness        | @intentsolutions/audit-harness 0.1.0 | Installed                                                                                                                                                                |
-| Format         | Prettier 3.8.3                       | Enforced in CI + pre-commit                                                                                                                                              |
-| Lint           | ESLint 10.2.0 + typescript-eslint    | Enforced in CI + pre-commit                                                                                                                                              |
-| Typecheck      | tsc -b (composite, strict)           | Enforced in CI                                                                                                                                                           |
-| Unit test      | Vitest 4.1.4                         | Enforced in CI                                                                                                                                                           |
-| Dead code      | Knip 6.4.1                           | Available, not in CI gate                                                                                                                                                |
-| Coverage       | @vitest/coverage-v8 4.1.5            | Installed, 80% line / 70% branch floor                                                                                                                                   |
-| Mutation       | Stryker (vitest runner)              | Installed, 70% break threshold                                                                                                                                           |
-| Pre-commit     | husky 9.1.7 + lint-staged 16.4.0     | Installed                                                                                                                                                                |
-| Architecture   | dependency-cruiser 17.x              | Enforced in CI (`.dependency-cruiser.cjs` — monorepo invariants)                                                                                                         |
-| Complexity     | scripts/crap-score.ts (TS AST)       | Enforced in CI at threshold 30 (Wall 5 ideal; tightened from 40 after `runCycle` refactor — `qmd-team-intent-kb-igs`)                                                    |
-| Secrets        | gitleaks-action v2                   | Enforced in CI on every PR                                                                                                                                               |
-| SAST           | Semgrep (security.yml)               | Advisory (artifact upload)                                                                                                                                               |
-| L4 Integration | testcontainers 11.x + pg client      | Enforced in CI `integration` job on push to main / `integration`-labeled PRs (see §Waived layers — partial waiver)                                                       |
-| Contract       | OpenAPI snapshot (vitest)            | Enforced in CI (apps/api openapi-contract.test.ts). Replaces Pact for this repo — see §Contract testing                                                                  |
-| Policy pin     | scripts/harness-pin.sh               | Enforced in CI (Wall 7) — SHA-256 hash of every engineer-owned policy artifact; AI can't silently change policy without an engineer-initiated re-pin. See §Hash manifest |
+Observed 2026-10-27 at source tree `24347cd` (Node 22 in CI). The policy
+classification and dated waiver rationale above are preserved. Their historical
+statements about absent external consumers and label-only integration do not
+describe the current wiring below; this audit does not change those waivers.
+
+| Gate                       | Current source/configuration                                                                  | Measurement or limit                                                                             |
+| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Harness                    | Installed `@intentsolutions/audit-harness` 1.5.1; stock and owning wrapper share one manifest | Both verification entry points pass                                                              |
+| Format/lint/types          | Prettier 3.9.9, ESLint 10.12.0, TypeScript 5.9.3; CI uses Node 22                             | Required validate job; lint-staged also runs format/lint                                         |
+| Unit and coverage          | Vitest/coverage-v8 5.0.3                                                                      | CI enforces 80 statements/80 lines/70 branches/75 functions                                      |
+| Mutation                   | Stryker configuration with break threshold 70                                                 | No executable mutation invocation found in checked-in workflows; current score not measured      |
+| Hooks                      | Husky and lint-staged 17.6.0, policy-change and Beads shims                                   | Hook presence does not prove local execution cannot be bypassed                                  |
+| Architecture               | dependency-cruiser                                                                            | CI result: zero errors, six warnings                                                             |
+| Complexity                 | `scripts/crap-score.ts`, TypeScript AST cyclomatic complexity                                 | CI threshold 30; not coverage-weighted CRAP and excludes tests                                   |
+| Secrets/SAST               | gitleaks and Semgrep workflow                                                                 | Inspect individual check semantics; Semgrep is advisory                                          |
+| Integration                | testcontainers 12.2.0/Postgres; real SQLite, Fastify inject, qmd fixtures                     | Dedicated integration job runs on every PR and push; excluded from ordinary Vitest configuration |
+| Contract                   | OpenAPI snapshot                                                                              | Structural API regression signal; not a verified external consumer contract                      |
+| Retrieval/governance evals | Required `retrieval-eval` and `moat-evals` jobs                                               | Synthetic/disposable acceptance; separate from live corpus/service lanes                         |
+| Dead code                  | Knip 6.39.0                                                                                   | Available tooling, not a required CI invocation here                                             |
+| Policy pin                 | `scripts/harness-pin.sh` and stock verifier                                                   | Whole-file pins include this document; hashes detect drift, not reviewer identity                |
+
+The generic `audit-harness audit --deep` CRAP result is excluded: it reported
+PASS while scoring zero production and zero test methods. Its default child
+also wrote local reports despite the audit command's read-only description.
+The generated files were retained outside the checkout; no policy or source
+change was accepted from that run. Tracked under `compile-then-govern-8pg.1`.
+OSV and j-rig measurements were unavailable in this diagnostic session. Missing
+standalone markdownlint on PATH does not negate the separate owning docs CI.
 
 ## Hash manifest
 
@@ -144,40 +154,59 @@ inside the local trust boundary; the hashes do not authenticate physical reviewe
 
 ## Frameworks
 
-| Package                 | Framework               | Test files |
-| ----------------------- | ----------------------- | ---------- |
-| packages/schema         | Vitest                  | 8          |
-| packages/common         | Vitest                  | 6          |
-| packages/store          | Vitest                  | 11         |
-| packages/claude-runtime | Vitest                  | 15         |
-| packages/policy-engine  | Vitest                  | 8          |
-| packages/qmd-adapter    | Vitest                  | 10         |
-| packages/repo-resolver  | Vitest                  | 6          |
-| apps/api                | Vitest + Fastify inject | 13         |
-| apps/curator            | Vitest                  | 12         |
-| apps/edge-daemon        | Vitest                  | 9          |
-| apps/git-exporter       | Vitest                  | 7          |
-| apps/reporting          | Vitest                  | 5          |
-| apps/mcp-server         | Vitest                  | 6          |
+Vitest runs the workspace source tests; standalone Node controls and Docker
+integration have distinct commands. The following inventory counts tracked
+`*.test.ts` paths at the audited source tree, not executed tests or coverage:
+
+| Package                 | Tracked test paths |
+| ----------------------- | -----------------: |
+| apps/api                |                 37 |
+| apps/curator            |                 45 |
+| apps/edge-daemon        |                 14 |
+| apps/git-exporter       |                 13 |
+| apps/mcp-server         |                 14 |
+| apps/reporting          |                  7 |
+| packages/claude-runtime |                 17 |
+| packages/common         |                 12 |
+| packages/eval-surface   |                  5 |
+| packages/policy-engine  |                 17 |
+| packages/qmd-adapter    |                 49 |
+| packages/qmd-runtime    |                  0 |
+| packages/repo-resolver  |                  5 |
+| packages/schema         |                 10 |
+| packages/store          |                 29 |
+| packages/test-fixtures  |                  1 |
+
+A zero in this filename inventory does not establish absence of runtime tests
+elsewhere. Root scripts and dedicated integration files are outside this table.
 
 ## Last audit
 
-- **Date**: 2026-04-24
-- **Grade**: B+ (88/100) — post-remediation
-- **Tests**: 1,312 passing across 119 files
-- **P0 gaps**: 0
-- **P1 gaps**: 0 (all remediated by implement-tests)
-- **Remediated**: audit harness, pre-commit hooks, coverage gate, mutation testing, SAST
+- **Date:** 2026-10-27; diagnostic refresh for `compile-then-govern-6ps.19`.
+- **Source:** `24347cd86c4fd7f2ebe98cade03d60b89b7f7926`; same whole tree as reviewed `115bb54`.
+- **Executed ordinary suite:** 4,230 passed, five optional live assertions skipped;
+  281 test files passed and two skipped. Separate Docker integration passed in CI.
+- **Coverage:** 88.73% statements, 84.19% branches, 91.17% functions, 89.83% lines.
+- **Public evidence:** [validate job](https://github.com/jeremylongshore/bobs-big-brain-registrar/actions/runs/40450724539/job/122012544648)
+  at unchanged executable source `7eb3aac`; subsequent settlement follow-up was doc-only.
+- **Grade:** not assigned. The April 24 numeric grades and 1,312-test snapshot are historical.
+- **Unmeasured:** current mutation score, true production/test/average CRAP,
+  complete requirements/persona/journey linkage and live acceptance.
+- **Report:** [TEST_AUDIT.md](../TEST_AUDIT.md).
 
 ## Traceability
 
-| Artifact            | Status                    | Notes                                                                                                                              |
-| ------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/RTM.md`      | Seeded (Batch 1, PR #126) | 7 architecture-invariant requirements (MUST) + 6 v0.5.0 capability requirements (SHOULD) + 2 WON'T entries. Linking pass deferred. |
-| `tests/PERSONAS.md` | Seeded (Batch 3, this PR) | 6 personas declared (developer, curator, org-admin, auditor, operator, bot-agent). 23 declared flows. Linking pass deferred.       |
-| `tests/JOURNEYS.md` | Seeded (Batch 3, this PR) | 6 journeys declared. 43 in-scope steps. 2 real coverage gaps (hash-chain verifier); 1 blocked by Epic 16 (ICOS→qmd bridge).        |
+`tests/RTM.md`, `tests/PERSONAS.md` and `tests/JOURNEYS.md` retain their declared
+requirements, tiers, personas and journeys. This audit did not regenerate them
+or adopt new MoSCoW values. Their historical counts and inferred links do not
+establish a current measured coverage percentage.
 
-**Linking infrastructure not yet wired.** The three artifacts above declare the _intent_ — what the system serves and what flows matter — but tests don't yet carry persona/flow/REQ-id annotations, so coverage % can't be computed automatically. Next pass: decide annotation convention (JSDoc on `describe` blocks recommended), then `rtm-builder-agent` / `persona-coverage-agent` / `journey-mapper-agent` walk tests and populate the linked columns.
+Some historical persona/journey text still describes the hash-chain verifier as
+unbuilt. Current implementation and regression/property tests exist in
+`packages/store/src/audit-verify.ts` and its tests. The historical gap label is
+not a current implementation verdict, and implementation alone does not prove
+every declared journey complete. Test-to-requirement, persona and journey
+linkage needs its own explicit verification before reporting percentages.
 
 ## Explicit live retrieval acceptance
 
