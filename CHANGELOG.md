@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Qualify staleness declarations with pinned historical source references and
+  private/unsigned evidence limits. Repository renames request metadata review;
+  platform retirement candidates additionally require an explicit per-memory,
+  per-rule estate applicability assessment. External references and unknown scope
+  remain review findings. No live sweep, verified-authority gate or apply path is
+  included (`compile-then-govern-39z.2.2`). The private Curator source interface
+  now requires rule `remedy`/`authority` and returns finding `remedy`, `authority`
+  and `scopeEvidenceRef`; the optional third argument supplies applicability.
+  Default calls retain all non-exempt matches for manual review. No version bump
+  or package publication is included.
+
 ### Fixed
 
 - Distinguish explicit prescriptive staleness candidates from manual-review

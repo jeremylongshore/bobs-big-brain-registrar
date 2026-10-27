@@ -168,4 +168,6 @@ for the current documentation audit. Historical plans are not current acceptance
 | 063      | AA-AUDR | [063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26](063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26.md)     |
 | 064      | RA-REPT | [064-RA-REPT-retrieval-model-decision-packet](064-RA-REPT-retrieval-model-decision-packet.md)                                             |
 
-Next available sequence: 065.
+| 065 | AT-DSGN | [065-AT-DSGN-staleness-rule-evidence-and-scope](065-AT-DSGN-staleness-rule-evidence-and-scope.md) |
+
+Next available sequence: 066.
