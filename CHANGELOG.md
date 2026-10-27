@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add an internal finite reviewed staleness settlement and separately reviewed
+  reactivation core. It binds canonical and complete stored-row snapshots, rule
+  definitions, captured evidence bytes and an independently supplied manifest
+  digest; canonical state and audit receipts settle in one immediate transaction
+  with exact readback, rollback and replay controls. Disposable-store coverage
+  includes unknown metadata drift and ignored/altered writes. No CLI/API wiring,
+  live authority, corpus sweep, index refresh or deployment is included
+  (`compile-then-govern-39z.2.3`).
+
 ### Changed
 
 - Qualify staleness declarations with pinned historical source references and
