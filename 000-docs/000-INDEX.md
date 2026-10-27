@@ -38,6 +38,7 @@ for the current documentation audit. Historical plans are not current acceptance
 - [059-AT-TEST-disposable-retrieval-copy](059-AT-TEST-disposable-retrieval-copy.md)
 - [062-AT-TEST-fast-uri-parent-major-contracts](062-AT-TEST-fast-uri-parent-major-contracts.md)
 - [066-AT-DSGN-reviewed-staleness-settlement](066-AT-DSGN-reviewed-staleness-settlement.md)
+- [067-AT-DSGN-reviewed-contradiction-settlement](067-AT-DSGN-reviewed-contradiction-settlement.md)
 
 ### Testing and quality
 
@@ -173,4 +174,6 @@ for the current documentation audit. Historical plans are not current acceptance
 
 | 066 | AT-DSGN | [066-AT-DSGN-reviewed-staleness-settlement](066-AT-DSGN-reviewed-staleness-settlement.md) |
 
-Next available sequence: 067.
+| 067 | AT-DSGN | [067-AT-DSGN-reviewed-contradiction-settlement](067-AT-DSGN-reviewed-contradiction-settlement.md) |
+
+Next available sequence: 068.
