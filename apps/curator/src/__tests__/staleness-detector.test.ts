@@ -216,3 +216,135 @@ describe('ESTATE_STALENESS_RULES — rule hygiene', () => {
     }
   });
 });
+
+describe('dry-run precision — candidates are distinct from review', () => {
+  it.each([
+    'Use BigQuery for the production warehouse.',
+    'Hustle should use Firestore.',
+    'Run `gcloud run deploy` to ship this service.',
+    'Publish alerts to the ntfy topic.',
+  ])('identifies an affirmative prescription: %s', (content) => {
+    const findings = detectStaleness(memory({ content }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ disposition: 'retirement-candidate' });
+  });
+
+  it.each([
+    'We built a BigQuery schema in 72 hours.',
+    'The incident involved Firestore.',
+    'Building a 254-table BigQuery schema in 72 hours',
+    'The old instruction was "Use BigQuery for reporting."',
+    'Historical quote: "Use Firestore."',
+    '"We should use Firestore. That was the recommendation."',
+    "'We should use Firestore. That was the recommendation.'",
+    '"Old recommendation. We should use Firestore. End quotation."',
+    '"Old recommendation.\nWe should use Firestore.\nEnd quotation."',
+    '```sh\n```not-a-close\nRun gcloud run deploy\n```',
+    '~~~sh\n~~~not-a-close\nRun gcloud run deploy\n~~~',
+    'Nobody should use Firestore.',
+    'No one should use Firestore.',
+    'No services should use Firestore.',
+    'None of our services should use Firestore.',
+    'Firestore was retired; the old note says "Use Firestore."',
+    '> Run gcloud run deploy',
+    '> Prior recommendation:\nWe should use Firestore.',
+    '```sh\nRun gcloud run deploy\n```',
+    '~~~sh\nUse BigQuery\n~~~',
+    '    Run gcloud run deploy',
+    'Should we use Firestore?',
+    'If needed, use BigQuery.',
+    'We could use Firestore.',
+    'Use Redis instead of Firestore.',
+    'We were told we should use Firestore.',
+    'We retired Firebase. Deploy the service with gcloud.',
+    'The legacy configuration was removed. Run gcloud run deploy.',
+    "Don't use Redis; instead use Firestore.",
+  ])('keeps an uncertain/narrative match visible: %s', (content) => {
+    const findings = detectStaleness(memory({ content }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ disposition: 'manual-review' });
+    expect(findings[0]!.evidence).toContain('manual-review');
+  });
+
+  it('does not treat platform provenance as a prescription', () => {
+    const findings = detectStaleness(
+      memory({ metadata: { filePaths: ['docs/bigquery/report.md'], tags: [] } }),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ disposition: 'manual-review', matched: ['bigquery'] });
+  });
+
+  it('keeps an opaque quoted instruction visible even beside a teardown record', () => {
+    const findings = detectStaleness(
+      memory({ content: 'Firebase was retired.\n> Use Firestore.' }),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.disposition).toBe('manual-review');
+  });
+
+  it('preserves pure teardown exemptions and classifies each matching rule', () => {
+    const findings = detectStaleness(
+      memory({ content: 'Firebase was retired. Publish alerts to ntfy.' }),
+    );
+    expect(findings.map((f) => [f.ruleId, f.disposition])).toEqual([
+      ['ntfy-removed-2026-06-13', 'manual-review'],
+    ]);
+    expect(detectStaleness(memory({ content: 'Never use gcloud or BigQuery.' }))).toEqual([]);
+  });
+
+  it('does not hide provenance-only tokens behind a different historical token', () => {
+    const findings = detectStaleness(
+      memory({
+        content: 'Firebase was retired.',
+        metadata: { filePaths: ['docs/gcloud/setup.md'], tags: [] },
+      }),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      disposition: 'manual-review',
+      matched: expect.arrayContaining(['firebase', 'gcloud']),
+    });
+  });
+
+  it('preserves rename findings from provenance regardless of historical prose', () => {
+    const findings = detectStaleness(
+      memory({
+        content: 'The legacy configuration was retired.',
+        metadata: {
+          filePaths: [],
+          tags: [],
+          repoUrl: 'https://github.com/jeremylongshore/qmd-team-intent-kb',
+        },
+      }),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.disposition).toBe('retirement-candidate');
+  });
+
+  it('does not blanket-exempt imported reference material', () => {
+    const findings = detectStaleness(
+      memory({
+        content: 'Use BigQuery.',
+        metadata: { filePaths: ['imports/reference.md'], tags: ['reference'] },
+      }),
+    );
+    expect(findings[0]!.disposition).toBe('retirement-candidate');
+  });
+
+  it('does not mutate input and retains deterministic rule order and evidence', () => {
+    const subject = memory({ content: 'Use BigQuery. Publish alerts to ntfy.' });
+    const before = structuredClone(subject);
+    const first = detectStaleness(subject);
+    expect(subject).toEqual(before);
+    expect(detectStaleness(subject)).toEqual(first);
+    expect(first.map((f) => f.ruleId)).toEqual([
+      'gcp-torn-down-2026-07-09',
+      'ntfy-removed-2026-06-13',
+    ]);
+    for (const finding of first) {
+      expect(finding.disposition).toBe('retirement-candidate');
+      expect(finding.evidence).toContain(finding.matched[0]);
+      expect(finding.memoryId).toBe(subject.id);
+    }
+  });
+});
