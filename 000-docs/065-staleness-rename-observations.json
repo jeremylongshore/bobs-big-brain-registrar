@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-10-27T03:09:14.587345+00:00",
+  "observations": [
+    {
+      "old_url": "https://github.com/jeremylongshore/intentional-cognition-os",
+      "observed_http_status": 301,
+      "location": "https://github.com/jeremylongshore/bobs-big-brain-compiler",
+      "api_full_name": "jeremylongshore/bobs-big-brain-compiler"
+    },
+    {
+      "old_url": "https://github.com/jeremylongshore/qmd-team-intent-kb",
+      "observed_http_status": 301,
+      "location": "https://github.com/jeremylongshore/bobs-big-brain-registrar",
+      "api_full_name": "jeremylongshore/bobs-big-brain-registrar"
+    },
+    {
+      "old_url": "https://github.com/jeremylongshore/governed-second-brain-plugin",
+      "observed_http_status": 301,
+      "location": "https://github.com/jeremylongshore/bobs-big-brain-plugin",
+      "api_full_name": "jeremylongshore/bobs-big-brain-plugin"
+    }
+  ],
+  "limit": "Point-in-time primary URL observations only; redirects are not governed corpus correctness or remedy authority."
+}

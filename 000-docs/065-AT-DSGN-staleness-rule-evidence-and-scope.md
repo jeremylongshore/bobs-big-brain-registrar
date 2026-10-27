@@ -1,8 +1,9 @@
 # Staleness rule evidence and scope
 
 Source contract for `compile-then-govern-39z.2.2`. This is dry-run triage in
-`apps/curator/src/staleness/`; it has no production caller, network probe, database
-write, lifecycle transition or package-index export.
+`apps/curator/src/staleness/`; it adds no network probe, database write,
+lifecycle transition or package-index export. The repository call-site observation and default-call migration are
+documented below; external consumers have not been audited.
 
 ## Evidence is distinct from a proposed remedy
 
@@ -16,22 +17,40 @@ complete pinned source references.
 
 | Rule                                | Historical declaration                                                 | Evidence availability                                                                | Proposed remedy                                           |
 | ----------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| GCP                                 | Estate teardown effective 2026-07-09, described by a 2026-07-10 record | Private Intent OS decision reference and byte hash; no private contents published    | Review an affirmative instruction for this estate         |
+| GCP                                 | Estate teardown effective 2026-07-09, described by a 2026-07-10 record | Private Intent OS decision reference and byte hash; document body not reproduced     | Review an affirmative instruction for this estate         |
 | Compiler and Registrar repositories | Remote renames on 2026-07-19                                           | Public umbrella topology, pinned below                                               | Review repository metadata/links                          |
 | Plugin repository                   | Remote rename 2026-07-13; local-directory rename 2026-07-14            | Public umbrella topology; historical rule ID retains July 14                         | Review repository metadata/paths                          |
 | Marketplace                         | Retirement and archival declared 2026-07-17                            | Public topology description of a private repository, not a signed retirement receipt | Review marketplace instructions                           |
-| ntfy                                | Estate service removal declared 2026-06-13                             | Private decision D23 reference and byte hash; no private contents published          | Review an affirmative instruction for that estate service |
+| ntfy                                | Estate service removal declared 2026-06-13                             | Private decision D23 reference and byte hash; document body not reproduced           | Review an affirmative instruction for that estate service |
+
+The executable definitions in `staleness-rules.ts` are canonical for the shipped
+rule inventory. The table is a manually maintained explanatory summary, checked
+during review; it is not generated or automatically synchronized.
 
 The public source is [umbrella topology section 2 at f3ad985](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/f3ad9856d3f150360e6f437a2c724f7ee5b70d37/000-docs/007-AT-SMAP-repo-topology-and-working-surface.md).
 Private sources require independent authorized access to the referenced revision.
-These source records supply historical context, not a verified-authority gate.
+Private decision documents are not reproduced or excerpted. The public rule
+contract does disclose their source identifiers, dates and byte hashes, plus the
+narrow historical estate conclusions already represented by the earlier rules.
+No broader private strategy or decision text is included.
+
+The author computed the source hashes at authoring time. The detector checks
+reference shape only; neither it nor another in-repository check recomputes hashes
+against those source bytes. Public source bytes can be independently checked;
+private bytes require authorized access. These source records supply historical
+context, not a verified-authority gate.
 No signed teardown or owner approval receipt is manufactured by this contract.
 
 ## Current observations have narrower meaning
 
-At 2026-10-27T03:09:14Z, read-only HTTP observations returned 301 for each of these
-old GitHub repository URLs, with the listed canonical destination. Authenticated
-GitHub repository metadata independently resolved the same canonical names.
+The author recorded the following structured observations at
+2026-10-27T03:09:14Z: read-only HTTP requests returned 301 with the listed
+`Location` destinations; separate authenticated GitHub repository API requests
+returned the canonical `full_name` values. The extracted fields and observation
+time are preserved in the [observation record](065-staleness-rename-observations.json)
+(SHA-256 `7580e8dbe40fcc70c5c7bad9ce34a157691906753f41ce2680b250cd369044cd`).
+This is an author-recorded observation artifact, not raw authenticated responses,
+a signed attestation or a probe re-executed by CI.
 
 | Old path under `github.com/jeremylongshore/` | Redirect destination under the same owner |
 | -------------------------------------------- | ----------------------------------------- |
@@ -43,7 +62,8 @@ This is a point-in-time observation, not a promise about future redirects. It
 contradicts treating an old name as proof of URL failure or memory-wide
 obsolescence. Every rename match remains `manual-review` with remedy
 `metadata-review`, including historical references and provenance-only matches.
-The detector itself never performs HTTP requests.
+The detector itself never performs HTTP requests. A rename alone does not prove
+content obsolescence even if an old URL later stops redirecting.
 
 The historical GCP decision does not prove a current zero-project billing count
 or invalidate an external GCP tutorial. The historical ntfy decision does not
@@ -68,13 +88,34 @@ any edit. These are invocation-local assertions, not saved approvals, verified
 provenance or proof of current authority. The detector does not fetch the evidence
 locator or authenticate its author.
 
-The result exposes the proposed remedy, historical rule evidence and the accepted
-scope evidence locator separately. Both dispositions remain proposals. An
+The result exposes the proposed remedy, structured authority record and accepted
+scope evidence locator as separate fields. The historical declaration remains
+prose within `evidence`, alongside the disposition and limitations. Both dispositions remain proposals. An
 assessment and pinned historical record still cannot bypass prose triage:
 narratives, quotations, code, uncertain or mixed advice remain manual review;
 clear teardown records retain their exemption. An empty result is not a health
 verdict. The syntax heuristic is not a general language/Markdown parser or a
 measured corpus-accuracy claim.
+
+## Repository call sites and migration
+
+At source revision `56a76cd6fc6c9f1a08657da64a92e7ff8b0fdb87`, the following
+repository search returned only the detector module and its unit test:
+
+```sh
+git grep -l -E 'detectStaleness|staleness-detector' 56a76cd6fc6c9f1a08657da64a92e7ff8b0fdb87 -- apps packages scripts
+```
+
+That observation supports no production wiring found in these repository paths;
+it does not establish absence of callers in other repositories or external tools.
+
+This changes default-call semantics: without scope assessments, all non-exempt
+built-in matches now return manual review. Renames remain metadata review even
+with an estate assessment. A caller seeking platform candidate proposals must
+supply the new third argument; the returned shape now includes `remedy`,
+`authority` and `scopeEvidenceRef`. Custom rules must declare a remedy and either
+supply authority references or explicitly use `authority: null`. None of these
+changes creates an apply permission.
 
 ## Verification and remaining parent acceptance
 
