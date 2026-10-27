@@ -30,9 +30,10 @@ narrow historical estate conclusions already represented by the earlier rules.
 No broader private strategy or decision text is included.
 
 The author computed the source hashes at authoring time. The detector checks
-reference shape only; neither it nor another in-repository check recomputes hashes
-against those source bytes. Public source bytes can be independently checked;
-private bytes require authorized access. These source records supply historical
+reference shape only. The later internal [reviewed settlement core](066-AT-DSGN-reviewed-staleness-settlement.md)
+recomputes hashes against caller-supplied captured bytes before settlement; this
+does not authenticate or refresh the historical decision. Public source bytes can
+be independently checked; private bytes require authorized access. These source records supply historical
 context, not a verified-authority gate.
 No signed teardown or owner approval receipt is manufactured by this contract.
 
