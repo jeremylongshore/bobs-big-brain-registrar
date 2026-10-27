@@ -1,174 +1,40 @@
 import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
 
-/**
- * Evidence-linked staleness detection (bead `compile-then-govern-39z.2`).
- *
- * The deterministic, model-free half of truth-maintenance: a memory is stale
- * when a rule in {@link ESTATE_STALENESS_RULES} declares the estate fact it
- * depends on gone, and the memory's text or provenance implicates that rule's
- * tokens — a platform that was torn
- * down, a repo that was renamed, a service that was removed. No LLM, no
- * embeddings, no similarity. Just: does the thing this answer tells you to use
- * still exist?
- *
- * ## Why this exists
- *
- * Supersession as built is a near-duplicate collapser (Jaccard over title tokens
- * within one category), so nothing has ever been retired for being WRONG — only
- * for being RESTATED. Meanwhile a live probe of `how do I deploy to production`
- * on 2026-07-31 returned 5 hits, 0 correct, 2 of them recommending `gcloud`
- * against an estate whose GCP footprint was torn down on 2026-07-09.
- *
- * Retrieval quality cannot fix that: those answers are genuinely ON TOPIC, so a
- * better ranker surfaces them HIGHER. The fix has to retire them.
- *
- * Pattern borrowed from the RCSB PDB AI Help Desk (arXiv:2604.22800), which
- * keeps a KB current by hash-detecting changes in its source documents. Ours is
- * the same shape at the estate level, and it is the cheapest signal available.
- *
- * ## The distinction that makes or breaks this
- *
- * A naive `content.includes('gcloud')` sweep deprecates the wrong rows. Two
- * kinds of memory mention a dead platform, and they are OPPOSITE:
- *
- *   PRESCRIPTIVE — "deploy with `gcloud run deploy`, store secrets in Secret
- *                  Manager"  → the answer is now WRONG. Retire it.
- *
- *   HISTORICAL   — "the GCP estate was torn down 2026-07-09; never use gcloud"
- *                  → this IS the correct answer to "why no GCP?". Retiring it
- *                    would delete the very record that justifies the retirement,
- *                    and would make the estate LESS able to explain itself.
- *
- * Dead-platform matches need an affirmative instruction in prose to become a
- * retirement candidate. Narratives, provenance-only mentions and uncertain or
- * mixed contexts remain explicit manual-review findings. Pure teardown records
- * retain their exemption. This is a small syntax heuristic, not general natural
- * language understanding or a measured corpus-precision claim.
- *
- * ## What this module does NOT do
- *
- * It does not mutate anything or authorize a transition. Both dispositions are
- * dry-run findings; a future apply path must independently verify rule authority
- * (decision/teardown receipts), govern and receipt any reversible transition.
- * The current dated rule descriptions do not satisfy that prerequisite. An empty
- * result is not a verdict that a memory is current, safe or useful.
- *
- * @module staleness/staleness-detector
- */
+import { ESTATE_STALENESS_RULES, type StalenessRule } from './staleness-rules.js';
+
+export { ESTATE_STALENESS_RULES } from './staleness-rules.js';
+export type { StalenessRule } from './staleness-rules.js';
 
 /**
- * A single estate fact declared dead by the rule author. The rule hygiene test
- * (every `because` carries a date) makes a retirement EXPLAINABLE — not proven:
- * the code never independently verifies the estate; it verifies the memory
- * against the rule.
+ * Deterministic dry-run triage, not truth verification or transition authority.
+ * Historical records, scope assessments and proposed remedies stay separate.
+ * Platform prescriptions become candidates only with a matching caller-supplied
+ * estate scope assessment and pinned rule references. Neither is independently
+ * authenticated here. Assessments apply only to this invocation and must be
+ * reassessed after any memory edit; they are not persistent approvals.
+ * Ambiguous prose remains review; clear history is exempt.
+ * Renames always request metadata/link review, including working redirects.
+ * Empty results do not establish currency, safety or usefulness. No I/O or apply.
  */
-export interface StalenessRule {
-  /** Stable id, recorded in the audit event so a retirement can be explained. */
-  readonly id: string;
-  /** Plain-English statement of the dead fact, including the date it died. */
-  readonly because: string;
-  /**
-   * Tokens whose presence implicates this rule. Matched case-insensitively on
-   * word-ish boundaries (see {@link mentions}) so `bq` does not fire inside
-   * `bqueue` and `ntfy` does not fire inside `ntfyd`.
-   */
-  readonly tokens: readonly string[];
-  /**
-   * Whether a HISTORICAL framing exempts the memory.
-   *
-   * `true` for torn-down platforms: a memory recording the teardown is the
-   * answer we want to keep. `false` for pure renames — "the repo is called
-   * `qmd-team-intent-kb`" is wrong whether stated prescriptively or
-   * historically, because the name simply no longer resolves.
-   */
-  readonly exemptIfHistorical: boolean;
+export interface StalenessScopeAssessment {
+  readonly memoryId: string;
+  readonly ruleId: string;
+  readonly scope: 'intent-solutions-estate' | 'external' | 'unresolved';
+  /** Caller-provided evidence locator, not fetched or authenticated here. */
+  readonly evidenceRef: string;
 }
 
-/** Why one memory was flagged. */
 export interface StalenessFinding {
   readonly memoryId: string;
   readonly ruleId: string;
-  /** Neither disposition authorizes retirement or proves the rule's claim. */
   readonly disposition: 'retirement-candidate' | 'manual-review';
-  /** Rule declaration, matched tokens and the dry-run disposition. */
+  readonly remedy: StalenessRule['remedy'];
+  readonly authority: StalenessRule['authority'];
+  /** null means applicability has not been explicitly assessed for this pair. */
+  readonly scopeEvidenceRef: string | null;
   readonly evidence: string;
-  /** The matched tokens, for operator review before a bulk apply. */
   readonly matched: readonly string[];
 }
-
-/**
- * The estate's dead facts, each with the date it died.
- *
- * Every entry here is a CLAIM ABOUT THE ESTATE, not about language. Adding a
- * rule means asserting "this no longer exists", so each carries its date and
- * should be traceable to a decision record or teardown.
- */
-export const ESTATE_STALENESS_RULES: readonly StalenessRule[] = [
-  {
-    id: 'gcp-torn-down-2026-07-09',
-    because:
-      'The GCP estate was torn down on 2026-07-09 (0 billing-enabled projects; ' +
-      'BigQuery, Vertex, Firebase and Cloud Run all gone). Any answer that tells ' +
-      'you to USE these is wrong.',
-    tokens: [
-      'gcloud',
-      'bq',
-      'bigquery',
-      'vertex ai',
-      'vertexai',
-      'firebase',
-      'firestore',
-      'cloud run',
-      'app engine',
-      'secret manager',
-      'gcp project',
-    ],
-    exemptIfHistorical: true,
-  },
-  {
-    id: 'repo-renamed-2026-07-19-compiler',
-    because:
-      'The repo `intentional-cognition-os` was renamed to `bobs-big-brain-compiler` ' +
-      'on 2026-07-19. (The npm package name and the `@ico/*` scope did NOT change, ' +
-      'so this rule matches the REPO/URL form only.)',
-    tokens: ['jeremylongshore/intentional-cognition-os'],
-    exemptIfHistorical: false,
-  },
-  {
-    id: 'repo-renamed-2026-07-19-registrar',
-    because:
-      'The repo `qmd-team-intent-kb` was renamed to `bobs-big-brain-registrar` on ' +
-      '2026-07-19. (The `@qmd-team-intent-kb/*` package scope and the GHCR image ' +
-      'did NOT change, so this rule matches the REPO/URL form only.)',
-    tokens: ['jeremylongshore/qmd-team-intent-kb'],
-    exemptIfHistorical: false,
-  },
-  {
-    id: 'repo-renamed-2026-07-14-plugin',
-    because:
-      'The plugin repo/dir `governed-second-brain-plugin` was renamed to ' +
-      '`bobs-big-brain-plugin` on 2026-07-14.',
-    tokens: ['governed-second-brain-plugin'],
-    exemptIfHistorical: false,
-  },
-  {
-    id: 'marketplace-retired-2026-07-17',
-    because:
-      'The private marketplace repo `team-intent-claude-plugins` was retired and ' +
-      'archived on 2026-07-17. "Team" is a runtime MODE of the public plugin, not ' +
-      'a separate repo.',
-    tokens: ['team-intent-claude-plugins'],
-    exemptIfHistorical: true,
-  },
-  {
-    id: 'ntfy-removed-2026-06-13',
-    because:
-      'The ntfy container was removed on 2026-06-13 when alerting was rebuilt ' +
-      'Slack-only. There is no ntfy topic to publish to.',
-    tokens: ['ntfy'],
-    exemptIfHistorical: true,
-  },
-];
 
 /**
  * Phrases that mark a mention as a RECORD of something being gone rather than
@@ -325,6 +191,7 @@ function dispositionFor(
   prose: string,
   contexts: readonly ProseContext[],
 ): StalenessFinding['disposition'] | undefined {
+  if (rule.remedy === 'metadata-review') return 'manual-review';
   if (!rule.exemptIfHistorical) return 'retirement-candidate';
   // A historical token cannot explain a different token found only in a path.
   if (matched.some((token) => !mentions(prose, token))) return 'manual-review';
@@ -364,12 +231,16 @@ function dispositionFor(
  *                 sweep normally passes only `active` ones).
  * @param rules  - Rule set to apply. Defaults to {@link ESTATE_STALENESS_RULES};
  *                 injectable so tests do not depend on the live estate.
+ * @param scopeAssessments - Caller assessments bound to memory AND rule, never
+ * inferred from tags, paths or repository identity. These are review inputs, not
+ * verified authority. Without one, prescriptions remain manual review.
  * @returns One finding per non-exempt matching rule. Ambiguous matches remain
  *          manual-review findings. An empty array is not a health verdict.
  */
 export function detectStaleness(
   memory: Pick<CuratedMemory, 'id' | 'title' | 'content' | 'metadata'>,
   rules: readonly StalenessRule[] = ESTATE_STALENESS_RULES,
+  scopeAssessments: readonly StalenessScopeAssessment[] = [],
 ): StalenessFinding[] {
   const provenance = [
     ...(memory.metadata?.filePaths ?? []),
@@ -388,14 +259,41 @@ export function detectStaleness(
   for (const rule of rules) {
     const matched = rule.tokens.filter((t) => mentions(haystack, t));
     if (matched.length === 0) continue;
-    const disposition = dispositionFor(rule, matched, prose, contexts);
-    if (disposition === undefined) continue;
+    const proposedDisposition = dispositionFor(rule, matched, prose, contexts);
+    if (proposedDisposition === undefined) continue;
+    const assessments = scopeAssessments.filter(
+      (item) => item.memoryId === memory.id && item.ruleId === rule.id,
+    );
+    // Duplicate/conflicting assessments require reconciliation, never first-wins.
+    const soleAssessment = assessments.length === 1 ? assessments[0] : undefined;
+    const assessment =
+      soleAssessment?.scope === rule.authority?.scope && soleAssessment?.evidenceRef.trim() !== ''
+        ? soleAssessment
+        : undefined;
+    const pinnedSources =
+      rule.authority != null &&
+      rule.authority.sources.length > 0 &&
+      rule.authority.sources.every(
+        (source) =>
+          /^[a-f0-9]{40}$/.test(source.revision) &&
+          /^[a-f0-9]{64}$/.test(source.sha256) &&
+          source.repository.trim() !== '' &&
+          source.path.trim() !== '' &&
+          source.locator.trim() !== '',
+      );
+    const disposition =
+      proposedDisposition === 'retirement-candidate' && (!assessment || !pinnedSources)
+        ? 'manual-review'
+        : proposedDisposition;
 
     findings.push({
       memoryId: memory.id,
       ruleId: rule.id,
       disposition,
-      evidence: `${rule.because} Matched: ${matched.map((m) => `"${m}"`).join(', ')}. Dry-run disposition: ${disposition}; not transition authorization.`,
+      remedy: rule.remedy,
+      authority: rule.authority,
+      scopeEvidenceRef: assessment?.evidenceRef ?? null,
+      evidence: `${rule.because} Matched: ${matched.map((m) => `"${m}"`).join(', ')}. Remedy: ${rule.remedy}. Scope: ${assessment?.evidenceRef ?? 'unassessed'}. Rule evidence: ${rule.authority?.limitations ?? 'not supplied'}. Dry-run disposition: ${disposition}; not transition authorization.`,
       matched,
     });
   }

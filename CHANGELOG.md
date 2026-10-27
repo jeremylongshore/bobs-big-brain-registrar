@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Qualify staleness declarations with pinned historical source references and
+  private/unsigned evidence limits. Repository renames request metadata review;
+  platform retirement candidates additionally require an explicit per-memory,
+  per-rule estate applicability assessment. External references and unknown scope
+  remain review findings. No live sweep, verified-authority gate or apply path is
+  included (`compile-then-govern-39z.2.2`).
+
 - Distinguish explicit prescriptive staleness candidates from manual-review
   matches in the dry-run detector. Completed narratives, quoted/code examples,
   provenance-only platform mentions and mixed historical advice remain visible
