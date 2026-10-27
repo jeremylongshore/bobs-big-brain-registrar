@@ -65,29 +65,33 @@ classification and dated waiver rationale above are preserved. Their historical
 statements about absent external consumers and label-only integration do not
 describe the current wiring below; this audit does not change those waivers.
 
-| Gate                       | Current source/configuration                                                                  | Measurement or limit                                                                             |
-| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Harness                    | Installed `@intentsolutions/audit-harness` 1.5.1; stock and owning wrapper share one manifest | Both verification entry points pass                                                              |
-| Format/lint/types          | Prettier 3.9.9, ESLint 10.12.0, TypeScript 5.9.3; CI uses Node 22                             | Required validate job; lint-staged also runs format/lint                                         |
-| Unit and coverage          | Vitest/coverage-v8 5.0.3                                                                      | CI enforces 80 statements/80 lines/70 branches/75 functions                                      |
-| Mutation                   | Stryker configuration with break threshold 70                                                 | No executable mutation invocation found in checked-in workflows; current score not measured      |
-| Hooks                      | Husky and lint-staged 17.6.0, policy-change and Beads shims                                   | Hook presence does not prove local execution cannot be bypassed                                  |
-| Architecture               | dependency-cruiser                                                                            | CI result: zero errors, six warnings                                                             |
-| Complexity                 | `scripts/crap-score.ts`, TypeScript AST cyclomatic complexity                                 | CI threshold 30; not coverage-weighted CRAP and excludes tests                                   |
-| Secrets/SAST               | gitleaks and Semgrep workflow                                                                 | Inspect individual check semantics; Semgrep is advisory                                          |
-| Integration                | testcontainers 12.2.0/Postgres; real SQLite, Fastify inject, qmd fixtures                     | Dedicated integration job runs on every PR and push; excluded from ordinary Vitest configuration |
-| Contract                   | OpenAPI snapshot                                                                              | Structural API regression signal; not a verified external consumer contract                      |
-| Retrieval/governance evals | Required `retrieval-eval` and `moat-evals` jobs                                               | Synthetic/disposable acceptance; separate from live corpus/service lanes                         |
-| Dead code                  | Knip 6.39.0                                                                                   | Available tooling, not a required CI invocation here                                             |
-| Policy pin                 | `scripts/harness-pin.sh` and stock verifier                                                   | Whole-file pins include this document; hashes detect drift, not reviewer identity                |
+| Gate                       | Current source/configuration                                                                  | Measurement or limit                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Harness                    | Installed `@intentsolutions/audit-harness` 1.5.1; stock and owning wrapper share one manifest | Author-reported local verification passed; public owning CI proof is linked in TEST_AUDIT.md                 |
+| Format/lint/types          | Prettier 3.9.9, ESLint 10.12.0, TypeScript 5.9.3; CI uses Node 22                             | Configured validate job; lint-staged also runs format/lint                                                   |
+| Unit and coverage          | Vitest/coverage-v8 5.0.3                                                                      | CI enforces 80 statements/80 lines/70 branches/75 functions                                                  |
+| Mutation                   | Stryker configuration with break threshold 70                                                 | No executable mutation invocation found in checked-in workflows; current score not measured                  |
+| Hooks                      | Husky and lint-staged 17.6.0, policy-change and Beads shims                                   | Hook presence does not prove local execution cannot be bypassed                                              |
+| Architecture               | dependency-cruiser                                                                            | Configured CI job; measured results are in TEST_AUDIT.md                                                     |
+| Complexity                 | `scripts/crap-score.ts`, TypeScript AST cyclomatic complexity                                 | CI threshold 30; not coverage-weighted CRAP and excludes tests                                               |
+| Secrets/SAST               | gitleaks and Semgrep workflow                                                                 | Inspect individual check semantics; Semgrep is advisory                                                      |
+| Integration                | testcontainers 12.2.0/Postgres; real SQLite, Fastify inject, qmd fixtures                     | Configured for pull requests to main and pushes to main/develop; excluded from ordinary Vitest configuration |
+| Contract                   | OpenAPI snapshot                                                                              | Structural API regression signal; not a verified external consumer contract                                  |
+| Retrieval/governance evals | Configured `retrieval-eval` and `moat-evals` jobs                                             | Synthetic/disposable acceptance; separate from live corpus/service lanes                                     |
+| Dead code                  | Knip 6.39.0                                                                                   | Available tooling; no owning CI invocation found here                                                        |
+| Policy pin                 | `scripts/harness-pin.sh` and stock verifier                                                   | Whole-file pins include this document; hashes detect drift, not reviewer identity                            |
 
-The generic `audit-harness audit --deep` CRAP result is excluded: it reported
+The author-recorded generic `audit-harness audit --deep` CRAP result is excluded: it reported
 PASS while scoring zero production and zero test methods. Its default child
 also wrote local reports despite the audit command's read-only description.
 The generated files were retained outside the checkout; no policy or source
-change was accepted from that run. Tracked under `compile-then-govern-8pg.1`.
+change was accepted from that run. Local handoff reference: `compile-then-govern-8pg.1`; no public tracker attestation.
 OSV and j-rig measurements were unavailable in this diagnostic session. Missing
 standalone markdownlint on PATH does not negate the separate owning docs CI.
+
+Source-trigger details, sanitized diagnostic extracts and the limits of local
+execution claims are in [TEST_AUDIT.md](../TEST_AUDIT.md). “Configured” does not
+attest branch-protection requirements or guarantee future execution.
 
 ## Hash manifest
 
@@ -182,17 +186,11 @@ elsewhere. Root scripts and dedicated integration files are outside this table.
 
 ## Last audit
 
-- **Date:** 2026-10-27; diagnostic refresh for `compile-then-govern-6ps.19`.
-- **Source:** `24347cd86c4fd7f2ebe98cade03d60b89b7f7926`; same whole tree as reviewed `115bb54`.
-- **Executed ordinary suite:** 4,230 passed, five optional live assertions skipped;
-  281 test files passed and two skipped. Separate Docker integration passed in CI.
-- **Coverage:** 88.73% statements, 84.19% branches, 91.17% functions, 89.83% lines.
-- **Public evidence:** [validate job](https://github.com/jeremylongshore/bobs-big-brain-registrar/actions/runs/40450724539/job/122012544648)
-  at unchanged executable source `7eb3aac`; subsequent settlement follow-up was doc-only.
-- **Grade:** not assigned. The April 24 numeric grades and 1,312-test snapshot are historical.
-- **Unmeasured:** current mutation score, true production/test/average CRAP,
-  complete requirements/persona/journey linkage and live acceptance.
-- **Report:** [TEST_AUDIT.md](../TEST_AUDIT.md).
+The canonical dated source/test/coverage snapshot and public evidence links are
+in [TEST_AUDIT.md](../TEST_AUDIT.md#measured-evidence). This section links to that
+report rather than maintaining a second copy of its measurements. No grade is
+assigned. Current mutation effectiveness, true CRAP, complete traceability and
+live acceptance are separate unmeasured obligations in this diagnostic session.
 
 ## Traceability
 
