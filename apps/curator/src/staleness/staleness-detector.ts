@@ -39,19 +39,19 @@ import type { CuratedMemory } from '@qmd-team-intent-kb/schema';
  *                    would delete the very record that justifies the retirement,
  *                    and would make the estate LESS able to explain itself.
  *
- * So every dead-platform rule is gated behind {@link readsAsHistorical}. When in
- * doubt this module KEEPS the memory: a false negative leaves one stale row for
- * a later pass, while a false positive silently removes institutional memory.
- * That asymmetry is deliberate and is the whole safety argument.
+ * Dead-platform matches need an affirmative instruction in prose to become a
+ * retirement candidate. Narratives, provenance-only mentions and uncertain or
+ * mixed contexts remain explicit manual-review findings. Pure teardown records
+ * retain their exemption. This is a small syntax heuristic, not general natural
+ * language understanding or a measured corpus-precision claim.
  *
  * ## What this module does NOT do
  *
- * It does not mutate anything. It returns findings. The caller performs the
- * governed `active -> deprecated` transition with a hash-chained audit event
- * citing {@link StalenessFinding.evidence}, so every retirement has a receipt
- * and is reversible (`deprecated -> active` is a legal transition). Soft belief
- * update, never hard delete — per ExComm (arXiv:2605.22102), because "conflict
- * resolution is not guaranteed to be perfect".
+ * It does not mutate anything or authorize a transition. Both dispositions are
+ * dry-run findings; a future apply path must independently verify rule authority
+ * (decision/teardown receipts), govern and receipt any reversible transition.
+ * The current dated rule descriptions do not satisfy that prerequisite. An empty
+ * result is not a verdict that a memory is current, safe or useful.
  *
  * @module staleness/staleness-detector
  */
@@ -88,7 +88,9 @@ export interface StalenessRule {
 export interface StalenessFinding {
   readonly memoryId: string;
   readonly ruleId: string;
-  /** Audit-event-ready sentence: the dead fact plus the token that matched. */
+  /** Neither disposition authorizes retirement or proves the rule's claim. */
+  readonly disposition: 'retirement-candidate' | 'manual-review';
+  /** Rule declaration, matched tokens and the dry-run disposition. */
   readonly evidence: string;
   /** The matched tokens, for operator review before a bulk apply. */
   readonly matched: readonly string[];
@@ -256,6 +258,100 @@ export function readsAsHistorical(text: string): boolean {
   return HISTORICAL_MARKERS.some((marker) => lower.includes(marker));
 }
 
+interface ProseContext {
+  readonly text: string;
+  readonly opaque: boolean;
+}
+
+/** Keep code/quotes visible as matches, but never interpret them as instructions. */
+function proseContexts(prose: string): ProseContext[] {
+  const contexts: ProseContext[] = [];
+  let fence: { char: string; length: number } | undefined;
+  for (const line of prose.split(/\r?\n/)) {
+    const fenceLine = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+    const marker = fenceLine?.[1];
+    if (marker) {
+      if (!fence) fence = { char: marker[0]!, length: marker.length };
+      else if (
+        marker[0] === fence.char &&
+        marker.length >= fence.length &&
+        fenceLine![2]!.trim() === ''
+      )
+        fence = undefined;
+      contexts.push({ text: line, opaque: true });
+      continue;
+    }
+    const opaque = fence !== undefined || /^\s*>|^(?: {4}|\t)/.test(line);
+    for (const text of line.split(/(?<=[.!?;])\s+/)) {
+      if (text.trim()) contexts.push({ text, opaque });
+    }
+  }
+  return contexts;
+}
+
+const INSTRUCTION =
+  /^(?:(?:[-*+]|\d+[.)])\s+)?(?:please\s+)?(?:use|run|deploy|publish|install|configure|create|store|enable|connect|send|subscribe|set up)\b/i;
+const MODAL_INSTRUCTION =
+  /\b(?:should|must|needs? to|recommend(?:s)?(?: that (?:we|you))?)\s+(?:use|run|deploy|publish|install|configure|create|store|enable|connect|send|subscribe|set up)\b/i;
+const UNCERTAIN_CONTEXT =
+  /\?|\b(?:if|unless|whether|could|might|may|would|perhaps|maybe|suppose|example|quoted|but|however|instead|although|rather)\b/i;
+const PAST_NARRATIVE = /\b(?:previously|yesterday|was|were|had|built|involved)\b/i;
+const NEGATIVE_CONTEXT = /\b(?:not|never|avoid|without|don't|no|nobody|none|nothing|neither)\b/i;
+// Be conservative even when sentence splitting crosses a quoted span. A plain
+// apostrophe inside a word (Hustle's) is not a quotation delimiter.
+const QUOTED_CONTEXT = /["“”‘’]|(?:^|\s)'|'(?:\s|[.!?;]|$)/;
+
+function affirmativeInstruction(context: ProseContext, tokens: readonly string[]): boolean {
+  if (
+    context.opaque ||
+    QUOTED_CONTEXT.test(context.text) ||
+    UNCERTAIN_CONTEXT.test(context.text) ||
+    PAST_NARRATIVE.test(context.text)
+  ) {
+    return false;
+  }
+  // Inline code remains meaningful in "Run `gcloud ...`". Quoted prose does not:
+  // "The old instruction was 'Use Firestore'" must not become a candidate.
+  const unquoted = context.text.replace(/"[^"]*"|'[^']*'|“[^”]*”|‘[^’]*’/g, ' ').trim();
+  if (!tokens.some((token) => mentions(unquoted, token))) return false;
+  if (readsAsHistorical(unquoted) || NEGATIVE_CONTEXT.test(unquoted)) return false;
+  return INSTRUCTION.test(unquoted) || MODAL_INSTRUCTION.test(unquoted);
+}
+
+/** Conservative triage only; no returned value authorizes an apply. */
+function dispositionFor(
+  rule: StalenessRule,
+  matched: readonly string[],
+  prose: string,
+  contexts: readonly ProseContext[],
+): StalenessFinding['disposition'] | undefined {
+  if (!rule.exemptIfHistorical) return 'retirement-candidate';
+  // A historical token cannot explain a different token found only in a path.
+  if (matched.some((token) => !mentions(prose, token))) return 'manual-review';
+  // Quoted prose can span sentences/lines; Markdown also permits blockquote
+  // continuation lines without `>`. Without a full parser, keep any such
+  // document in review rather than infer where its quotation ends.
+  if (QUOTED_CONTEXT.test(prose) || /^\s*>/m.test(prose)) return 'manual-review';
+  const relevant = contexts.filter((context) =>
+    rule.tokens.some((token) => mentions(context.text, token)),
+  );
+  const affirmative = relevant.filter((context) => affirmativeInstruction(context, rule.tokens));
+  const pureHistory =
+    relevant.length > 0 &&
+    relevant.every(
+      (context) =>
+        !context.opaque &&
+        !QUOTED_CONTEXT.test(context.text) &&
+        !UNCERTAIN_CONTEXT.test(context.text) &&
+        readsAsHistorical(context.text),
+    );
+  if (pureHistory && affirmative.length === 0) return undefined;
+  if (affirmative.length === relevant.length && relevant.length > 0 && !readsAsHistorical(prose)) {
+    return 'retirement-candidate';
+  }
+  return 'manual-review';
+}
+
 /**
  * Detect estate-fact staleness in one memory.
  *
@@ -268,8 +364,8 @@ export function readsAsHistorical(text: string): boolean {
  *                 sweep normally passes only `active` ones).
  * @param rules  - Rule set to apply. Defaults to {@link ESTATE_STALENESS_RULES};
  *                 injectable so tests do not depend on the live estate.
- * @returns One finding per matching rule, or an empty array when nothing is
- *          stale. Never throws.
+ * @returns One finding per non-exempt matching rule. Ambiguous matches remain
+ *          manual-review findings. An empty array is not a health verdict.
  */
 export function detectStaleness(
   memory: Pick<CuratedMemory, 'id' | 'title' | 'content' | 'metadata'>,
@@ -286,18 +382,20 @@ export function detectStaleness(
   // strings — a file path cannot narrate that a platform was torn down, and
   // letting it vote would misclassify on an incidental path component.
   const prose = `${memory.title}\n${memory.content}`;
-  const historical = readsAsHistorical(prose);
+  const contexts = proseContexts(prose);
 
   const findings: StalenessFinding[] = [];
   for (const rule of rules) {
     const matched = rule.tokens.filter((t) => mentions(haystack, t));
     if (matched.length === 0) continue;
-    if (rule.exemptIfHistorical && historical) continue;
+    const disposition = dispositionFor(rule, matched, prose, contexts);
+    if (disposition === undefined) continue;
 
     findings.push({
       memoryId: memory.id,
       ruleId: rule.id,
-      evidence: `${rule.because} Matched: ${matched.map((m) => `"${m}"`).join(', ')}.`,
+      disposition,
+      evidence: `${rule.because} Matched: ${matched.map((m) => `"${m}"`).join(', ')}. Dry-run disposition: ${disposition}; not transition authorization.`,
       matched,
     });
   }

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Distinguish explicit prescriptive staleness candidates from manual-review
+  matches in the dry-run detector. Completed narratives, quoted/code examples,
+  provenance-only platform mentions and mixed historical advice remain visible
+  for review; clear teardown records retain their exemption. This is a small
+  syntax heuristic, not a corpus-precision measurement or transition authority.
+  No apply path or rule-evidence gate is changed (`compile-then-govern-39z.2.1`).
+
 - For API graph reads, enforce the selected tenant, API-derived token allowlist
   and audience policy. Reject blank or repeated tenant selectors.
   Constrain both link endpoints before recursive expansion so restricted tenant
