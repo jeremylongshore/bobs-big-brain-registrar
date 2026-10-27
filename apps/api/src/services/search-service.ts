@@ -1,4 +1,6 @@
-import type { MemoryRepository } from '@qmd-team-intent-kb/store';
+import type { MemoryRepository, GraphReadScope } from '@qmd-team-intent-kb/store';
+import { parseContradictionReferences } from '@qmd-team-intent-kb/schema';
+import type { ContradictionReferences } from '@qmd-team-intent-kb/schema';
 import type { SearchQuery, SearchResult, SearchHit, SearchScope } from '@qmd-team-intent-kb/schema';
 import {
   rerankSearchHits,
@@ -53,6 +55,10 @@ export class SearchService {
   constructor(
     private readonly memoryRepo: MemoryRepository,
     private readonly qmd?: QmdQueryPort,
+    private readonly readContradictions?: (
+      memoryId: string,
+      scope: GraphReadScope,
+    ) => ContradictionReferences,
   ) {}
 
   /**
@@ -74,10 +80,26 @@ export class SearchService {
       throw badRequest('Search query must not be empty');
     }
 
-    if (this.qmd !== undefined) {
-      return this.searchViaQmd(query, readerRole);
-    }
-    return this.searchViaSqlite(query, readerRole);
+    const result =
+      this.qmd !== undefined
+        ? await this.searchViaQmd(query, readerRole)
+        : this.searchViaSqlite(query, readerRole);
+    if (!this.readContradictions) return result;
+    return {
+      ...result,
+      hits: result.hits.map((hit) => {
+        let contradictions: ContradictionReferences = { status: 'unavailable' };
+        try {
+          if (hit.memoryId)
+            contradictions = parseContradictionReferences(
+              this.readContradictions!(hit.memoryId, { tenantId: query.tenantId, readerRole }),
+            );
+        } catch {
+          /* Keep retrieval usable without claiming a measured zero. */
+        }
+        return { ...hit, contradictions };
+      }),
+    };
   }
 
   /**

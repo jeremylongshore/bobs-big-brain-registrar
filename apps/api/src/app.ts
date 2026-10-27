@@ -8,6 +8,7 @@ import {
   AuditRepository,
   ImportBatchRepository,
   MemoryLinksRepository,
+  readContradictionReferences,
 } from '@qmd-team-intent-kb/store';
 import { holdLimitsFromEnv } from '@qmd-team-intent-kb/curator';
 import type { BrainignoreRuleset, HoldLimits } from '@qmd-team-intent-kb/curator';
@@ -186,7 +187,9 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const memoryService = new MemoryService(memoryRepo, auditRepo);
   const policyService = new PolicyService(policyRepo);
   const healthService = new HealthService(deps.db);
-  const searchService = new SearchService(memoryRepo, deps.qmdAdapter);
+  const searchService = new SearchService(memoryRepo, deps.qmdAdapter, (memoryId, scope) =>
+    readContradictionReferences(deps.db, memoryId, scope),
+  );
   const importService = new ImportService(candidateRepo, memoryRepo, batchRepo, linksRepo);
   const holdLimits = deps.holdLimits ?? holdLimitsFromEnv();
   const promotionService = new PromotionService(

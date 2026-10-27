@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Surface optional visible contradiction references on Registrar search hits,
+  including API cited/SQLite responses and owning MCP mappings. Read-only current
+  tenant/audience/sensitivity checks guard both endpoints; unavailable graph
+  evidence is distinct from an available empty visible set. No ranking,
+  lifecycle or audit-write behavior changes. Build the canonical metadata schema
+  before generating the remote client and exercise its actual stdio transport
+  (`compile-then-govern-39z.1.3`). Standalone Plugin adoption and live conflict
+  acceptance remain separate.
+
 - Add an internal finite reviewed contradiction-edge settlement core. Explicit
   pairs bind captured compiler evidence, current memory/promotion snapshots and
   independent approval; one immediate transaction writes deterministic edges

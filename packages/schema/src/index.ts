@@ -52,3 +52,7 @@ export {
   getAllowedTransitionsFrom,
 } from './lifecycle.js';
 export type { TransitionValidationResult } from './lifecycle.js';
+export {
+  ContradictionReferences,
+  parseContradictionReferences,
+} from './contradiction-references.js';

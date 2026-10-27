@@ -16,6 +16,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./contradiction-references": {
+      "types": "./dist/contradiction-references.d.ts",
+      "import": "./dist/contradiction-references.js",
+      "default": "./dist/contradiction-references.js"
     }
   },
   "scripts": {

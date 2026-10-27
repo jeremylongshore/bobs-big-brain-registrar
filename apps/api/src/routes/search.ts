@@ -19,7 +19,9 @@ export function registerSearchRoutes(app: FastifyInstance, service: SearchServic
         description:
           'Applies freshness reranking. Body is validated against the SearchQuery schema. ' +
           'Hits are filtered by the read standing of the caller token: a memory whose audience ' +
-          'is narrower than the caller is cleared for is never returned.',
+          'is narrower than the caller is cleared for is never returned. ' +
+          'Optional contradictions metadata lists currently visible active graph counterparts; ' +
+          'an unavailable status is not evidence of zero conflicts.',
       },
     },
     async (request, reply) => {
