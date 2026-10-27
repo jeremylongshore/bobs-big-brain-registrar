@@ -153,7 +153,7 @@ export function reviewedContradictionStoreDigest(
         const declaredColumns = db
           .prepare(`SELECT * FROM main.${quote(name)}`)
           .columns()
-          .map((column) => column.name);
+          .map((column) => column.name.toLowerCase());
         let projection = '*';
         if (tableKinds.find((table) => table.name === name)?.wr !== 1) {
           const hidden = ['rowid', '_rowid_', 'oid'].find(

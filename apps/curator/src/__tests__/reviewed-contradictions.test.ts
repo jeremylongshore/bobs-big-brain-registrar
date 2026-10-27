@@ -478,6 +478,26 @@ describe('finite reviewed contradiction settlement', () => {
     expect(() => state()).toThrow(/Cannot bind hidden rowid/);
   });
 
+  it('resolves hidden rowid aliases with SQLite case-insensitive column names', () => {
+    db.exec(
+      `CREATE TABLE synthetic_upper("ROWID" TEXT, value TEXT); INSERT INTO synthetic_upper VALUES ('decoy','keep')`,
+    );
+    const runId = randomUUID();
+    db.exec(
+      `CREATE TRIGGER mutate_upper AFTER INSERT ON audit_events WHEN NEW.memory_id='${runId}' BEGIN UPDATE synthetic_upper SET _rowid_=999; END`,
+    );
+    const input = { ...manifest(), runId };
+    const before = state();
+    expect(() => apply(input)).toThrow(/Non-target store changed/);
+    expect(state()).toBe(before);
+    expect(db.prepare('SELECT _rowid_ AS actual_rowid,value FROM synthetic_upper').get()).toEqual({
+      actual_rowid: 1,
+      value: 'keep',
+    });
+    db.exec('CREATE TABLE synthetic_all_upper("ROWID" TEXT,"_ROWID_" TEXT,"OID" TEXT)');
+    expect(() => state()).toThrow(/Cannot bind hidden rowid/);
+  });
+
   it.each(['memory_links', 'audit_events'])(
     'refuses silently unbound new columns in target table %s',
     (table) => {
