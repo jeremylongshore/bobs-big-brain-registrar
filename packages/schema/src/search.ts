@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MemoryCategory, SearchScope } from './enums.js';
 import { IsoDatetime, NonEmptyString, TenantId, Uuid } from './common.js';
+import { ContradictionReferences } from './contradiction-references.js';
 
 /** Pagination parameters */
 export const Pagination = z.object({
@@ -44,6 +45,8 @@ export const SearchHit = z.object({
   collection: z.string().optional(),
   highlightedContent: z.string().optional(),
   matchedAt: IsoDatetime,
+  /** Missing/unavailable is not evidence of zero conflicts. Counts are visible references only. */
+  contradictions: ContradictionReferences.optional(),
 });
 export type SearchHit = z.infer<typeof SearchHit>;
 

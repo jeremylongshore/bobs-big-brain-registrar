@@ -16,6 +16,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { parseContradictionReferences } from '@qmd-team-intent-kb/schema/contradiction-references';
+import type { ContradictionReferences } from '@qmd-team-intent-kb/schema/contradiction-references';
 
 const VERSION = '0.4.0';
 const API_URL = process.env['TEAMKB_API_URL'];
@@ -27,6 +29,7 @@ interface CitedHit {
   score: number;
   title?: string;
   collection?: string;
+  contradictions?: ContradictionReferences;
 }
 
 async function search(
@@ -57,6 +60,7 @@ async function search(
         score?: number;
         title?: string;
         collection?: string;
+        contradictions?: unknown;
       }>;
     };
     const results: CitedHit[] = (body.hits ?? [])
@@ -67,6 +71,9 @@ async function search(
         score: typeof h.score === 'number' ? h.score : 0,
         title: h.title,
         collection: h.collection,
+        ...(h.contradictions === undefined
+          ? {}
+          : { contradictions: parseContradictionReferences(h.contradictions) }),
       }));
     return { source: 'brain-api', query, scope, count: results.length, results };
   } catch {

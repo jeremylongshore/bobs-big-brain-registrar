@@ -113,3 +113,4 @@ export type { ImportBatch } from './repositories/import-batch-repository.js';
 
 export { openExistingDatabase } from './existing-database.js';
 export type { ExistingDatabaseOptions } from './existing-database.js';
+export { readContradictionReferences } from './contradiction-references.js';

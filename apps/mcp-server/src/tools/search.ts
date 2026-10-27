@@ -1,11 +1,16 @@
 import { join } from 'node:path';
-import type { SearchScope } from '@qmd-team-intent-kb/schema';
+import { parseContradictionReferences } from '@qmd-team-intent-kb/schema';
+import type { SearchScope, ContradictionReferences } from '@qmd-team-intent-kb/schema';
 import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import {
   extractMemoryIdFromCitation,
   isSearchVisibleSensitivity,
 } from '@qmd-team-intent-kb/common';
-import { createDatabase, MemoryRepository } from '@qmd-team-intent-kb/store';
+import {
+  createDatabase,
+  MemoryRepository,
+  readContradictionReferences,
+} from '@qmd-team-intent-kb/store';
 import type { McpServerConfig } from '../config.js';
 
 /** One raw qmd hit before it is mapped to the caller-facing shape. */
@@ -14,6 +19,7 @@ interface RawQmdHit {
   score: number;
   snippet: string;
   collection: string;
+  contradictions?: ContradictionReferences;
 }
 
 /**
@@ -25,24 +31,42 @@ interface RawQmdHit {
  * it fails OPEN to the raw hits — the qmd index itself already excludes sensitive
  * rows for a post-5bm.3 export, so this is defense-in-depth, not the only gate.
  */
-function filterSensitiveHits(hits: RawQmdHit[], dbPath: string): RawQmdHit[] {
+function readLocalHitMetadata(hits: RawQmdHit[], config: McpServerConfig): RawQmdHit[] {
   if (hits.length === 0) return hits;
   try {
-    const db = createDatabase({ path: dbPath, readonly: true });
+    const db = createDatabase({ path: config.dbPath, readonly: true });
     try {
       const repo = new MemoryRepository(db);
-      return hits.filter((h) => {
-        const id = extractMemoryIdFromCitation(h.file);
-        if (id === null) return true;
-        const memory = repo.findById(id);
-        if (memory === null) return true;
-        return isSearchVisibleSensitivity(memory.sensitivity);
-      });
+      return db
+        .transaction(() =>
+          hits
+            .filter((h) => {
+              const id = extractMemoryIdFromCitation(h.file);
+              if (id === null) return true;
+              const memory = repo.findById(id);
+              if (memory === null) return true;
+              return isSearchVisibleSensitivity(memory.sensitivity);
+            })
+            .map((hit) => {
+              const id = extractMemoryIdFromCitation(hit.file);
+              return {
+                ...hit,
+                contradictions:
+                  id === null
+                    ? { status: 'unavailable' as const }
+                    : readContradictionReferences(db, id, {
+                        tenantId: config.tenantId,
+                        readerRole: config.role ?? 'member',
+                      }),
+              };
+            }),
+        )
+        .deferred();
     } finally {
       db.close();
     }
   } catch {
-    return hits;
+    return hits.map((hit) => ({ ...hit, contradictions: { status: 'unavailable' } }));
   }
 }
 
@@ -53,6 +77,7 @@ export interface SearchHitOut {
   snippet: string;
   score: number;
   collection?: string;
+  contradictions?: ContradictionReferences;
 }
 
 /** Result of a `teamkb_search` call. */
@@ -161,13 +186,14 @@ async function searchLocal(
   // exclude them (exporter skip, 5bm.3); this resolves each hit's stored row as
   // defense-in-depth for a pre-skip index. A hit that doesn't resolve is not an
   // identifiable sensitive memory — kept.
-  const visible = filterSensitiveHits(hits, config.dbPath);
+  const visible = readLocalHitMetadata(hits, config);
 
   const results: SearchHitOut[] = visible.slice(0, limit).map((r) => ({
     citation: r.file,
     snippet: r.snippet,
     score: r.score,
     collection: r.collection,
+    contradictions: r.contradictions,
   }));
 
   return { source: 'qmd-local', query, scope, count: results.length, results };
@@ -196,7 +222,13 @@ async function searchRemote(
     });
     if (res.ok) {
       const body = (await res.json()) as {
-        hits?: Array<{ citation?: string; snippet?: string; score?: number; collection?: string }>;
+        hits?: Array<{
+          citation?: string;
+          snippet?: string;
+          score?: number;
+          collection?: string;
+          contradictions?: unknown;
+        }>;
       };
       results = (body.hits ?? [])
         .filter((h) => typeof h.citation === 'string' && h.citation.length > 0)
@@ -205,6 +237,9 @@ async function searchRemote(
           snippet: typeof h.snippet === 'string' ? h.snippet : '',
           score: typeof h.score === 'number' ? h.score : 0,
           collection: h.collection,
+          ...(h.contradictions === undefined
+            ? {}
+            : { contradictions: parseContradictionReferences(h.contradictions) }),
         }));
     }
   } catch {
