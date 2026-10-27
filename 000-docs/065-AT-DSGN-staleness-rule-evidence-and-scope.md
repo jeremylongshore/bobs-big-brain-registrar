@@ -13,19 +13,14 @@ records are explicitly unsigned and their currentness is not revalidated by the
 detector. A hash identifies bytes; it does not authenticate a decision, establish
 its meaning or prove that a service is absent today. Custom rules can explicitly
 supply `authority: null`; they cannot produce retirement candidates without
-complete pinned source references.
+syntactically well-formed pinned references. This gate checks shape only; it
+does not establish byte correspondence or authenticity.
 
-| Rule                                | Historical declaration                                                 | Evidence availability                                                                | Proposed remedy                                           |
-| ----------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| GCP                                 | Estate teardown effective 2026-07-09, described by a 2026-07-10 record | Private Intent OS decision reference and byte hash; document body not reproduced     | Review an affirmative instruction for this estate         |
-| Compiler and Registrar repositories | Remote renames on 2026-07-19                                           | Public umbrella topology, pinned below                                               | Review repository metadata/links                          |
-| Plugin repository                   | Remote rename 2026-07-13; local-directory rename 2026-07-14            | Public umbrella topology; historical rule ID retains July 14                         | Review repository metadata/paths                          |
-| Marketplace                         | Retirement and archival declared 2026-07-17                            | Public topology description of a private repository, not a signed retirement receipt | Review marketplace instructions                           |
-| ntfy                                | Estate service removal declared 2026-06-13                             | Private decision D23 reference and byte hash; document body not reproduced           | Review an affirmative instruction for that estate service |
-
-The executable definitions in `staleness-rules.ts` are canonical for the shipped
-rule inventory. The table is a manually maintained explanatory summary, checked
-during review; it is not generated or automatically synchronized.
+The executable definitions in [staleness-rules.ts](../apps/curator/src/staleness/staleness-rules.ts)
+are the sole rule inventory. This document does not maintain a second rule table.
+For the plugin rule, structured `authority.effectiveDate` means the remote rename
+date (2026-07-13); the local-directory date (2026-07-14) is carried only in the
+`because` prose and retained historical rule ID, not a second structured field.
 
 The public source is [umbrella topology section 2 at f3ad985](https://github.com/intent-solutions-io/bobs-big-brain-umbrella/blob/f3ad9856d3f150360e6f437a2c724f7ee5b70d37/000-docs/007-AT-SMAP-repo-topology-and-working-surface.md).
 Private sources require independent authorized access to the referenced revision.
@@ -43,20 +38,13 @@ No signed teardown or owner approval receipt is manufactured by this contract.
 
 ## Current observations have narrower meaning
 
-The author recorded the following structured observations at
-2026-10-27T03:09:14Z: read-only HTTP requests returned 301 with the listed
-`Location` destinations; separate authenticated GitHub repository API requests
-returned the canonical `full_name` values. The extracted fields and observation
-time are preserved in the [observation record](065-staleness-rename-observations.json)
-(SHA-256 `7580e8dbe40fcc70c5c7bad9ce34a157691906753f41ce2680b250cd369044cd`).
-This is an author-recorded observation artifact, not raw authenticated responses,
-a signed attestation or a probe re-executed by CI.
-
-| Old path under `github.com/jeremylongshore/` | Redirect destination under the same owner |
-| -------------------------------------------- | ----------------------------------------- |
-| `intentional-cognition-os`                   | `bobs-big-brain-compiler`                 |
-| `qmd-team-intent-kb`                         | `bobs-big-brain-registrar`                |
-| `governed-second-brain-plugin`               | `bobs-big-brain-plugin`                   |
+The author-recorded [observation artifact](065-staleness-rename-observations.json)
+contains `observed_at`, old URLs, HTTP status values, Location destinations and
+API-derived `full_name` values. It records results rather than how requests were
+made: no collection script, request transcript, credential-use attestation or
+CI-executed probe is supplied. Those fields are author observations, not signed
+evidence or proof of the collection method. Consult the artifact for the three
+recorded old/canonical URL pairs rather than a duplicated table here.
 
 This is a point-in-time observation, not a promise about future redirects. It
 contradicts treating an old name as proof of URL failure or memory-wide
@@ -116,6 +104,13 @@ supply the new third argument; the returned shape now includes `remedy`,
 `authority` and `scopeEvidenceRef`. Custom rules must declare a remedy and either
 supply authority references or explicitly use `authority: null`. None of these
 changes creates an apply permission.
+
+The owning [package manifest](../apps/curator/package.json) marks Curator
+`private: true` and exports only its package-root index; the [index](../apps/curator/src/index.ts)
+does not export this staleness module. These are internal source-interface
+changes, recorded under Changed in the changelog. Uncontrolled filesystem/deep
+imports outside this repository have not been audited. No package publication,
+version bump or future release-classification decision is made here.
 
 ## Verification and remaining parent acceptance
 

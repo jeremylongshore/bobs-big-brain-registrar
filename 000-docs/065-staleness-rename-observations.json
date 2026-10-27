@@ -20,5 +20,5 @@
       "api_full_name": "jeremylongshore/bobs-big-brain-plugin"
     }
   ],
-  "limit": "Point-in-time primary URL observations only; redirects are not governed corpus correctness or remedy authority."
+  "limit": "Author-recorded point-in-time HTTP status/Location and API-derived full_name fields. Collection method is not evidenced in-repository; neither channel proves governed corpus correctness or remedy authority."
 }
