@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import { scanForSecrets } from '../secrets/secret-scanner.js';
 import { SECRET_PATTERNS } from '../secrets/patterns.js';
 
@@ -7,6 +8,33 @@ const hero = 'heroku-api-key';
 const hits = (text: string) => scanForSecrets(text).filter((m) => m.patternId.endsWith(hero));
 
 describe('Heroku UUID source-associated context', () => {
+  it('does not feed a synthetic clipping guard to a custom context predicate', () => {
+    const original = SECRET_PATTERNS.find((p) => p.id === hero)!;
+    const pattern = { ...original, requiresContext: /0/g };
+    const value = '11111111-1111-1111-1111-111111111111';
+    expect(scanForSecrets(`${'A'.repeat(300)} key:\n${value}`, [pattern])).toEqual([]);
+  });
+  it.each([252, 253])(
+    'does not manufacture a credential-word boundary with %i padding',
+    (padding) => {
+      expect(hits(`monkey:${' '.repeat(padding)}\n${uuid}`)).toEqual([]);
+    },
+  );
+  it.each([
+    { suffix: '', expected: 0 },
+    { suffix: ' key:', expected: 1 },
+  ])('bounds context work after a long identifier with suffix $suffix', ({ suffix, expected }) => {
+    const moduleUrl = new URL('../../dist/secrets/secret-scanner.js', import.meta.url).href;
+    const script = `import { scanForSecrets } from ${JSON.stringify(moduleUrl)};
+      process.stdout.write(JSON.stringify(scanForSecrets('A'.repeat(100000) + ${JSON.stringify(suffix)} + '\\n' + ${JSON.stringify(uuid)})));`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+      timeout: 2000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toHaveLength(expected);
+  });
   it.each(
     ['API guide:', 'API_REQUEST_ID=', 'TRACE_ID='].flatMap((label) =>
       (['raw', 'base64', 'hex'] as const).map((encoding) => ({ label, encoding })),

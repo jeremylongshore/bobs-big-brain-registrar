@@ -66,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keys while excluding unrelated API-guide lines. Repeated encoded occurrences
   reuse cached decoded bytes and evaluate their own context; context-free
   findings retain deduplication. Same-line keyword ambiguity remains suspicious.
+  Evaluate source-line gates lazily and limit a preceding label to its final
+  256 UTF-16 code units plus one original boundary character, avoiding broad
+  context scans on unrelated long lines without inventing keyword boundaries.
   Source-only correction; distribution and live work remain separate
   (`compile-then-govern-2i3.5.2`).
 
