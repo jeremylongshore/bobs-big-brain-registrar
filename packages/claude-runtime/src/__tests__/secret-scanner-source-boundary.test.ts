@@ -62,6 +62,15 @@ describe('whitespace-stripped API keys preserve source token boundaries', () => 
     },
   );
 
+  it.each(
+    ['', 'The key is ', 'key:\n'].flatMap((prefix) => [' ', '\t'].map((gap) => ({ prefix, gap }))),
+  )(
+    'detects horizontal key fragments with source prefix $prefix and gap $gap',
+    ({ prefix, gap }) => {
+      expect(hasApiKey(`${prefix}${key.slice(0, 12)}${gap}${key.slice(12)}\nend.`)).toBe(true);
+    },
+  );
+
   it('preserves exact source coordinates for ordinary inline keys', () => {
     const match = scanForSecrets(`header\nkey: ${key}`).find(
       (item) => item.patternId === 'generic-api-key',

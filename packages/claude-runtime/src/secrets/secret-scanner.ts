@@ -151,6 +151,17 @@ function scanFlat(
   }
 }
 
+/** Reject an ambiguous fragmented prefix attached to a word, including a wrapped word. */
+function hasWordPrefix(content: string, start: number): boolean {
+  let index = start - 1;
+  let lineWrap = false;
+  while (index >= 0 && /\s/.test(content[index]!)) {
+    if (/[\r\n\u2028\u2029]/.test(content[index]!)) lineWrap = true;
+    index--;
+  }
+  return index >= 0 && /[A-Za-z0-9_]/.test(content[index]!) && (index === start - 1 || lineWrap);
+}
+
 /**
  * Newline-collapsed pre-pass (evasion A — split-across-newline keys).
  *
@@ -221,7 +232,11 @@ function scanNewlineCollapsed(
       const source = content
         .slice(start, end + 1)
         .replace(/\s+/g, (space) => (/[\r\n\u2028\u2029]/.test(space) ? '' : space));
-      return firstCountedMatch(pattern, source)?.index === 0;
+      if (firstCountedMatch(pattern, source)?.index === 0) return true;
+      // A genuinely standalone key prefix may also have horizontal fragments.
+      // Without a source token, however, an embedded/wrapped word suffix such
+      // as `task-` must not manufacture a key by joining ordinary prose.
+      return !hasWordPrefix(content, start);
     },
   );
 }
