@@ -47,6 +47,7 @@ for the current documentation audit. Historical plans are not current acceptance
 - [006-TQ-SECU-security-governance](006-TQ-SECU-security-governance.md)
 - [048-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor](048-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor.md)
 - [069-AT-DSGN-review-agent-judgment-scoring](069-AT-DSGN-review-agent-judgment-scoring.md)
+- [070-AT-DSGN-frozen-review-agent-evaluation](070-AT-DSGN-frozen-review-agent-evaluation.md)
 
 ### Operations and deployment
 
@@ -171,14 +172,11 @@ for the current documentation audit. Historical plans are not current acceptance
 | 062      | AT-TEST | [062-AT-TEST-fast-uri-parent-major-contracts](062-AT-TEST-fast-uri-parent-major-contracts.md)                                             |
 | 063      | AA-AUDR | [063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26](063-AA-AUDR-registrar-source-contract-reconciliation-2026-10-26.md)     |
 | 064      | RA-REPT | [064-RA-REPT-retrieval-model-decision-packet](064-RA-REPT-retrieval-model-decision-packet.md)                                             |
+| 065      | AT-DSGN | [065-AT-DSGN-staleness-rule-evidence-and-scope](065-AT-DSGN-staleness-rule-evidence-and-scope.md)                                         |
+| 066      | AT-DSGN | [066-AT-DSGN-reviewed-staleness-settlement](066-AT-DSGN-reviewed-staleness-settlement.md)                                                 |
+| 067      | AT-DSGN | [067-AT-DSGN-reviewed-contradiction-settlement](067-AT-DSGN-reviewed-contradiction-settlement.md)                                         |
+| 068      | AT-DSGN | [068-AT-DSGN-search-contradiction-references](068-AT-DSGN-search-contradiction-references.md)                                             |
+| 069      | AT-DSGN | [069-AT-DSGN-review-agent-judgment-scoring](069-AT-DSGN-review-agent-judgment-scoring.md)                                                 |
+| 070      | AT-DSGN | [070-AT-DSGN-frozen-review-agent-evaluation](070-AT-DSGN-frozen-review-agent-evaluation.md)                                               |
 
-| 065 | AT-DSGN | [065-AT-DSGN-staleness-rule-evidence-and-scope](065-AT-DSGN-staleness-rule-evidence-and-scope.md) |
-
-| 066 | AT-DSGN | [066-AT-DSGN-reviewed-staleness-settlement](066-AT-DSGN-reviewed-staleness-settlement.md) |
-
-| 067 | AT-DSGN | [067-AT-DSGN-reviewed-contradiction-settlement](067-AT-DSGN-reviewed-contradiction-settlement.md) |
-
-| 068 | AT-DSGN | [068-AT-DSGN-search-contradiction-references](068-AT-DSGN-search-contradiction-references.md) |
-| 069 | AT-DSGN | [069-AT-DSGN-review-agent-judgment-scoring](069-AT-DSGN-review-agent-judgment-scoring.md) |
-
-Next available sequence: 070.
+Next available sequence: 071.

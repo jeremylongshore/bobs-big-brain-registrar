@@ -20,7 +20,8 @@
     "provenance:ci": "tsx scripts/ci-provenance-integrity.ts",
     "govern:ci": "tsx scripts/ci-govern-decision.ts",
     "groundedness:ci": "tsx scripts/ci-groundedness.ts",
-    "groundedness:judge-compare": "tsx scripts/groundedness-judge-compare.ts"
+    "groundedness:judge-compare": "tsx scripts/groundedness-judge-compare.ts",
+    "review:eval": "tsx src/review-agent-eval-cli.ts"
   },
   "dependencies": {
     "@qmd-team-intent-kb/claude-runtime": "workspace:*",

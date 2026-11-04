@@ -12,6 +12,9 @@ const Floors = z.object({ promote: Floor, hold: Floor, reject: Floor }).strict()
 export type ReviewJudgmentCase = z.infer<typeof Case>;
 export type ReviewJudgmentPrediction = z.infer<typeof Prediction>;
 export type ReviewRecallFloors = z.infer<typeof Floors>;
+export const ReviewJudgmentCase = Case;
+export const ReviewJudgmentPrediction = Prediction;
+export const ReviewRecallFloors = Floors;
 type Confusion = Record<ReviewLabel, Record<ReviewLabel | 'missing', number>>;
 
 export interface ReviewClassMetrics {

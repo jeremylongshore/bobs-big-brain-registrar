@@ -8,6 +8,7 @@
     { "path": "packages/qmd-adapter" },
     { "path": "packages/claude-runtime" },
     { "path": "packages/policy-engine" },
+    { "path": "packages/eval-surface" },
     { "path": "packages/repo-resolver" },
     { "path": "apps/api" },
     { "path": "apps/curator" },
