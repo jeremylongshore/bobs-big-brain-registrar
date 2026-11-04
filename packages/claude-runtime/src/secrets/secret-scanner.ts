@@ -71,8 +71,12 @@ const HEX_CANDIDATE_RE = /[A-Fa-f0-9]{24,}/g;
  * a real credential later on the same line. The walk runs on a private global
  * copy of the regex, so no shared `lastIndex` state is touched.
  */
-function firstCountedMatch(pattern: SecretPattern, text: string): RegExpExecArray | null {
-  if (!pattern.accept) {
+function firstCountedMatch(
+  pattern: SecretPattern,
+  text: string,
+  acceptSource?: (match: RegExpExecArray) => boolean,
+): RegExpExecArray | null {
+  if (!pattern.accept && !acceptSource) {
     if (pattern.regex.global || pattern.regex.sticky) {
       pattern.regex.lastIndex = 0;
     }
@@ -82,9 +86,13 @@ function firstCountedMatch(pattern: SecretPattern, text: string): RegExpExecArra
   const walker = new RegExp(pattern.regex.source, flags);
   let match = walker.exec(text);
   while (match !== null) {
-    if (pattern.accept(match)) return match;
-    // A zero-length match would never advance `lastIndex` — step past it.
-    if (match[0].length === 0) walker.lastIndex += 1;
+    const sourceAccepted = !acceptSource || acceptSource(match);
+    if ((!pattern.accept || pattern.accept(match)) && sourceAccepted) return match;
+    // A rejected joined-word match may consume the first letters of a later
+    // valid prefix. Resume after its START so that overlapping candidate is not
+    // hidden. Existing value-predicate walks otherwise retain their behavior.
+    if (!sourceAccepted) walker.lastIndex = match.index + 1;
+    else if (match[0].length === 0) walker.lastIndex += 1;
     match = walker.exec(text);
   }
   return null;
@@ -94,8 +102,9 @@ function execWithContext(
   pattern: SecretPattern,
   text: string,
   contextText?: string,
+  acceptSource?: (match: RegExpExecArray) => boolean,
 ): RegExpExecArray | null {
-  const match = firstCountedMatch(pattern, text);
+  const match = firstCountedMatch(pattern, text, acceptSource);
   if (!match) return null;
   if (pattern.requiresContext) {
     if (pattern.requiresContext.global || pattern.requiresContext.sticky) {
@@ -117,12 +126,18 @@ function scanFlat(
   locate: (matchIndex: number, matchLength: number) => { line: number; column: number },
   patternIdOverride?: (patternId: string) => string,
   contextText?: string,
+  acceptSource?: (pattern: SecretPattern, match: RegExpExecArray) => boolean,
 ): void {
   for (const pattern of patterns) {
     // `contextText` (when supplied) is the window a context-gated pattern's gate
     // is evaluated against — used by the decode pass so a wrapped value is gated
     // on the ORIGINAL content, not just the context-free decoded blob.
-    const match = execWithContext(pattern, text, contextText);
+    const match = execWithContext(
+      pattern,
+      text,
+      contextText,
+      acceptSource ? (item) => acceptSource(pattern, item) : undefined,
+    );
     if (match) {
       const { line, column } = locate(match.index, match[0].length);
       matches.push({
@@ -158,7 +173,6 @@ function scanNewlineCollapsed(
   // env-secret assignment still reads as KEY = value) and a no-whitespace view
   // (rejoins a key literally broken mid-token across a newline).
   const singleSpace = content.replace(/\s+/g, ' ');
-  const noWhitespace = content.replace(/\s+/g, '');
   const remaining = patterns.filter((p) => !alreadyFired.has(p.id));
   if (remaining.length === 0) return;
   // Best-effort location: collapsed views lose source coordinates, so report the
@@ -175,7 +189,47 @@ function scanNewlineCollapsed(
       p.skipWhitespaceStrippedView !== true &&
       !matches.slice(before).some((m) => m.patternId === p.id),
   );
-  if (stillUnmatched.length > 0) scanFlat(noWhitespace, stillUnmatched, matches, locate);
+  if (stillUnmatched.length === 0) return;
+  // Preserve UTF-16 offsets into the original source. Validate the source token
+  // before applying the fragment-prefix guard, so a genuine line-wrapped key
+  // attached to an identifier remains visible. The existing input cap bounds
+  // the map and each source slice.
+  const offsets: number[] = [];
+  const characters: string[] = [];
+  for (let index = 0; index < content.length; index++) {
+    const character = content[index]!;
+    if (!/\s/.test(character)) {
+      offsets.push(index);
+      characters.push(character);
+    }
+  }
+  scanFlat(
+    characters.join(''),
+    stillUnmatched,
+    matches,
+    locate,
+    undefined,
+    undefined,
+    (pattern, match) => {
+      if (!pattern.requiresSourceToken) return true;
+      const start = offsets[match.index];
+      const end = offsets[match.index + match[0].length - 1];
+      if (start === undefined || end === undefined) return false;
+      // Join line-wrap whitespace, including padding and Unicode separators, keeping
+      // ordinary horizontal spaces. Only a real matching prefix must survive:
+      // the greedy stripped match may also contain subsequent prose words.
+      const source = content
+        .slice(start, end + 1)
+        .replace(/\s+/g, (space) => (/[\r\n\u2028\u2029]/.test(space) ? '' : space));
+      if (firstCountedMatch(pattern, source)?.index === 0) return true;
+      // A genuinely standalone key prefix may also have horizontal fragments.
+      // Without a source token, however, a prefix immediately after a letter
+      // (the suffix of `task-`, for example) must not manufacture a key. Do not
+      // look through newline boundaries: unrelated prior prose must never hide
+      // a standalone fragmented key on the next line.
+      return start === 0 || !/[A-Za-z]/.test(content[start - 1]!);
+    },
+  );
 }
 
 /**

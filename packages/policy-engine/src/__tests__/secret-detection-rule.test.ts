@@ -52,6 +52,39 @@ describe('evaluateSecretDetection', () => {
     expect(result.reason).toContain('generic-api-key');
   });
 
+  it.each([
+    'Task-Based Gameplay improves player feedback and progression',
+    'risk-level classification needs careful handling',
+    'per-task-family evaluation measures generalization',
+  ])('passes multiline prose without a manufactured key: %s', (prose) => {
+    const candidate = makeCandidate({ content: `${prose}\nNext section covers evaluation.` });
+    expect(evaluateSecretDetection(candidate, makeRule(), makeContext(candidate)).outcome).toBe(
+      'pass',
+    );
+  });
+
+  it('rejects a real split key after benign joined-word prose without leaking its value', () => {
+    const key = 'sk-' + 'TESTONLY'.repeat(5);
+    const candidate = makeCandidate({
+      content: `Task-Based Gameplay improves player feedback and progression\nThe key is ${key.slice(0, 12)}\n${key.slice(12)}`,
+    });
+    const result = evaluateSecretDetection(candidate, makeRule(), makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+    expect(result.reason).toContain('generic-api-key');
+    expect(result.reason).not.toContain(key.slice(3, 12));
+  });
+
+  it('rejects a horizontally fragmented key starting after an unrelated prose line', () => {
+    const key = 'sk-' + 'TESTONLY'.repeat(5);
+    const candidate = makeCandidate({
+      content: `Unrelated preceding prose\n${key.slice(0, 12)} ${key.slice(12)}`,
+    });
+    const result = evaluateSecretDetection(candidate, makeRule(), makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+    expect(result.reason).toContain('generic-api-key');
+    expect(result.reason).not.toContain(key.slice(3, 12));
+  });
+
   it('passes clean content', () => {
     const candidate = makeCandidate({
       content: 'Use Result<T, E> for all fallible operations in the codebase.',
