@@ -67,9 +67,10 @@ export interface SecretPattern {
   /**
    * In the whitespace-stripped view, validate a token at the ORIGINAL source
    * position after joining line-wrap whitespace. Horizontal fragments remain
-   * accepted at a standalone source prefix, but an embedded/wrapped word suffix
-   * cannot manufacture a key from prose. Other scan passes and value/context
-   * predicates retain their existing behavior.
+   * accepted unless the prefix is immediately preceded by an ASCII letter.
+   * A newline is a boundary, so unrelated preceding prose cannot hide a key;
+   * ambiguous soft-wrapped prose can remain suspicious. Other scan passes and
+   * value/context predicates retain their existing behavior.
    */
   requiresSourceToken?: boolean;
 }

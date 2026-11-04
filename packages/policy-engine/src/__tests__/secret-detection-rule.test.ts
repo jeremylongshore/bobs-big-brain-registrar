@@ -74,6 +74,17 @@ describe('evaluateSecretDetection', () => {
     expect(result.reason).not.toContain(key.slice(3, 12));
   });
 
+  it('rejects a horizontally fragmented key starting after an unrelated prose line', () => {
+    const key = 'sk-' + 'TESTONLY'.repeat(5);
+    const candidate = makeCandidate({
+      content: `Unrelated preceding prose\n${key.slice(0, 12)} ${key.slice(12)}`,
+    });
+    const result = evaluateSecretDetection(candidate, makeRule(), makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+    expect(result.reason).toContain('generic-api-key');
+    expect(result.reason).not.toContain(key.slice(3, 12));
+  });
+
   it('passes clean content', () => {
     const candidate = makeCandidate({
       content: 'Use Result<T, E> for all fallible operations in the codebase.',

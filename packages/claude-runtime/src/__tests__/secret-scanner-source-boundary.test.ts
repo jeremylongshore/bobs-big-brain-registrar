@@ -45,8 +45,8 @@ describe('whitespace-stripped API keys preserve source token boundaries', () => 
     expect(hasApiKey(`identifier${key.slice(0, 12)}\n${key.slice(12)}`)).toBe(true);
   });
 
-  it('does not manufacture a key when the natural prefix itself wraps', () => {
-    expect(hasApiKey('ta\nsk-Based Gameplay improves player feedback and progression')).toBe(false);
+  it('keeps an ambiguous wrapped prose prefix suspicious rather than hiding line-start keys', () => {
+    expect(hasApiKey('ta\nsk-Based Gameplay improves player feedback and progression')).toBe(true);
   });
 
   it('accepts a genuinely wrapped token followed by ordinary prose', () => {
@@ -63,7 +63,9 @@ describe('whitespace-stripped API keys preserve source token boundaries', () => 
   );
 
   it.each(
-    ['', 'The key is ', 'key:\n'].flatMap((prefix) => [' ', '\t'].map((gap) => ({ prefix, gap }))),
+    ['', 'The key is ', 'key:\n', 'Unrelated preceding prose\n'].flatMap((prefix) =>
+      [' ', '\t'].map((gap) => ({ prefix, gap })),
+    ),
   )(
     'detects horizontal key fragments with source prefix $prefix and gap $gap',
     ({ prefix, gap }) => {

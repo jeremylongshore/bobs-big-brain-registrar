@@ -151,17 +151,6 @@ function scanFlat(
   }
 }
 
-/** Reject an ambiguous fragmented prefix attached to a word, including a wrapped word. */
-function hasWordPrefix(content: string, start: number): boolean {
-  let index = start - 1;
-  let lineWrap = false;
-  while (index >= 0 && /\s/.test(content[index]!)) {
-    if (/[\r\n\u2028\u2029]/.test(content[index]!)) lineWrap = true;
-    index--;
-  }
-  return index >= 0 && /[A-Za-z0-9_]/.test(content[index]!) && (index === start - 1 || lineWrap);
-}
-
 /**
  * Newline-collapsed pre-pass (evasion A — split-across-newline keys).
  *
@@ -201,10 +190,10 @@ function scanNewlineCollapsed(
       !matches.slice(before).some((m) => m.patternId === p.id),
   );
   if (stillUnmatched.length === 0) return;
-  // Preserve UTF-16 offsets into the original source. A preceding-character
-  // boundary alone would miss genuine keys attached to identifiers and still
-  // accept wrapped prose prefixes. Validate the source token instead; the
-  // existing input cap bounds the map and each source slice.
+  // Preserve UTF-16 offsets into the original source. Validate the source token
+  // before applying the fragment-prefix guard, so a genuine line-wrapped key
+  // attached to an identifier remains visible. The existing input cap bounds
+  // the map and each source slice.
   const offsets: number[] = [];
   const characters: string[] = [];
   for (let index = 0; index < content.length; index++) {
@@ -234,9 +223,11 @@ function scanNewlineCollapsed(
         .replace(/\s+/g, (space) => (/[\r\n\u2028\u2029]/.test(space) ? '' : space));
       if (firstCountedMatch(pattern, source)?.index === 0) return true;
       // A genuinely standalone key prefix may also have horizontal fragments.
-      // Without a source token, however, an embedded/wrapped word suffix such
-      // as `task-` must not manufacture a key by joining ordinary prose.
-      return !hasWordPrefix(content, start);
+      // Without a source token, however, a prefix immediately after a letter
+      // (the suffix of `task-`, for example) must not manufacture a key. Do not
+      // look through newline boundaries: unrelated prior prose must never hide
+      // a standalone fragmented key on the next line.
+      return start === 0 || !/[A-Za-z]/.test(content[start - 1]!);
     },
   );
 }
