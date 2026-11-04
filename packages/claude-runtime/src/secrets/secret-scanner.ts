@@ -151,12 +151,18 @@ function scanFlat(
   }
 }
 
+/** Join padded line wraps, retaining purely horizontal whitespace runs. */
+function joinLineWraps(text: string): string {
+  return text.replace(/\s+/g, (space) => (/[\r\n\u2028\u2029]/.test(space) ? '' : space));
+}
+
 /**
  * Newline-collapsed pre-pass (evasion A — split-across-newline keys).
  *
  * The per-line scan cannot see a key whose characters straddle a `\n`. We build
- * a whitespace-collapsed view (every run of whitespace, incl. newlines, becomes
- * a single space) AND a no-whitespace view, and re-run the patterns over both.
+ * a whitespace-collapsed view (every run becomes a single space) and additional
+ * split-token views. Env/Slack patterns join only line-wrap runs; other eligible
+ * patterns use the fully whitespace-stripped view with their source guards.
  * A hit that the per-line scan already found is deduped by (patternId) — we only
  * add a collapsed-view hit for a pattern the line scan did not already fire on,
  * so the split-key case surfaces without double-counting inline hits. Line/
@@ -169,9 +175,7 @@ function scanNewlineCollapsed(
   matches: SecretMatch[],
 ): void {
   if (content.length > LIMITS.collapsedScanMaxChars) return;
-  // Two views: a single-space collapse (preserves token boundaries so, e.g., an
-  // env-secret assignment still reads as KEY = value) and a no-whitespace view
-  // (rejoins a key literally broken mid-token across a newline).
+  // First preserve token boundaries, so an assignment still reads KEY = value.
   const singleSpace = content.replace(/\s+/g, ' ');
   const remaining = patterns.filter((p) => !alreadyFired.has(p.id));
   if (remaining.length === 0) return;
@@ -180,6 +184,16 @@ function scanNewlineCollapsed(
   const locate = () => ({ line: 1, column: 1 });
   const before = matches.length;
   scanFlat(singleSpace, remaining, matches, locate);
+  // Env/Slack values must not be fabricated by concatenating ordinary words.
+  // Normalize ONCE, then scan directly: per-candidate suffix validation would
+  // repeatedly rescan greedy values on many short assignments.
+  const wrapOnly = remaining.filter(
+    (p) =>
+      p.lineWrapOnly === true &&
+      p.skipWhitespaceStrippedView !== true &&
+      !matches.slice(before).some((m) => m.patternId === p.id),
+  );
+  if (wrapOnly.length > 0) scanFlat(joinLineWraps(content), wrapOnly, matches, locate);
   // Only try the no-whitespace view for patterns STILL unmatched, to catch a key
   // broken mid-token (which the single-space view leaves as two tokens).
   // A pattern that opts out (`skipWhitespaceStrippedView`) depends on whitespace
@@ -187,6 +201,7 @@ function scanNewlineCollapsed(
   const stillUnmatched = remaining.filter(
     (p) =>
       p.skipWhitespaceStrippedView !== true &&
+      p.lineWrapOnly !== true &&
       !matches.slice(before).some((m) => m.patternId === p.id),
   );
   if (stillUnmatched.length === 0) return;
@@ -218,9 +233,7 @@ function scanNewlineCollapsed(
       // Join line-wrap whitespace, including padding and Unicode separators, keeping
       // ordinary horizontal spaces. Only a real matching prefix must survive:
       // the greedy stripped match may also contain subsequent prose words.
-      const source = content
-        .slice(start, end + 1)
-        .replace(/\s+/g, (space) => (/[\r\n\u2028\u2029]/.test(space) ? '' : space));
+      const source = joinLineWraps(content.slice(start, end + 1));
       if (firstCountedMatch(pattern, source)?.index === 0) return true;
       // A genuinely standalone key prefix may also have horizontal fragments.
       // Without a source token, however, a prefix immediately after a letter
@@ -405,9 +418,8 @@ export function scanForSecrets(
     }
   }
 
-  // Only the single-line content path can be split across a newline; if there is
-  // no newline the collapsed pre-pass would just re-scan the same text.
-  if (content.includes('\n')) {
+  // Include CR and Unicode line separators, also accepted by joinLineWraps.
+  if (/[\r\n\u2028\u2029]/.test(content)) {
     const firedOnLineScan = new Set(matches.map((m) => m.patternId));
     scanNewlineCollapsed(content, patterns, firedOnLineScan, matches);
   }

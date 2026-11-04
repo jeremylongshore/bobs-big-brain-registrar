@@ -34,6 +34,7 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     name: 'Slack Token',
     regex: /xox[bpras]-[0-9A-Za-z-]{10,}/,
     description: 'Slack bot, user, or app token',
+    lineWrapOnly: true,
   },
   {
     id: 'pem-key',
@@ -70,6 +71,7 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     name: 'Environment Variable Secret',
     regex: /(?:SECRET|PASSWORD|TOKEN|API_KEY|PRIVATE_KEY)\s*=\s*["']?[^\s"']{8,}/i,
     description: 'Environment variable assignment containing a secret value',
+    lineWrapOnly: true,
   },
   {
     id: 'azure-connection-string',
