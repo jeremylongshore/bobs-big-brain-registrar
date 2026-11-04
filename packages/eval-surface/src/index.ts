@@ -90,3 +90,14 @@ export {
   type ReviewRecallFloors,
   type ReviewClassMetrics,
 } from './review-agent-judgment.js';
+export {
+  parseOkfFixtureBundle,
+  exportGovernedOkfFixture,
+  proposeOkfFixtureImport,
+} from './okf-fixture/exchange.js';
+export {
+  parseOkfDocument,
+  serializeOkfDocument,
+  OKF_SPEC_REVISION,
+  OKF_FIXTURE_LIMITS,
+} from './okf-fixture/codec.js';

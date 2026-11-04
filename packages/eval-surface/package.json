@@ -29,6 +29,7 @@
     "@qmd-team-intent-kb/policy-engine": "workspace:*",
     "@qmd-team-intent-kb/schema": "workspace:*",
     "@qmd-team-intent-kb/store": "workspace:*",
+    "yaml": "2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
