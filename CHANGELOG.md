@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve original source token boundaries when scanning whitespace-stripped
+  text for generic API keys, preventing ordinary multiline task/risk prose from
+  becoming a key. Real split keys, encoded keys and later overlapping valid
+  prefixes remain detected. This source fix does not rebundle the Plugin or
+  re-govern the live inbox (`compile-then-govern-2i3.1`); separate env/Slack
+  joining and Heroku-context precision work remains under `2i3.5`.
+
 - Distinguish explicit prescriptive staleness candidates from manual-review
   matches in the dry-run detector. Completed narratives, quoted/code examples,
   provenance-only platform mentions and mixed historical advice remain visible

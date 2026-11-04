@@ -64,6 +64,13 @@ export interface SecretPattern {
    * spaces would turn it into a password-shaped token.
    */
   skipWhitespaceStrippedView?: boolean;
+  /**
+   * In the whitespace-stripped view, require the token to start outside an
+   * ASCII word in the ORIGINAL source. Removed whitespace is a valid boundary;
+   * an embedded prefix in a word such as `task-` is not. Other scan passes and
+   * value/context predicates retain their existing behavior.
+   */
+  requiresSourceBoundary?: boolean;
 }
 
 /** A match found by the secret scanner */
