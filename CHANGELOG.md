@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve horizontal spaces in the additional split-token scan for env and
+  Slack values, so short ordinary fragments do not become secret-shaped values.
+  Join padded LF/CR/Unicode line wraps in one bounded view, retaining inline and
+  encoded detection. Generic-key source guards and Heroku context policy remain
+  unchanged; Plugin distribution and live inbox work remain separate
+  (`compile-then-govern-2i3.5.1`).
+
 - Prevent the tested generic API-key false matches caused by joining ordinary
   multiline task/risk prose. Validate source tokens and immediate prefix
   boundaries while retaining line-start, wrapped, encoded and overlapping-key controls.

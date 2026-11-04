@@ -65,6 +65,13 @@ export interface SecretPattern {
    */
   skipWhitespaceStrippedView?: boolean;
   /**
+   * Rejoin only whitespace runs containing a line separator in the additional
+   * split-token view, preserving ordinary horizontal word boundaries. Excludes
+   * this pattern from the fully whitespace-stripped view; per-line, single-space
+   * and encoded scans retain their existing behavior.
+   */
+  lineWrapOnly?: boolean;
+  /**
    * In the whitespace-stripped view, validate a token at the ORIGINAL source
    * position after joining line-wrap whitespace. Horizontal fragments remain
    * accepted unless the prefix is immediately preceded by an ASCII letter.

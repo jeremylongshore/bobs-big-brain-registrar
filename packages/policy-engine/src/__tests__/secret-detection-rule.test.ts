@@ -95,6 +95,30 @@ describe('evaluateSecretDetection', () => {
     expect(result.ruleId).toBe(rule.id);
   });
 
+  it.each(['TOKEN=abc def ghi jkl', 'xox' + 'b-abc def ghi jkl'])(
+    'passes short horizontal value fragments: %s',
+    (text) => {
+      const candidate = makeCandidate({ content: `${text}\nNext section.` });
+      expect(evaluateSecretDetection(candidate, makeRule(), makeContext(candidate)).outcome).toBe(
+        'pass',
+      );
+    },
+  );
+
+  it.each([
+    { id: 'env-secret', prefix: 'TOKEN=' },
+    { id: 'slack-token', prefix: 'xox' + 'b-' },
+  ])('rejects a genuinely wrapped $id without exposing the value', ({ id, prefix }) => {
+    const payload = 'TESTONLY'.repeat(5);
+    const candidate = makeCandidate({
+      content: `${prefix}${payload.slice(0, 4)}\n    ${payload.slice(4)} and more text.`,
+    });
+    const result = evaluateSecretDetection(candidate, makeRule(), makeContext(candidate));
+    expect(result.outcome).toBe('fail');
+    expect(result.reason).toContain(id);
+    expect(result.reason).not.toContain(payload.slice(0, 12));
+  });
+
   it('includes pattern ids in failure reason', () => {
     const content = 'AWS_KEY=AKIAIOSFODNN7EXAMPLE';
     const candidate = makeCandidate({ content });
