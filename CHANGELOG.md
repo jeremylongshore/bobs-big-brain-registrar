@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a bounded, fixture-only OKF v0.2 exchange experiment in the private eval
+  package. Foreign provenance remains inert data; imports create untrusted inbox
+  proposals and preserve existing disclosure and policy gates. Record pinned
+  ArcKit compatibility limits without a conformance or deployment claim
+  (`compile-then-govern-1io.2`).
+
 - Add a read-only frozen review-agent evaluation runner with independent
   manifest pins, exact case/inventory checks, preserved prior checkpoints and
   manifest-bound predictions. Its subprocess self-test uses disposable synthetic

@@ -1,0 +1,72 @@
+{
+  "classification": "author-observed synthetic experiment; not third-party certification",
+  "googleSpec": {
+    "revision": "ad30107c31c06aec8a7d5636e0d1058118604e6f",
+    "version": "0.2",
+    "sha256": "26aa5da029278939f914e578107242d9607d4f2dc5fe153272b82f9ed1030101"
+  },
+  "arckitRevision": "f80a67228aa04206da695cfbd9f7c9702dd4c403",
+  "scripts": {
+    "export-okf.mjs": "44b1d4d4b87468a61f6f018875b0c91c8b72e6b4be8979830fe88674eb56ab0d",
+    "import-okf.mjs": "745d4e430bf109ac6c06dc4cafe8c1fbfdf9c04a91fd3bd5041c52093c2b92c6",
+    "okf-frontmatter.mjs": "2406b1a5e2fde6605c42bc6396d368425f33b9ba59d222a82c377b96965915bb",
+    "doc-types.mjs": "ee747f7ed0677bbd33cce75a4e3dc997f1052da8067c345c7a5b7eb8be82650d",
+    "okf-types.mjs": "630772d8e40d5ea37219d607f8f53aaa45bd6c15ab2167b8deced53782e0f60d"
+  },
+  "results": {
+    "arckitSelfImport": {
+      "valid_count": 1,
+      "invalid_count": 0,
+      "skipped_count": 2,
+      "materialized_count": 0,
+      "invalid": []
+    },
+    "bbbToArckit": {
+      "valid_count": 0,
+      "invalid_count": 3,
+      "skipped_count": 0,
+      "materialized_count": 0,
+      "invalid": [
+        {
+          "source_path": "bbb-export/concepts/memory.md",
+          "reason": "unsupported nested YAML line:     type: ai"
+        },
+        {
+          "source_path": "bbb-export/index.md",
+          "reason": "missing required OKF type field"
+        },
+        {
+          "source_path": "bbb-export/log.md",
+          "reason": "missing OKF frontmatter"
+        }
+      ]
+    },
+    "minimalToArckit": {
+      "valid_count": 1,
+      "invalid_count": 0,
+      "skipped_count": 0,
+      "materialized_count": 0,
+      "invalid": []
+    },
+    "bbbOwnRoundtripAndArckitToBbb": {
+      "ownRoundtrip": {
+        "concepts": 1,
+        "candidates": 1,
+        "trust": "untrusted",
+        "originalLifecycle": "active"
+      },
+      "arckitToBbb": {
+        "concepts": 1,
+        "diagnostics": [
+          "index.md:noncanonical_reserved_frontmatter",
+          "log.md:noncanonical_reserved_frontmatter"
+        ],
+        "conceptDiagnostics": [["broken_bundle_link"]],
+        "candidates": 1,
+        "trust": "untrusted"
+      }
+    }
+  },
+  "recordedAt": "2026-11-04T07:43:44.586219+00:00",
+  "arckitExportGeneratedAt": "2026-11-04T07:39:17.939Z"
+}

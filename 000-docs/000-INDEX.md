@@ -48,6 +48,7 @@ for the current documentation audit. Historical plans are not current acceptance
 - [048-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor](048-TQ-AUDT-grounding-audit-every-improvement-loop-and-its-anchor.md)
 - [069-AT-DSGN-review-agent-judgment-scoring](069-AT-DSGN-review-agent-judgment-scoring.md)
 - [070-AT-DSGN-frozen-review-agent-evaluation](070-AT-DSGN-frozen-review-agent-evaluation.md)
+- [071-AT-DSGN-okf-fixture-exchange](071-AT-DSGN-okf-fixture-exchange.md)
 
 ### Operations and deployment
 
