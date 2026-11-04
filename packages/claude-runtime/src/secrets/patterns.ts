@@ -84,13 +84,17 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     name: 'Heroku API Key',
     regex: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/,
     description: 'Heroku API key (UUID format), only in key-context',
+    requiresSourceContext: true,
     // A Heroku API key is UUID-shaped, but so is a request id, a trace id, or a
     // bead id in ordinary prose. Firing on any bare UUID over-blocks benign
     // memories (the e06.3 eval's `neg-uuid-in-prose-01` false positive dragged
     // secret-scanner + content-classifier precision below 1.0). Gate the rule
     // behind key-context: only flag a UUID as a credential when a `heroku` /
     // `api` / `key` / `token` keyword, or an assignment/secret env var, is
-    // present in the same scan window. A REAL Heroku key still fires (it is set
+    // associated with the source occurrence. Source lines spanned by the value
+    // and an immediately preceding explicit label/assignment supply context;
+    // unrelated document lines do not. Same-line keyword ambiguity remains
+    // suspicious. A REAL Heroku key still fires (it is set
     // via `HEROKU_API_KEY=` or referenced with those words); a naked UUID in
     // prose does not. Precision up, recall held (bead compile-then-govern-e06.15).
     //

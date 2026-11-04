@@ -15,6 +15,18 @@ function makeRule(overrides?: Record<string, unknown>) {
 }
 
 describe('evaluateSecretDetection', () => {
+  it.each(
+    ['API guide:', 'API_REQUEST_ID='].flatMap((label) =>
+      (['raw', 'base64'] as const).map((encoding) => ({ label, encoding })),
+    ),
+  )('passes a noncredential $label followed by $encoding UUID', ({ label, encoding }) => {
+    const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+    const value = encoding === 'raw' ? uuid : Buffer.from(uuid).toString('base64');
+    const candidate = makeCandidate({ content: `${label}\n${value}` });
+    expect(evaluateSecretDetection(candidate, makeRule(), makeContext(candidate)).outcome).toBe(
+      'pass',
+    );
+  });
   it('detects JWT tokens in content', () => {
     const content =
       'token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
@@ -94,6 +106,32 @@ describe('evaluateSecretDetection', () => {
     expect(result.outcome).toBe('pass');
     expect(result.ruleId).toBe(rule.id);
   });
+
+  it.each(['raw', 'base64'] as const)(
+    'passes an unrelated API-guide line and a %s UUID',
+    (encoding) => {
+      const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+      const value = encoding === 'raw' ? uuid : Buffer.from(uuid).toString('base64');
+      const candidate = makeCandidate({ content: `API guide\nRequest id ${value}` });
+      expect(evaluateSecretDetection(candidate, makeRule(), makeContext(candidate)).outcome).toBe(
+        'pass',
+      );
+    },
+  );
+
+  it.each(['raw', 'base64'] as const)(
+    'rejects a labeled %s UUID with metadata-only reasoning',
+    (encoding) => {
+      const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+      const value = encoding === 'raw' ? uuid : Buffer.from(uuid).toString('base64');
+      const candidate = makeCandidate({ content: `HEROKU_API_KEY set to\n${value}` });
+      const result = evaluateSecretDetection(candidate, makeRule(), makeContext(candidate));
+      expect(result.outcome).toBe('fail');
+      expect(result.reason).toContain('heroku-api-key');
+      expect(result.reason).not.toContain(uuid);
+      expect(result.reason).not.toContain(value);
+    },
+  );
 
   it.each(['TOKEN=abc def ghi jkl', 'xox' + 'b-abc def ghi jkl'])(
     'passes short horizontal value fragments: %s',

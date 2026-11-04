@@ -1,5 +1,6 @@
 import type { SecretMatch, SecretPattern } from '../types.js';
 import { SECRET_PATTERNS } from './patterns.js';
+import { mappedWhitespace, SourceContext } from './source-context.js';
 
 /**
  * Bounds for the evasion-hardening pre-passes. Kept explicit so `scanForSecrets`
@@ -57,6 +58,9 @@ const HEX_CANDIDATE_RE = /[A-Fa-f0-9]{24,}/g;
  * `heroku` / `api key` context would be silently missed (Gemini finding, e06.15).
  * For the per-line and collapsed passes the value and its context live in the
  * same string, so `contextText` is omitted and the window is `text` itself.
+ * Source-associated patterns instead receive a per-match predicate that checks
+ * their original occurrence (or decoded-local context). Its accepted match
+ * already satisfies the gate; no whole-document keyword fallback is applied.
  *
  * Returns the RegExpExecArray for a counted hit, or `null` when the pattern does
  * not match or its context gate is not satisfied.
@@ -106,7 +110,7 @@ function execWithContext(
 ): RegExpExecArray | null {
   const match = firstCountedMatch(pattern, text, acceptSource);
   if (!match) return null;
-  if (pattern.requiresContext) {
+  if (pattern.requiresContext && !(pattern.requiresSourceContext && acceptSource)) {
     if (pattern.requiresContext.global || pattern.requiresContext.sticky) {
       pattern.requiresContext.lastIndex = 0;
     }
@@ -123,7 +127,11 @@ function scanFlat(
   text: string,
   patterns: SecretPattern[],
   matches: SecretMatch[],
-  locate: (matchIndex: number, matchLength: number) => { line: number; column: number },
+  locate: (
+    matchIndex: number,
+    matchLength: number,
+    pattern: SecretPattern,
+  ) => { line: number; column: number },
   patternIdOverride?: (patternId: string) => string,
   contextText?: string,
   acceptSource?: (pattern: SecretPattern, match: RegExpExecArray) => boolean,
@@ -139,7 +147,7 @@ function scanFlat(
       acceptSource ? (item) => acceptSource(pattern, item) : undefined,
     );
     if (match) {
-      const { line, column } = locate(match.index, match[0].length);
+      const { line, column } = locate(match.index, match[0].length, pattern);
       matches.push({
         patternId: patternIdOverride ? patternIdOverride(pattern.id) : pattern.id,
         patternName: pattern.name,
@@ -173,17 +181,40 @@ function scanNewlineCollapsed(
   patterns: SecretPattern[],
   alreadyFired: Set<string>,
   matches: SecretMatch[],
+  sourceContext?: SourceContext,
 ): void {
   if (content.length > LIMITS.collapsedScanMaxChars) return;
   // First preserve token boundaries, so an assignment still reads KEY = value.
-  const singleSpace = content.replace(/\s+/g, ' ');
+  const singleSpace = mappedWhitespace(content, true);
   const remaining = patterns.filter((p) => !alreadyFired.has(p.id));
   if (remaining.length === 0) return;
   // Best-effort location: collapsed views lose source coordinates, so report the
   // first line. Column is 1 (start-of-view) — a signal, not a precise offset.
   const locate = () => ({ line: 1, column: 1 });
   const before = matches.length;
-  scanFlat(singleSpace, remaining, matches, locate);
+  const acceptedContext = (pattern: SecretPattern, match: RegExpExecArray, offsets: number[]) => {
+    if (!pattern.requiresSourceContext) return true;
+    const start = offsets[match.index];
+    const end = offsets[match.index + match[0].length - 1];
+    return (
+      start !== undefined &&
+      end !== undefined &&
+      sourceContext?.allows(pattern, start, end + 1) === true
+    );
+  };
+  const sourceLocation = (index: number, pattern: SecretPattern, offsets: number[]) =>
+    pattern.requiresSourceContext && sourceContext && offsets[index] !== undefined
+      ? sourceContext.locate(offsets[index]!)
+      : locate();
+  scanFlat(
+    singleSpace.text,
+    remaining,
+    matches,
+    (index, _length, pattern) => sourceLocation(index, pattern, singleSpace.offsets),
+    undefined,
+    undefined,
+    (pattern, match) => acceptedContext(pattern, match, singleSpace.offsets),
+  );
   // Env/Slack values must not be fabricated by concatenating ordinary words.
   // Normalize ONCE, then scan directly: per-candidate suffix validation would
   // repeatedly rescan greedy values on many short assignments.
@@ -209,23 +240,17 @@ function scanNewlineCollapsed(
   // before applying the fragment-prefix guard, so a genuine line-wrapped key
   // attached to an identifier remains visible. The existing input cap bounds
   // the map and each source slice.
-  const offsets: number[] = [];
-  const characters: string[] = [];
-  for (let index = 0; index < content.length; index++) {
-    const character = content[index]!;
-    if (!/\s/.test(character)) {
-      offsets.push(index);
-      characters.push(character);
-    }
-  }
+  const stripped = mappedWhitespace(content, false);
+  const offsets = stripped.offsets;
   scanFlat(
-    characters.join(''),
+    stripped.text,
     stillUnmatched,
     matches,
-    locate,
+    (index, _length, pattern) => sourceLocation(index, pattern, offsets),
     undefined,
     undefined,
     (pattern, match) => {
+      if (!acceptedContext(pattern, match, offsets)) return false;
       if (!pattern.requiresSourceToken) return true;
       const start = offsets[match.index];
       const end = offsets[match.index + match[0].length - 1];
@@ -261,10 +286,13 @@ function scanEncodedWrapped(
   content: string,
   patterns: SecretPattern[],
   matches: SecretMatch[],
+  sourceContext?: SourceContext,
 ): void {
   let decodedCandidates = 0;
   let decodedBytes = 0;
   const seenWrapped = new Set<string>();
+  const decodedCache = new Map<string, { text: string; encoding: string }>();
+  const occurrencePatterns = patterns.filter((p) => p.requiresSourceContext);
 
   const tryDecode = (
     raw: string,
@@ -277,32 +305,50 @@ function scanEncodedWrapped(
     if (raw.length > LIMITS.maxEncodedCandidateLen) return;
     if (decodedBytes >= LIMITS.maxTotalDecodedBytes) return;
 
-    const decoded = decode(raw);
+    const cached = decodedCache.get(raw);
+    // Preserve the existing cross-codec dedup: bytes first decoded as base64
+    // must not later be interpreted as a cached hex decode (or vice versa).
+    if (cached && cached.encoding !== prefix) return;
+    const decoded = cached?.text ?? decode(raw);
     if (decoded === null || decoded.length === 0) return;
-    decodedCandidates += 1;
-    decodedBytes += decoded.length;
+    if (cached === undefined) {
+      decodedCandidates += 1;
+      decodedBytes += decoded.length;
+      decodedCache.set(raw, { text: decoded, encoding: prefix });
+    }
     // Best-effort location: the candidate's ACTUAL match offset in the ORIGINAL
     // content (threaded from matchAll's `m.index`), on the line it starts. Using
     // the real index is correct when the same blob appears more than once —
     // `content.indexOf(raw)` would always report the first occurrence.
-    const line = index >= 0 ? content.slice(0, index).split('\n').length : 1;
-    const column = index >= 0 ? index - content.lastIndexOf('\n', index) : 1;
+    let legacyLocation: { line: number; column: number } | undefined;
+    const decodedContext = new SourceContext(decoded);
     scanFlat(
       decoded,
-      patterns,
+      seenWrapped.has(raw) ? occurrencePatterns : patterns,
       matches,
-      () => ({ line, column: Math.max(1, column) }),
+      (_matchIndex, _length, pattern) => {
+        if (pattern.requiresSourceContext && sourceContext) return sourceContext.locate(index);
+        legacyLocation ??= {
+          line: index >= 0 ? content.slice(0, index).split('\n').length : 1,
+          column: index >= 0 ? Math.max(1, index - content.lastIndexOf('\n', index)) : 1,
+        };
+        return legacyLocation;
+      },
       (patternId) => {
         const wrappedId = `${prefix}:${patternId}`;
         return wrappedId;
       },
-      // The decoded blob is just the raw value; a context-gated pattern must be
-      // evaluated against the ORIGINAL content (where `heroku` / `api key`
-      // keywords live), else a real wrapped Heroku key is silently missed
-      // (Gemini finding, e06.15). Value regex still runs on `decoded`.
+      // Legacy custom context gates retain the original window. Heroku's
+      // source predicate below instead associates context with this occurrence
+      // or with the matching value's decoded source lines.
       content,
+      (pattern, match) =>
+        !pattern.requiresSourceContext ||
+        sourceContext?.allows(pattern, index, index + raw.length) === true ||
+        decodedContext.allows(pattern, match.index, match.index + match[0].length),
     );
-    // Dedup guard: track the wrapped prefix so the same blob is not re-scanned.
+    // Context-free findings remain deduped. Repeated source-sensitive occurrences
+    // reuse decoded bytes and evaluate their own context without another decode.
     seenWrapped.add(raw);
   };
 
@@ -312,7 +358,7 @@ function scanEncodedWrapped(
     if (decodedCandidates >= LIMITS.maxEncodedCandidates) break;
     if (decodedBytes >= LIMITS.maxTotalDecodedBytes) break;
     const raw = m[0];
-    if (seenWrapped.has(raw)) continue;
+    if (seenWrapped.has(raw) && occurrencePatterns.length === 0) continue;
     tryDecode(raw, m.index ?? -1, decodeBase64, 'base64-wrapped');
   }
 
@@ -321,7 +367,7 @@ function scanEncodedWrapped(
     if (decodedCandidates >= LIMITS.maxEncodedCandidates) break;
     if (decodedBytes >= LIMITS.maxTotalDecodedBytes) break;
     const raw = m[0];
-    if (seenWrapped.has(raw) || raw.length % 2 !== 0) continue;
+    if ((seenWrapped.has(raw) && occurrencePatterns.length === 0) || raw.length % 2 !== 0) continue;
     tryDecode(raw, m.index ?? -1, decodeHex, 'hex-wrapped');
   }
 }
@@ -396,6 +442,10 @@ export function scanForSecrets(
 ): SecretMatch[] {
   const matches: SecretMatch[] = [];
   const lines = content.split('\n');
+  const sourceContext = patterns.some((p) => p.requiresSourceContext)
+    ? new SourceContext(content)
+    : undefined;
+  let lineStart = 0;
 
   // Pass 1 — the original per-line scan (behaviour unchanged for context-free
   // patterns; the split/encoded passes are additive backstops layered on top,
@@ -405,27 +455,43 @@ export function scanForSecrets(
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]!;
     for (const pattern of patterns) {
-      const match = execWithContext(pattern, line);
+      const match = execWithContext(
+        pattern,
+        line,
+        undefined,
+        pattern.requiresSourceContext
+          ? (item) =>
+              sourceContext?.allows(
+                pattern,
+                lineStart + item.index,
+                lineStart + item.index + item[0].length,
+              ) === true
+          : undefined,
+      );
       if (match) {
+        const location =
+          pattern.requiresSourceContext && sourceContext
+            ? sourceContext.locate(lineStart + match.index)
+            : { line: lineIdx + 1, column: match.index + 1 };
         matches.push({
           patternId: pattern.id,
           patternName: pattern.name,
-          line: lineIdx + 1,
-          column: match.index + 1,
+          ...location,
           matchLength: match[0].length,
         });
       }
     }
+    lineStart += line.length + 1;
   }
 
   // Include CR and Unicode line separators, also accepted by joinLineWraps.
   if (/[\r\n\u2028\u2029]/.test(content)) {
     const firedOnLineScan = new Set(matches.map((m) => m.patternId));
-    scanNewlineCollapsed(content, patterns, firedOnLineScan, matches);
+    scanNewlineCollapsed(content, patterns, firedOnLineScan, matches, sourceContext);
   }
 
   // Pass 3 — bounded decode-and-rescan of encoded-looking blobs.
-  scanEncodedWrapped(content, patterns, matches);
+  scanEncodedWrapped(content, patterns, matches, sourceContext);
 
   return matches;
 }

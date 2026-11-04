@@ -44,6 +44,9 @@ export interface SecretPattern {
    * relaxes any OTHER pattern — every context-free rule keeps firing unchanged.
    */
   requiresContext?: RegExp;
+  /** Evaluate context at the original source occurrence, including an explicit
+   * preceding label, instead of borrowing keywords from an entire derived view. */
+  requiresSourceContext?: boolean;
   /**
    * Optional value predicate. When present, a `regex` match only counts when
    * `accept` returns true for it; the scanner then looks at EVERY match in the
