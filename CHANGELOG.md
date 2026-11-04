@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a read-only frozen review-agent evaluation runner with independent
+  manifest pins, exact case/inventory checks, preserved prior checkpoints and
+  manifest-bound predictions. Its subprocess self-test uses disposable synthetic
+  cases; human approval, real labels and operational qualification remain parent
+  work (`compile-then-govern-6ps.13.2`).
+
 - Add pure review-agent promote/hold/reject judgment scoring with independent
   recall floors, explicit missing-prediction misses, full class confusion
   metrics and a separate paraphrase-duplicate rejection gate. This scores

@@ -1,22 +1,21 @@
 /**
  * @qmd-team-intent-kb/eval-surface — QMD's functional eval surface.
  *
- * Pure evaluators that measure whether the governed brain is doing its job,
- * each returning an Evidence-Bundle-friendly EvaluatorResult:
+ * Evaluators and scoring reports that measure whether the governed brain is doing its job:
  *  - memory-utility       — retrieval recall@k against held-out probes
  *  - dedup-catch-rate     — exact content-hash dedup catch (+ false-positive guard)
  *  - provenance-integrity — per-memory content-hash consistency + audit-chain intactness
  *  - govern-decision      — per-check precision/recall of the deterministic govern
  *                           decision over an adversarial labeled set (is the moat
  *                           merely deterministic, or actually EFFECTIVE?)
+ *  - review-agent         — supplied-label class metrics and a read-only frozen-file adapter
  *
  * This package MEASURES. It does not emit or sign Evidence Bundles — the
  * emit wiring (bead tr08.19) now exists at ci/emit-evidence/, which runs the
  * CI eval gates as subprocesses and shapes their verdicts into signed
  * gate-result/v1 bundles for the labs dashboard (subprocess-level v1; an
- * EvaluatorResult-level in-package emitter remains future work). Keeping
- * measurement pure (no I/O beyond the repositories/data handed in) makes each
- * evaluator independently testable and side-effect-free.
+ * EvaluatorResult-level in-package emitter remains future work). Scoring cores
+ * are side-effect-free; the frozen review adapter reads caller-selected files.
  */
 
 export { evaluateMemoryUtility, type MemoryUtilityOptions } from './memory-utility.js';
@@ -77,6 +76,11 @@ export type {
   Perturbation,
 } from './groundedness/types.js';
 export type { EvaluatorResult, RetrievalProbe, DedupProbe } from './types.js';
+export {
+  verifyFrozenReviewDataset,
+  scoreFrozenReviewDataset,
+  type FrozenReviewOptions,
+} from './review-agent-frozen.js';
 export {
   scoreReviewJudgments,
   REVIEW_LABELS,
