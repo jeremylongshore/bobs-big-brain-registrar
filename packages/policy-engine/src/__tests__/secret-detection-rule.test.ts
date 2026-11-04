@@ -64,7 +64,7 @@ describe('evaluateSecretDetection', () => {
   });
 
   it('rejects a real split key after benign joined-word prose without leaking its value', () => {
-    const key = 'sk-' + 'abcdefghijKLMNOPqrstuvwxyz1234567890';
+    const key = 'sk-' + 'TESTONLY'.repeat(5);
     const candidate = makeCandidate({
       content: `Task-Based Gameplay improves player feedback and progression\nThe key is ${key.slice(0, 12)}\n${key.slice(12)}`,
     });

@@ -27,7 +27,7 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     regex: /sk-[A-Za-z0-9]{20,}/,
     description: 'API key with sk- prefix (OpenAI, Stripe, etc.)',
     // Joining prose must not turn the suffix of `task-` / `risk-` into a key.
-    requiresSourceBoundary: true,
+    requiresSourceToken: true,
   },
   {
     id: 'slack-token',

@@ -190,9 +190,10 @@ function scanNewlineCollapsed(
       !matches.slice(before).some((m) => m.patternId === p.id),
   );
   if (stillUnmatched.length === 0) return;
-  // Preserve UTF-16 offsets into the original source. Testing a boundary in the
-  // stripped string would also hide real keys after ordinary prose, because
-  // their separating space has disappeared. The bounded input caps this map.
+  // Preserve UTF-16 offsets into the original source. A preceding-character
+  // boundary alone would miss genuine keys attached to identifiers and still
+  // accept wrapped prose prefixes. Validate the source token instead; the
+  // existing input cap bounds the map and each source slice.
   const offsets: number[] = [];
   const characters: string[] = [];
   for (let index = 0; index < content.length; index++) {
@@ -210,9 +211,17 @@ function scanNewlineCollapsed(
     undefined,
     undefined,
     (pattern, match) => {
-      if (!pattern.requiresSourceBoundary) return true;
+      if (!pattern.requiresSourceToken) return true;
       const start = offsets[match.index];
-      return start !== undefined && (start === 0 || !/[A-Za-z0-9_]/.test(content[start - 1]!));
+      const end = offsets[match.index + match[0].length - 1];
+      if (start === undefined || end === undefined) return false;
+      // Join line-wrap whitespace, including padding and Unicode separators, keeping
+      // ordinary horizontal spaces. Only a real matching prefix must survive:
+      // the greedy stripped match may also contain subsequent prose words.
+      const source = content
+        .slice(start, end + 1)
+        .replace(/\s+/g, (space) => (/[\r\n\u2028\u2029]/.test(space) ? '' : space));
+      return firstCountedMatch(pattern, source)?.index === 0;
     },
   );
 }

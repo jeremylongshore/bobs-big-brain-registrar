@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { scanForSecrets } from '../secrets/secret-scanner.js';
 
-const key = 'sk-' + 'abcdefghijKLMNOPqrstuvwxyz1234567890';
+const key = 'sk-' + 'TESTONLY'.repeat(5);
 const hasApiKey = (text: string) =>
   scanForSecrets(text).some((match) => match.patternId === 'generic-api-key');
 
@@ -40,6 +40,27 @@ describe('whitespace-stripped API keys preserve source token boundaries', () => 
       true,
     );
   });
+
+  it('detects a real split key directly adjacent to an identifier', () => {
+    expect(hasApiKey(`identifier${key.slice(0, 12)}\n${key.slice(12)}`)).toBe(true);
+  });
+
+  it('does not manufacture a key when the natural prefix itself wraps', () => {
+    expect(hasApiKey('ta\nsk-Based Gameplay improves player feedback and progression')).toBe(false);
+  });
+
+  it('accepts a genuinely wrapped token followed by ordinary prose', () => {
+    expect(
+      hasApiKey(`The key is ${key.slice(0, 12)}\n${key.slice(12)} and it authenticates.`),
+    ).toBe(true);
+  });
+
+  it.each([' \r\n    ', '\t\n\t', ' \u2028  ', '\t\u2029\t'])(
+    'detects a real key with padded line-wrap whitespace %j',
+    (wrap) => {
+      expect(hasApiKey(`header\nThe key is ${key.slice(0, 12)}${wrap}${key.slice(12)}`)).toBe(true);
+    },
+  );
 
   it('preserves exact source coordinates for ordinary inline keys', () => {
     const match = scanForSecrets(`header\nkey: ${key}`).find(

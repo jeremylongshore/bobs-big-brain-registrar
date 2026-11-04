@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Preserve original source token boundaries when scanning whitespace-stripped
+- Validate original source tokens when scanning whitespace-stripped
   text for generic API keys, preventing ordinary multiline task/risk prose from
   becoming a key. Real split keys, encoded keys and later overlapping valid
   prefixes remain detected. This source fix does not rebundle the Plugin or
