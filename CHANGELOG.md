@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Associate Heroku UUID context with the original occurrence's source lines or
+  an immediately preceding explicit label, preserving labeled split and encoded
+  keys while excluding unrelated API-guide lines. Repeated encoded occurrences
+  reuse cached decoded bytes and evaluate their own context; context-free
+  findings retain deduplication. Same-line keyword ambiguity remains suspicious.
+  Source-only correction; distribution and live work remain separate
+  (`compile-then-govern-2i3.5.2`).
+
 - Preserve horizontal spaces in the additional split-token scan for env and
   Slack values, so short ordinary fragments do not become secret-shaped values.
   Join padded LF/CR/Unicode line wraps in one bounded view, retaining inline and
