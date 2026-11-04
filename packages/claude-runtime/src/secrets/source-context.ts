@@ -4,6 +4,10 @@ import type { SecretPattern } from '../types.js';
 // merely because an API keyword appears elsewhere in the document.
 const LABEL_END =
   /(?:[:=]|\bset\s+to|\bis|\bwas|\b(?:key|token|secret|credential|bearer)|HEROKU_API_KEY)[\s`"']*$/i;
+// A heading such as `API guide:` or an `API_REQUEST_ID=` assignment is
+// not a credential label merely because the broad same-line gate sees `api`.
+const CREDENTIAL_LABEL =
+  /(?:^|[^a-z0-9])(?:api[-_ ]?key|key|token|secret|credential|bearer|password)(?:[^a-z0-9]|$)/i;
 
 /** Source lines and cached context prefix counts keep per-match lookup bounded. */
 export class SourceContext {
@@ -47,7 +51,7 @@ export class SourceContext {
         regex.lastIndex = 0;
         const context = regex.test(line);
         counts.push(counts[index]! + Number(context));
-        labels.push(context && LABEL_END.test(line));
+        labels.push(context && CREDENTIAL_LABEL.test(line) && LABEL_END.test(line));
       }
       gate = { counts, labels };
       this.gates.set(pattern, gate);

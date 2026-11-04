@@ -15,6 +15,18 @@ function makeRule(overrides?: Record<string, unknown>) {
 }
 
 describe('evaluateSecretDetection', () => {
+  it.each(
+    ['API guide:', 'API_REQUEST_ID='].flatMap((label) =>
+      (['raw', 'base64'] as const).map((encoding) => ({ label, encoding })),
+    ),
+  )('passes a noncredential $label followed by $encoding UUID', ({ label, encoding }) => {
+    const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+    const value = encoding === 'raw' ? uuid : Buffer.from(uuid).toString('base64');
+    const candidate = makeCandidate({ content: `${label}\n${value}` });
+    expect(evaluateSecretDetection(candidate, makeRule(), makeContext(candidate)).outcome).toBe(
+      'pass',
+    );
+  });
   it('detects JWT tokens in content', () => {
     const content =
       'token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';

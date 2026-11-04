@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Associate Heroku UUID context with the original occurrence's source lines or
-  an immediately preceding explicit label, preserving labeled split and encoded
+  an immediately preceding credential-specific label, preserving labeled split and encoded
   keys while excluding unrelated API-guide lines. Repeated encoded occurrences
   reuse cached decoded bytes and evaluate their own context; context-free
   findings retain deduplication. Same-line keyword ambiguity remains suspicious.

@@ -7,6 +7,19 @@ const hero = 'heroku-api-key';
 const hits = (text: string) => scanForSecrets(text).filter((m) => m.patternId.endsWith(hero));
 
 describe('Heroku UUID source-associated context', () => {
+  it.each(
+    ['API guide:', 'API_REQUEST_ID=', 'TRACE_ID='].flatMap((label) =>
+      (['raw', 'base64', 'hex'] as const).map((encoding) => ({ label, encoding })),
+    ),
+  )('does not treat $label as a credential label for $encoding', ({ label, encoding }) => {
+    const value = encoding === 'raw' ? uuid : Buffer.from(uuid).toString(encoding);
+    expect(hits(`${label}\n${value}`)).toEqual([]);
+  });
+
+  it.each(['TOKEN=', 'PASSWORD=', 'Heroku key is', 'credential:'])(
+    'retains a credential-specific preceding label %s',
+    (label) => expect(hits(`${label}\n${uuid}`)).not.toEqual([]),
+  );
   it('keeps a long failed label suffix separate from the following UUID', () => {
     expect(hits(`Heroku key${' '.repeat(16000)}x\n${uuid}`)).toEqual([]);
   });
