@@ -11,5 +11,7 @@ export { detectMonorepo } from './monorepo.js';
 export type { MonorepoInfo } from './monorepo.js';
 export { deriveTenantId, normalizeRemoteUrl } from './tenant.js';
 export type { TenantOverrides } from './tenant.js';
+export { ProjectDefinition, resolveProjectIdentity } from './project.js';
+export type { ProjectIdentity, ProjectResolutionError } from './project.js';
 
 export const name = '@qmd-team-intent-kb/repo-resolver';
