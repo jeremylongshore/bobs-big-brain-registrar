@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add separate hand-authored skill eval profiles for synthetic response-policy and
+  sibling-trigger cases; no real brain writes, provider run or schedule activation.
+  Refs bead `bd_000-projects-qkhp`.
+
 - Add a bounded, fixture-only OKF v0.2 exchange experiment in the private eval
   package. Foreign provenance remains inert data; imports create untrusted inbox
   proposals and preserve existing disclosure and policy gates. Record pinned

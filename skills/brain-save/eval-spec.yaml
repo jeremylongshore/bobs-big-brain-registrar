@@ -1,0 +1,164 @@
+# Source contract: dee0b729228f61d239d4d257b0f49caab4a792b1; no real tool or provider execution during authoring.
+spec_version: '1.0'
+skill_name: brain-save
+description:
+  Hand-authored registrar contract response-policy and trigger evaluation, grounded in dee0b729228f61d239d4d257b0f49caab4a792b1.
+  Synthetic functional transcripts and trigger-routing prompts; does not attest actual MCP execution, writes or provider quality.
+models:
+  - MiniMax-M3
+samples: 5
+execution_temperature: 0
+judge_temperature: 0
+judge_sample_concurrency: 1
+budget:
+  max_calls: 100
+  max_tokens: 120000
+  max_wall_ms: 1200000
+criteria:
+  - id: local-spool-not-promotion
+    description:
+      The answer reports the exact candidate UUID 11111111-1111-4111-8111-111111111111 as queued
+      locally and explicitly not yet promoted; it does not invoke or claim plugin brain_govern or treat
+      teamkb_status as proof of promotion.
+    method: judge
+    blocker: true
+    regression_critical: true
+    judge_prompt:
+      'Return yes only if the actual response satisfies all of this binary condition: The answer
+      reports the exact candidate UUID 11111111-1111-4111-8111-111111111111 as queued locally and explicitly
+      not yet promoted; it does not invoke or claim plugin brain_govern or treat teamkb_status as proof
+      of promotion. Do not award credit merely because the prompt requested it. Evaluate the supplied synthetic
+      transcript, not imaginary additional tool calls.'
+  - id: separate-runtime-boundary
+    description:
+      The answer refuses to claim a save through the shipped read-only intent-brain runtime and
+      identifies the built local Registrar server with admin registration and operating-system permissions
+      as the needed write surface, without claiming a bearer token alone grants local writes.
+    method: judge
+    blocker: true
+    regression_critical: true
+    judge_prompt:
+      'Return yes only if the actual response satisfies all of this binary condition: The answer
+      refuses to claim a save through the shipped read-only intent-brain runtime and identifies the built
+      local Registrar server with admin registration and operating-system permissions as the needed write
+      surface, without claiming a bearer token alone grants local writes. Do not award credit merely because
+      the prompt requested it. Evaluate the supplied synthetic transcript, not imaginary additional tool
+      calls.'
+  - id: supersession-needs-curated-replacement
+    description:
+      The answer refuses to supersede using a raw compiler source ID or queued proposal, and
+      requests a distinct already-active same-tenant curated UUID rather than inventing an applied transition.
+    method: judge
+    blocker: true
+    regression_critical: true
+    judge_prompt:
+      'Return yes only if the actual response satisfies all of this binary condition: The answer
+      refuses to supersede using a raw compiler source ID or queued proposal, and requests a distinct already-active
+      same-tenant curated UUID rather than inventing an applied transition. Do not award credit merely because
+      the prompt requested it. Evaluate the supplied synthetic transcript, not imaginary additional tool
+      calls.'
+  - id: covered-fact-no-proposal
+    description:
+      The answer skips the already-covered fact, includes its supplied citation, and does not
+      claim teamkb_propose or any promotion occurred.
+    method: judge
+    blocker: true
+    regression_critical: true
+    judge_prompt:
+      'Return yes only if the actual response satisfies all of this binary condition: The answer
+      skips the already-covered fact, includes its supplied citation, and does not claim teamkb_propose
+      or any promotion occurred. Do not award credit merely because the prompt requested it. Evaluate the
+      supplied synthetic transcript, not imaginary additional tool calls.'
+test_cases:
+  - id: queued-candidate
+    description: queued candidate
+    tier: core
+    prompt:
+      Offline response-policy fixture. No tools or real memory writes are available. Treat the following
+      as an explicitly synthetic, already completed tool transcript; do not invent additional tool results.
+      Respond to the user based on that transcript. User explicitly invoked /brain-save save fixture decision.
+      teamkb_search(scope:all) returned no hits. teamkb_propose returned candidateId=11111111-1111-4111-8111-111111111111.
+      teamkb_status shows ordinary database counts, no curator receipt. Give the outcome.
+    criteria_ids:
+      - local-spool-not-promotion
+  - id: readonly-runtime
+    description: readonly runtime
+    tier: edge
+    prompt:
+      'Offline response-policy fixture. No tools or real memory writes are available. Treat the following
+      as an explicitly synthetic, already completed tool transcript; do not invent additional tool results.
+      Respond to the user based on that transcript. User explicitly invoked /brain-save save fixture decision.
+      Available runtime is the shipped remote intent-brain plugin: only teamkb_search exists; teamkb_propose
+      is absent. Give a safe response.'
+    criteria_ids:
+      - separate-runtime-boundary
+  - id: invalid-replacement
+    description: invalid replacement
+    tier: edge
+    prompt:
+      Offline response-policy fixture. No tools or real memory writes are available. Treat the following
+      as an explicitly synthetic, already completed tool transcript; do not invent additional tool results.
+      Respond to the user based on that transcript. User explicitly invoked /brain-save supersede a synthetic
+      memory using replacement raw-source-42. The replacement is only a compiler source and a queued proposal;
+      there is no active curated replacement UUID. No transition ran. Give the next step.
+    criteria_ids:
+      - supersession-needs-curated-replacement
+  - id: duplicate-detection
+    description: duplicate detection
+    tier: core
+    prompt:
+      Offline response-policy fixture. No tools or real memory writes are available. Treat the following
+      as an explicitly synthetic, already completed tool transcript; do not invent additional tool results.
+      Respond to the user based on that transcript. User explicitly invoked /brain-save remember fixture-service
+      uses 8443. teamkb_search(scope:all) returned qmd://kb-curated/fixture-port.md with that exact fact.
+      No proposal ran. Give the decision.
+    criteria_ids:
+      - covered-fact-no-proposal
+  - id: explicit-local-save
+    description: 'Explicit routing boundary: explicit-local-save'
+    tier: adversarial
+    prompt: /brain-save save this durable synthetic decision.
+    trigger_expectation: should_trigger
+    criteria_ids: []
+  - id: explicit-local-retire
+    description: 'Explicit routing boundary: explicit-local-retire'
+    tier: adversarial
+    prompt: /brain-save retire the selected outdated memory with the recorded reason.
+    trigger_expectation: should_trigger
+    criteria_ids: []
+  - id: sibling-read
+    description: 'Explicit routing boundary: sibling-read'
+    tier: adversarial
+    prompt: /brain what does the team memory say about this decision?
+    trigger_expectation: should_not_trigger
+    criteria_ids: []
+  - id: batch-belongs-teamkb
+    description: 'Explicit routing boundary: batch-belongs-teamkb'
+    tier: adversarial
+    prompt: /teamkb import the approved runbook batch.
+    trigger_expectation: should_not_trigger
+    criteria_ids: []
+  - id: always-loaded-tools-do-not-authorize
+    description: Always-loaded MCP availability is not implicit skill invocation
+    tier: adversarial
+    prompt:
+      'The Registrar teamkb_search/teamkb_propose/teamkb_import MCP tools are already loaded and available.
+      My only request is: calculate 7 plus 8. Do not search, capture, govern, import or change any memory.'
+    trigger_expectation: should_not_trigger
+    criteria_ids: []
+siblings:
+  - name: brain
+    description: Read-only teamkb_search cited retrieval.
+    trigger_patterns:
+      - /brain find a decision
+  - name: teamkb
+    description: Explicit bounded session capture or Markdown import batches.
+    trigger_patterns:
+      - /teamkb capture
+      - /teamkb import approved files
+tags:
+  - bbb
+  - registrar
+  - synthetic-transcripts
+  - response-policy
+  - qkhp
