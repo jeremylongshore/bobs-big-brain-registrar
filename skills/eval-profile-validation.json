@@ -1,0 +1,63 @@
+{
+  "record_kind": "author-local validation, not signed attestation",
+  "date": "2026-11-12",
+  "validator_source_commit": "0e2afc878547e0db51ec45270bc4af04097e26d0",
+  "validator_bundle_sha256": "38c7f98f0e2dfac27cc9a6955eb7aa55da0c387239366c90d4a8f7aa17bdbd9a",
+  "command": "node BUILT_JRIG_CLI validate PROFILE --json",
+  "assertions": [
+    "canonical SkillEvalSpec accepts each profile",
+    "unique criterion IDs",
+    "all criteria have scoped functional cases",
+    "trigger cases are adversarial with explicit expectation and empty criteria_ids",
+    "functional prompts identify synthetic completed transcripts"
+  ],
+  "profiles": [
+    {
+      "repo": "registrar",
+      "path": "skills/brain/eval-spec.yaml",
+      "sha256": "0c15de130523be4566f9899961c8c83ad97c65d14d5236153d9bc5ecbd3af28d",
+      "criteria": 4,
+      "functional_cases": 4,
+      "trigger_cases": 5,
+      "canonical_validation": {
+        "valid": true,
+        "type": "eval spec",
+        "errors": []
+      }
+    },
+    {
+      "repo": "registrar",
+      "path": "skills/brain-save/eval-spec.yaml",
+      "sha256": "45734e9536d9d0b32791a26c3afc193519c27651e5f6fd77745d095f80451524",
+      "criteria": 4,
+      "functional_cases": 4,
+      "trigger_cases": 5,
+      "canonical_validation": {
+        "valid": true,
+        "type": "eval spec",
+        "errors": []
+      }
+    },
+    {
+      "repo": "registrar",
+      "path": "skills/teamkb/eval-spec.yaml",
+      "sha256": "468eaad02fea051150c1af6ffe09802f03ae50c17f4dc57123bb21f48306310b",
+      "criteria": 5,
+      "functional_cases": 5,
+      "trigger_cases": 6,
+      "canonical_validation": {
+        "valid": true,
+        "type": "eval spec",
+        "errors": []
+      }
+    }
+  ],
+  "model_execution": false,
+  "runtime_files_changed": false,
+  "contract_source_commit": "dee0b729228f61d239d4d257b0f49caab4a792b1",
+  "contract_files": {
+    "skills/brain/SKILL.md": "e1c74ca1c8725b02ad62c0f50ceecc8c47fdec02d1d5549276da2fa068fda9b9",
+    "skills/brain-save/SKILL.md": "ea72f3b8ec632ba04922c9bdbc7000559baa7d2ea54e0a43d206c585ccced323",
+    "skills/teamkb/SKILL.md": "91a5500c38c1d6c4d887737e00192fab5d859495a25dde3cc6802824c1068c63"
+  }
+}

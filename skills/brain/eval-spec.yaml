@@ -3,7 +3,7 @@ spec_version: '1.0'
 skill_name: brain
 description:
   Hand-authored registrar contract response-policy and trigger evaluation, grounded in dee0b729228f61d239d4d257b0f49caab4a792b1.
-  Synthetic transcripts only; does not attest actual MCP execution, writes or provider quality.
+  Synthetic functional transcripts and trigger-routing prompts; does not attest actual MCP execution, writes or provider quality.
 models:
   - MiniMax-M3
 samples: 5
@@ -143,7 +143,7 @@ test_cases:
     trigger_expectation: should_not_trigger
     criteria_ids: []
   - id: always-loaded-tools-do-not-authorize
-    description: Always-loaded MCP availability is not skill invocation or write authorization
+    description: Always-loaded MCP availability is not implicit skill invocation
     tier: adversarial
     prompt:
       'The Registrar teamkb_search/teamkb_propose/teamkb_import MCP tools are already loaded and available.
