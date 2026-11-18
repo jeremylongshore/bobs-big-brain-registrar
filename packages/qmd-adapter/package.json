@@ -30,7 +30,7 @@
     "@qmd-team-intent-kb/common": "workspace:*",
     "@qmd-team-intent-kb/schema": "workspace:*",
     "@qmd-team-intent-kb/store": "workspace:*",
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^13.2.0",
     "sqlite-vec": "^0.1.9",
     "yaml": "2.9.1"
   },
