@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Expose the existing source-classification v1 schema and signing codec through
+  the schema package's dedicated `source-classification` subpath. Curator keeps
+  compatibility re-exports; canonical bytes and receiver policy are unchanged.
+  An isolated packed-artifact test covers independent consumption. This does
+  not publish the package, enroll producers or activate consumers
+  (`compile-then-govern-39z.11.4.4.4.5`).
+
 - Add an opt-in, authenticated source-governance API with strict v1 preview/apply
   envelopes, server-owned receiver/clock, current tenant authorization and the
   existing disclosure/review controls. Legacy API, MCP and spool inputs refuse
