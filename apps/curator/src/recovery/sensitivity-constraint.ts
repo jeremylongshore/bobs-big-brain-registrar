@@ -4,12 +4,16 @@ import { effectiveSensitivity } from '@qmd-team-intent-kb/policy-engine';
 import { AuditEvent, Sensitivity, Sha256Hash, Uuid } from '@qmd-team-intent-kb/schema';
 import type { Author, MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import type { AuditRepository } from '@qmd-team-intent-kb/store';
+import {
+  IMPORTED_FLOOR_KIND,
+  importedMinimumSensitivity,
+} from './imported-sensitivity-constraint.js';
 
 const KIND = 'recovery-sensitivity-floor-v1';
 
 /** Resolve durable constraints in this store, including later human review.
  * Invalid or content-mismatched constraint receipts refuse instead of dropping
- * a privacy bound. This does not import constraint receipts from remote clones.
+ * a privacy bound. Imported receipts are created only by verified source import.
  */
 export function resolveCandidateMinimumSensitivity(
   candidate: MemoryCandidate,
@@ -17,6 +21,11 @@ export function resolveCandidateMinimumSensitivity(
 ): Sensitivity | undefined {
   let minimum: Sensitivity | undefined;
   for (const event of audit.findByMemoryAndTenant(candidate.id, candidate.tenantId)) {
+    if (event.action === 'governed' && event.details['kind'] === IMPORTED_FLOOR_KIND) {
+      const floor = importedMinimumSensitivity(event, candidate);
+      minimum = minimum === undefined ? floor : effectiveSensitivity(minimum, floor);
+      continue;
+    }
     if (event.action !== 'governed' || event.details['kind'] !== KIND) continue;
     const floor = Sensitivity.parse(event.details['minimumSensitivity']);
     Uuid.parse(event.details['runId']);

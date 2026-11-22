@@ -9,15 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add internal transactional verified-source import with durable alias sensitivity
+  floors, monotonic source checkpoint receipts, idempotent settlement and complete
+  rollback on authority, snapshot or receipt drift. Re-govern imports and tighten
+  matching destination rows without widening audience or reactivating archives.
+  Protected CLI/legacy migration and live rollout remain open
+  (`compile-then-govern-39z.11.1.3`).
+
 - Add internal authenticated source snapshot export and verification with complete
   active-tenant inventory, source sensitivity floors, Ed25519 signatures and
-  independently supplied scoped checkpoint pins. Destination import, durable
-  replay protection and protected CLI/legacy migration remain open; no live trust
+  independently supplied scoped checkpoint pins. Protected CLI/legacy migration
+  remains open; no live trust
   enrollment or deployment (`compile-then-govern-39z.11.1.2`).
 
 - Document a proposed cross-clone sensitivity constraint contract, including
   source authority, evidence completeness, monotonic floors and acceptance cases.
-  Destination transport and live policy remain unimplemented (`compile-then-govern-39z.11`).
+  Live authority enrollment and rollout remain unimplemented (`compile-then-govern-39z.11`).
 
 - Add an opt-in independent hold-expiry worker with private physical-store-bound
   configuration, shared writer locking, durable transport bindings, bounded

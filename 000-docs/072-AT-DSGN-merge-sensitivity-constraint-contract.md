@@ -2,8 +2,8 @@
 
 Status: **In development**. Bead: `compile-then-govern-39z.11`.
 The authenticated source snapshot route is selected for implementation. Export
-and verification are implemented as internal library functions; transactional
-import and the protected CLI/legacy boundary remain open. This does not change
+and verification plus transactional import are implemented as internal library
+functions; the protected CLI/legacy boundary remains open. This does not change
 admission or read policy, or certify cross-clone privacy preservation.
 
 ## Existing behavior and gap
@@ -125,7 +125,7 @@ constitute a conflict. This deliberately replaces first-copy selection.
 
 This preflight does not authenticate either clone, transport source floor
 receipts, or prove that an export is complete. It is a prerequisite to the
-transport contract, whose destination application remains in development.
+transport contract, whose destination application is described below.
 
 All destination-tenant rows must schema-normalize; an unrelated malformed row
 also refuses the pass. Only matching rows participate in comparison: same-identity
@@ -185,8 +185,8 @@ Child `compile-then-govern-39z.11.1.2` adds internal
 `exportSourceSnapshot` and `verifySourceSnapshot` functions in
 [source-snapshot.ts](../apps/curator/src/merge/source-snapshot.ts).
 They do not write destination state or change the existing merge API/CLI.
-Children `.3` and `.4` own transactional application and the explicit legacy
-boundary. A successful verification alone must never authorize promotion.
+Child `.3` adds the transactional application described below; `.4` owns
+the public API/CLI and explicit legacy boundary. A successful verification alone must never authorize promotion.
 
 The exporter reads all active canonical memories for one source tenant in a
 single deferred transaction, verifies the entire source audit chain strictly,
@@ -225,7 +225,7 @@ An accepted checkpoint must come from a trustworthy channel that supplies the
 operator's acceptable freshness; signatures and dates cannot discover a newer
 source change or a revocation that the caller has not learned. Key enrollment,
 private-key custody, checkpoint distribution/refresh and live authority are not
-implemented here. Destination durable anti-rollback tracking belongs to child `.3`.
+implemented here. Destination durable anti-rollback tracking is implemented by child `.3` below.
 
 Export contains the source memory content and metadata, including restricted and
 owner-audience rows. Only an authorized trusted local operator may call it and
@@ -233,3 +233,66 @@ handle the artifact; this library is not a public download endpoint or an audien
 filter. It copies no raw audit reasons and returns no private key. All refusals
 are sanitized category errors. No live source keys, trust registry, runtime
 activation, production verification or full transport completion is claimed.
+
+## Transactional destination implementation (2026-11-22)
+
+Child `compile-then-govern-39z.11.1.3` adds internal `previewSourceImport` and
+`applySourceImport` in [source-import.ts](../apps/curator/src/merge/source-import.ts).
+The protected path accepts only signed snapshots and independently supplied
+trusted checkpoints. Bare rows cannot enter it. Existing merge callers have not
+been migrated; child `.4` still owns the exposed interface and compatibility work.
+
+Preview reads a consistent destination transaction without writes. Apply refuses
+an enclosing transaction and acquires its own immediate write transaction. Memory
+and audit repositories must share the connection. The plan binds exact source,
+authority, optional policy and destination digests. Apply revalidates them under
+the write lock and checks authority and policy again before commit. Authority
+providers and clocks are trusted local dependencies, never artifact instructions.
+Plan hashes detect changes; they are not human authorization or trust enrollment.
+
+Inputs are limited to 32 artifacts, 8 MiB total and 10,000 total source items.
+Identical artifacts are collapsed. Source snapshots, destination rows and audit
+history are materialized; no bounded-memory store scan is claimed. Strict audit
+verification rejects breaks, unverified history and unknown hash versions before
+import and at finalization. No historical amnesty or repair is performed.
+
+Content, source provenance, title, category, author and metadata must agree for
+equal-content groups. Audience is part of metadata. Conflicting curated or pending
+candidate identities refuse. An existing non-inbox candidate also refuses: a
+remote active snapshot cannot resolve a local human hold or supersede local
+terminal review standing. Source governance outputs (sensitivity, trust, policy
+evaluations, lifecycle, timestamps, promoter and version) are re-evaluated rather
+than accepted as destination authority. Every source restriction, matching stored
+destination sensitivity and supported durable alias restriction contributes to the
+maximum floor before duplicate handling. Aliases retain their own content-bound
+`imported-sensitivity-floor-v1` receipts, consumed by the shared review resolver.
+
+Optional policy still tests both original and effective classification. Without
+optional policy, disclosure and constraint verification remain mandatory. The
+protected path supplies active destination content and deterministically ordered
+new approved content to contradiction checks. An admission refusal retains the
+verified restriction; it does not create a new memory. Matching existing rows are
+conservatively tightened even when admission refuses, without reactivation or
+changes to audience. New rows use canonical promotion and its receipt.
+
+Finalization verifies every retained floor, tightening, promotion, source-progress
+and batch receipt, every affected memory snapshot, the current effective floors,
+and strict chain integrity. Missing writes or stronger constraints arriving during
+finalization roll back the whole transaction. Later human hold release and ordinary
+promotion resolve imported floors; requesting a lower floor cannot lower them.
+
+Accepted sequence/digest receipts are scoped to source identity and both tenants.
+Key rotation shares that sequence space. Older snapshots and same-sequence changed
+snapshots refuse even if an old checkpoint is supplied again. A newer snapshot
+with a weaker source floor cannot relax a retained destination restriction. Exact
+batch replay returns its historical settlement without writes, promotion or
+reactivation. This historical receipt is not a statement that a row is currently
+active. Replay still verifies current supplied authority and accepted sequence.
+Changing policy creates a distinct batch identity and requires a fresh preview.
+
+The receipt chain is local and tamper-evident. It does not defend against an
+administrator replacing the entire database and its local history. External
+checkpoint authority, physical-store access controls, operator-facing locks,
+post-commit indexing, live adoption and deployment remain separate work. The
+source exporter now recognizes imported floors so subsequent authorized exports
+preserve them; the version-1 effective-floor wire semantics are unchanged.
