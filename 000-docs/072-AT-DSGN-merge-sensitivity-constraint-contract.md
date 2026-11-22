@@ -266,7 +266,14 @@ terminal review standing. Source governance outputs (sensitivity, trust, policy
 evaluations, lifecycle, timestamps, promoter and version) are re-evaluated rather
 than accepted as destination authority. Every source restriction, matching stored
 destination sensitivity and supported durable alias restriction contributes to the
-maximum floor before duplicate handling. Aliases retain their own content-bound
+maximum floor before duplicate handling. The shared resolver also queries
+existing versioned governance receipts by tenant and content hash, so rejected
+imports with no candidate or memory row still constrain later aliases. Legacy
+recovery-floor resolution remains candidate-scoped; the protected importer
+combines known destination recovery aliases explicitly. This is a query over the existing
+audit schema, with no new authority table, migration or rewrite. Unknown or
+malformed applicable receipts refuse. Export evidence digests include these
+content-matched receipts. Aliases retain their own content-bound
 `imported-sensitivity-floor-v1` receipts, consumed by the shared review resolver.
 
 Registered enabled destination policy is loaded inside the transaction. An
@@ -285,7 +292,10 @@ changes to audience. New rows use canonical promotion and its receipt.
 
 Finalization verifies every retained floor, tightening, promotion, source-progress
 and batch receipt, every affected memory snapshot, the current effective floors,
-and strict chain integrity. Missing writes or stronger constraints arriving during
+and strict chain integrity. Authority is reloaded after that verification,
+with a final clock sample after signature and policy validation. This narrows the
+commit-time observation window; it is not a distributed revocation lease or a
+linearizable remote authorization service. Missing writes or stronger constraints arriving during
 finalization roll back the whole transaction. Later human hold release and ordinary
 promotion resolve imported floors; requesting a lower floor cannot lower them. Unknown floor versions or unsupported
 constraint-shaped receipts refuse rather than being silently ignored.

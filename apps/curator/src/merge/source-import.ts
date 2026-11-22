@@ -312,11 +312,11 @@ export function applySourceImport(
           events.push(recordSourceProgress(snapshot, state.plan, timestamp, deps.auditRepo));
         const outcomes = importOutcomes(assessments);
         events.push(recordImportSettlement(state.plan, outcomes, timestamp, deps.auditRepo));
-        recheckImportAuthority(inputs, context, state.plan, deps);
         if (!isDeepStrictEqual(destinationCandidates(deps, context.tenantId), state.candidates))
           throw new SourceImportError('retention-failed');
         verifyRetainedWrites(events, memories, deps);
         verifyFinalConstraints(assessments, deps);
+        recheckImportAuthority(inputs, context, state.plan, deps);
         return { importDigest: state.plan.importDigest, alreadyApplied: false, outcomes };
       })
       .immediate();

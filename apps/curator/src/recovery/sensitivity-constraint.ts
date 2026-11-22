@@ -11,6 +11,26 @@ import {
 
 const KIND = 'recovery-sensitivity-floor-v1';
 
+/** Include content-bound receipts even when their original candidate was rejected
+ * or no longer has a row. Legacy recovery floors remain candidate-scoped; the
+ * importer combines known destination recovery aliases explicitly. Imported
+ * restrictions apply to every content alias. Receipts remain the authority.
+ */
+export function candidateSensitivityEvidence(
+  candidate: Pick<MemoryCandidate, 'id' | 'content' | 'tenantId'>,
+  audit: AuditRepository,
+): AuditEvent[] {
+  const events = new Map<string, AuditEvent>();
+  for (const event of [
+    ...audit.findByMemoryAndTenant(candidate.id, candidate.tenantId),
+    ...audit
+      .findGovernedByContentHashAndTenant(computeContentHash(candidate.content), candidate.tenantId)
+      .filter((event) => event.details['kind'] !== KIND),
+  ])
+    events.set(event.id, event);
+  return [...events.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
 /** Resolve durable constraints in this store, including later human review.
  * Invalid or content-mismatched constraint receipts refuse instead of dropping
  * a privacy bound. Imported receipts are created only by verified source import.
@@ -20,7 +40,7 @@ export function resolveCandidateMinimumSensitivity(
   audit: AuditRepository,
 ): Sensitivity | undefined {
   let minimum: Sensitivity | undefined;
-  for (const event of audit.findByMemoryAndTenant(candidate.id, candidate.tenantId)) {
+  for (const event of candidateSensitivityEvidence(candidate, audit)) {
     const kind = event.details['kind'];
     if (
       event.action === 'governed' &&
@@ -32,7 +52,7 @@ export function resolveCandidateMinimumSensitivity(
       throw new Error('Unsupported stored sensitivity constraint');
 
     if (event.action === 'governed' && event.details['kind'] === IMPORTED_FLOOR_KIND) {
-      const floor = importedMinimumSensitivity(event, candidate);
+      const floor = importedMinimumSensitivity(event, { ...candidate, id: event.memoryId });
       minimum = minimum === undefined ? floor : effectiveSensitivity(minimum, floor);
       continue;
     }
@@ -43,7 +63,7 @@ export function resolveCandidateMinimumSensitivity(
     Sha256Hash.parse(event.details['manifestDigest']);
     if (
       event.details['contentHash'] !== computeContentHash(candidate.content) ||
-      event.details['candidateId'] !== candidate.id ||
+      event.details['candidateId'] !== event.memoryId ||
       event.actor.type !== 'human' ||
       (event.details['resolverRole'] !== 'admin' && event.details['resolverRole'] !== 'owner')
     ) {

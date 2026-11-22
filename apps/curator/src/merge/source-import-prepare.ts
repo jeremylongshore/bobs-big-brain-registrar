@@ -29,7 +29,12 @@ export function boundImportInputs(inputs: readonly string[]): string[] {
 export function loadVerifiedSources(
   inputs: string[],
   context: SourceImportContext,
-): { snapshots: SignedSourceSnapshot[]; authorityDigest: string } {
+): {
+  snapshots: SignedSourceSnapshot[];
+  authorityDigest: string;
+  validFrom: number;
+  validUntil: number;
+} {
   const checkpoints = context
     .loadCheckpoints()
     .map((value) => TrustedSourceCheckpoint.parse(value));
@@ -64,7 +69,20 @@ export function loadVerifiedSources(
   ) {
     throw new SourceImportError('invalid-input');
   }
-  return { snapshots, authorityDigest: sourceSnapshotDigest(pairs.map((pair) => pair.checkpoint)) };
+  return {
+    snapshots,
+    authorityDigest: sourceSnapshotDigest(pairs.map((pair) => pair.checkpoint)),
+    validFrom: Math.max(
+      ...pairs.map(({ snapshot, checkpoint }) =>
+        Math.max(Date.parse(snapshot.payload.issuedAt), Date.parse(checkpoint.validFrom)),
+      ),
+    ),
+    validUntil: Math.min(
+      ...pairs.map(({ snapshot, checkpoint }) =>
+        Math.min(Date.parse(snapshot.payload.expiresAt), Date.parse(checkpoint.validUntil)),
+      ),
+    ),
+  };
 }
 
 export function destinationCandidates(deps: SourceImportDependencies, tenantId: string) {
@@ -173,10 +191,15 @@ export function recheckImportAuthority(
   plan: SourceImportPlan,
   deps: SourceImportDependencies,
 ): void {
+  const verified = loadVerifiedSources(inputs, context);
   if (
-    loadVerifiedSources(inputs, context).authorityDigest !== plan.authorityDigest ||
+    verified.authorityDigest !== plan.authorityDigest ||
     destinationPolicy(deps, context).policyDigest !== plan.policyDigest
   ) {
     throw new SourceImportError('stale-plan');
   }
+  // Sample once more after signature/policy work; no history scan follows this.
+  const now = context.now();
+  if (!Number.isFinite(now) || now < verified.validFrom || now >= verified.validUntil)
+    throw new SourceImportError('stale-plan');
 }

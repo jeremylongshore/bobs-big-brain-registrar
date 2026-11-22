@@ -691,6 +691,67 @@ describe('transactional verified source import', () => {
     expect(() => apply(preview)).toThrow();
     expect(fingerprint()).toBe(before);
   });
+  it('retains audit-only rejected content restrictions across later candidate aliases', () => {
+    context.policy = makePolicy({
+      tenantId: destination,
+      rules: [
+        {
+          id: 'gate',
+          type: 'sensitivity_gate',
+          action: 'reject',
+          priority: 0,
+          enabled: true,
+          parameters: { blockedLevels: ['restricted'] },
+        },
+      ],
+    });
+    const first = row({ sensitivity: 'restricted' });
+    expect(apply(prepare(source([first], 'a'))).outcomes[0]!.status).toBe('rejected');
+    expect(deps.memoryRepo.findByTenant(destination)).toEqual([]);
+    expect(new CandidateRepository(db).findByTenant(destination)).toEqual([]);
+    const alias = row();
+    const second = apply(prepare(source([alias], 'b')));
+    expect(second.outcomes[0]).toMatchObject({
+      status: 'rejected',
+      minimumSensitivity: 'restricted',
+    });
+    expect(
+      resolveCandidateMinimumSensitivity(importCandidate(row(), destination), deps.auditRepo),
+    ).toBe('restricted');
+    expect(
+      resolveCandidateMinimumSensitivity(importCandidate(alias, 'foreign'), deps.auditRepo),
+    ).toBeUndefined();
+    expect(
+      resolveCandidateMinimumSensitivity(
+        importCandidate(row({ content: 'Unrelated synthetic text' }), destination),
+        deps.auditRepo,
+      ),
+    ).toBeUndefined();
+    delete context.policy;
+    const admitted = apply(prepare(source([row()], 'c')));
+    expect(admitted.outcomes[0]).toMatchObject({ status: 'promoted', sensitivity: 'restricted' });
+    expect(deps.memoryRepo.findByTenant(destination)[0]!.sensitivity).toBe('restricted');
+  });
+  it('checks authority after expensive final integrity verification', () => {
+    const preview = prepare(source());
+    const original = deps.auditRepo.findAllChronological.bind(deps.auditRepo);
+    vi.spyOn(deps.auditRepo, 'findAllChronological').mockImplementation(() => {
+      const rows = original();
+      if (rows.length > 0) pins = pins.map((pin) => ({ ...pin, revoked: true }));
+      return rows;
+    });
+    const before = fingerprint();
+    expect(() => apply(preview)).toThrow();
+    expect(fingerprint()).toBe(before);
+  });
+  it('samples the clock again after final signature and policy verification', () => {
+    const preview = prepare(source());
+    let calls = 0;
+    context.now = () => (++calls <= 3 ? now : Date.parse(expiresAt));
+    const before = fingerprint();
+    expect(() => apply(preview)).toThrow();
+    expect(fingerprint()).toBe(before);
+  });
   it('rejects stripped legacy arrays on this path', () => {
     expect(() => previewSourceImport([JSON.stringify([row()])], deps, context)).toThrow();
   });
