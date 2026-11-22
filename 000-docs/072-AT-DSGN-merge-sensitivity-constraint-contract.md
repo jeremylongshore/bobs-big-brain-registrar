@@ -112,8 +112,8 @@ expiry silently lowering a durable floor. The parent bead remains in progress.
 
 ## Implementation prerequisite: duplicate preflight
 
-The merge gate now validates every schema-normalized input before deduplication
-or writes: content-derived identity, content digest, destination tenant and active
+The merge gate preflights every schema-normalized input before promotion
+or persistence: content-derived identity, content digest, destination tenant and active
 lifecycle. Copies sharing an identity must have identical normalized snapshots,
 including audience and sensitivity. Conflicts refuse the whole pass regardless
 of clone order; even differences in version, timestamps or policy evidence

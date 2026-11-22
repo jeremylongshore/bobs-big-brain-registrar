@@ -351,12 +351,36 @@ describe('mergeGovern - govern-at-merge gate', () => {
   });
 
   describe('whole-input preflight before duplicate collapse', () => {
-    it('accepts equivalent snapshots with reordered object keys', () => {
-      const row = makeRow('Use explicit versioned schemas for shared knowledge records.');
-      const reordered = Object.fromEntries(Object.entries(row).reverse()) as CuratedMemory;
-      const result = mergeGovern([row], [reordered], deps, { tenantId: TENANT });
-      expect(result.promoted).toHaveLength(1);
-      expect(deps.memoryRepo.count()).toBe(1);
+    it('keeps state and audit bytes identical when nested object keys are reordered', () => {
+      const row = makeRow('Use explicit versioned schemas for shared knowledge records.', {
+        metadata: { filePaths: ['fixture.ts'], tags: ['fixture'], audience: 'owner' },
+      });
+      function reverseKeys(value: unknown): unknown {
+        if (Array.isArray(value)) return value.map(reverseKeys);
+        if (value !== null && typeof value === 'object') {
+          return Object.fromEntries(
+            Object.entries(value)
+              .reverse()
+              .map(([key, item]) => [key, reverseKeys(item)]),
+          );
+        }
+        return value;
+      }
+      const reordered = reverseKeys(row) as CuratedMemory;
+      const otherDb = createTestDatabase();
+      try {
+        const other = makeDeps(otherDb);
+        const forward = mergeGovern([row], [reordered], deps, { tenantId: TENANT });
+        const reverse = mergeGovern([reordered], [row], other, { tenantId: TENANT });
+        expect(forward.promoted).toHaveLength(1);
+        expect(JSON.stringify(forward)).toBe(JSON.stringify(reverse));
+        expect(JSON.stringify(deps.auditRepo.findAllChronological())).toBe(
+          JSON.stringify(other.auditRepo.findAllChronological()),
+        );
+        expect(verifyAuditChain(deps.auditRepo)).toEqual(verifyAuditChain(other.auditRepo));
+      } finally {
+        otherDb.close();
+      }
     });
 
     it('validates a later malformed row before promoting any earlier clean row', () => {
@@ -396,6 +420,23 @@ describe('mergeGovern - govern-at-merge gate', () => {
       ['sensitivity', (row) => ({ ...row, sensitivity: 'confidential' })],
       ['audience', (row) => ({ ...row, metadata: { ...row.metadata, audience: 'owner' } })],
       ['lifecycle', (row) => ({ ...row, lifecycle: 'archived' })],
+      ['version', (row) => ({ ...row, version: row.version + 1 })],
+      ['timestamp', (row) => ({ ...row, updatedAt: '2026-12-01T00:00:00.000Z' })],
+      [
+        'policy evidence',
+        (row) => ({
+          ...row,
+          policyEvaluations: [
+            {
+              policyId: randomUUID(),
+              ruleId: 'fixture-rule',
+              result: 'pass',
+              reason: 'fixture',
+              evaluatedAt: NOW,
+            },
+          ],
+        }),
+      ],
     ];
     for (const [field, mutate] of mutations) {
       for (const reverse of [false, true]) {
