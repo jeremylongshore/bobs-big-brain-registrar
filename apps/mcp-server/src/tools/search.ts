@@ -5,6 +5,7 @@ import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapt
 import {
   extractMemoryIdFromCitation,
   isSearchVisibleSensitivity,
+  isAudienceVisibleToRole,
 } from '@qmd-team-intent-kb/common';
 import {
   createDatabase,
@@ -23,9 +24,9 @@ interface RawQmdHit {
 }
 
 /**
- * Read-time sensitivity filter (5bm.11) for the local qmd path. Resolves each
- * hit's citation back to its stored row and drops confidential/restricted
- * memories, mirroring the exporter's skip (5bm.3) and the API search-service.
+ * Read-time standing filter for the local qmd path. Resolves each hit to its
+ * stored row and checks tenant, sensitivity and reader audience. Local admin
+ * standing does not imply owner standing.
  * A hit whose citation does not resolve to a stored row is NOT an identifiable
  * sensitive memory, so it is kept. Opens the store read-only; on any store error
  * it fails OPEN to the raw hits — the qmd index itself already excludes sensitive
@@ -45,7 +46,11 @@ function readLocalHitMetadata(hits: RawQmdHit[], config: McpServerConfig): RawQm
               if (id === null) return true;
               const memory = repo.findById(id);
               if (memory === null) return true;
-              return isSearchVisibleSensitivity(memory.sensitivity);
+              return (
+                memory.tenantId === config.tenantId &&
+                isSearchVisibleSensitivity(memory.sensitivity) &&
+                isAudienceVisibleToRole(memory.metadata.audience, config.role ?? 'member')
+              );
             })
             .map((hit) => {
               const id = extractMemoryIdFromCitation(hit.file);
@@ -181,11 +186,9 @@ async function searchLocal(
   const result = await adapter.query(query, scope);
 
   const hits = result.ok ? result.value : [];
-  // Read-time sensitivity enforcement (5bm.11): drop confidential/restricted
-  // hits so a sensitive memory is never returned. The qmd index should already
-  // exclude them (exporter skip, 5bm.3); this resolves each hit's stored row as
-  // defense-in-depth for a pre-skip index. A hit that doesn't resolve is not an
-  // identifiable sensitive memory — kept.
+  // Recheck resolved tenant, sensitivity and audience before applying the
+  // limit. Legacy unresolved citations and store-error fallback remain separate
+  // compatibility paths; this check does not establish their source authority.
   const visible = readLocalHitMetadata(hits, config);
 
   const results: SearchHitOut[] = visible.slice(0, limit).map((r) => ({
