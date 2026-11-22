@@ -306,6 +306,34 @@ export function mergeGovern(
   }
   const union = [...unionById.values()];
 
+  // The later content-hash dedupe can also discard DIFFERENT identities. Check
+  // their semantic snapshots before that happens. Capture/promotion identities,
+  // timestamps and row versions can differ; provenance, metadata, declared
+  // restrictions and policy evidence cannot silently select a winner.
+  const constraintsByHash = new Map<string, unknown>();
+  for (const memory of union) {
+    const {
+      id: _id,
+      candidateId: _candidateId,
+      promotedAt: _promotedAt,
+      updatedAt: _updatedAt,
+      version: _version,
+      ...semanticSnapshot
+    } = memory;
+    const constraints = {
+      ...semanticSnapshot,
+      minimumSensitivity: resolveCandidateMinimumSensitivity(
+        projectToUntrustedCandidate(memory),
+        deps.auditRepo,
+      ),
+    };
+    const previous = constraintsByHash.get(memory.contentHash);
+    if (previous !== undefined && !isDeepStrictEqual(previous, constraints)) {
+      throw new Error('Merge input contains conflicting content constraints');
+    }
+    constraintsByHash.set(memory.contentHash, constraints);
+  }
+
   // 3. SEED the dedupe set from the merged DB's existing content hashes (the same
   //    call the eval harness uses), then accrete each newly-promoted row's hash.
   const existingHashes = new Set<string>(deps.memoryRepo.getAllContentHashes());

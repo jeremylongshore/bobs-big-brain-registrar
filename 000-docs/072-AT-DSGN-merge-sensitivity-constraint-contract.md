@@ -123,3 +123,13 @@ constitute a conflict. This deliberately replaces first-copy selection.
 This preflight does not authenticate either clone, transport source floor
 receipts, or prove that an export is complete. It is a prerequisite to the
 transport contract, whose authority and application routes remain proposed.
+
+Content-hash deduplication also requires preflight: distinct identities with equal
+content must agree on their schema-normalized semantic fields and destination-local
+reviewed floors. The comparison excludes IDs, promotion/update timestamps and row
+versions; it retains provenance, metadata, sensitivity and policy evidence.
+Disagreement refuses the entire pass before persistence instead of letting the
+lexicographically first identity win. Compatible content duplicates still use the
+existing policy/bare content-hash deduplication. This checks supplied rows and
+local constraints only; it does not establish omitted foreign constraints or
+source authority, and therefore does not complete transport preservation.

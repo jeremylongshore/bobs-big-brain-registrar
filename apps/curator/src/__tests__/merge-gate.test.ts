@@ -17,6 +17,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { recordCandidateMinimumSensitivity } from '../recovery/sensitivity-constraint.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Database from 'better-sqlite3';
 import {
@@ -348,6 +349,87 @@ describe('mergeGovern - govern-at-merge gate', () => {
     expect(ok.promoted).toHaveLength(1);
     expect(ok.quarantined).toHaveLength(0);
     expect(deps.memoryRepo.count()).toBe(1);
+  });
+
+  describe('content-duplicate constraint preflight', () => {
+    it('refuses when distinct identities have different destination-local reviewed floors', () => {
+      const first = makeRow('Identical content with a reviewed local privacy floor.');
+      const second = makeRow(first.content);
+      const candidate = MemoryCandidateSchema.parse({
+        id: first.candidateId,
+        status: 'inbox',
+        source: first.source,
+        content: first.content,
+        title: first.title,
+        category: first.category,
+        trustLevel: 'untrusted',
+        author: first.author,
+        tenantId: TENANT,
+        metadata: first.metadata,
+        capturedAt: NOW,
+        prePolicyFlags: { potentialSecret: false, lowConfidence: false, duplicateSuspect: false },
+      });
+      recordCandidateMinimumSensitivity(
+        candidate,
+        'confidential',
+        {
+          runId: randomUUID(),
+          manifestDigest: computeContentHash('fixture manifest'),
+          candidateSnapshotDigest: computeContentHash('fixture snapshot'),
+          actor: { type: 'human', id: 'fixture-owner' },
+          role: 'owner',
+          reason: 'Synthetic review',
+        },
+        deps.auditRepo,
+      );
+      const before = JSON.stringify(deps.auditRepo.findAllChronological());
+      for (const pair of [
+        [first, second],
+        [second, first],
+      ]) {
+        expect(() => mergeGovern([pair[0]!], [pair[1]!], deps, { tenantId: TENANT })).toThrow(
+          'conflicting content constraints',
+        );
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(JSON.stringify(deps.auditRepo.findAllChronological())).toBe(before);
+      }
+    });
+
+    for (const field of ['sensitivity', 'audience', 'policy evidence'] as const) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses distinct identities with different ${field}, policy=${withPolicy}`, () => {
+          const content = 'The same planning text must not erase a stricter source restriction.';
+          const first = makeRow(content);
+          const second = makeRow(content);
+          if (field === 'sensitivity') second.sensitivity = 'confidential';
+          if (field === 'audience') second.metadata = { ...second.metadata, audience: 'owner' };
+          if (field === 'policy evidence')
+            second.policyEvaluations = [
+              {
+                policyId: randomUUID(),
+                ruleId: 'fixture',
+                result: 'flag',
+                reason: 'review',
+                evaluatedAt: NOW,
+              },
+            ];
+          const options = {
+            tenantId: TENANT,
+            ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+          };
+          for (const pair of [
+            [first, second],
+            [second, first],
+          ]) {
+            expect(() => mergeGovern([pair[0]!], [pair[1]!], deps, options)).toThrow(
+              'conflicting content constraints',
+            );
+            expect(deps.memoryRepo.count()).toBe(0);
+            expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+          }
+        });
+      }
+    }
   });
 
   describe('whole-input preflight before duplicate collapse', () => {
