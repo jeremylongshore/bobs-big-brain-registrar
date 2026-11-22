@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Validate every merge input before duplicate collapse or writes. Refuse content
+- Preflight every merge input before promotion or persistence. Refuse content
   hash, tenant, lifecycle and duplicate snapshot conflicts instead of silently
   choosing the first clone. Cross-clone constraint transport remains open under
   `compile-then-govern-39z.11.1`.
