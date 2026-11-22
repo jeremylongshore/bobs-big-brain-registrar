@@ -385,7 +385,8 @@ an internal synchronous admission scope only after verifying current stored
 authority and writing the matching durable source floor. The scope binds the
 full candidate snapshot, exact assertion, receiver/ingress and authority digest.
 It is private to that database connection and removed in `finally` on success or
-failure. No request boolean, metadata label or historical floor opens it.
+failure. The helper does not reject a returned promise; the enclosing SQLite
+transaction rejects promise-returning callbacks. No request boolean, metadata label or historical floor opens it.
 
 The curator and promoter reverify the signature, time, current registry and
 matching floor at their admission checks. A changed candidate, registry, key,
@@ -412,7 +413,8 @@ digests, next revision, audit-chain tip and operator identity. Apply rechecks th
 plan inside an immediate transaction and records a `source-authority-change-v1`
 receipt with digests/revision under the `source-authority` audit tenant. The receipt
 contains no profile catalog, key material or source content. Stored-record,
-operator or receipt drift rolls back the change. Repeated/stale plans refuse;
+operator actor/role or receipt drift rolls back the change. The operator clock
+may advance and is not bound into the operator digest. Repeated/stale plans refuse;
 after an uncertain result, reconcile the current registry and receipt rather than
 blindly retrying the previous plan.
 
@@ -422,11 +424,13 @@ valid scoped profile references and valid key lifetime ordering. It cannot remov
 any enrollment or disable a required enrollment, lower an existing profile, change its source
 binding, introduce a weaker profile for an already known receiver/tenant/source
 context, delete existing profiles/key identities, replace key material under an
-existing identity, or resurrect a revoked key. Changed profile and enrollment
+existing identity, or reactivate revoked signing material under any key identity. Changed profile and enrollment
 entries also require advancing their own revisions; keys have no separate revision
 field, so their changes are bound by the global registry revision and plan digest. Tightening, key revocation and adding
-new identities remain possible through an exactly reviewed plan. Key rotation
-uses a new identity and retains the old revoked identity. Broader relaxation,
+new identities remain possible through an exactly reviewed plan. Replacing key material
+requires a new identity; revoking the old identity is a separate allowed change.
+An active key cannot reuse material marked revoked in the previous or proposed
+registry, including under a different producer or key ID. Broader relaxation,
 pruning or de-enrollment needs a separate operation; no force flag is provided.
 
 The configuration receipt supplies application-level audit evidence. The mutable

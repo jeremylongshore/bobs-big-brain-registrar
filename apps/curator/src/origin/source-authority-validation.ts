@@ -33,6 +33,7 @@ export function requireSourceAuthorityUpdate(
   next: SourceClassificationRegistry,
 ): void {
   requireReferences(next);
+  requireRevokedKeyMaterial(previous, next);
   if (next.revision !== (previous?.revision ?? 0) + 1)
     throw new Error('Source authority revision must advance by one');
   if (!previous) return;
@@ -116,4 +117,18 @@ function requireBindingFloors(
         throw new Error('Cannot lower a source binding through another profile identity');
     }
   }
+}
+
+/** Revocation follows the signing material, even across producer/key aliases. */
+function requireRevokedKeyMaterial(
+  previous: SourceClassificationRegistry | null,
+  next: SourceClassificationRegistry,
+): void {
+  const revoked = new Set(
+    [...(previous?.keys ?? []), ...next.keys]
+      .filter((key) => key.revoked)
+      .map((key) => key.publicKeyHex.toLowerCase()),
+  );
+  if (next.keys.some((key) => !key.revoked && revoked.has(key.publicKeyHex.toLowerCase())))
+    throw new Error('Cannot resurrect revoked source key material under another identity');
 }

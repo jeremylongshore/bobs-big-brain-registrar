@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestDatabase, AuditRepository, verifyAuditChain } from '@qmd-team-intent-kb/store';
 import { makeSourceGovernanceFixture } from './source-governance-fixtures.js';
@@ -61,6 +62,34 @@ describe('reviewed source authority configuration primitive', () => {
     apply();
     expect(readStoredSourceRegistry(db)).toEqual(f.registry);
     expect(new AuditRepository(db).findAllChronological()).toHaveLength(2);
+  });
+  it.each(['stored-revoked', 'same-update', 'initial'] as const)(
+    'refuses active aliases of %s key material without writes',
+    (kind) => {
+      if (kind === 'stored-revoked') f.registry.keys[0]!.revoked = true;
+      if (kind !== 'initial') baseline();
+      f.registry.keys[0]!.revoked = true;
+      f.registry.keys.push({ ...f.registry.keys[0]!, id: 'alias-key', revoked: false });
+      const before = db.serialize().toString('base64');
+      expect(() => apply()).toThrow('revoked source key material');
+      expect(db.serialize().toString('base64')).toBe(before);
+    },
+  );
+  it('allows fresh material under a new identity while retaining a revoked key', () => {
+    f.registry.keys[0]!.revoked = true;
+    baseline();
+    const fresh = generateKeyPairSync('ed25519')
+      .publicKey.export({ type: 'spki', format: 'der' })
+      .subarray(-32)
+      .toString('hex');
+    f.registry.keys.push({
+      ...f.registry.keys[0]!,
+      id: 'fresh-key',
+      publicKeyHex: fresh,
+      revoked: false,
+    });
+    apply();
+    expect(readStoredSourceRegistry(db)).toEqual(f.registry);
   });
   it.each([
     'required-removal',
