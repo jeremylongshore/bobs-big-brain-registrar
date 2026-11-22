@@ -74,6 +74,7 @@ Every PR must include:
 
 - All new logic must have corresponding tests.
 - Tests run via Vitest: `pnpm test` at the repo root or within a specific package.
+- The root suite caps file workers at 50% of available CPUs, intended to reduce competition with child-process tests. This does not reserve CPUs. Configured per-test and subprocess timeout values are unchanged; each parameterized FIFO case has its own test timeout. Use Vitest's `--maxWorkers` override for explicit resource experiments; record the value with results.
 - Integration tests belong in `tests/` at the repo root.
 - Unit tests belong in `__tests__/` or `*.test.ts` files alongside the code they test.
 - Aim for meaningful coverage of behavior, not arbitrary line coverage targets.
