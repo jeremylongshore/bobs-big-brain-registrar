@@ -115,14 +115,15 @@ pure consumer of it.
 
 ## Resolved search standing (2026-11-22)
 
-The API rechecks each resolved citation against the requested tenant, independently
+For tenant-scoped queries, the API rechecks each resolved citation against the
+requested tenant, independently
 of the adapter's tenant filter. A foreign row is excluded rather than treated as
 an unresolved citation with legacy defaults. Existing unscoped queries retain
 their cross-tenant behavior; the API authentication and tenancy middleware still
 control access to that query shape.
 
-Local MCP search checks the resolved row's tenant, sensitivity and audience before
-limiting results. Its configured member/admin standing uses the shared audience
+When store lookup succeeds, local MCP search checks the resolved row's tenant,
+sensitivity and audience before limiting results. Its configured member/admin standing uses the shared audience
 predicate; local admin does not imply owner. API owner standing continues to come
 from its authenticated identity. Confidential and restricted search exclusions
 remain in effect for all roles.

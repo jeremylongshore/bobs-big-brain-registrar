@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Recheck resolved qmd search hits against the requested tenant in the API and
-  against tenant and audience in local MCP search before returning snippets.
-  Local admin does not confer owner standing. Unresolved citations, stale index
-  content and store-error fallback remain separate privacy work
-  (`compile-then-govern-39z.11.2`, `compile-then-govern-39z.11.3`).
+- Recheck resolved qmd hits for tenant-scoped API queries and, when store lookup
+  succeeds, tenant and audience in local MCP search
+  (`compile-then-govern-39z.11.2`). Local admin does not confer owner standing.
+  Unresolved citations, stale index content and store-error fallback remain
+  tracked separately in `compile-then-govern-39z.11.3`.
 
 ### Added
 
