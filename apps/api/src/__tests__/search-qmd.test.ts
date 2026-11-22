@@ -44,137 +44,103 @@ function hit(file: string, score: number, snippet = 'snip', collection = 'kb-cur
 describe('POST /api/search — qmd cited path', () => {
   let db: Database.Database;
   let app: FastifyInstance;
-
   beforeEach(() => {
     db = createTestDatabase();
   });
-
   afterEach(async () => {
     await app.close();
     db.close();
   });
-
-  it('returns qmd:// citations when the qmd adapter is wired', async () => {
-    const qmd = new FakeQmd([
-      hit('qmd://kb-curated/caddy-block.md', 0.9, 'The Caddy block reverse-proxies …'),
-      hit('qmd://kb-curated/system-map.md', 0.6, 'System map overview …'),
-    ]);
-    app = buildApp({ db, qmdAdapter: qmd });
+  function seed(title: string, score: number, tenantId = 'team-alpha') {
+    const memory = makeMemory({
+      title,
+      tenantId,
+      category: 'troubleshooting',
+      updatedAt: new Date().toISOString(),
+      content: `Current ${title}`,
+    });
+    new MemoryRepository(db).insert(memory);
+    return {
+      memory,
+      hit: hit(`qmd://kb-guides/${memory.id}.md`, score, 'stale index text', 'kb-guides'),
+    };
+  }
+  it('returns current content with a governed citation', async () => {
+    const row = seed('Caddy block', 0.9);
+    app = buildApp({ db, qmdAdapter: new FakeQmd([row.hit]) });
     await app.ready();
-
     const res = await app.inject({
       method: 'POST',
       url: '/api/search',
-      payload: { query: 'caddy', scope: 'curated' },
+      payload: { query: 'caddy' },
     });
-
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.totalCount).toBe(2);
-    expect(body.hits[0].citation).toBe('qmd://kb-curated/caddy-block.md');
-    expect(body.hits[0].citation.startsWith('qmd://')).toBe(true);
-    expect(body.hits[0].collection).toBe('kb-curated');
-    // every hit is anchored to a verifiable citation — the wedge
-    for (const h of body.hits) {
-      expect(h.citation).toMatch(/^qmd:\/\//);
-      expect(h.score).toBeGreaterThan(0);
-      expect(h.score).toBeLessThanOrEqual(1);
-    }
+    expect(res.json().hits[0]).toMatchObject({
+      citation: row.hit.file,
+      collection: 'kb-guides',
+      memoryId: row.memory.id,
+      snippet: row.memory.content,
+    });
   });
-
-  it('derives a human title from the citation filename', async () => {
-    const qmd = new FakeQmd([hit('qmd://kb-decisions/use-apache-2.md', 1)]);
-    app = buildApp({ db, qmdAdapter: qmd });
+  it('uses the current stored title rather than a filename-derived title', async () => {
+    const row = seed('Current license decision', 1);
+    app = buildApp({ db, qmdAdapter: new FakeQmd([row.hit]) });
     await app.ready();
-
     const res = await app.inject({
       method: 'POST',
       url: '/api/search',
-      payload: { query: 'license', scope: 'curated' },
+      payload: { query: 'license' },
     });
-    expect(res.json().hits[0].title).toBe('use apache 2');
+    expect(res.json().hits[0].title).toBe(row.memory.title);
   });
-
-  it('passes the requested scope through to qmd (tier split)', async () => {
-    const qmd = new FakeQmd([hit('qmd://kb-curated/a.md', 1)]);
+  it('passes the requested scope through to qmd', async () => {
+    const qmd = new FakeQmd([]);
     app = buildApp({ db, qmdAdapter: qmd });
     await app.ready();
-
-    await app.inject({
-      method: 'POST',
-      url: '/api/search',
-      payload: { query: 'x', scope: 'all' },
-    });
+    await app.inject({ method: 'POST', url: '/api/search', payload: { query: 'x', scope: 'all' } });
     expect(qmd.lastScope).toBe('all');
     expect(qmd.lastQuery).toBe('x');
   });
-
-  // ---- tenant isolation on the qmd path (EPIC 0, compile-then-govern-c5k) ---
-
-  it('propagates tenantId to qmd so the cited path is tenant-scoped', async () => {
-    const qmd = new FakeQmd([hit('qmd://kb-curated/a.md', 1)]);
+  it('propagates tenantId to qmd', async () => {
+    const qmd = new FakeQmd([]);
     app = buildApp({ db, qmdAdapter: qmd });
     await app.ready();
-
     await app.inject({
       method: 'POST',
       url: '/api/search',
-      payload: { query: 'x', scope: 'curated', tenantId: 'team-alpha' },
+      payload: { query: 'x', tenantId: 'team-alpha' },
     });
-    // Before the fix the qmd path dropped tenantId entirely (leaking every
-    // tenant's governed memories). The argument must now reach qmd.
     expect(qmd.tenantIdSeen).toBe(true);
     expect(qmd.lastTenantId).toBe('team-alpha');
   });
-
-  it('paginates the qmd result set', async () => {
-    const qmd = new FakeQmd([
-      hit('qmd://kb-curated/a.md', 0.9),
-      hit('qmd://kb-curated/b.md', 0.8),
-      hit('qmd://kb-curated/c.md', 0.7),
-    ]);
-    app = buildApp({ db, qmdAdapter: qmd });
+  it('paginates authorized current results', async () => {
+    const rows = [seed('one', 0.9), seed('two', 0.8), seed('three', 0.7)];
+    app = buildApp({ db, qmdAdapter: new FakeQmd(rows.map((r) => r.hit)) });
     await app.ready();
-
     const res = await app.inject({
       method: 'POST',
       url: '/api/search',
-      payload: { query: 'x', scope: 'curated', pagination: { page: 1, pageSize: 2 } },
+      payload: { query: 'x', pagination: { page: 1, pageSize: 2 } },
     });
-    const body = res.json();
-    expect(body.hits).toHaveLength(2);
-    expect(body.totalCount).toBe(3);
-    expect(body.hasMore).toBe(true);
+    expect(res.json().hits).toHaveLength(2);
+    expect(res.json().totalCount).toBe(3);
+    expect(res.json().hasMore).toBe(true);
   });
-
-  it('degrades to empty results (not 500) when qmd fails', async () => {
-    const qmd = new FakeQmd([], true);
-    app = buildApp({ db, qmdAdapter: qmd });
+  it('degrades to empty results when qmd fails', async () => {
+    app = buildApp({ db, qmdAdapter: new FakeQmd([], true) });
     await app.ready();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/search',
-      payload: { query: 'x', scope: 'curated' },
-    });
+    const res = await app.inject({ method: 'POST', url: '/api/search', payload: { query: 'x' } });
     expect(res.statusCode).toBe(200);
-    expect(res.json().totalCount).toBe(0);
     expect(res.json().hits).toEqual([]);
+    expect(res.json().totalCount).toBe(0);
   });
-
-  it('normalises scores to [0,1] preserving qmd ordering when top score > 1', async () => {
-    const qmd = new FakeQmd([hit('qmd://kb-curated/a.md', 8), hit('qmd://kb-curated/b.md', 4)]);
-    app = buildApp({ db, qmdAdapter: qmd });
+  it('normalizes scores while preserving authorized qmd ordering', async () => {
+    const rows = [seed('one', 8), seed('two', 4)];
+    app = buildApp({ db, qmdAdapter: new FakeQmd(rows.map((r) => r.hit)) });
     await app.ready();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/search',
-      payload: { query: 'x', scope: 'curated' },
-    });
-    const body = res.json();
-    expect(body.hits[0].score).toBe(1); // 8/8
-    expect(body.hits[1].score).toBe(0.5); // 4/8
+    const res = await app.inject({ method: 'POST', url: '/api/search', payload: { query: 'x' } });
+    expect(res.json().hits[0].score).toBeCloseTo(1, 3);
+    expect(res.json().hits[1].score).toBeCloseTo(0.5, 3);
   });
 });
 
@@ -291,7 +257,7 @@ describe('POST /api/search — qmd path freshness/category rerank', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/search',
-        payload: { query, scope: 'curated' },
+        payload: { query, scope: 'all' },
       });
       return res.json().hits.map((h: { memoryId: string }) => h.memoryId);
     }
@@ -313,7 +279,7 @@ describe('POST /api/search — qmd path freshness/category rerank', () => {
     });
   });
 
-  it('leaves unresolvable citations in qmd order without enrichment', async () => {
+  it('withholds unresolvable citations', async () => {
     const qmd = new FakeQmd([
       hit('qmd://kb-curated/not-a-row.md', 0.9),
       hit('qmd://kb-curated/also-gone.md', 0.6),
@@ -327,9 +293,7 @@ describe('POST /api/search — qmd path freshness/category rerank', () => {
       payload: { query: 'x', scope: 'curated' },
     });
     const body = res.json();
-    expect(body.hits[0].citation).toBe('qmd://kb-curated/not-a-row.md');
-    expect(body.hits[0].memoryId).toBeUndefined();
-    expect(body.hits[0].category).toBeUndefined();
-    expect(body.hits[1].score).toBeCloseTo(0.6 / 0.9, 3);
+    expect(body.hits).toEqual([]);
+    expect(body.totalCount).toBe(0);
   });
 });

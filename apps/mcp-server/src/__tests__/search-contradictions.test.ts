@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('MCP contradiction metadata transport', () => {
   it('local mode reads scoped references without changing citations/scores or durable state', async () => {
-    const primary = makeMemory({ tenantId: 'acme' });
+    const primary = makeMemory({ tenantId: 'acme', category: 'pattern' });
     const target = makeMemory({ tenantId: 'acme', title: 'visible conflict' });
     const hidden = makeMemory({
       tenantId: 'acme',
@@ -63,7 +63,7 @@ describe('MCP contradiction metadata transport', () => {
     });
     expect(result.results[0]).toEqual({
       citation: raw.file,
-      snippet: raw.snippet,
+      snippet: primary.content.slice(0, 200),
       score: raw.score,
       collection: raw.collection,
       contradictions: {
@@ -76,7 +76,7 @@ describe('MCP contradiction metadata transport', () => {
     expect(db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
   });
 
-  it('local unknown citation and unavailable store never claim a measured zero', async () => {
+  it('local unknown citation and unavailable store withhold unverified content', async () => {
     const port = {
       makeAdapter: () => ({
         query: async () => ({
@@ -92,13 +92,11 @@ describe('MCP contradiction metadata transport', () => {
         }),
       }),
     };
-    expect((await searchTool({ query: 'x' }, config, port)).results[0]!.contradictions).toEqual({
-      status: 'unavailable',
-    });
+    expect((await searchTool({ query: 'x' }, config, port)).results).toEqual([]);
     expect(
       (await searchTool({ query: 'x' }, { ...config, dbPath: join(root, 'missing.db') }, port))
-        .results[0]!.contradictions,
-    ).toEqual({ status: 'unavailable' });
+        .results,
+    ).toEqual([]);
   });
 
   it.each(['available', 'unavailable', 'absent', 'malformed', 'duplicate'])(
@@ -168,7 +166,10 @@ describe('local resolved qmd hit standing', () => {
         makeMemory({ tenantId: 'acme', title: 'confidential', sensitivity: 'confidential' }),
         makeMemory({ tenantId: 'acme', title: 'restricted', sensitivity: 'restricted' }),
       ];
-      rows.forEach((row) => repo.insert(row));
+      rows.forEach((row) => {
+        row.content = `sentinel-${row.title}`;
+        repo.insert(row);
+      });
       const makeAdapter = () => ({
         query: async () => ({
           ok: true as const,

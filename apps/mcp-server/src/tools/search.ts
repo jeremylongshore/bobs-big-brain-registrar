@@ -3,14 +3,10 @@ import { parseContradictionReferences } from '@qmd-team-intent-kb/schema';
 import type { SearchScope, ContradictionReferences } from '@qmd-team-intent-kb/schema';
 import { getDefaultDenseConfig, QmdAdapter } from '@qmd-team-intent-kb/qmd-adapter';
 import {
-  extractMemoryIdFromCitation,
-  isSearchVisibleSensitivity,
-  isAudienceVisibleToRole,
-} from '@qmd-team-intent-kb/common';
-import {
   createDatabase,
   MemoryRepository,
   readContradictionReferences,
+  readCurrentSearchHits,
 } from '@qmd-team-intent-kb/store';
 import type { McpServerConfig } from '../config.js';
 
@@ -23,55 +19,40 @@ interface RawQmdHit {
   contradictions?: ContradictionReferences;
 }
 
-/**
- * Read-time standing filter for the local qmd path. Resolves each hit to its
- * stored row and checks tenant, sensitivity and reader audience. Local admin
- * standing does not imply owner standing.
- * A hit whose citation does not resolve to a stored row is NOT an identifiable
- * sensitive memory, so it is kept. Opens the store read-only; on any store error
- * it fails OPEN to the raw hits — the qmd index itself already excludes sensitive
- * rows for a post-5bm.3 export, so this is defense-in-depth, not the only gate.
- */
-function readLocalHitMetadata(hits: RawQmdHit[], config: McpServerConfig): RawQmdHit[] {
-  if (hits.length === 0) return hits;
+/** Resolve content and standing from one read-only store snapshot. */
+function readLocalHitMetadata(
+  hits: RawQmdHit[],
+  config: McpServerConfig,
+  scope: SearchScope,
+): RawQmdHit[] {
+  if (hits.length === 0) return [];
   try {
     const db = createDatabase({ path: config.dbPath, readonly: true });
     try {
       const repo = new MemoryRepository(db);
       return db
         .transaction(() =>
-          hits
-            .filter((h) => {
-              const id = extractMemoryIdFromCitation(h.file);
-              if (id === null) return true;
-              const memory = repo.findById(id);
-              if (memory === null) return true;
-              return (
-                memory.tenantId === config.tenantId &&
-                isSearchVisibleSensitivity(memory.sensitivity) &&
-                isAudienceVisibleToRole(memory.metadata.audience, config.role ?? 'member')
-              );
-            })
-            .map((hit) => {
-              const id = extractMemoryIdFromCitation(hit.file);
-              return {
-                ...hit,
-                contradictions:
-                  id === null
-                    ? { status: 'unavailable' as const }
-                    : readContradictionReferences(db, id, {
-                        tenantId: config.tenantId,
-                        readerRole: config.role ?? 'member',
-                      }),
-              };
+          readCurrentSearchHits(repo, hits, {
+            tenantId: config.tenantId,
+            readerRole: config.role ?? 'member',
+            scope,
+          }).map((hit) => ({
+            file: hit.file,
+            score: hit.score,
+            snippet: hit.snippet,
+            collection: hit.collection,
+            contradictions: readContradictionReferences(db, hit.memory.id, {
+              tenantId: config.tenantId,
+              readerRole: config.role ?? 'member',
             }),
+          })),
         )
         .deferred();
     } finally {
       db.close();
     }
   } catch {
-    return hits.map((hit) => ({ ...hit, contradictions: { status: 'unavailable' } }));
+    return [];
   }
 }
 
@@ -186,10 +167,8 @@ async function searchLocal(
   const result = await adapter.query(query, scope);
 
   const hits = result.ok ? result.value : [];
-  // Recheck resolved tenant, sensitivity and audience before applying the
-  // limit. Legacy unresolved citations and store-error fallback remain separate
-  // compatibility paths; this check does not establish their source authority.
-  const visible = readLocalHitMetadata(hits, config);
+  // Missing or unreadable authority never falls back to cached index content.
+  const visible = readLocalHitMetadata(hits, config, scope);
 
   const results: SearchHitOut[] = visible.slice(0, limit).map((r) => ({
     citation: r.file,

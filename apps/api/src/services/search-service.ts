@@ -1,10 +1,10 @@
+import { readCurrentSearchHits } from '@qmd-team-intent-kb/store';
 import type { MemoryRepository, GraphReadScope } from '@qmd-team-intent-kb/store';
 import { parseContradictionReferences } from '@qmd-team-intent-kb/schema';
 import type { ContradictionReferences } from '@qmd-team-intent-kb/schema';
 import type { SearchQuery, SearchResult, SearchHit, SearchScope } from '@qmd-team-intent-kb/schema';
 import {
   rerankSearchHits,
-  rerankCitedHits,
   isSearchVisibleSensitivity,
   isAudienceVisibleToRole,
 } from '@qmd-team-intent-kb/common';
@@ -130,69 +130,27 @@ export class SearchService {
       };
     }
 
-    const ranked = result.value;
-    const maxScore = ranked.reduce((m, h) => (h.score > m ? h.score : m), 0);
-
-    // Normalise BEFORE the freshness rerank: qmd exact hits can all score 0,
-    // where normaliseScore falls back to a rank-derived score — reranking the
-    // raw zeros instead would multiply freshness into 0 and erase the ranking.
+    const ranked = readCurrentSearchHits(this.memoryRepo, result.value, {
+      tenantId: query.tenantId,
+      readerRole,
+      scope: query.scope,
+    });
+    const maxScore = ranked.reduce((m, h) => Math.max(m, h.score), 0);
     const normalised = ranked.map((hit, index) => ({
       ...hit,
       score: normaliseScore(hit.score, maxScore, index, ranked.length),
+      category: hit.memory.category,
+      updatedAt: hit.memory.updatedAt,
+      title: hit.memory.title,
+      lifecycle: hit.memory.lifecycle,
     }));
-
-    // Freshness + category rerank (same policy as the SQLite fallback, R1 of
-    // the retrieval epic). Citations resolve back to store rows by id — the
-    // exporter names files `{memoryId}.md`. Check resolved tenant membership
-    // independently of adapter scoping. Do not turn a foreign row into an
-    // unresolved citation, which retains legacy public/tenant defaults.
-    const foreignMemoryIds = new Set<string>();
-    const reranked = rerankCitedHits(
-      normalised,
-      (memoryId) => {
-        const memory = this.memoryRepo.findById(memoryId);
-        if (memory !== null && query.tenantId !== undefined && memory.tenantId !== query.tenantId) {
-          foreignMemoryIds.add(memoryId);
-        }
-        return memory === null
-          ? null
-          : {
-              category: memory.category,
-              updatedAt: memory.updatedAt,
-              sensitivity: memory.sensitivity,
-              audience: memory.metadata.audience,
-              title: memory.title,
-              lifecycle: memory.lifecycle,
-            };
-      },
-      nowIso,
-      undefined,
-      { query: query.query },
-    );
-
-    // Read-time sensitivity enforcement (5bm.11): drop confidential/restricted
-    // hits so a sensitive memory is never returned to a search caller — the same
-    // levels the exporter skips (5bm.3). The qmd index should already exclude
-    // them; this is the defense-in-depth for a pre-skip index or a resolved row.
-    //
-    // Read-time audience enforcement (K2): likewise drop a hit whose memory is
-    // for a narrower audience than this caller. The exporter keeps such memories
-    // out of the shared index, so this is the backstop for an index built before
-    // a memory was narrowed.
-    const visible = reranked.filter(
-      (hit) =>
-        (hit.memoryId === null || !foreignMemoryIds.has(hit.memoryId)) &&
-        isSearchVisibleSensitivity(hit.sensitivity) &&
-        isAudienceVisibleToRole(hit.audience, readerRole),
-    );
-
-    const allHits: SearchHit[] = visible.map((hit) => ({
-      memoryId: hit.memoryId ?? undefined,
-      title: titleFromCitation(hit.file),
+    const reranked = rerankSearchHits(normalised, nowIso, undefined, { query: query.query });
+    const allHits: SearchHit[] = reranked.map((hit) => ({
+      memoryId: hit.memory.id,
+      title: hit.memory.title,
       snippet: hit.snippet,
       score: Math.min(hit.finalScore, 1),
-      // Category came off a governed store row, so it is a valid MemoryCategory.
-      category: hit.memoryId !== null ? (hit.category as SearchHit['category']) : undefined,
+      category: hit.memory.category,
       citation: hit.file,
       collection: hit.collection,
       matchedAt: nowIso,
@@ -290,22 +248,6 @@ function paginate(allHits: SearchHit[], query: SearchQuery): SearchResult {
     pageSize,
     hasMore: start + pageSize < allHits.length,
   };
-}
-
-/**
- * Derive a human-readable title from a `qmd://collection/path/to/file.md`
- * citation: take the basename, drop the extension, turn separators into
- * spaces. Falls back to the full citation so the title is never empty
- * (SearchHit.title is NonEmptyString).
- */
-function titleFromCitation(citation: string): string {
-  const lastSlash = citation.lastIndexOf('/');
-  const base = lastSlash === -1 ? citation : citation.slice(lastSlash + 1);
-  const stripped = base
-    .replace(/\.[^.]+$/, '')
-    .replace(/[-_]+/g, ' ')
-    .trim();
-  return stripped.length > 0 ? stripped : citation;
 }
 
 /**

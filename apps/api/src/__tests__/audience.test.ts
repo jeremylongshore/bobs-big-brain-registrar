@@ -395,10 +395,7 @@ describe('claim-level audience — qmd cited path', () => {
     return (res.json() as { hits: Array<{ citation: string }> }).hits.map((h) => h.citation).sort();
   };
   const uris = (...memories: CuratedMemory[]) =>
-    [
-      ...memories.map((x) => `qmd://kb-curated/${x.id}.md`),
-      'qmd://kb-curated/not-a-stored-memory.md',
-    ].sort();
+    memories.map((x) => `qmd://kb-curated/${x.id}.md`).sort();
 
   it('filters cited hits per role even when the index still contains narrower memories', async () => {
     expect(await cited(MEMBER)).toEqual(uris(m.legacy, m.tenant));
