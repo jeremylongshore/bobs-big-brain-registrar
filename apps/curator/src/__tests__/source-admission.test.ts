@@ -205,4 +205,14 @@ describe('candidate-scoped source admission', () => {
     expect(new AuditRepository(db).findAllChronological()).toEqual([]);
     expect(() => requireSourceAdmission(db, f.candidate)).toThrow(SourceEnrollmentRequiredError);
   });
+  it('reverifies with an advancing clock while the assertion remains valid', () => {
+    transaction(() =>
+      scope(() => {
+        f.receiver.now = '2026-11-22T09:03:00.000Z';
+        expect(() => requireSourceAdmission(db, f.candidate)).not.toThrow();
+        f.receiver.now = '2026-11-22T09:04:00.000Z';
+        expect(() => requireSourceAdmission(db, f.candidate)).not.toThrow();
+      }),
+    );
+  });
 });

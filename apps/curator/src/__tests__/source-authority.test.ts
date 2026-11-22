@@ -193,4 +193,27 @@ describe('reviewed source authority configuration primitive', () => {
     expect(() => previewSourceAuthority(f.registry, db, bad)).toThrow('provider wrote');
     expect(readStoredSourceRegistry(db)).toBe(null);
   });
+  it('cannot remove an optional enrollment through the configuration primitive', () => {
+    f.registry.enrollments[0]!.required = false;
+    baseline();
+    f.registry.enrollments = [];
+    const before = db.serialize().toString('base64');
+    expect(() => apply()).toThrow('Cannot remove source enrollment');
+    expect(db.serialize().toString('base64')).toBe(before);
+  });
+  it('requires the global registry revision for a key-scope change', () => {
+    const extra = {
+      ...f.registry.profiles[0]!,
+      id: 'other-profile',
+      context: { ...f.registry.profiles[0]!.context, channel: 'other-private' },
+    };
+    f.registry.profiles.push(extra);
+    apply();
+    f.registry.keys[0]!.profileIds.push(extra.id);
+    expect(() => preview()).toThrow('revision must advance');
+    f.registry.revision++;
+    apply();
+    expect(readStoredSourceRegistry(db)?.keys[0]?.profileIds).toContain(extra.id);
+    expect(new AuditRepository(db).findAllChronological()).toHaveLength(2);
+  });
 });

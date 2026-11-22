@@ -373,8 +373,9 @@ writer.
 Task `compile-then-govern-39z.11.4.4.2` connects the source-governance core to the
 same stored registry used by legacy admission. `SourceGovernanceContext` now
 supplies only trusted receiver identity/current time and the optional existing
-origin secret. It cannot supply a registry. The private core API has no current
-CLI, HTTP, MCP, collector or background-job caller; these changes are not an
+origin secret. It cannot supply a registry. A repository-wide call-site search finds only tests invoking these core
+preview/apply APIs; they are not exported from the curator package index and no
+CLI, HTTP, MCP, collector or background-job entrypoint calls them here; these changes are not an
 operational enrollment or complete ingress-adapter milestone.
 
 Preview and apply load the strict registry from their SQLite connection. Missing
@@ -415,13 +416,15 @@ operator or receipt drift rolls back the change. Repeated/stale plans refuse;
 after an uncertain result, reconcile the current registry and receipt rather than
 blindly retrying the previous plan.
 
-This initial configuration path requires registry revisions to advance by one,
+Every configuration change requires the global registry revision to advance by one,
+including key-scope changes and revocation. This initial path requires
 valid scoped profile references and valid key lifetime ordering. It cannot remove
-or disable required enrollments, lower an existing profile, change its source
+any enrollment or disable a required enrollment, lower an existing profile, change its source
 binding, introduce a weaker profile for an already known receiver/tenant/source
 context, delete existing profiles/key identities, replace key material under an
 existing identity, or resurrect a revoked key. Changed profile and enrollment
-entries require advancing their revisions. Tightening, key revocation and adding
+entries also require advancing their own revisions; keys have no separate revision
+field, so their changes are bound by the global registry revision and plan digest. Tightening, key revocation and adding
 new identities remain possible through an exactly reviewed plan. Key rotation
 uses a new identity and retains the old revoked identity. Broader relaxation,
 pruning or de-enrollment needs a separate operation; no force flag is provided.

@@ -47,8 +47,8 @@ function requireEnrollments(
 ): void {
   for (const old of previous.enrollments) {
     const entry = next.enrollments.find((e) => enrollmentId(e) === enrollmentId(old));
-    if (old.required && (!entry || !entry.required))
-      throw new Error('Cannot remove required source enrollment');
+    if (!entry || (old.required && !entry.required))
+      throw new Error('Cannot remove source enrollment or disable its requirement');
     if (
       entry &&
       (entry.revision < old.revision || (!same(entry, old) && entry.revision <= old.revision))
