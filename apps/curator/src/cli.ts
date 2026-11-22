@@ -1,3 +1,4 @@
+import { SourceEnrollmentRequiredError } from './origin/source-enrollment.js';
 /**
  * curator-cli — drive the INTKB curator pipeline from a spool directory.
  *
@@ -551,6 +552,15 @@ async function cmdIngest(args: string[], deps: CuratorCliDeps): Promise<number> 
       }
     }
     return admissionOk ? 0 : 1;
+  } catch (error) {
+    if (!(error instanceof SourceEnrollmentRequiredError)) throw error;
+    if (json)
+      process.stdout.write(
+        JSON.stringify({ ok: false, stage: 'govern', code: error.code, error: error.message }) +
+          '\n',
+      );
+    else process.stderr.write(`${error.code}: ${error.message}\n`);
+    return 1;
   } finally {
     // better-sqlite3 Databases hold an OS file descriptor — close to avoid
     // leaks when --db points at a real file (in-memory dbs don't care).

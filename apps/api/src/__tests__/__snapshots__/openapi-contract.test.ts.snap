@@ -30,6 +30,11 @@ exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] =
         "post",
       ],
     },
+    "/api/candidates/source-governance-capabilities": {
+      "methods": [
+        "get",
+      ],
+    },
     "/api/candidates/{id}": {
       "methods": [
         "get",
@@ -41,6 +46,11 @@ exports[`OpenAPI contract > publishes a stable apps/api surface (snapshot) 1`] =
       ],
     },
     "/api/candidates/{id}/reject": {
+      "methods": [
+        "post",
+      ],
+    },
+    "/api/candidates/{id}/source-governance": {
       "methods": [
         "post",
       ],

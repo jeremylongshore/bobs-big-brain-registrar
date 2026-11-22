@@ -1,3 +1,7 @@
+import {
+  hasUnsupportedSourceEvidence,
+  SOURCE_EVIDENCE_UNSUPPORTED,
+} from '@qmd-team-intent-kb/schema';
 import type { FastifyInstance } from 'fastify';
 
 /** Default maximum body size: 1MB */
@@ -11,6 +15,15 @@ export function registerInputSanitizer(
   app: FastifyInstance,
   maxBodySize: number = DEFAULT_MAX_BODY_SIZE,
 ): void {
+  app.addHook('preHandler', async (request, reply) => {
+    const path = request.url.split('?')[0] ?? request.url;
+    if (request.method === 'POST' && /^\/api\/candidates\/[^/]+\/source-governance$/.test(path))
+      return;
+    if (hasUnsupportedSourceEvidence(request.body))
+      return reply
+        .code(422)
+        .send({ code: 'source_evidence_unsupported', error: SOURCE_EVIDENCE_UNSUPPORTED });
+  });
   app.addHook('onRequest', async (request, reply) => {
     const contentLength = request.headers['content-length'];
 

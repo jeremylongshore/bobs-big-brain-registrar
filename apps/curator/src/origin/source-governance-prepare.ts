@@ -1,3 +1,4 @@
+import { sourceGovernanceConfigDigest } from './source-governance-config.js';
 import { readSourceControlInput } from './source-control-read.js';
 import { readStoredSourceRegistry } from './source-enrollment.js';
 import type Database from 'better-sqlite3';
@@ -92,10 +93,7 @@ export function prepareSourceGovernance(
     replayIdentity: verified.replayIdentity,
     authorityDigest: sourceGovernanceDigest(verified),
     policyDigest: sourceGovernanceDigest(policies),
-    configDigest: sourceGovernanceDigest({
-      originSecretDigest:
-        context.originSecret === undefined ? null : classificationHash(context.originSecret),
-    }),
+    configDigest: sourceGovernanceConfigDigest(context),
     stateDigest: sourceGovernanceDigest({ rows, candidates, tip: deps.auditRepo.findChainTip() }),
     minimumSensitivity: floor,
     restrictionOnly: candidate.status !== 'inbox',

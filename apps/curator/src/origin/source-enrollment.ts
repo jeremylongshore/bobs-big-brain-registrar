@@ -5,7 +5,9 @@ import { SourceClassificationRegistry } from './source-classification-schema.js'
 export class SourceEnrollmentRequiredError extends Error {
   readonly code = 'SOURCE_ENROLLMENT_REQUIRED';
   constructor() {
-    super('Source enrollment requires an evidence-capable admission path');
+    super(
+      'Source enrollment requires an evidence-capable admission path: use the configured Registrar source-governance v1 API; this legacy route cannot admit the candidate',
+    );
     this.name = 'SourceEnrollmentRequiredError';
   }
 }
@@ -35,4 +37,21 @@ export function requireLegacySourceAdmission(db: Database.Database, tenantId: st
   const registry = readStoredSourceRegistry(db);
   if (registry?.enrollments.some((entry) => entry.tenantId === tenantId && entry.required))
     throw new SourceEnrollmentRequiredError();
+}
+
+/** Capability discovery exposes only enrollment presence, never registry material. */
+export function hasSourceIngressEnrollment(
+  db: Database.Database,
+  receiverId: string,
+  tenantId: string,
+  ingressId: string,
+): boolean {
+  return (
+    readStoredSourceRegistry(db)?.enrollments.some(
+      (entry) =>
+        entry.receiverId === receiverId &&
+        entry.tenantId === tenantId &&
+        entry.ingressId === ingressId,
+    ) ?? false
+  );
 }

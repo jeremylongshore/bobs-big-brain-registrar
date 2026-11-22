@@ -1,3 +1,4 @@
+import { UnsupportedSourceEvidenceFields } from '@qmd-team-intent-kb/schema';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { MemoryCategory, MemoryLifecycleState, SearchScope } from '@qmd-team-intent-kb/schema';
@@ -110,6 +111,7 @@ export function createServer(
       'teamkb_propose',
       'Queue a new memory proposal for explicit review. Writes to the spool only. Requires a compatible Curator deployment with the Registrar MCP review gate; the producer build alone does not prove that gate is installed. An authorized administrator reviews the pending candidate through the candidate API.',
       {
+        ...UnsupportedSourceEvidenceFields,
         title: z.string().min(1).describe('Short descriptive title for the memory'),
         content: z.string().min(1).describe('Full content of the memory'),
         category: MemoryCategory.optional().describe(
@@ -141,6 +143,7 @@ export function createServer(
       'teamkb_import',
       'Bulk import files matching a glob pattern as memory candidates. Each file becomes one candidate queued for governance review.',
       {
+        ...UnsupportedSourceEvidenceFields,
         glob: z.string().min(1).describe('Glob pattern relative to basePath (e.g. "docs/**/*.md")'),
         basePath: z
           .string()

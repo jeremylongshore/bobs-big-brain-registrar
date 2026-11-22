@@ -1,3 +1,4 @@
+import { SourceEnrollmentRequiredError } from '@qmd-team-intent-kb/curator';
 import type { FastifyInstance } from 'fastify';
 import { ApiError, badRequest } from '../errors.js';
 import type { CandidateService } from '../services/candidate-service.js';
@@ -119,6 +120,13 @@ export function registerCandidateRoutes(
 
         return reply.status(200).send(memory);
       } catch (err) {
+        if (err instanceof SourceEnrollmentRequiredError) {
+          return reply.status(422).send({
+            code: err.code,
+            error:
+              'This tenant requires signed source evidence. Use /api/candidates/:id/source-governance with a v1 preview/apply envelope; check /api/candidates/source-governance-capabilities first.',
+          });
+        }
         if (err instanceof ApiError) {
           // `code` carries the stable rejection class (H1 — e.g.
           // `origin_token_invalid` when the provenance HMAC fails to verify).
@@ -167,6 +175,13 @@ export function registerCandidateRoutes(
         );
         return reply.status(200).send({ ok: true, candidateId: id, status: 'rejected' });
       } catch (err) {
+        if (err instanceof SourceEnrollmentRequiredError) {
+          return reply.status(422).send({
+            code: err.code,
+            error:
+              'This tenant requires signed source evidence. Use /api/candidates/:id/source-governance with a v1 preview/apply envelope; check /api/candidates/source-governance-capabilities first.',
+          });
+        }
         if (err instanceof ApiError) {
           // `code` carries the stable refusal class (`on_hold` for a candidate
           // that only a human may resolve — K6).

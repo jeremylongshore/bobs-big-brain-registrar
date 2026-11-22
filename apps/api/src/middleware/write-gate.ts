@@ -47,6 +47,7 @@ export function registerWriteGate(app: FastifyInstance): void {
     const path = request.url.split('?')[0] ?? request.url;
     const isAdminWrite =
       PROMOTE_PATH.test(path) ||
+      /^\/api\/candidates\/[^/]+\/source-governance$/.test(path) ||
       REJECT_PATH.test(path) ||
       ADMIN_WRITE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
     if (!isAdminWrite) {

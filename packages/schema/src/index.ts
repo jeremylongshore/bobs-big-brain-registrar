@@ -56,3 +56,9 @@ export {
   ContradictionReferences,
   parseContradictionReferences,
 } from './contradiction-references.js';
+
+export {
+  UnsupportedSourceEvidenceFields,
+  hasUnsupportedSourceEvidence,
+  SOURCE_EVIDENCE_UNSUPPORTED,
+} from './source-evidence-boundary.js';

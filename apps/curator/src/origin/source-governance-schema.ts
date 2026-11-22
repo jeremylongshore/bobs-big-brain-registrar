@@ -1,3 +1,4 @@
+import type { CuratorConfig } from '../types.js';
 import { z } from 'zod';
 import { Sensitivity, Sha256Hash, TenantId, Uuid } from '@qmd-team-intent-kb/schema';
 
@@ -45,4 +46,5 @@ export type SourceGovernanceSettlement = z.infer<typeof SourceGovernanceSettleme
 export interface SourceGovernanceContext {
   readReceiver(): unknown;
   originSecret?: string;
+  curation?: Pick<CuratorConfig, 'importExclusions' | 'holdLimits'>;
 }

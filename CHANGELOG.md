@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Add an opt-in, authenticated source-governance API with strict v1 preview/apply
+  envelopes, server-owned receiver/clock, current tenant authorization and the
+  existing disclosure/review controls. Legacy API, MCP and spool inputs refuse
+  reserved evidence fields instead of discarding them. Required-tenant CLI,
+  background and import paths retain admission refusal; no live enrollment or
+  frozen-plugin activation is included (`compile-then-govern-39z.11.4.4.3`).
+
 - Add an empty-by-default stored source registry and refuse legacy curator and
   shared promotion paths for tenants with required source enrollment. Invalid
   authority refuses admission; promotion rechecks inside its transaction.

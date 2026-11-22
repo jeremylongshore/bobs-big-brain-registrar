@@ -1,3 +1,4 @@
+import { SOURCE_EVIDENCE_UNSUPPORTED } from '@qmd-team-intent-kb/schema';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
@@ -233,7 +234,11 @@ export async function ingestFromSpoolDetailed(
     }
 
     const readResult = await readSpoolFile(filepath);
-    if (!readResult.ok) continue; // skip unreadable files, keep processing others
+    if (!readResult.ok) {
+      if (readResult.error === SOURCE_EVIDENCE_UNSUPPORTED)
+        admissionRejected.push({ spoolFile: filepath, reason: SOURCE_EVIDENCE_UNSUPPORTED });
+      continue;
+    }
 
     const candidates = readResult.value;
     if (requiresBatchReceipt(candidates, DEFAULT_BROAD_IMPORT_CANDIDATE_LIMIT, manifest)) {

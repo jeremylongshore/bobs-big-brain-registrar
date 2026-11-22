@@ -1,3 +1,7 @@
+import {
+  hasUnsupportedSourceEvidence,
+  SOURCE_EVIDENCE_UNSUPPORTED,
+} from '@qmd-team-intent-kb/schema';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -189,7 +193,10 @@ export async function readSpoolFile(filepath: string): Promise<Result<MemoryCand
     const candidates: MemoryCandidate[] = [];
 
     for (const line of lines) {
-      const parsed = MemoryCandidate.safeParse(JSON.parse(line));
+      const raw: unknown = JSON.parse(line);
+      if (hasUnsupportedSourceEvidence(raw))
+        return { ok: false, error: SOURCE_EVIDENCE_UNSUPPORTED };
+      const parsed = MemoryCandidate.safeParse(raw);
       if (parsed.success) {
         candidates.push(parsed.data);
       }

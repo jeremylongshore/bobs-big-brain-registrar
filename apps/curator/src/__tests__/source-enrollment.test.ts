@@ -1,3 +1,6 @@
+import { deriveMemoryId } from '@qmd-team-intent-kb/common';
+import { makeMemory } from './fixtures.js';
+import { mergeGovern } from '../merge/merge-gate.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import { createTestDatabase } from '@qmd-team-intent-kb/store';
@@ -49,6 +52,21 @@ function untouched() {
 }
 
 describe('persisted source enrollment blocks legacy admission', () => {
+  it('refuses the ordinary merge admission path for an enrolled tenant', () => {
+    store();
+    const contentHash = computeContentHash(f.candidate.content);
+    const incoming = makeMemory({
+      id: deriveMemoryId(f.candidate.id, contentHash),
+      candidateId: f.candidate.id,
+      tenantId: f.candidate.tenantId,
+      content: f.candidate.content,
+      contentHash,
+    });
+    expect(() => mergeGovern([incoming], [], deps, { tenantId: f.candidate.tenantId })).toThrow(
+      SourceEnrollmentRequiredError,
+    );
+    untouched();
+  });
   it('keeps an empty store unenrolled and promotes normally', () => {
     expect(direct().tenantId).toBe(f.candidate.tenantId);
     expect(deps.memoryRepo.count()).toBe(1);

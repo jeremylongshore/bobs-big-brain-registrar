@@ -1,3 +1,4 @@
+import { makeSourceGovernanceFixture } from '../../../curator/src/__tests__/source-governance-fixtures.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -79,6 +80,22 @@ describe('runCycle', () => {
     expect(result.ingest.summary).toBeNull();
     expect(
       logger.messages.some((entry) => entry.message.includes('disabled by enterprise settings')),
+    ).toBe(true);
+  });
+
+  it('refuses legacy background admission for a required source tenant', async () => {
+    const f = makeSourceGovernanceFixture();
+    db.prepare('INSERT INTO source_classification_authority VALUES (1, ?)').run(
+      JSON.stringify(f.registry),
+    );
+    config.tenantId = f.candidate.tenantId;
+    await writeSpoolFile(spoolDir, 'spool-source-required.jsonl', [f.candidate]);
+    const result = await runCycle(config, deps, logger);
+    expect(result.ingest.ingested).toBe(1);
+    expect(result.curation).toBeNull();
+    expect(deps.memoryRepo.count()).toBe(0);
+    expect(
+      logger.messages.some((entry) => entry.message.includes('source-governance v1 API')),
     ).toBe(true);
   });
 
