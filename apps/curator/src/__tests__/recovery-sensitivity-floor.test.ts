@@ -323,11 +323,11 @@ describe('durable same-store sensitivity constraints', () => {
     });
     governSelectedCandidates(input, db);
     const candidate = candidates.findById(input.selections[0]!.candidateId)!;
-    const original = audit.findByMemoryAndTenant.bind(audit);
+    const original = audit.findGovernedByContentHashAndTenant.bind(audit);
     let injected = false;
-    vi.spyOn(audit, 'findByMemoryAndTenant').mockImplementation((id, tenant) => {
-      const rows = original(id, tenant);
-      if (!injected && id === candidate.id) {
+    vi.spyOn(audit, 'findGovernedByContentHashAndTenant').mockImplementation((hash, tenant) => {
+      const rows = original(hash, tenant);
+      if (!injected && hash === computeContentHash(candidate.content)) {
         injected = true;
         recordCandidateMinimumSensitivity(
           candidate,

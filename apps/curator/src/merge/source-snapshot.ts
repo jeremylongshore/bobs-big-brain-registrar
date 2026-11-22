@@ -8,7 +8,11 @@ import {
 import { effectiveSensitivity } from '@qmd-team-intent-kb/policy-engine';
 import { MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import { AuditRepository, MemoryRepository, verifyAuditChain } from '@qmd-team-intent-kb/store';
-import { resolveCandidateMinimumSensitivity } from '../recovery/sensitivity-constraint.js';
+import {
+  candidateSensitivityEvidence,
+  resolveCandidateMinimumSensitivity,
+} from '../recovery/sensitivity-constraint.js';
+import { IMPORTED_FLOOR_KIND } from '../recovery/imported-sensitivity-constraint.js';
 import {
   MAX_SOURCE_SNAPSHOT_BYTES,
   MAX_SOURCE_SNAPSHOT_ITEMS,
@@ -180,14 +184,18 @@ export function exportSourceSnapshot(
           throw new SourceSnapshotError('invalid-source');
         rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         const items: SourceSnapshotItem[] = rows.map((memory) => {
-          const evidence = audit.findByMemoryAndTenant(memory.candidateId, memory.tenantId);
+          const evidence = candidateSensitivityEvidence(
+            { id: memory.candidateId, content: memory.content, tenantId: memory.tenantId },
+            audit,
+          );
           for (const event of evidence) {
             const kind = event.details['kind'];
             if (
               event.action === 'governed' &&
               ('minimumSensitivity' in event.details ||
                 (typeof kind === 'string' && kind.includes('sensitivity-floor'))) &&
-              kind !== 'recovery-sensitivity-floor-v1'
+              kind !== 'recovery-sensitivity-floor-v1' &&
+              kind !== IMPORTED_FLOOR_KIND
             )
               throw new SourceSnapshotError('invalid-source');
           }

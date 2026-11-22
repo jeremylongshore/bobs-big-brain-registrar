@@ -195,6 +195,7 @@ export class AuditRepository {
   private readonly stmtFindByMemoryAndTenant: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByAction: Database.Statement;
+  private readonly stmtFindGovernedByContentHashAndTenant: Database.Statement;
   private readonly stmtFindByTenantAndAction: Database.Statement;
   private readonly stmtCountByAction: Database.Statement;
   private readonly stmtFindInRange: Database.Statement;
@@ -304,6 +305,15 @@ export class AuditRepository {
     // returns every tenant's rows for that action.
     this.stmtFindByTenantAndAction = db.prepare(`
       SELECT * FROM audit_events WHERE tenant_id = ? AND action = ? ORDER BY timestamp ASC
+    `);
+
+    // Existing versioned receipts already bind contentHash. Query them directly;
+    // no derived authority table or history migration is introduced.
+    this.stmtFindGovernedByContentHashAndTenant = db.prepare(`
+      SELECT * FROM audit_events
+      WHERE tenant_id = ? AND action = 'governed'
+        AND json_extract(details_json, '$.contentHash') = ?
+      ORDER BY seq ASC
     `);
 
     this.stmtCountByAction = db.prepare(`
@@ -479,6 +489,11 @@ export class AuditRepository {
   findByTenantAndAction(tenantId: string, action: string): AuditEvent[] {
     const rows = this.stmtFindByTenantAndAction.all(tenantId, action);
     return rows.map(rowToEvent);
+  }
+
+  /** Content-scoped governance evidence, including receipts without a surviving row. */
+  findGovernedByContentHashAndTenant(contentHash: string, tenantId: string): AuditEvent[] {
+    return this.stmtFindGovernedByContentHashAndTenant.all(tenantId, contentHash).map(rowToEvent);
   }
 
   /** Count events grouped by action type */
