@@ -124,7 +124,8 @@ This preflight does not authenticate either clone, transport source floor
 receipts, or prove that an export is complete. It is a prerequisite to the
 transport contract, whose authority and application routes remain proposed.
 
-Matching destination-tenant rows participate in preflight: same-identity
+All destination-tenant rows must schema-normalize; an unrelated malformed row
+also refuses the pass. Only matching rows participate in comparison: same-identity
 snapshots must agree, and content-hash groups include existing destination copies.
 Schema-normalized snapshots are compared in their JSON representation, so optional
 undefined properties and absent JSON fields do not create false conflicts. An
@@ -149,11 +150,21 @@ This checks consistency of available snapshots, not a reconstruction of a legacy
 candidate’s original namespace/workspace/path inputs.
 
 Preflight and promotions share a database transaction. Memory and audit repositories
-must use the same connection; apply uses an immediate transaction, and preview uses
-a deferred read transaction. A later promotion failure rolls back the whole pass.
+must use the same connection. Apply starts an immediate transaction before preflight
+and holds its write lock through promotion. Preview starts a deferred transaction;
+the dry-run path performs no writes. Deferred mode itself is not a read-only guard. A later promotion failure rolls back the whole pass.
 This holds the destination snapshot through writes; it does not lock remote sources
 or authenticate source snapshots supplied by callers.
 
 The merge checks affected candidate bindings across the destination store and
 refuses pre-existing conflicts without rewriting either row. This is a merge
 preflight, not a global write constraint or a migration of historical records.
+
+Preflight refusals throw to the caller without appending a destination audit event;
+this preserves the no-write refusal contract. Destination decoding failures are
+identified as destination-side errors without including stored content. Affected
+legacy snapshots that cannot meet this contract require separately reviewed
+reconciliation; the merge does not infer a safe transformation or repair history.
+Different curated bodies under one candidate ID are conservatively ambiguous here,
+even if a future transformation could legitimately produce them. This does not
+claim to reconstruct the original spool body digest from a candidate UUID.

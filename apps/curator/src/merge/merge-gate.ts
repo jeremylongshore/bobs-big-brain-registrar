@@ -341,20 +341,24 @@ function mergeGovernInTransaction(
     }
   }
   const incomingHashes = new Set(union.map((memory) => memory.contentHash));
-  const destinationMatches = deps.memoryRepo
-    .findByTenant(options.tenantId)
-    .map(normalizeMergeSnapshot)
-    .filter((memory) => {
-      const incomingHash = candidateHashes.get(memory.candidateId);
-      if (incomingHash !== undefined && incomingHash !== memory.contentHash) {
-        throw new Error('Merge destination contains a conflicting candidate content binding');
-      }
-      const incoming = unionById.get(memory.id);
-      if (incoming !== undefined && !isDeepStrictEqual(incoming, memory)) {
-        throw new Error('Merge destination contains a conflicting identity snapshot');
-      }
-      return incomingHashes.has(memory.contentHash);
-    });
+  let destinationRows: CuratedMemory[];
+  try {
+    destinationRows = deps.memoryRepo.findByTenant(options.tenantId).map(normalizeMergeSnapshot);
+  } catch {
+    // Do not expose stored row contents or misidentify destination damage as input.
+    throw new Error('Merge destination rows could not be read and schema-validated');
+  }
+  const destinationMatches = destinationRows.filter((memory) => {
+    const incomingHash = candidateHashes.get(memory.candidateId);
+    if (incomingHash !== undefined && incomingHash !== memory.contentHash) {
+      throw new Error('Merge destination contains a conflicting candidate content binding');
+    }
+    const incoming = unionById.get(memory.id);
+    if (incoming !== undefined && !isDeepStrictEqual(incoming, memory)) {
+      throw new Error('Merge destination contains a conflicting identity snapshot');
+    }
+    return incomingHashes.has(memory.contentHash);
+  });
 
   // The later content-hash dedupe can also discard DIFFERENT identities. Check
   // their semantic snapshots before that happens. Capture/promotion identities,

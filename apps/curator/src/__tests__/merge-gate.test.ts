@@ -411,6 +411,22 @@ describe('mergeGovern - govern-at-merge gate', () => {
   });
 
   describe('content-duplicate constraint preflight', () => {
+    it('identifies malformed unrelated destination data without changing either store', () => {
+      const stored = makeRow('An unrelated destination record with synthetic damage.');
+      deps.memoryRepo.insert(stored);
+      db.prepare("UPDATE curated_memories SET content = '' WHERE id = ?").run(stored.id);
+      expect(() =>
+        mergeGovern([makeRow('A valid independent incoming record.')], [], deps, {
+          tenantId: TENANT,
+        }),
+      ).toThrow('Merge destination rows could not be read and schema-validated');
+      expect(deps.memoryRepo.count()).toBe(1);
+      expect(
+        db.prepare('SELECT content FROM curated_memories WHERE id = ?').get(stored.id),
+      ).toEqual({ content: '' });
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
     for (const lifecycle of ['active', 'superseded'] as const) {
       for (const withPolicy of [false, true]) {
         it(`refuses changed candidate content in another tenant, lifecycle=${lifecycle}, policy=${withPolicy}`, () => {
@@ -563,6 +579,9 @@ describe('mergeGovern - govern-at-merge gate', () => {
       const incoming = makeRow(stored.content);
       const result = mergeGovern([incoming], [], deps, { tenantId: TENANT });
       expect(result.promoted).toHaveLength(1);
+      expect(deps.memoryRepo.findByTenant(TENANT)).toHaveLength(1);
+      expect(deps.memoryRepo.count()).toBe(2);
+      expect(deps.memoryRepo.findById(incoming.id)?.content).toBe(incoming.content);
       expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
     });
 

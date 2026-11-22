@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Refuse cross-tenant and historical candidate/content conflicts before merge writes without exposing foreign row data or rewriting history.
+- Refuse affected candidate-ID/digest binding conflicts across destination tenants and lifecycles before merge writes, without exposing foreign row data or rewriting history.
 
 - Preflight every merge input before promotion or persistence. Refuse content
   hash, tenant, lifecycle and duplicate snapshot conflicts instead of silently
