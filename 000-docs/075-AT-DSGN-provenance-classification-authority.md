@@ -368,7 +368,11 @@ Raw privileged SQLite writes remain outside this application-level guard. The
 new table itself provides no independent tamper evidence against a privileged
 writer.
 
-## Stored-authority admission and configuration
+## Stored-authority admission and configuration (PR473, 2026-11-22)
+
+This section records the PR473 boundary. The following ingress milestone supersedes
+its statements about governance package exports and endpoint availability; registry
+configuration primitives remain internal.
 
 Task `compile-then-govern-39z.11.4.4.2` connects the source-governance core to the
 same stored registry used by legacy admission. `SourceGovernanceContext` now
@@ -440,3 +444,76 @@ claim is made for the table itself. Old-binary compatibility and rollback after
 actual enrollment remain unverified. Parent `.4.4` retains actual capture and
 endpoint/process adoption; `.4.5` retains operational acceptance requiring separate
 authorization. Frozen consumers are not activated by this source milestone.
+
+## Versioned API ingress implementation (2026-11-22)
+
+The source implementation adds authenticated API governance over candidates already
+accepted by canonical intake. It does not add a capture shortcut or a registry
+provisioning endpoint. `TEAMKB_SOURCE_RECEIVER_ID` is server configuration; when
+absent, the endpoint reports unavailable. Setting it does not create enrollment,
+load producer keys, authorize live activation or demonstrate a deployed consumer.
+
+An authenticated admin queries `GET /api/candidates/source-governance-capabilities`
+and supplies an authorized tenant as usual. The response declares protocol version
+1, enabled/disabled state, the route and the fixed ingress ID
+`api-source-governance-v1`. No profile catalog or key material is exposed.
+
+`POST /api/candidates/:id/source-governance` accepts one strict envelope:
+
+- Preview: `version: 1`, `tenantId`, `action: "preview"`, `assertion`.
+- Apply: the same fields with `action: "apply"` and the exact returned `plan`.
+- `assertion` is the canonical signed JSON string defined above. Unknown envelope
+  fields, versions, caller clocks, receiver IDs, ingress IDs and profile overrides
+  refuse. The profile inside the signed assertion still must match stored authority.
+
+The server resolves the bearer token independently; loopback dev/admin is insufficient.
+Admin standing and tenant scope are checked again when the core reloads its receiver,
+including within the write transaction. The path ID, authorized tenant, stored
+candidate and plan must agree. The API disclosure scan runs independently of tenant
+policy. Canonical author/trust/status overrides, member quarantine, existing holds,
+source floors and supersession refusal remain in place. Source signatures do not
+release a hold or supply human-review authority. Configured import exclusions and
+hold limits pass into curation and are bound into the preview digest; compiled
+import matchers include their source and flags in that digest.
+
+Intake still uses `POST /api/candidates`, including its per-actor quota. A returned
+`already_exists` candidate may have a different ID because content deduplication
+collapsed it. A producer must not relabel an old assertion with that returned ID:
+the governance endpoint checks the signed identity and bytes against the selected
+stored candidate. There is no automatic signature transfer or evidence persistence
+in candidate metadata. Required tenants remain unable to promote through legacy
+paths even when evidence is absent or stripped before arrival.
+
+After settlement, the API requests the configured tenant index refresh, including
+when aliases were restricted. A refresh failure reports `indexRefresh: "pending"`
+without undoing committed governance. That result does not claim every external
+index or installed client is refreshed. Historical settlement replay remains a
+no-new-admission operation, while still requiring current request authorization.
+
+### Supported and unsupported ingress inventory
+
+| Surface                                         | Source behavior and evidence                                                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API canonical intake                            | Candidate-only; reserved evidence fields refuse before parsing. Existing scan, quota and actor overrides remain. HTTP tests cover no stripping and ID collapse.                                  |
+| API source governance                           | Supported preview/apply v1 over an existing candidate; actual HTTP tests cover current evidence, access, drift, rollback and member quarantine.                                                  |
+| API legacy promotion                            | Required enrollment returns 422 `SOURCE_ENROLLMENT_REQUIRED` with the evidence route; unenrolled legacy promotion remains available.                                                             |
+| API vault import                                | Creates inbox candidates only. Reserved evidence on the request refuses before filesystem access. Later admission uses the same guarded promoter.                                                |
+| Registrar MCP propose/import                    | Does not accept source evidence. Actual SDK transport rejects reserved fields; direct helpers also refuse. Ordinary proposals remain review-bound spool entries.                                 |
+| Spool v1 writer/reader/intake                   | Reserved evidence fields refuse. Intake reports an admission rejection and retains the raw file; it does not archive it as successfully ingested. No source-evidence field is added to spool v1. |
+| Curator CLI ingest                              | Actual child-process test proves required enrollment retains inbox candidates but exits nonzero with an actionable governance refusal.                                                           |
+| Edge-daemon cycle                               | Required enrollment leaves curation incomplete and logs the evidence-route refusal; synthetic cycle test proves no promotion.                                                                    |
+| Selected recovery/manual governance             | Existing real-store test proves a historical floor cannot waive required admission. No evidence-aware recovery CLI is added.                                                                     |
+| Merge and authenticated snapshot import         | Existing source restrictions survive; required destination enrollment refuses admission. Snapshot import preserves the enrollment error and rolls back its attempted floor/row writes.           |
+| Standalone public plugin and Compiler producers | Adoption remains parent work. Frozen Plugin85 is unchanged; neither release nor installed-consumer compatibility is established here.                                                            |
+
+The reserved top-level names are `sourceEvidence`, `sourceAssertion`,
+`sourceClassification` and `assertion`. They are explicitly unsupported on a v1
+candidate and on legacy capture/import surfaces. This rejects previously ignored
+extension fields; valid candidate-v1 identity, content and UUID derivation are
+unchanged. Documents imported as content are not themselves authenticated evidence.
+
+These are source and synthetic-test boundaries. The parent retains trusted producer
+capture, distribution and actual end-to-end adoption; live registry enrollment and
+operational acceptance remain separately authorized work. The API exports the
+necessary governance functions through the curator package index, but does not
+export registry provisioning or the private admission scope.

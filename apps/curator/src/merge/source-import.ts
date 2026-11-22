@@ -1,3 +1,4 @@
+import { SourceEnrollmentRequiredError } from '../origin/source-enrollment.js';
 import { isDeepStrictEqual } from 'node:util';
 import { deriveAuditEventId, deriveMemoryId } from '@qmd-team-intent-kb/common';
 import {
@@ -100,7 +101,12 @@ function protectImport<T>(run: () => T): T {
   try {
     return run();
   } catch (error) {
-    if (error instanceof SourceImportError || error instanceof SourceSnapshotError) throw error;
+    if (
+      error instanceof SourceImportError ||
+      error instanceof SourceSnapshotError ||
+      error instanceof SourceEnrollmentRequiredError
+    )
+      throw error;
     throw new SourceImportError('invalid-destination');
   }
 }

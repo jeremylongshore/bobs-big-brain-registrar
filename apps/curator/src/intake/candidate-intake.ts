@@ -1,3 +1,4 @@
+import { hasUnsupportedSourceEvidence } from '@qmd-team-intent-kb/schema';
 import { isDeepStrictEqual } from 'node:util';
 import type Database from 'better-sqlite3';
 import { AuditRepository, CandidateRepository } from '@qmd-team-intent-kb/store';
@@ -153,6 +154,12 @@ export function prepareIntakeCandidate(
   ctx: IntakeActorContext = {},
   allowedChannels: readonly string[] = DEFAULT_ALLOWED_ORIGIN_CHANNELS,
 ): MemoryCandidate {
+  if (hasUnsupportedSourceEvidence(data)) {
+    throw disallowedIntake(
+      'This intake accepts candidates only. Use the versioned source-governance endpoint after intake; evidence fields cannot be discarded.',
+      'source_evidence_unsupported',
+    );
+  }
   const parsed = MemoryCandidate.safeParse(data);
   if (!parsed.success) {
     throw invalidIntake(`Invalid candidate: ${parsed.error.message}`);

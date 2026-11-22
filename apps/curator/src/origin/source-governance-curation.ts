@@ -24,6 +24,7 @@ export function curateSourceCandidate(
     outcome = 'quarantined';
   } else {
     const result = new Curator(deps, {
+      ...context.curation,
       tenantId: candidate.tenantId,
       ...(context.originSecret === undefined ? {} : { originSecret: context.originSecret }),
       supersessionMode: 'report',

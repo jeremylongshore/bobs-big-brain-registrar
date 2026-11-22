@@ -147,6 +147,12 @@ async function main(): Promise<void> {
     allowedChannels,
     originSecret,
     importExclusions,
+    sourceGovernance:
+      process.env['TEAMKB_SOURCE_RECEIVER_ID'] === undefined
+        ? undefined
+        : {
+            receiverId: process.env['TEAMKB_SOURCE_RECEIVER_ID']!,
+          },
   });
   await app.ready();
 

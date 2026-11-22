@@ -5,7 +5,9 @@ import { SourceClassificationRegistry } from './source-classification-schema.js'
 export class SourceEnrollmentRequiredError extends Error {
   readonly code = 'SOURCE_ENROLLMENT_REQUIRED';
   constructor() {
-    super('Source enrollment requires an evidence-capable admission path');
+    super(
+      'Source enrollment requires an evidence-capable admission path: use the configured Registrar source-governance v1 API; this legacy route cannot admit the candidate',
+    );
     this.name = 'SourceEnrollmentRequiredError';
   }
 }

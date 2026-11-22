@@ -1,3 +1,4 @@
+import { UnsupportedSourceEvidenceFields } from './source-evidence-boundary.js';
 import { z } from 'zod';
 import { CandidateStatus, MemoryCategory, MemorySource, TrustLevel } from './enums.js';
 import { Author, ContentMetadata, IsoDatetime, NonEmptyString, TenantId, Uuid } from './common.js';
@@ -80,6 +81,7 @@ export type CandidateOrigin = z.infer<typeof CandidateOrigin>;
 /** A raw memory proposal captured from a Claude Code session, before governance */
 export const MemoryCandidate = z
   .object({
+    ...UnsupportedSourceEvidenceFields,
     schemaVersion: z
       .literal(MEMORY_CANDIDATE_SCHEMA_VERSION)
       .default(MEMORY_CANDIDATE_SCHEMA_VERSION),

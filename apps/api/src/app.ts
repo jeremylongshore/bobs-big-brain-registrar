@@ -1,3 +1,7 @@
+import {
+  registerSourceGovernanceRoutes,
+  type SourceGovernanceInstallation,
+} from './routes/source-governance.js';
 import { realpathSync } from 'node:fs';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
@@ -52,6 +56,8 @@ import { registerOpenApi } from './openapi.js';
 export interface AppDependencies {
   /** An open better-sqlite3 database connection (real or in-memory). */
   db: Database.Database;
+  /** Server-owned receiver configuration; absent disables evidence governance. */
+  sourceGovernance?: SourceGovernanceInstallation;
   /** Opt-in private approval configuration. Request bodies cannot select this file or store. */
   reviewedStaleness?: Omit<ReviewedStalenessInstallation, 'databasePath'>;
   /** Suppress Fastify's built-in logger — useful in tests. Default: false. */
@@ -228,6 +234,17 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   void app.register(async (scope) => {
     registerHealthRoutes(scope, healthService);
     registerCandidateRoutes(scope, candidateService, promotionService, deps.indexRefresher);
+    registerSourceGovernanceRoutes(
+      scope,
+      deps.db,
+      tokenRegistry,
+      deps.sourceGovernance,
+      {
+        originSecret: deps.originSecret,
+        curation: { importExclusions: deps.importExclusions, holdLimits },
+      },
+      deps.indexRefresher,
+    );
     registerHoldRoutes(scope, holdService, deps.indexRefresher);
     registerMemoryRoutes(scope, memoryService, memoryRepo);
     if (deps.reviewedStaleness !== undefined) {

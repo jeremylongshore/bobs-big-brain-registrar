@@ -1,3 +1,4 @@
+import { sourceGovernanceConfigDigest } from './source-governance-config.js';
 import { readSourceControlInput } from './source-control-read.js';
 import { readStoredSourceRegistry } from './source-enrollment.js';
 import { withVerifiedSourceAdmission } from './source-admission.js';
@@ -151,10 +152,7 @@ export function applySourceGovernance(
           expected.policyDigest
       )
         throw new Error('Source candidate or policy changed before commit');
-      const configDigest = sourceGovernanceDigest({
-        originSecretDigest:
-          context.originSecret === undefined ? null : classificationHash(context.originSecret),
-      });
+      const configDigest = sourceGovernanceConfigDigest(context);
       if (configDigest !== expected.configDigest)
         throw new Error('Source configuration changed before commit');
       requireSourceEvent(floorEvent, deps);

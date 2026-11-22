@@ -1,3 +1,7 @@
+import {
+  hasUnsupportedSourceEvidence,
+  SOURCE_EVIDENCE_UNSUPPORTED,
+} from '@qmd-team-intent-kb/schema';
 import { randomUUID } from 'node:crypto';
 import type { MemoryCandidate, MemoryCategory } from '@qmd-team-intent-kb/schema';
 import { MEMORY_CANDIDATE_SCHEMA_VERSION } from '@qmd-team-intent-kb/schema';
@@ -30,6 +34,7 @@ export async function propose(
   config: McpServerConfig,
   nowFn: () => string = () => new Date().toISOString(),
 ): Promise<ProposeResult> {
+  if (hasUnsupportedSourceEvidence(input)) throw new Error(SOURCE_EVIDENCE_UNSUPPORTED);
   const candidateId = randomUUID();
 
   const candidate: MemoryCandidate = {

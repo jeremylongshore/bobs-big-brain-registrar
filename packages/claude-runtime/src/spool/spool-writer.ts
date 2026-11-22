@@ -1,3 +1,7 @@
+import {
+  hasUnsupportedSourceEvidence,
+  SOURCE_EVIDENCE_UNSUPPORTED,
+} from '@qmd-team-intent-kb/schema';
 import { mkdir, appendFile, chmod } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Result } from '@qmd-team-intent-kb/common';
@@ -19,6 +23,8 @@ export async function writeToSpool(
   spoolDir?: string,
   agentId?: string,
 ): Promise<Result<string, string>> {
+  if (hasUnsupportedSourceEvidence(candidate))
+    return { ok: false, error: SOURCE_EVIDENCE_UNSUPPORTED };
   const dir = spoolDir ?? getSpoolPath();
   const filename = agentId ? `spool-${agentId}.jsonl` : getSpoolFilename();
   const filepath = resolve(dir, filename);

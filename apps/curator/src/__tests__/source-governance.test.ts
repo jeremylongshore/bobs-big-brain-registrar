@@ -378,54 +378,88 @@ describe('transactional provenance governance', () => {
       'confidential',
     );
   });
-  it('carries a source restriction through authenticated snapshot export and cross-clone import', () => {
-    apply();
-    const transportKeys = generateActorKeypair();
-    const options = {
-      sourceId: 'synthetic-source',
-      sourceTenantId: f.candidate.tenantId,
-      destinationTenantId: 'destination',
-      sequence: 1,
-      issuedAt: '2026-11-22T09:01:00.000Z',
-      expiresAt: '2026-11-23T09:00:00.000Z',
-    };
-    const artifact = exportSourceSnapshot(db, options, transportKeys.privateKeyHex);
-    const snapshot = SignedSourceSnapshot.parse(JSON.parse(artifact));
-    expect(snapshot.payload.items[0]!.minimumSensitivity).toBe('confidential');
-    const destination = createTestDatabase();
-    try {
-      const target = sourceGovernanceRepositories(destination);
-      const checkpoint = {
-        ...options,
-        keyId: snapshot.payload.keyId,
-        publicKeyHex: transportKeys.publicKeyHex,
-        snapshotDigest: snapshot.digest,
-        validFrom: options.issuedAt,
-        validUntil: options.expiresAt,
-        revoked: false,
+  it.each([false, true])(
+    'retains snapshot floors and refuses required destination enrollment=%s',
+    (required) => {
+      apply();
+      const transportKeys = generateActorKeypair();
+      const options = {
+        sourceId: 'synthetic-source',
+        sourceTenantId: f.candidate.tenantId,
+        destinationTenantId: 'destination',
+        sequence: 1,
+        issuedAt: '2026-11-22T09:01:00.000Z',
+        expiresAt: '2026-11-23T09:00:00.000Z',
       };
-      // Checkpoint's closed schema has its own validity fields, not assertion timestamps.
-      const { issuedAt: _issued, expiresAt: _expires, ...pin } = checkpoint;
-      const importContext = {
-        tenantId: 'destination',
-        loadCheckpoints: () => [pin],
-        now: () => Date.parse(f.receiver.now),
-      };
-      const prepared = previewSourceImport([artifact], target, importContext);
-      const result = applySourceImport(prepared.plan, [artifact], target, importContext);
-      expect(result.outcomes[0]).toMatchObject({ status: 'promoted', sensitivity: 'confidential' });
-      const imported = target.memoryRepo.findById(result.outcomes[0]!.memoryId)!;
-      expect(
-        resolveCandidateMinimumSensitivity(
-          { ...f.candidate, id: randomUUID(), tenantId: 'destination', content: imported.content },
-          target.auditRepo,
-        ),
-      ).toBe('confidential');
-      expect(verifyAuditChain(target.auditRepo).breaks).toEqual([]);
-    } finally {
-      destination.close();
-    }
-  });
+      const artifact = exportSourceSnapshot(db, options, transportKeys.privateKeyHex);
+      const snapshot = SignedSourceSnapshot.parse(JSON.parse(artifact));
+      expect(snapshot.payload.items[0]!.minimumSensitivity).toBe('confidential');
+      const destination = createTestDatabase();
+      try {
+        const target = sourceGovernanceRepositories(destination);
+        const checkpoint = {
+          ...options,
+          keyId: snapshot.payload.keyId,
+          publicKeyHex: transportKeys.publicKeyHex,
+          snapshotDigest: snapshot.digest,
+          validFrom: options.issuedAt,
+          validUntil: options.expiresAt,
+          revoked: false,
+        };
+        // Checkpoint's closed schema has its own validity fields, not assertion timestamps.
+        const { issuedAt: _issued, expiresAt: _expires, ...pin } = checkpoint;
+        const importContext = {
+          tenantId: 'destination',
+          loadCheckpoints: () => [pin],
+          now: () => Date.parse(f.receiver.now),
+        };
+        if (required) {
+          const registry = structuredClone(f.registry);
+          registry.profiles.forEach((profile) => {
+            profile.tenantId = 'destination';
+          });
+          registry.keys.forEach((key) => {
+            key.tenantId = 'destination';
+          });
+          registry.enrollments.forEach((entry) => {
+            entry.tenantId = 'destination';
+          });
+          destination
+            .prepare('INSERT INTO source_classification_authority VALUES (1, ?)')
+            .run(JSON.stringify(registry));
+        }
+        const before = destination.serialize().toString('base64');
+        const prepared = previewSourceImport([artifact], target, importContext);
+        if (required) {
+          expect(() => applySourceImport(prepared.plan, [artifact], target, importContext)).toThrow(
+            'source-governance v1 API',
+          );
+          expect(destination.serialize().toString('base64')).toBe(before);
+          return;
+        }
+        const result = applySourceImport(prepared.plan, [artifact], target, importContext);
+        expect(result.outcomes[0]).toMatchObject({
+          status: 'promoted',
+          sensitivity: 'confidential',
+        });
+        const imported = target.memoryRepo.findById(result.outcomes[0]!.memoryId)!;
+        expect(
+          resolveCandidateMinimumSensitivity(
+            {
+              ...f.candidate,
+              id: randomUUID(),
+              tenantId: 'destination',
+              content: imported.content,
+            },
+            target.auditRepo,
+          ),
+        ).toBe('confidential');
+        expect(verifyAuditChain(target.auditRepo).breaks).toEqual([]);
+      } finally {
+        destination.close();
+      }
+    },
+  );
   it.each([
     'minimumSensitivity',
     'assertionDigest',

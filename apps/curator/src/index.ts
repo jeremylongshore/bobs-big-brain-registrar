@@ -265,3 +265,9 @@ export {
   completeHoldEscalation,
 } from './hold/escalation.js';
 export type { HoldEscalationPlan, HoldEscalationCompletion } from './hold/escalation.js';
+
+// Evidence-aware ingress may call governance, never registry provisioning or admission scopes.
+export { previewSourceGovernance, applySourceGovernance } from './origin/source-governance.js';
+export { SourceGovernancePlan } from './origin/source-governance-schema.js';
+export type { SourceGovernanceContext } from './origin/source-governance-schema.js';
+export { SourceEnrollmentRequiredError } from './origin/source-enrollment.js';
