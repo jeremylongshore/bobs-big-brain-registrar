@@ -469,8 +469,8 @@ ALTER TABLE candidates ADD COLUMN origin_json TEXT;
   },
   {
     // Empty by default. Provisioning/enrollment is separate operator work.
-    // Keeping authority in the governed store makes all owning processes read
-    // the same registry instead of choosing a request-supplied configuration.
+    // Authority for the legacy admission guard only. The source-governance
+    // context is not yet loaded from or bound to this record.
     version: 12,
     name: 'add_source_classification_authority',
     sql: `

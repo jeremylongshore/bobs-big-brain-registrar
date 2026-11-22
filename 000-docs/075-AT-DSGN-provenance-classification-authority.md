@@ -320,9 +320,12 @@ capture coverage, registry custody, deployment readiness or production adoption.
 ## Implemented legacy enrollment guard (2026-11-22)
 
 Task `compile-then-govern-39z.11.4.4.1` adds schema migration 12 and an
-empty-by-default `source_classification_authority` singleton record. The record
-holds the existing strict versioned registry; it is independent of candidates,
-request metadata and policy selection. This milestone has no provisioning API,
+empty-by-default `source_classification_authority` singleton table with zero
+rows. A provisioned record holds the existing strict versioned registry; it is independent of candidates,
+request metadata and policy selection. This record is authoritative only for
+the legacy guard; the source-governance core still uses its separately supplied
+authority context. Those sources are not yet transactionally integrated. This
+milestone has no provisioning API,
 CLI, migration of existing authority, or operational enrollment. Tests populate
 only disposable synthetic databases.
 
@@ -351,7 +354,9 @@ exercise actual API/MCP/spool/import/recovery/background endpoints. This guard's
 unit/integration evidence does not establish every endpoint's error mapping or
 capture capability. Do not enroll a live tenant until those adapters and their
 operational acceptance exist. Unsupported consumers, including frozen Plugin85,
-remain held. Older binaries do not read this new record: rolling code back after
-enrollment requires stopping writers and an approved compatibility plan, not
-assuming the table alone enforces admission. Raw privileged SQLite writes remain
-outside the application boundary and its tamper-evident trust model.
+remain held. No older-binary compatibility test is added here. Binaries predating
+this feature are not expected to enforce the stored registry; rolling code back
+after enrollment requires stopping writers and a separate compatibility plan.
+Raw privileged SQLite writes remain outside this application-level guard. The
+new table itself provides no independent tamper evidence against a privileged
+writer.
