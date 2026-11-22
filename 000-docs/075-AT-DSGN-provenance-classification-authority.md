@@ -1,7 +1,8 @@
 # Provenance classification authority
 
 **Status:** Proposed end-to-end contract with an implemented pure
-assertion-verification primitive and durable governance core. Ingress-wide
+assertion-verification primitive, stored-authority governance and configuration
+primitives. Ingress-wide
 enforcement, adoption and rollout remain open.
 **Date:** 2026-11-22
 **Parent:** `compile-then-govern-39z.11.4`
@@ -255,7 +256,10 @@ and does not preserve historical restrictions by itself. Registry digests detect
 changes only when a later consumer compares and revalidates them; they are not a
 freshness service. Returning `legacy` is explicitly outside the new protection.
 
-## Implemented durable governance core (2026-11-22)
+## Durable governance core milestone (PR471, 2026-11-22)
+
+This section records the PR471 milestone. The stored-authority integration below
+supersedes its supplied-registry interface; the other durable restrictions remain.
 
 Task `compile-then-govern-39z.11.4.3` implements `previewSourceGovernance` and
 `applySourceGovernance` as database-level functions. They have no CLI, HTTP, MCP,
@@ -317,7 +321,10 @@ This core inspects tenant rows and audit evidence when preparing a finite plan.
 Its correctness tests do not establish sustained ingestion throughput, live
 capture coverage, registry custody, deployment readiness or production adoption.
 
-## Implemented legacy enrollment guard (2026-11-22)
+## Legacy enrollment guard milestone (PR472, 2026-11-22)
+
+This section records PR472 behavior. The integration below supersedes the
+separate authority context and absence of an evidence-capable admission path.
 
 Task `compile-then-govern-39z.11.4.4.1` adds schema migration 12 and an
 empty-by-default `source_classification_authority` singleton table with zero
@@ -360,3 +367,76 @@ after enrollment requires stopping writers and a separate compatibility plan.
 Raw privileged SQLite writes remain outside this application-level guard. The
 new table itself provides no independent tamper evidence against a privileged
 writer.
+
+## Stored-authority admission and configuration
+
+Task `compile-then-govern-39z.11.4.4.2` connects the source-governance core to the
+same stored registry used by legacy admission. `SourceGovernanceContext` now
+supplies only trusted receiver identity/current time and the optional existing
+origin secret. It cannot supply a registry. A repository-wide call-site search finds only tests invoking these core
+preview/apply APIs; they are not exported from the curator package index and no
+CLI, HTTP, MCP, collector or background-job entrypoint calls them here; these changes are not an
+operational enrollment or complete ingress-adapter milestone.
+
+Preview and apply load the strict registry from their SQLite connection. Missing
+or invalid authority cannot fall back to an in-memory registry. Legacy calls
+still refuse a required tenant enrollment. Source-governance application opens
+an internal synchronous admission scope only after verifying current stored
+authority and writing the matching durable source floor. The scope binds the
+full candidate snapshot, exact assertion, receiver/ingress and authority digest.
+It is private to that database connection and removed in `finally` on success or
+failure. The helper does not reject a returned promise; the enclosing SQLite
+transaction rejects promise-returning callbacks. No request boolean, metadata label or historical floor opens it.
+
+The curator and promoter reverify the signature, time, current registry and
+matching floor at their admission checks. A changed candidate, registry, key,
+profile or receiver refuses. Removing a requirement while a source scope is
+active also refuses rather than changing to legacy behavior. A second candidate,
+second connection, later transaction or asynchronous continuation cannot inherit
+permission. Source governance still owns ordinary policy, member quarantine,
+holds, alias tightening, supersession refusal and final settlement checks. Exact
+historical replay returns its prior outcome; it does not create new admission.
+Trusted identity/clock callbacks are checked for row writes on the owning SQLite
+connection, so detected writes also roll back on preview and replay paths.
+This counter does not sandbox DDL, pragmas, other connections, arbitrary privileged
+JavaScript or external effects; the callbacks remain trusted read providers.
+
+`previewSourceAuthority` and `applySourceAuthority` are internal configuration
+primitives. Their integrating caller must establish **whole-store host-operator
+authority**, independently of any request. A declared human identity and `owner`
+role are validated and bound into the plan; they do not authenticate a person or
+turn a tenant owner into a host operator. No provisioning command, API endpoint,
+installed consumer or live authorization is added here.
+
+Configuration preview is read-only and binds the previous and proposed registry
+digests, next revision, audit-chain tip and operator identity. Apply rechecks that
+plan inside an immediate transaction and records a `source-authority-change-v1`
+receipt with digests/revision under the `source-authority` audit tenant. The receipt
+contains no profile catalog, key material or source content. Stored-record,
+operator actor/role or receipt drift rolls back the change. The operator clock
+may advance and is not bound into the operator digest. Repeated/stale plans refuse;
+after an uncertain result, reconcile the current registry and receipt rather than
+blindly retrying the previous plan.
+
+Every configuration change requires the global registry revision to advance by one,
+including key-scope changes and revocation. This initial path requires
+valid scoped profile references and valid key lifetime ordering. It cannot remove
+any enrollment or disable a required enrollment, lower an existing profile, change its source
+binding, introduce a weaker profile for an already known receiver/tenant/source
+context, delete existing profiles/key identities, replace key material under an
+existing identity, or reactivate revoked signing material under any key identity. Changed profile and enrollment
+entries also require advancing their own revisions; keys have no separate revision
+field, so their changes are bound by the global registry revision and plan digest. Tightening, key revocation and adding
+new identities remain possible through an exactly reviewed plan. Replacing key material
+requires a new identity; revoking the old identity is a separate allowed change.
+An active key cannot reuse material marked revoked in the previous or proposed
+registry, including under a different producer or key ID. Broader relaxation,
+pruning or de-enrollment needs a separate operation; no force flag is provided.
+
+The configuration receipt supplies application-level audit evidence. The mutable
+registry row is not independently authenticated against that receipt on each read,
+and privileged raw SQLite changes remain outside this guard. No new tamper-evidence
+claim is made for the table itself. Old-binary compatibility and rollback after
+actual enrollment remain unverified. Parent `.4.4` retains actual capture and
+endpoint/process adoption; `.4.5` retains operational acceptance requiring separate
+authorization. Frozen consumers are not activated by this source milestone.

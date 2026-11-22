@@ -152,16 +152,14 @@ describe('persisted source enrollment blocks legacy admission', () => {
     ).toThrow('Invalid stored source authority');
     untouched();
   });
-  it('does not mistake the existing source-floor core for an enrolled adapter', () => {
+  it('admits the source-governance core using stored authority', () => {
     deps.candidateRepo.insert(f.candidate, computeContentHash(f.candidate.content));
     store();
     const wire = signSourceClassification(f.payload, f.keys.privateKey);
-    const context = { readAuthority: () => ({ registry: f.registry, receiver: f.receiver }) };
+    const context = { readReceiver: () => f.receiver };
     const plan = previewSourceGovernance(f.candidate.id, wire, db, context);
-    expect(() => applySourceGovernance(plan, wire, db, context)).toThrow(
-      SourceEnrollmentRequiredError,
-    );
-    untouched();
-    expect(deps.candidateRepo.findById(f.candidate.id)?.status).toBe('inbox');
+    expect(applySourceGovernance(plan, wire, db, context).settlement.outcome).toBe('promoted');
+    expect(deps.candidateRepo.findById(f.candidate.id)?.status).toBe('promoted');
+    expect(() => direct()).toThrow(SourceEnrollmentRequiredError);
   });
 });

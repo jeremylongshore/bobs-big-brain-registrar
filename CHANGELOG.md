@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bind source-governance admission to the stored registry with fresh verification
+  scoped to one candidate/transaction. Add internal configuration preview/apply
+  primitives with revision, restriction and receipt checks. Capture adapters,
+  provisioning endpoints and live enrollment remain unfinished
+  (`compile-then-govern-39z.11.4.4.2`).
+
 - Add transactional source-provenance governance with durable sensitivity floors,
   replay settlement, content-alias tightening, current-authority rechecks and
   authenticated snapshot transport support. The core has synthetic integration

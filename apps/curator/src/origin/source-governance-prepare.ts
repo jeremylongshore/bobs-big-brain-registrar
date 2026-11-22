@@ -1,3 +1,5 @@
+import { readSourceControlInput } from './source-control-read.js';
+import { readStoredSourceRegistry } from './source-enrollment.js';
 import type Database from 'better-sqlite3';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import { PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
@@ -46,8 +48,10 @@ export function prepareSourceGovernance(
   const deps = sourceGovernanceRepositories(db);
   requireSourceGovernanceChain(deps.auditRepo);
   const candidate = MemoryCandidate.parse(deps.candidateRepo.findById(candidateId));
-  const authority = context.readAuthority();
-  const receiver = SourceClassificationReceiver.parse(authority.receiver);
+  const receiver = SourceClassificationReceiver.parse(
+    readSourceControlInput(db, () => context.readReceiver()),
+  );
+  const authority = { registry: readStoredSourceRegistry(db), receiver };
   const verified = verifySourceClassification({ ...authority, receiver, candidate, serialized });
   if (verified.status !== 'verified')
     throw new Error('Source governance requires current verified authority');
