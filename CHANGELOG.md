@@ -82,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Limit root test file workers to half the available CPUs and isolate independent FIFO recovery refusal cases, reducing child-process startup contention without increasing test or subprocess deadlines (`compile-then-govern-bkr`).
+
 - Refuse affected candidate-ID/digest binding conflicts across destination tenants and lifecycles before merge writes, without exposing foreign row data or rewriting history.
 
 - Preflight every merge input before promotion or persistence. Refuse content

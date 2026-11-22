@@ -196,18 +196,30 @@ describe('actual recovery maintenance command', () => {
     expect(statSync(implicitKey).mode & 0o777).toBe(0o640);
     expect(existsSync(join(root, '.write.lock'))).toBe(false);
   });
-  it('refuses writerless FIFO request, plan, key and database files without blocking', () => {
+  it.each(['request', 'status plan', 'apply plan', 'key'] as const)(
+    'refuses a writerless FIFO %s without blocking',
+    (kind) => {
+      const fifo = join(root, 'private.fifo');
+      expect(spawnSync('/usr/bin/mkfifo', ['-m', '600', fifo]).status).toBe(0);
+      const digest = kind === 'request' ? '' : plan();
+      const before = snapshot();
+      const args =
+        kind === 'request'
+          ? ['plan', '--request', fifo, '--out', join(root, 'fifo-plan.json')]
+          : kind === 'status plan'
+            ? ['status', '--plan', fifo, '--digest', digest]
+            : kind === 'apply plan'
+              ? ['apply', '--plan', fifo, '--digest', digest]
+              : ['apply', '--plan', planPath, '--digest', digest, '--origin-secret-file', fifo];
+      expect(command(args).code).toBe(1);
+      expect(snapshot()).toEqual(before);
+      expect(existsSync(join(root, '.write.lock'))).toBe(false);
+      expect(existsSync(join(root, 'fifo-plan.json'))).toBe(false);
+    },
+  );
+  it('refuses a writerless FIFO database in a bounded opener process', () => {
     const fifo = join(root, 'private.fifo');
     expect(spawnSync('/usr/bin/mkfifo', ['-m', '600', fifo]).status).toBe(0);
-    const digest = plan();
-    for (const args of [
-      ['plan', '--request', fifo, '--out', join(root, 'fifo-plan.json')],
-      ['status', '--plan', fifo, '--digest', digest],
-      ['apply', '--plan', fifo, '--digest', digest],
-      ['apply', '--plan', planPath, '--digest', digest, '--origin-secret-file', fifo],
-    ]) {
-      expect(command(args).code).toBe(1);
-    }
     // The exported opener is exercised in its own bounded process: a regression
     // must fail the test rather than indefinitely block the test worker.
     const opener = resolve('packages/store/dist/index.js');
@@ -223,7 +235,6 @@ describe('actual recovery maintenance command', () => {
     expect(child.stdout).toBe('refused');
     expect(child.stderr).toBe('');
     expect(existsSync(join(root, '.write.lock'))).toBe(false);
-    expect(existsSync(join(root, 'fifo-plan.json'))).toBe(false);
   });
   it('refuses permissive explicit keys without chmod or plan creation', () => {
     chmodSync(keyPath, 0o640);
