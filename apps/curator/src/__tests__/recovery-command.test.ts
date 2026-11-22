@@ -235,6 +235,7 @@ describe('actual recovery maintenance command', () => {
     expect(child.stdout).toBe('refused');
     expect(child.stderr).toBe('');
     expect(existsSync(join(root, '.write.lock'))).toBe(false);
+    expect(existsSync(join(root, 'fifo-plan.json'))).toBe(false);
   });
   it('refuses permissive explicit keys without chmod or plan creation', () => {
     chmodSync(keyPath, 0o640);

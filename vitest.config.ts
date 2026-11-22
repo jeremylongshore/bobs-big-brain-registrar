@@ -4,8 +4,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // File workers also launch bounded Node/qmd children. Leave CPU capacity for
-    // those processes instead of spending short test deadlines on contention.
+    // File workers also launch bounded Node/qmd children. Limit file concurrency
+    // to reduce competition; this does not reserve CPU capacity.
     maxWorkers: '50%',
     globalSetup: [
       fileURLToPath(new URL('./tests/support/fixture-global-setup.ts', import.meta.url)),
