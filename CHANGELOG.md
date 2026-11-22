@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Override the transitive hono, @hono/node-server, qs, glob and minimatch advisories reachable
+  through the qmd MCP SDK, testcontainers and Stryker so `pnpm audit` is clean again; six
+  production dependencies bumped by Dependabot (#457).
+
 ### Added
 
 - Add separate hand-authored skill eval profiles for synthetic response-policy and
