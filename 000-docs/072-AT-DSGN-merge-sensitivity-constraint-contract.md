@@ -124,6 +124,14 @@ This preflight does not authenticate either clone, transport source floor
 receipts, or prove that an export is complete. It is a prerequisite to the
 transport contract, whose authority and application routes remain proposed.
 
+Matching destination-tenant rows participate in preflight: same-identity
+snapshots must agree, and content-hash groups include existing destination copies.
+Schema-normalized snapshots are compared in their JSON representation, so optional
+undefined properties and absent JSON fields do not create false conflicts. An
+identity already bound to another tenant refuses before persistence.
+The dedupe seed is tenant-scoped; equal text in another tenant cannot suppress
+this tenant’s import.
+
 Content-hash deduplication also requires preflight: distinct identities with equal
 content must agree on their schema-normalized semantic fields and destination-local
 reviewed floors. The comparison excludes IDs, promotion/update timestamps and row

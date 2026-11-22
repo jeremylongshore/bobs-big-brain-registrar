@@ -85,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preflight every merge input before promotion or persistence. Refuse content
   hash, tenant, lifecycle and duplicate snapshot conflicts instead of silently
   choosing the first clone. Preflight content-hash groups across distinct IDs
-  for conflicting semantic fields and destination-local floors before deduplication.
+  for conflicting semantic fields and destination-local floors before deduplication,
+  including matching destination rows. Scope the dedupe seed to the requested tenant.
   Cross-clone constraint transport remains open under
   `compile-then-govern-39z.11.1`.
 

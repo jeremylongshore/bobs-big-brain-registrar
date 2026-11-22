@@ -253,6 +253,14 @@ function mergeClock(index: number): string {
   return new Date(MERGE_EPOCH_MS + index).toISOString();
 }
 
+function normalizeMergeSnapshot(input: unknown): CuratedMemory {
+  const parsed = CuratedMemorySchema.safeParse(input);
+  if (!parsed.success) throw new Error('Merge input contains an invalid curated row');
+  // Optional undefined properties can be present on repository projections but
+  // absent from JSON clone input. Compare their JSON-domain representation.
+  return JSON.parse(JSON.stringify(parsed.data)) as CuratedMemory;
+}
+
 /**
  * Run the govern-at-merge gate over the UNION of two clones' promoted rows.
  *
@@ -282,11 +290,7 @@ export function mergeGovern(
   // Source rows are claims, not authority: disagreement refuses the whole pass
   // rather than choosing whichever clone was listed first. Constraint transport
   // and reviewed reconciliation remain separate work (design 072).
-  const rows = [...cloneA, ...cloneB].map((input) => {
-    const parsed = CuratedMemorySchema.safeParse(input);
-    if (!parsed.success) throw new Error('Merge input contains an invalid curated row');
-    return parsed.data;
-  });
+  const rows = [...cloneA, ...cloneB].map(normalizeMergeSnapshot);
   rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const unionById = new Map<string, CuratedMemory>();
   for (const memory of rows) {
@@ -306,12 +310,30 @@ export function mergeGovern(
   }
   const union = [...unionById.values()];
 
+  for (const memory of union) {
+    const existingIdentity = deps.memoryRepo.findById(memory.id);
+    if (existingIdentity !== null && existingIdentity.tenantId !== options.tenantId) {
+      throw new Error('Merge identity is already bound outside the destination tenant');
+    }
+  }
+  const incomingHashes = new Set(union.map((memory) => memory.contentHash));
+  const destinationMatches = deps.memoryRepo
+    .findByTenant(options.tenantId)
+    .map(normalizeMergeSnapshot)
+    .filter((memory) => {
+      const incoming = unionById.get(memory.id);
+      if (incoming !== undefined && !isDeepStrictEqual(incoming, memory)) {
+        throw new Error('Merge destination contains a conflicting identity snapshot');
+      }
+      return incomingHashes.has(memory.contentHash);
+    });
+
   // The later content-hash dedupe can also discard DIFFERENT identities. Check
   // their semantic snapshots before that happens. Capture/promotion identities,
   // timestamps and row versions can differ; provenance, metadata, declared
   // restrictions and policy evidence cannot silently select a winner.
   const constraintsByHash = new Map<string, unknown>();
-  for (const memory of union) {
+  for (const memory of [...union, ...destinationMatches]) {
     const {
       id: _id,
       candidateId: _candidateId,
@@ -334,9 +356,11 @@ export function mergeGovern(
     constraintsByHash.set(memory.contentHash, constraints);
   }
 
-  // 3. SEED the dedupe set from the merged DB's existing content hashes (the same
-  //    call the eval harness uses), then accrete each newly-promoted row's hash.
-  const existingHashes = new Set<string>(deps.memoryRepo.getAllContentHashes());
+  // 3. Seed only this tenant's existing hashes, then accrete promoted hashes.
+  //    Another tenant's equal text must not suppress this tenant's import.
+  const existingHashes = new Set<string>(
+    deps.memoryRepo.getContentHashesByTenant(options.tenantId),
+  );
 
   const pipeline = options.policy !== undefined ? new PolicyPipeline(options.policy) : undefined;
 

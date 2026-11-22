@@ -352,6 +352,69 @@ describe('mergeGovern - govern-at-merge gate', () => {
   });
 
   describe('content-duplicate constraint preflight', () => {
+    for (const sameIdentity of [false, true]) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses destination conflicts, same identity=${sameIdentity}, policy=${withPolicy}`, () => {
+          const stored = makeRow('A planning record already present in the destination.');
+          deps.memoryRepo.insert(stored);
+          const incoming = sameIdentity
+            ? { ...stored, sensitivity: 'confidential' as const }
+            : makeRow(stored.content, {
+                sensitivity: 'confidential',
+                metadata: { filePaths: [], tags: [], audience: 'owner' },
+              });
+          const unrelated = makeRow('An unrelated valid incoming row must not be partly written.');
+          const before = JSON.stringify(deps.memoryRepo.findByTenant(TENANT));
+          expect(() =>
+            mergeGovern([unrelated], [incoming], deps, {
+              tenantId: TENANT,
+              ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+            }),
+          ).toThrow(/conflicting.*(?:snapshot|constraint)/);
+          expect(JSON.stringify(deps.memoryRepo.findByTenant(TENANT))).toBe(before);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+
+    it('deduplicates an identical destination snapshot without changing it', () => {
+      const stored = makeRow(
+        'An identical source and destination snapshot needs no new promotion.',
+      );
+      deps.memoryRepo.insert(stored);
+      const result = mergeGovern([stored], [], deps, { tenantId: TENANT });
+      expect(result.promoted).toHaveLength(0);
+      expect(result.quarantined).toHaveLength(1);
+      expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('refuses a cross-tenant identity collision before writing another incoming row', () => {
+      const stored = makeRow('A globally keyed identity already belongs to another tenant.', {
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(stored);
+      const incoming = { ...stored, tenantId: TENANT };
+      const unrelated = makeRow('Another incoming record must remain unwritten on collision.');
+      expect(() => mergeGovern([unrelated], [incoming], deps, { tenantId: TENANT })).toThrow(
+        'outside the destination tenant',
+      );
+      expect(deps.memoryRepo.count()).toBe(1);
+      expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('does not deduplicate against another tenant content', () => {
+      const stored = makeRow('Equal text in another tenant must not suppress this tenant import.', {
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(stored);
+      const incoming = makeRow(stored.content);
+      const result = mergeGovern([incoming], [], deps, { tenantId: TENANT });
+      expect(result.promoted).toHaveLength(1);
+      expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
+    });
+
     it('refuses when distinct identities have different destination-local reviewed floors', () => {
       const first = makeRow('Identical content with a reviewed local privacy floor.');
       const second = makeRow(first.content);
