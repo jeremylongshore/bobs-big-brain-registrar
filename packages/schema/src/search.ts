@@ -25,20 +25,18 @@ export type SearchQuery = z.infer<typeof SearchQuery>;
 /** A single search result hit */
 export const SearchHit = z.object({
   /**
-   * UUID of the governed memory this hit resolves to. Present on the SQLite
-   * metadata path; absent on the qmd retrieval path, where a hit is anchored
-   * by its `citation` (qmd:// URI) rather than a store row.
+   * UUID of the governed memory this hit resolves to. Current API search
+   * supplies it on both SQLite and qmd paths. Optional for older consumers.
    */
   memoryId: Uuid.optional(),
   title: NonEmptyString,
   snippet: z.string(),
   score: z.number().min(0).max(1),
-  /** Governed memory category. Absent on qmd hits, which carry `collection`. */
+  /** Current governed memory category. Optional for older consumers. */
   category: MemoryCategory.optional(),
   /**
-   * The tamper-evident citation for this hit — a `qmd://<collection>/<file>`
-   * URI emitted by qmd. This is the wedge: every retrieved answer is anchored
-   * to a verifiable source, not just recalled. Present on the qmd path.
+   * Current governed memory locator, `qmd://<collection>/<uuid>.md`, on the
+   * qmd path. It does not attest export/index freshness or authenticate content.
    */
   citation: z.string().optional(),
   /** qmd collection the hit came from (e.g. `kb-curated`). Present on the qmd path. */

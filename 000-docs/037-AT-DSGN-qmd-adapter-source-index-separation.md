@@ -134,3 +134,7 @@ failures still return index hits, and snippets are not bound to the current row'
 content after redaction. Those gaps are tracked in
 `compile-then-govern-39z.11.3`; this change is not complete read-privacy enforcement
 or evidence of deployed consumer adoption.
+
+The subsequent [current-store authority contract](074-AT-DSGN-current-store-search-authority.md)
+supersedes those unresolved-citation and store-error compatibility paths in source.
+It also replaces indexed snippets with current authorized content; rollout remains separate.

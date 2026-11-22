@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -34,53 +34,69 @@ function fakeAdapter(
 }
 
 describe('searchTool — local qmd mode (TEAMKB_API_URL unset)', () => {
-  it('returns qmd:// citations from the local adapter', async () => {
-    const adapter = fakeAdapter([
-      {
-        file: 'qmd://kb-curated/system-map.md',
-        score: 0.9,
-        snippet: 'map',
-        collection: 'kb-curated',
-      },
-    ]);
-    const result = await searchTool({ query: 'caddy' }, makeConfig(), {
-      makeAdapter: () => adapter,
+  let dir: string;
+  let db: ReturnType<typeof createDatabase>;
+  let config: McpServerConfig;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'search-local-'));
+    config = makeConfig({ basePath: dir, dbPath: join(dir, 'store.db') });
+    db = createDatabase({ path: config.dbPath });
+  });
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+  function seed(score: number) {
+    const row = makeMemory({
+      tenantId: config.tenantId,
+      category: 'pattern',
+      content: 'current map',
     });
-
+    new MemoryRepository(db).insert(row);
+    return {
+      file: `qmd://kb-curated/${row.id}.md`,
+      score,
+      snippet: 'stale map',
+      collection: 'kb-curated',
+    };
+  }
+  it('returns current content from a governed citation', async () => {
+    const hit = seed(0.9);
+    const result = await searchTool({ query: 'caddy' }, config, {
+      makeAdapter: () => fakeAdapter([hit]),
+    });
     expect(result.source).toBe('qmd-local');
     expect(result.scope).toBe('curated');
     expect(result.count).toBe(1);
-    expect(result.results[0]!.citation).toBe('qmd://kb-curated/system-map.md');
-    expect(result.results[0]!.collection).toBe('kb-curated');
-  });
-
-  it('passes tenant + exportDir into the adapter factory', async () => {
-    let seen: { tenantId?: string; exportDir?: string } = {};
-    await searchTool({ query: 'x' }, makeConfig({ tenantId: 'acme', exportDir: '/data/exp' }), {
-      makeAdapter: (tenantId, exportDir) => {
-        seen = { tenantId, exportDir };
-        return fakeAdapter([]);
-      },
-    });
-    expect(seen.tenantId).toBe('acme');
-    expect(seen.exportDir).toBe('/data/exp');
-  });
-
-  it('honours the limit', async () => {
-    const hits = Array.from({ length: 5 }, (_, i) => ({
-      file: `qmd://kb-curated/${i}.md`,
-      score: 1 - i / 10,
-      snippet: '',
+    expect(result.results[0]).toMatchObject({
+      citation: hit.file,
       collection: 'kb-curated',
-    }));
-    const result = await searchTool({ query: 'x', limit: 2 }, makeConfig(), {
+      snippet: 'current map',
+    });
+  });
+  it('passes tenant and exportDir into the adapter factory', async () => {
+    let seen: { tenantId?: string; exportDir?: string } = {};
+    await searchTool(
+      { query: 'x' },
+      { ...config, tenantId: 'acme', exportDir: '/data/exp' },
+      {
+        makeAdapter: (tenantId, exportDir) => {
+          seen = { tenantId, exportDir };
+          return fakeAdapter([]);
+        },
+      },
+    );
+    expect(seen).toEqual({ tenantId: 'acme', exportDir: '/data/exp' });
+  });
+  it('honours the limit on current authorized rows', async () => {
+    const hits = Array.from({ length: 5 }, (_, i) => seed(1 - i / 10));
+    const result = await searchTool({ query: 'x', limit: 2 }, config, {
       makeAdapter: () => fakeAdapter(hits),
     });
     expect(result.results).toHaveLength(2);
   });
-
-  it('degrades to empty results when qmd fails (no throw)', async () => {
-    const result = await searchTool({ query: 'x' }, makeConfig(), {
+  it('degrades to empty results when qmd fails', async () => {
+    const result = await searchTool({ query: 'x' }, config, {
       makeAdapter: () => fakeAdapter([], true),
     });
     expect(result.count).toBe(0);
@@ -160,6 +176,7 @@ describe('searchTool — local read-time sensitivity filter (5bm.11)', () => {
     const repo = new MemoryRepository(db);
     const visible = makeMemory({
       tenantId: 'test-tenant',
+      category: 'pattern',
       title: 'Public map',
       sensitivity: 'internal',
     });
