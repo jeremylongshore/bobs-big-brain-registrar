@@ -143,12 +143,17 @@ export class SearchService {
 
     // Freshness + category rerank (same policy as the SQLite fallback, R1 of
     // the retrieval epic). Citations resolve back to store rows by id — the
-    // exporter names files `{memoryId}.md` — purely for ranking metadata; the
-    // qmd index itself is already tenant-scoped, and ids are globally unique.
+    // exporter names files `{memoryId}.md`. Check resolved tenant membership
+    // independently of adapter scoping. Do not turn a foreign row into an
+    // unresolved citation, which retains legacy public/tenant defaults.
+    const foreignMemoryIds = new Set<string>();
     const reranked = rerankCitedHits(
       normalised,
       (memoryId) => {
         const memory = this.memoryRepo.findById(memoryId);
+        if (memory !== null && query.tenantId !== undefined && memory.tenantId !== query.tenantId) {
+          foreignMemoryIds.add(memoryId);
+        }
         return memory === null
           ? null
           : {
@@ -176,6 +181,7 @@ export class SearchService {
     // a memory was narrowed.
     const visible = reranked.filter(
       (hit) =>
+        (hit.memoryId === null || !foreignMemoryIds.has(hit.memoryId)) &&
         isSearchVisibleSensitivity(hit.sensitivity) &&
         isAudienceVisibleToRole(hit.audience, readerRole),
     );

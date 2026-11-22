@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Recheck resolved qmd hits for tenant-scoped API queries and, when store lookup
+  succeeds, tenant and audience in local MCP search
+  (`compile-then-govern-39z.11.2`). Local admin does not confer owner standing.
+  Unresolved citations, stale index content and store-error fallback remain
+  tracked separately in `compile-then-govern-39z.11.3`.
+
 ### Added
 
 - Expose authenticated snapshot export, preview and apply through the curator

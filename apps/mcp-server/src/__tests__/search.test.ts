@@ -158,8 +158,13 @@ describe('searchTool — local read-time sensitivity filter (5bm.11)', () => {
     const dbPath = join(dir, 'teamkb.db');
     const db = createDatabase({ path: dbPath });
     const repo = new MemoryRepository(db);
-    const visible = makeMemory({ title: 'Public map', sensitivity: 'internal' });
+    const visible = makeMemory({
+      tenantId: 'test-tenant',
+      title: 'Public map',
+      sensitivity: 'internal',
+    });
     const secret = makeMemory({
+      tenantId: 'test-tenant',
       title: 'Secret map',
       sensitivity: 'confidential',
       contentHash: 'c'.repeat(64),
