@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through the qmd MCP SDK, testcontainers and Stryker so `pnpm audit` is clean again; six
   production dependencies bumped by Dependabot (#457).
 
-||||||| 8f3a4dc
 ### Fixed
 
 - Include the repository's Apache-2.0 license text and package metadata in the
