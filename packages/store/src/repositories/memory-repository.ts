@@ -223,6 +223,7 @@ export class MemoryRepository {
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindById: Database.Statement;
   private readonly stmtExistsForCandidate: Database.Statement;
+  private readonly stmtConflictingCandidateContent: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByHash: Database.Statement;
   private readonly stmtFindByHashAndTenant: Database.Statement;
@@ -275,6 +276,10 @@ export class MemoryRepository {
     `);
     this.stmtExistsForCandidate = db.prepare(`
       SELECT 1 FROM curated_memories WHERE candidate_id = ? AND tenant_id = ? LIMIT 1
+    `);
+
+    this.stmtConflictingCandidateContent = db.prepare(`
+      SELECT 1 FROM curated_memories WHERE candidate_id = ? AND content_hash <> ? LIMIT 1
     `);
 
     this.stmtFindByTenant = db.prepare(`
@@ -427,6 +432,11 @@ export class MemoryRepository {
   /** Whether this tenant has ever admitted the candidate, in any memory lifecycle. */
   existsForCandidate(candidateId: string, tenantId: string): boolean {
     return this.stmtExistsForCandidate.get(candidateId, tenantId) !== undefined;
+  }
+
+  /** Internal merge invariant across tenants/lifecycles; exposes no foreign row data. */
+  hasConflictingCandidateContent(candidateId: string, contentHash: string): boolean {
+    return this.stmtConflictingCandidateContent.get(candidateId, contentHash) !== undefined;
   }
 
   /** Return all curated memories belonging to the given tenant. */

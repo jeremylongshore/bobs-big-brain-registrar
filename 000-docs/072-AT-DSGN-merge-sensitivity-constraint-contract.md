@@ -142,7 +142,8 @@ existing policy/bare content-hash deduplication. This checks supplied rows and
 local constraints only; it does not establish omitted foreign constraints or
 source authority, and therefore does not complete transport preservation.
 
-Candidate IDs also bind one content digest across supplied and destination rows;
+Candidate IDs also bind one content digest across supplied and destination rows,
+including destination rows in other tenants or non-active lifecycles;
 a changed body cannot evade comparison by producing a different memory ID.
 This checks consistency of available snapshots, not a reconstruction of a legacy
 candidate’s original namespace/workspace/path inputs.
@@ -152,3 +153,7 @@ must use the same connection; apply uses an immediate transaction, and preview u
 a deferred read transaction. A later promotion failure rolls back the whole pass.
 This holds the destination snapshot through writes; it does not lock remote sources
 or authenticate source snapshots supplied by callers.
+
+The merge checks affected candidate bindings across the destination store and
+refuses pre-existing conflicts without rewriting either row. This is a merge
+preflight, not a global write constraint or a migration of historical records.

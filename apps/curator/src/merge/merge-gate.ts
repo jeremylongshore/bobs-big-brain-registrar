@@ -332,6 +332,9 @@ function mergeGovernInTransaction(
   const union = [...unionById.values()];
 
   for (const memory of union) {
+    if (deps.memoryRepo.hasConflictingCandidateContent(memory.candidateId, memory.contentHash)) {
+      throw new Error('Merge destination contains a conflicting candidate content binding');
+    }
     const existingIdentity = deps.memoryRepo.findById(memory.id);
     if (existingIdentity !== null && existingIdentity.tenantId !== options.tenantId) {
       throw new Error('Merge identity is already bound outside the destination tenant');

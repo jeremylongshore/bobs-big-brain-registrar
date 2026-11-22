@@ -411,6 +411,64 @@ describe('mergeGovern - govern-at-merge gate', () => {
   });
 
   describe('content-duplicate constraint preflight', () => {
+    for (const lifecycle of ['active', 'superseded'] as const) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses changed candidate content in another tenant, lifecycle=${lifecycle}, policy=${withPolicy}`, () => {
+          const foreign = makeRow('Original body in a separate tenant.', {
+            tenantId: 'other-tenant',
+            lifecycle,
+            ...(lifecycle === 'superseded'
+              ? {
+                  supersession: {
+                    supersededBy: randomUUID(),
+                    reason: 'Synthetic prior replacement',
+                    linkedAt: NOW,
+                  },
+                }
+              : {}),
+          });
+          deps.memoryRepo.insert(foreign);
+          const incoming = makeRow('Changed body reusing the foreign candidate identity.', {
+            candidateId: foreign.candidateId,
+          });
+          const before = JSON.stringify(deps.memoryRepo.findByTenant('other-tenant'));
+          expect(() =>
+            mergeGovern([incoming], [], deps, {
+              tenantId: TENANT,
+              ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+            }),
+          ).toThrow('candidate content binding');
+          expect(deps.memoryRepo.count()).toBe(1);
+          expect(JSON.stringify(deps.memoryRepo.findByTenant('other-tenant'))).toBe(before);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+
+    it('refuses pre-existing cross-tenant candidate conflicts without rewriting either row', () => {
+      const incoming = makeRow('Existing destination body with an ambiguous candidate binding.');
+      const foreign = makeRow('Conflicting historical body for that same candidate.', {
+        candidateId: incoming.candidateId,
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(incoming);
+      deps.memoryRepo.insert(foreign);
+      const before = JSON.stringify([
+        deps.memoryRepo.findById(incoming.id),
+        deps.memoryRepo.findById(foreign.id),
+      ]);
+      expect(() => mergeGovern([incoming], [], deps, { tenantId: TENANT })).toThrow(
+        'candidate content binding',
+      );
+      expect(
+        JSON.stringify([
+          deps.memoryRepo.findById(incoming.id),
+          deps.memoryRepo.findById(foreign.id),
+        ]),
+      ).toBe(before);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
     for (const destination of [false, true]) {
       for (const withPolicy of [false, true]) {
         it(`refuses one candidate bound to different bodies, destination=${destination}, policy=${withPolicy}`, () => {
