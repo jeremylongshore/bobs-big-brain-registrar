@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add internal authenticated source snapshot export and verification with complete
+  active-tenant inventory, source sensitivity floors, Ed25519 signatures and
+  independently supplied scoped checkpoint pins. Destination import, durable
+  replay protection and protected CLI/legacy migration remain open; no live trust
+  enrollment or deployment (`compile-then-govern-39z.11.1.2`).
+
 - Document a proposed cross-clone sensitivity constraint contract, including
   source authority, evidence completeness, monotonic floors and acceptance cases.
-  Transport and live policy remain unimplemented (`compile-then-govern-39z.11`).
+  Destination transport and live policy remain unimplemented (`compile-then-govern-39z.11`).
 
 - Add an opt-in independent hold-expiry worker with private physical-store-bound
   configuration, shared writer locking, durable transport bindings, bounded
