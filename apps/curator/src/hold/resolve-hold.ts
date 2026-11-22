@@ -187,13 +187,13 @@ export function resolveHold(
   }
   if (hold.expired) {
     // Past its bound a hold can only close to the safe default, never promote.
-    if (!dryRun) expireHold(hold, deps, now);
+    const expiredNow = !dryRun && expireHold(hold, deps, now) !== null;
     return {
       ok: false,
       candidateId,
       code: 'hold_expired',
-      error: `The hold expired at ${hold.expiresAt}; the candidate ${dryRun ? 'would be' : 'was'} closed unpromoted`,
-      expiredNow: !dryRun,
+      error: `The hold expired at ${hold.expiresAt}; the candidate ${dryRun ? 'cannot be released' : expiredNow ? 'was closed unpromoted' : 'awaits a final escalation attempt before closure'}`,
+      expiredNow,
     };
   }
 

@@ -13,7 +13,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through the qmd MCP SDK, testcontainers and Stryker so `pnpm audit` is clean again; six
   production dependencies bumped by Dependabot (#457).
 
+||||||| 8f3a4dc
+### Fixed
+
+- Include the repository's Apache-2.0 license text and package metadata in the
+  standalone schema artifact, verified against the packed consumer fixture.
+  No package publication or runtime adoption is included
+  (`compile-then-govern-39z.11.4.4.4.6`).
+
+- Expose the existing source-classification v1 schema and signing codec through
+  the schema package's dedicated `source-classification` subpath. Curator keeps
+  compatibility re-exports; canonical bytes and receiver policy are unchanged.
+  An isolated packed-artifact test covers independent consumption. This does
+  not publish the package, enroll producers or activate consumers
+  (`compile-then-govern-39z.11.4.4.4.5`).
+
+- Add an opt-in, authenticated source-governance API with strict v1 preview/apply
+  envelopes, server-owned receiver/clock, current tenant authorization and the
+  existing disclosure/review controls. Legacy API, MCP and spool inputs refuse
+  reserved evidence fields instead of discarding them. Required-tenant CLI,
+  background and import paths retain admission refusal; no live enrollment or
+  frozen-plugin activation is included (`compile-then-govern-39z.11.4.4.3`).
+
+- Add an empty-by-default stored source registry and refuse legacy curator and
+  shared promotion paths for tenants with required source enrollment. Invalid
+  authority refuses admission; promotion rechecks inside its transaction.
+  This is a source-only guard: evidence-capable adapters, reviewed provisioning
+  and live enrollment remain unfinished (`compile-then-govern-39z.11.4.4.1`).
+
+- Resolve API and local MCP qmd hits against current governed rows before
+  returning content. Withhold unresolved or unreadable authority, use current
+  snippets after redaction, and enforce current lifecycle/bulk scope independent
+  of stale index labels. Legacy non-row citations no longer return cached text;
+  consumer adoption and index/export refresh remain operator work
+  (`compile-then-govern-39z.11.3`).
+
+- Recheck resolved qmd hits for tenant-scoped API queries and, when store lookup
+  succeeds, tenant and audience in local MCP search
+  (`compile-then-govern-39z.11.2`). Local admin does not confer owner standing.
+  Unresolved citations, stale index content and store-error fallback remain
+  tracked separately in `compile-then-govern-39z.11.3`.
+
 ### Added
+
+- Bind source-governance admission to the stored registry with fresh verification
+  scoped to one candidate/transaction. Add internal configuration preview/apply
+  primitives with revision, restriction and receipt checks. Capture adapters,
+  provisioning endpoints and live enrollment remain unfinished
+  (`compile-then-govern-39z.11.4.4.2`).
+
+- Add transactional source-provenance governance with durable sensitivity floors,
+  replay settlement, content-alias tightening, current-authority rechecks and
+  authenticated snapshot transport support. The core has synthetic integration
+  tests; actual ingress wiring and live enrollment remain separate work
+  (`compile-then-govern-39z.11.4.3`).
+
+- Add a pure, versioned Ed25519 source-classification assertion verifier with
+  receiver-owned profile/key scope, strict canonical encoding and candidate
+  content binding. This library is not wired to live ingress; durable floors,
+  replay settlement and caller adoption remain separate work
+  (`compile-then-govern-39z.11.4.2`).
+
+- Specify a proposed authenticated provenance-classification contract and pin
+  the existing origin HMAC boundary with eight synthetic field-mutation cases.
+  The v1 token authenticates its identity tuple, not unsigned source context;
+  new source policies, assertions and rollout remain unimplemented
+  (`compile-then-govern-39z.11.4.1`).
+
+- Expose authenticated snapshot export, preview and apply through the curator
+  library and a dedicated private-file operator CLI. Bind reviewed plans to the
+  physical destination and checkpoint provider; apply under the shared write
+  lock with explicit commit and post-commit status. Label compatible bare-row
+  merge as legacy unverified transport. No live enrollment, migration or rollout
+  (`compile-then-govern-39z.11.1.4`).
+
+- Add internal transactional verified-source import with durable alias sensitivity
+  floors, monotonic source checkpoint receipts, idempotent settlement and complete
+  transactional rollback for pre-commit authority, snapshot or receipt drift.
+  Post-commit uncertainty is reported without claiming rollback. Re-govern imports and tighten
+  matching destination rows without widening audience or reactivating archives.
+  Live rollout remains open
+  (`compile-then-govern-39z.11.1.3`).
+
+- Add internal authenticated source snapshot export and verification with complete
+  active-tenant inventory, source sensitivity floors, Ed25519 signatures and
+  independently supplied scoped checkpoint pins. No live trust
+  enrollment or deployment (`compile-then-govern-39z.11.1.2`).
+
+- Document a proposed cross-clone sensitivity constraint contract, including
+  source authority, evidence completeness, monotonic floors and acceptance cases.
+  Live authority enrollment and rollout remain unimplemented (`compile-then-govern-39z.11`).
+
+- Add an opt-in independent hold-expiry worker with private physical-store-bound
+  configuration, shared writer locking, durable transport bindings, bounded
+  executable notification protocol, and reconciliation instead of blind resend.
+  Preview is the default; systemd examples remain uninstalled. Estate notifier
+  integration and actual staged delivery remain open under
+  `compile-then-govern-2i3.6.2`.
 
 - Add separate hand-authored skill eval profiles for synthetic response-policy and
   sibling-trigger cases; no real brain writes, provider run or schedule activation.
@@ -76,6 +172,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or package publication is included.
 
 ### Fixed
+
+- Cap root test file workers at 50% of available CPUs and split independent FIFO recovery refusal cases into separate tests. Configured timeout values are unchanged, but each generated case receives its own test timeout (`compile-then-govern-bkr`).
+
+- Refuse affected candidate-ID/digest binding conflicts across destination tenants and lifecycles before merge writes, without exposing foreign row data or rewriting history.
+
+- Preflight every merge input before promotion or persistence. Refuse content
+  hash, tenant, lifecycle and duplicate snapshot conflicts instead of silently
+  choosing the first clone. Preflight content-hash groups across distinct IDs
+  for conflicting semantic fields and destination-local floors before deduplication,
+  including matching destination rows. Scope the dedupe seed to the requested tenant.
+  Refuse conflicting candidate-to-content bindings and keep preflight/promotions
+  in one transaction, rolling back the pass on a later promotion failure.
+  Cross-clone constraint transport remains open under
+  `compile-then-govern-39z.11.1`.
 
 - Associate Heroku UUID context with the original occurrence's source lines or
   an immediately preceding credential-specific label, preserving labeled split and encoded

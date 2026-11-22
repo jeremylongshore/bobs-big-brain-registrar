@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
   assertDisclosureClean,
   computeContentHash,
@@ -6,7 +7,10 @@ import {
 } from '@qmd-team-intent-kb/common';
 import { PolicyPipeline } from '@qmd-team-intent-kb/policy-engine';
 import type { PipelineResult } from '@qmd-team-intent-kb/policy-engine';
-import { MemoryCandidate as MemoryCandidateSchema } from '@qmd-team-intent-kb/schema';
+import {
+  CuratedMemory as CuratedMemorySchema,
+  MemoryCandidate as MemoryCandidateSchema,
+} from '@qmd-team-intent-kb/schema';
 import type { CuratedMemory, GovernancePolicy, MemoryCandidate } from '@qmd-team-intent-kb/schema';
 import type {
   AuditRepository,
@@ -59,7 +63,7 @@ import { promote } from '../promotion/promoter.js';
  * governed state and an identical audit outcome, because every step is symmetric
  * in its inputs:
  *
- *   - id-dedup of the union is a set operation (order-independent);
+ *   - id-dedup accepts only schema-normalized identical snapshots; conflicts refuse;
  *   - the union is sorted by content-derived id before processing, so the
  *     traversal order - and therefore the order in which `existingHashes`
  *     accretes - is identical regardless of which clone's rows arrived first;
@@ -249,8 +253,21 @@ function mergeClock(index: number): string {
   return new Date(MERGE_EPOCH_MS + index).toISOString();
 }
 
+function normalizeMergeSnapshot(input: unknown): CuratedMemory {
+  const parsed = CuratedMemorySchema.safeParse(input);
+  if (!parsed.success) throw new Error('Merge input contains an invalid curated row');
+  // Optional undefined properties can be present on repository projections but
+  // absent from JSON clone input. Compare their JSON-domain representation.
+  return JSON.parse(JSON.stringify(parsed.data)) as CuratedMemory;
+}
+
 /**
  * Run the govern-at-merge gate over the UNION of two clones' promoted rows.
+ *
+ * @deprecated Legacy unverified source transport. Bare rows cannot authenticate
+ * source authority or complete source sensitivity constraints. For protected
+ * transport use exportSourceSnapshot / previewSourceImport / applySourceImport.
+ * This compatibility API only re-governs supplied rows and destination evidence.
  *
  * Every row is re-governed as UNTRUSTED: the disclosure / secret choke point runs
  * first, then the full policy pipeline with an accreting content-hash dedupe set.
@@ -271,46 +288,134 @@ export function mergeGovern(
   deps: MergeGovernDependencies,
   options: MergeGovernOptions,
 ): MergeGovernResult {
+  if (deps.memoryRepo.connection !== deps.auditRepo.connection) {
+    throw new Error('Merge repositories must share one database connection');
+  }
+  const run = deps.memoryRepo.connection.transaction(() =>
+    mergeGovernInTransaction(cloneA, cloneB, deps, options),
+  );
+  return options.dryRun ? run.deferred() : run.immediate();
+}
+
+function validatedDestinationRows(memoryRepo: MemoryRepository, tenantId: string): CuratedMemory[] {
+  let destinationRows: CuratedMemory[];
+  try {
+    destinationRows = memoryRepo.findByTenant(tenantId).map(normalizeMergeSnapshot);
+  } catch {
+    // Do not expose stored row contents or misidentify destination damage as input.
+    throw new Error('Merge destination rows could not be read and schema-validated');
+  }
+  for (const memory of destinationRows) {
+    if (
+      computeContentHash(memory.content) !== memory.contentHash ||
+      deriveMemoryId(memory.candidateId, memory.contentHash) !== memory.id
+    ) {
+      throw new Error('Merge destination contains an inconsistent content or identity binding');
+    }
+  }
+  return destinationRows;
+}
+
+function mergeGovernInTransaction(
+  cloneA: readonly CuratedMemory[],
+  cloneB: readonly CuratedMemory[],
+  deps: MergeGovernDependencies,
+  options: MergeGovernOptions,
+): MergeGovernResult {
   const dryRun = options.dryRun ?? false;
 
-  // 1. UNION + id-dedup. Content-derived ids are stable across clones, so two
-  //    rows sharing an id are the same logical memory - keep the first seen.
-  //    This is a pure set operation: symmetric in (cloneA, cloneB).
+  // Validate EVERY supplied row before collapsing duplicates. Otherwise a valid
+  // first copy can hide a conflicting second copy, including private metadata.
+  // Source rows are claims, not authority: disagreement refuses the whole pass
+  // rather than choosing whichever clone was listed first. Constraint transport
+  // and reviewed reconciliation remain separate work (design 072).
+  const rows = [...cloneA, ...cloneB].map(normalizeMergeSnapshot);
+  rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const unionById = new Map<string, CuratedMemory>();
-  for (const memory of [...cloneA, ...cloneB]) {
-    if (!unionById.has(memory.id)) {
-      unionById.set(memory.id, memory);
-    }
-  }
-
-  // 2. DETERMINISTIC TRAVERSAL. Sort the unique union by content-derived id so
-  //    the accreting `existingHashes` set accumulates in the SAME order on every
-  //    clone, regardless of which clone's rows arrived first. This sort is the
-  //    one element that makes A∪B and B∪A byte-identical.
-  const union = [...unionById.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-
-  // 2b. GATE-ENTRY ID INVARIANT - a WHOLE-UNION pre-pass, before ANY promotion.
-  //     A row crossing a clone boundary is, by contract, a row a clone already
-  //     promoted, so its id MUST equal deriveMemoryId(candidateId, contentHash)
-  //     (the canonical promotion path mints it that way). A row whose id does not
-  //     reproduce under re-derivation carries a stray, non-content-derived id (e.g.
-  //     a v4 from an old code path) - poison for both id-dedup (which keys on .id,
-  //     so the same logical memory under two random ids survives twice) and the
-  //     id-sorted commutativity guarantee (a random id sorts to a per-clone
-  //     position). Validate the entire union up front so a single bad row aborts
-  //     the merge ATOMICALLY: nothing is written before the throw, regardless of
-  //     where the offending row falls in the sort order. Walking the already-sorted
-  //     union makes the FIRST reported offender deterministic across clones.
-  for (const memory of union) {
+  const candidateHashes = new Map<string, string>();
+  for (const memory of rows) {
     const expectedId = deriveMemoryId(memory.candidateId, memory.contentHash);
-    if (memory.id !== expectedId) {
-      throw new MergeIdInvariantError(memory.id, expectedId);
+    if (memory.id !== expectedId) throw new MergeIdInvariantError(memory.id, expectedId);
+    if (computeContentHash(memory.content) !== memory.contentHash) {
+      throw new Error('Merge input content does not match its declared hash');
+    }
+    if (memory.tenantId !== options.tenantId || memory.lifecycle !== 'active') {
+      throw new Error('Merge input requires active rows in the destination tenant');
+    }
+    const previousHash = candidateHashes.get(memory.candidateId);
+    if (previousHash !== undefined && previousHash !== memory.contentHash) {
+      throw new Error('Merge input contains a conflicting candidate content binding');
+    }
+    candidateHashes.set(memory.candidateId, memory.contentHash);
+    const previous = unionById.get(memory.id);
+    if (previous !== undefined && !isDeepStrictEqual(previous, memory)) {
+      throw new Error('Merge input contains conflicting snapshots for one memory identity');
+    }
+    unionById.set(memory.id, memory);
+  }
+  const union = [...unionById.values()];
+
+  for (const memory of union) {
+    if (deps.memoryRepo.hasIdentityOutsideTenant(memory.id, options.tenantId)) {
+      throw new Error('Merge identity is already bound outside the destination tenant');
+    }
+    if (
+      deps.memoryRepo.hasConflictingCandidateBinding(
+        memory.candidateId,
+        memory.contentHash,
+        options.tenantId,
+      )
+    ) {
+      throw new Error('Merge destination contains a conflicting candidate content binding');
     }
   }
+  const incomingHashes = new Set(union.map((memory) => memory.contentHash));
+  const destinationRows = validatedDestinationRows(deps.memoryRepo, options.tenantId);
+  const destinationMatches = destinationRows.filter((memory) => {
+    const incomingHash = candidateHashes.get(memory.candidateId);
+    if (incomingHash !== undefined && incomingHash !== memory.contentHash) {
+      throw new Error('Merge destination contains a conflicting candidate content binding');
+    }
+    const incoming = unionById.get(memory.id);
+    if (incoming !== undefined && !isDeepStrictEqual(incoming, memory)) {
+      throw new Error('Merge destination contains a conflicting identity snapshot');
+    }
+    return incomingHashes.has(memory.contentHash);
+  });
 
-  // 3. SEED the dedupe set from the merged DB's existing content hashes (the same
-  //    call the eval harness uses), then accrete each newly-promoted row's hash.
-  const existingHashes = new Set<string>(deps.memoryRepo.getAllContentHashes());
+  // The later content-hash dedupe can also discard DIFFERENT identities. Check
+  // their semantic snapshots before that happens. Capture/promotion identities,
+  // timestamps and row versions can differ; provenance, metadata, declared
+  // restrictions and policy evidence cannot silently select a winner.
+  const constraintsByHash = new Map<string, unknown>();
+  for (const memory of [...union, ...destinationMatches]) {
+    const {
+      id: _id,
+      candidateId: _candidateId,
+      promotedAt: _promotedAt,
+      updatedAt: _updatedAt,
+      version: _version,
+      ...semanticSnapshot
+    } = memory;
+    const constraints = {
+      ...semanticSnapshot,
+      minimumSensitivity: resolveCandidateMinimumSensitivity(
+        projectToUntrustedCandidate(memory),
+        deps.auditRepo,
+      ),
+    };
+    const previous = constraintsByHash.get(memory.contentHash);
+    if (previous !== undefined && !isDeepStrictEqual(previous, constraints)) {
+      throw new Error('Merge input contains conflicting content constraints');
+    }
+    constraintsByHash.set(memory.contentHash, constraints);
+  }
+
+  // 3. Seed only this tenant's existing hashes, then accrete promoted hashes.
+  //    Another tenant's equal text must not suppress this tenant's import.
+  const existingHashes = new Set<string>(
+    deps.memoryRepo.getContentHashesByTenant(options.tenantId),
+  );
 
   const pipeline = options.policy !== undefined ? new PolicyPipeline(options.policy) : undefined;
 

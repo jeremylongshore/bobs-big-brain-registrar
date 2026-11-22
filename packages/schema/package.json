@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
@@ -21,6 +22,11 @@
       "types": "./dist/contradiction-references.d.ts",
       "import": "./dist/contradiction-references.js",
       "default": "./dist/contradiction-references.js"
+    },
+    "./source-classification": {
+      "types": "./dist/source-classification.d.ts",
+      "import": "./dist/source-classification.js",
+      "default": "./dist/source-classification.js"
     }
   },
   "scripts": {
@@ -31,5 +37,6 @@
   },
   "dependencies": {
     "zod": "^4.6.7"
-  }
+  },
+  "license": "Apache-2.0"
 }

@@ -293,30 +293,36 @@ function cmdResolve(opts: HoldsOpts, deps: CliDbDeps): number {
 function cmdExpire(opts: HoldsOpts, deps: CliDbDeps): number {
   return withDb(deps, opts, opts.dryRun, 'holds expire', (db) => {
     const expired = expireHolds(opts.tenantId, repositories(db), { dryRun: opts.dryRun });
+    const deferred = expired.filter((item) => item.escalationRequired === true).length;
+    const closed = expired.length - deferred;
     if (opts.json) {
       process.stdout.write(
         JSON.stringify({
           ok: true,
           dry_run: opts.dryRun,
           tenant_id: opts.tenantId,
-          expired: expired.length,
+          expired: closed,
+          escalation_required: deferred,
           holds: expired.map((e) => ({
             candidate_id: e.candidateId,
             expires_at: e.expiresAt,
             audit_event_id: e.auditEventId,
+            escalation_required: e.escalationRequired === true,
           })),
         }) + '\n',
       );
-      return 0;
+      return deferred > 0 ? REFUSED_EXIT : 0;
     }
     process.stdout.write(
       `holds expire ${opts.dryRun ? '(dry-run — nothing written) ' : ''}complete\n` +
-        `${opts.dryRun ? 'Would expire' : 'Expired'}: ${expired.length} (none promoted)\n`,
+        `${opts.dryRun ? 'Would expire' : 'Expired'}: ${closed} (none promoted); awaiting final escalation: ${deferred}\n`,
     );
     for (const e of expired) {
-      process.stdout.write(`  ${e.candidateId}  expired ${e.expiresAt}\n`);
+      process.stdout.write(
+        `  ${e.candidateId}  ${e.escalationRequired ? 'awaiting escalation; bound' : 'expired'} ${e.expiresAt}\n`,
+      );
     }
-    return 0;
+    return deferred > 0 ? REFUSED_EXIT : 0;
   });
 }
 

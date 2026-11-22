@@ -112,3 +112,29 @@ pure consumer of it.
 
 - Jeremy Longshore
   intentsolutions.io
+
+## Resolved search standing (2026-11-22)
+
+For tenant-scoped queries, the API rechecks each resolved citation against the
+requested tenant, independently
+of the adapter's tenant filter. A foreign row is excluded rather than treated as
+an unresolved citation with legacy defaults. Existing unscoped queries retain
+their cross-tenant behavior; the API authentication and tenancy middleware still
+control access to that query shape.
+
+When store lookup succeeds, local MCP search checks the resolved row's tenant,
+sensitivity and audience before limiting results. Its configured member/admin standing uses the shared audience
+predicate; local admin does not imply owner. API owner standing continues to come
+from its authenticated identity. Confidential and restricted search exclusions
+remain in effect for all roles.
+
+This source fix (`compile-then-govern-39z.11.2`) covers resolved rows only.
+Unresolved citations retain the existing compatibility behavior, local store
+failures still return index hits, and snippets are not bound to the current row's
+content after redaction. Those gaps are tracked in
+`compile-then-govern-39z.11.3`; this change is not complete read-privacy enforcement
+or evidence of deployed consumer adoption.
+
+The subsequent [current-store authority contract](074-AT-DSGN-current-store-search-authority.md)
+supersedes those unresolved-citation and store-error compatibility paths in source.
+It also replaces indexed snippets with current authorized content; rollout remains separate.

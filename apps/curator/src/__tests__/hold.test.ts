@@ -817,6 +817,29 @@ describe('curator-cli holds', () => {
     dispatch(['holds', action, '--db', dbPath, '--tenant', TENANT, ...rest], deps);
   const WHO = ['--actor', 'jeremy', '--reason', 'customer contact'];
 
+  it('reports deferred expiry as a refusal rather than a successful closure', async () => {
+    const candidate = seedHeld();
+    recommendOnHold(
+      {
+        candidateId: candidate.id,
+        tenantId: TENANT,
+        actor: { type: 'human', id: 'reviewer' },
+        verdict: 'release',
+        reasoning: 'reviewed',
+        now: T0,
+      },
+      repos(),
+    );
+    vi.setSystemTime(EXPIRY);
+    const before = auditCount();
+    expect(await cli('expire', '--dry-run', '--json')).toBe(3);
+    expect(lastJson()).toMatchObject({ expired: 0, escalation_required: 1 });
+    expect(await cli('expire', '--json')).toBe(3);
+    expect(lastJson()).toMatchObject({ expired: 0, escalation_required: 1 });
+    expect(statusOf(candidate.id)).toBe('quarantined');
+    expect(auditCount()).toBe(before);
+  });
+
   it('lists open holds as JSON without any candidate content', async () => {
     const candidate = seedHeld();
     recommendOnHold(

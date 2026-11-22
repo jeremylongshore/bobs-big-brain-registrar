@@ -20,7 +20,8 @@ rule that only flags cannot say whether the claim belongs in durable memory, or 
 Before K6 such a candidate was left in the inbox with no exit: the promote endpoint answered 422
 "flagged for manual review" every time, and nothing offered the review. A hold is that exit, and
 it is bounded. The candidate is neither promoted tenant-wide nor dropped. It waits for a person,
-for a fixed time, and if nobody decides it is closed without being promoted.
+for a fixed release window. After that window it cannot be promoted; closure of a
+release-advised hold additionally requires a recorded final escalation attempt (section 13).
 
 ## 2. Who changes state
 
@@ -51,7 +52,8 @@ hold gate, because the rule outcome places the hold. When an approval request ra
 (`POST /api/candidates/:id/promote`), `details.triggeredBy` names that caller. A member-quarantined
 candidate with no `held` receipt is not a K6 hold and has no expiry; that queue is unchanged.
 
-The three new `AuditAction` values (`held`, `hold_recommended`, `hold_resolved`) live in the
+The hold `AuditAction` values (`held`, `hold_recommended`, `hold_resolved`, and
+`hold_escalated`) live in the
 `audit_events.action` column, which has no CHECK constraint. Nothing in the store schema changed.
 
 ## 4. What triggers a hold
@@ -84,8 +86,10 @@ A flag from any other rule (`contradiction_check`, `content_sanitization`, `rele
 
 **Expiry resolves to the safe default.** Past `expiresAt` a hold can only be closed unpromoted:
 the candidate is stamped `rejected` (the row and its content are kept) and a `hold_resolved`
-receipt records `resolution: expired`. A release attempted after the bound is refused and closes
-the hold the same way, so the safe default does not depend on a timer having run. A candidate is
+receipt records `resolution: expired`. A release attempted after the bound is refused.
+If any release recommendation exists, both the sweep and resolve path defer closure until
+a completed final escalation attempt is recorded. Deferred candidates remain quarantined and
+non-releasable; this does not extend the release window. A candidate is
 held at most once: a resolved or expired hold is never reopened.
 
 **Past the cap the gate fails closed.** A candidate that would be held is left in the inbox,
@@ -128,10 +132,13 @@ curator-cli holds expire --db ~/.teamkb/teamkb.db --tenant intent-solutions
 `--role <admin|owner>` sets the resolver's standing and defaults to `owner`: the operator at the
 store file has owner standing, as loopback dev mode does. `--role member` is refused.
 
-Exit codes: `0` done, `3` the resolution was refused, `2` usage error, `1` I/O failure.
+Exit codes: `0` done, `3` resolution refused or expiry awaiting final escalation, `2` usage error, `1` I/O failure.
+For expiry JSON, `expired` counts closures (or proposed closures in dry-run), while
+`escalation_required` counts deferred holds. Each item exposes `escalation_required` too.
 
-After a release, run the exporter in reconcile mode and reindex so the new memory is searchable. A
-memory released to `admins` or `owner` stays out of the shared export tree (K2).
+After a release, export reconciliation and indexing remain separate operations. Release at
+`tenant` alone does not establish search visibility: sensitivity restrictions can still exclude
+the memory. A memory released to `admins` or `owner` stays out of the shared export tree (K2).
 
 ## 7. API
 
@@ -189,7 +196,7 @@ SELECT json_extract(details_json, '$.resolution') AS resolution, COUNT(*)
 FROM audit_events WHERE action = 'hold_resolved' GROUP BY 1;
 ```
 
-`memory_id` on all three hold receipts is the candidate's id. `curator-cli verify-audit-chain`
+`memory_id` on all hold receipts is the candidate's id. `curator-cli verify-audit-chain`
 covers them like any other receipt.
 
 ## 10. Measured escalation rate
@@ -278,3 +285,159 @@ read-only reopen, tenant/role/audience/status/hold refusals, repeated calls and 
 trigger failures during status or audit insertion. Reverting the new module and
 export removes this API; existing rejected rows and receipts remain valid and
 must be preserved. No schema or data rollback is needed.
+
+## 13. Expiry escalation receipts (2026-11-22 source update)
+
+Source task `compile-then-govern-2i3.6.1` adds deterministic planning and durable
+intent/outcome records. It does not install a scheduler, authenticate a transport,
+send a message, or establish human receipt. The independently invoked governed
+notification worker and staged delivery proof remain `compile-then-govern-2i3.6.2`.
+The parent stays open until those acceptance requirements are verified.
+
+`planHoldEscalations` is read-only. It selects a tenant's active holds starting
+exactly 24 hours before expiry and changes from `warning` to `final` at expiry.
+It returns candidate/tenant IDs, deadline, remaining milliseconds, phase, a
+snapshot digest and deterministic attempt ID. It excludes titles, candidate
+content, recommendation reasoning and source locations. The digest binds the
+complete stored candidate row and its hold/recommendation/resolution receipts.
+It is a local equality check, not independent authorization or a physical-store
+witness. A changed row or recommendation requires a new plan.
+
+A trusted worker calls `beginHoldEscalation` before external I/O, then
+`completeHoldEscalation` with `delivered`, `failed` or `unknown`. Each function
+owns an immediate transaction on one shared connection. Intent and outcome are
+distinct `hold_escalated` events; ignored writes, altered receipts or a row
+changed by an insertion trigger refuse and roll back. Identical intent/outcome
+replays write nothing. Contradictory outcomes, stale snapshots, foreign tenants
+and future-dated receipts refuse. There is no retry token that silently creates
+a second attempt for unchanged state.
+
+A recorded intent alone does not prove an attempt finished. A worker that finds
+`alreadyStarted: true` must reconcile the prior attempt rather than blindly
+send again. An unknown result must remain unknown; the core refuses changing it
+to delivered through ordinary replay. Delivery reconciliation needs its own
+explicit design before automation can resolve that uncertainty. The core stores
+trusted caller assertions, not independently authenticated provider receipts.
+It is an in-process interface, not a new HTTP endpoint or an agent permission.
+
+For a hold with any release advice, expiry requires a completed **final** attempt
+bound to the current snapshot. A warning receipt cannot substitute. All three
+terminal transport outcomes satisfy the prerequisite of an attempt, but only
+`delivered` claims transport delivery; none claims the human read or acted on it.
+Failed delivery therefore remains visible even if the hold subsequently closes.
+A started-only attempt leaves closure deferred. Both batch expiry and expired
+human resolve enforce the same check under the write transaction. The release
+window never extends, and expiry never promotes or deletes a candidate.
+
+The `hold_resolved` expiry receipt now records candidate identity, snapshot and
+content digests, release-recommendation IDs, deadline, and the final-attempt
+outcome receipt ID when present. A human with authorized access can identify the
+retained proposal by ID without copying its private lesson text into alerts or
+audit metadata. These records are tamper-evident under the existing local audit
+trust model; they do not protect against an operator rewriting the store and
+its evidence together. External anchoring remains separate.
+
+Deployment must coordinate readers of the additive `hold_escalated` audit action.
+The SQL action column has no CHECK constraint, so no migration is needed, but
+older schema readers may reject the new value. Rollback must retain that enum
+member once receipts exist. Removing the expiry safeguard would restore the
+old silent-closure behavior and is not a substitute for deploying the worker.
+Until authorized worker installation, a release-advised expired hold will remain
+listed as expired and deferred; no delivery is implied by this source update.
+
+## 14. Independent worker source and opt-in scheduling
+
+`curator-hold-expiry --config /absolute/private/worker.json` previews the current
+plans without a write lock, receipt or notification process. Explicit `--apply`
+permits at most one new external attempt per invocation, independently of the
+compile loop. The worker does not run the expiry sweep or promote a candidate.
+This source implementation and its disposable transport fixtures do not establish
+installation, provider delivery, or production verification.
+
+The strict version-1 configuration supplies `tenantId`, approval `expiresAt`, an
+opaque `destinationId`, absolute `reviewExecutable`, `operatorId`, and `store`
+with `databasePath`, `basePath`, `baseDevice`, `baseInode`, `databaseDevice` and
+`databaseInode`. `transport` supplies an absolute canonical `executable`, its
+`sha256`, and `timeoutMs` (1–30000). Optional `lockTimeoutMs` defaults to zero and
+is bounded at 30000. Obtain physical-store values from the existing recovery
+inspection interface against the intended store. The configuration must be a
+private regular file in a private directory owned by the invoking user. Approval
+expires, is reread before actions, and does not authorize other destinations or
+stores. This is trusted local operator configuration, not protection against a
+malicious process running as that operator.
+
+Apply validates the executable and physical store, obtains the shared recovery
+write lock, validates the notification payload, and persists intent before
+external I/O. The durable attempt binds tenant, physical store, destination,
+transport path and digest, review executable and operator. Renewing only the
+approval expiry does not change that binding. Changing a bound setting does not
+resend an existing attempt or reinterpret its outcome. Completed outcomes carry
+the binding and, when a valid adapter receipt exists, its digest. Readers handling
+these receipts must retain support for the optional transport fields on rollback.
+
+The trusted Linux adapter receives one JSON line on stdin:
+
+```json
+{
+  "version": 1,
+  "attemptId": "<UUID>",
+  "destinationId": "<approved-id>",
+  "message": "<metadata-only review instructions>"
+}
+```
+
+It must exit zero and return exactly one strict JSON object on stdout:
+
+```json
+{
+  "version": 1,
+  "mode": "live",
+  "attemptId": "<same UUID>",
+  "destinationId": "<same approved-id>",
+  "outcome": "delivered"
+}
+```
+
+`outcome` may instead be `failed` or `unknown`. Exit zero alone, dry-run or spool
+results, extra fields, mismatched IDs, invalid output, process failure and timeout
+cannot establish delivery. Combined stdout/stderr is capped at 16 KiB; raw output
+and error text are not copied to the audit log. Receipt semantics are assertions
+by the trusted adapter, not independently authenticated provider evidence.
+
+The adapter entry must be a regular, singly linked executable owned by root or
+the current user, without group/other write permission, no larger than 1 MiB.
+Execution uses the verified open descriptor through `/proc/self/fd/3`, so replacing
+the pathname after verification does not select different entry bytes. Use an
+absolute interpreter and absolute dependency paths; relative entry-directory
+resolution is unsuitable. Interpreter, dependencies, environment and same-user
+in-place file mutation remain trust boundaries. The adapter must not daemonize
+or escape its process group. The worker kills its group on timeout/exit and waits
+for the direct child before completing the attempt.
+
+Warning messages contain only candidate ID, phase, deadline, remaining window and
+a shell-quoted `holds resolve ... --dry-run` command scoped to the approved store,
+tenant, operator and recommended audience. Final messages offer a scoped listing
+command and explicitly state that the release window has closed. Private titles,
+bodies and classifier explanations remain in the governed store.
+
+A started-only, failed or unknown attempt requires reconciliation; automatic
+invocations never blindly resend it. Changing an unknown outcome to delivered
+is not supported by ordinary replay. The worker reports reconciliation IDs and
+continues considering other eligible holds. CLI exit 3 indicates reconciliation
+is needed; exit 1 indicates refusal or cleanup failure. Neither means it is safe
+to resend. Retain receipts and provider evidence for an explicitly reviewed
+reconciliation procedure. A cleanup failure preserves any recorded outcome in
+the result instead of implying that delivery did not occur.
+
+Uninstalled examples live in `scripts/systemd/examples/`: a user oneshot service,
+a five-minute timer, and a placeholder environment file. Review absolute runtime
+and configuration paths, approved recipients and every fallback channel before
+installing or enabling them. No installation command runs as part of the build.
+At one new attempt per invocation, operators must account for backlog and the
+warning window when selecting a schedule. Disabling the timer stops future
+scheduled attempts; retain compatible receipt readers and the expiry safeguard.
+
+An estate-specific adapter for Intent OS's governed notification interface belongs
+in Intent OS, not in this public repository. Its real status mapping, dry-run
+handling, fallback authorization and staged delivery evidence are separate work.
+Do not substitute a fixture's `mode: live` receipt for an actual delivery test.

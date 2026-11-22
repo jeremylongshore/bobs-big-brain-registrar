@@ -95,7 +95,7 @@ describe('search contradiction metadata integration', () => {
     );
   });
 
-  it('keeps cited retrieval usable on graph failure and unresolved citations without false empty references', async () => {
+  it('keeps authorized retrieval usable on graph failure but withholds unresolved citations', async () => {
     const { qmd } = fixture();
     const result = await new SearchService(repo, qmd, () => {
       throw new Error('private store detail');
@@ -120,8 +120,8 @@ describe('search contradiction metadata integration', () => {
         await new SearchService(repo, unknown, (id, scope) =>
           readContradictionReferences(db, id, scope),
         ).search(query)
-      ).hits[0]!.contradictions,
-    ).toEqual({ status: 'unavailable' });
+      ).hits,
+    ).toEqual([]);
   });
 
   it.each(['cited', 'sqlite'])(

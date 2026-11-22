@@ -35,6 +35,52 @@ describe('checkOriginAttestation — verdict table', () => {
     expect(checkOriginAttestation(candidate, SECRET)).toEqual({ verdict: 'attested' });
   });
 
+  it.each([
+    'channel',
+    'content',
+    'title',
+    'source',
+    'author',
+    'paths',
+    'role',
+    'mintedAt',
+  ] as const)('v1 identity-tuple verification does not authenticate %s', (field) => {
+    const original = makeAttestedCandidate(SECRET);
+    const changed = structuredClone(original);
+    switch (field) {
+      case 'channel':
+        changed.origin!.channel = 'different-channel';
+        break;
+      case 'content':
+        changed.content = 'Different synthetic content with the same claimed identity';
+        break;
+      case 'title':
+        changed.title = 'Different synthetic title';
+        break;
+      case 'source':
+        changed.source = 'import';
+        break;
+      case 'author':
+        changed.author = { type: 'human', id: 'different-actor', name: 'Fixture' };
+        break;
+      case 'paths':
+        changed.metadata.filePaths = ['different-repository/note.md'];
+        break;
+      case 'role':
+        changed.metadata.proposedByRole = 'admin';
+        break;
+      case 'mintedAt':
+        changed.origin!.mintedAt = '2026-11-22T00:00:00.000Z';
+        break;
+    }
+    const parsed = MemoryCandidate.parse(changed);
+    expect(parsed).not.toEqual(original);
+    expect(parsed.origin!.tokenHmac).toBe(original.origin!.tokenHmac);
+    // This pins the v1 gate boundary, not promotion approval, spool-id
+    // validity, channel allowlisting, or authority for future classification.
+    expect(checkOriginAttestation(parsed, SECRET)).toEqual({ verdict: 'attested' });
+  });
+
   it('forged origin (minted under a different secret) → rejected origin_token_invalid', () => {
     const candidate = makeAttestedCandidate(WRONG_SECRET);
     const res = checkOriginAttestation(candidate, SECRET);

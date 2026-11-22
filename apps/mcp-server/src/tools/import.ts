@@ -1,3 +1,7 @@
+import {
+  hasUnsupportedSourceEvidence,
+  SOURCE_EVIDENCE_UNSUPPORTED,
+} from '@qmd-team-intent-kb/schema';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join, basename, extname } from 'node:path';
@@ -53,6 +57,7 @@ export async function importFiles(
   config: McpServerConfig,
   nowFn: () => string = () => new Date().toISOString(),
 ): Promise<ImportResult> {
+  if (hasUnsupportedSourceEvidence(input)) throw new Error(SOURCE_EVIDENCE_UNSUPPORTED);
   const base = input.basePath ?? process.cwd();
   const pattern = join(base, input.glob);
 

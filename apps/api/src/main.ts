@@ -12,6 +12,7 @@
  * public interface.
  *
  * Env:
+ *   TEAMKB_STALENESS_APPROVAL_FILE — opt-in private reviewed-manifest approval (disabled when unset)
  *   TEAMKB_API_PORT     — listen port (default 3847)
  *   TEAMKB_API_HOST     — bind interface (default 127.0.0.1)
  *   TEAMKB_API_KEY      — bearer token; required when NODE_ENV=production
@@ -26,7 +27,11 @@
  *                         default: auto-generated ~/.teamkb/origin-secret, 0600)
  */
 import { resolve } from 'node:path';
-import { createDatabase, IndexStateRepository } from '@qmd-team-intent-kb/store';
+import {
+  createDatabase,
+  openExistingDatabase,
+  IndexStateRepository,
+} from '@qmd-team-intent-kb/store';
 import {
   loadOrCreateOriginSecret,
   ORIGIN_SECRET_UNAVAILABLE_WARNING,
@@ -43,7 +48,11 @@ import type { IndexRefresher } from './services/index-refresher.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const db = createDatabase({ path: config.dbPath });
+  const approvalFile = process.env['TEAMKB_STALENESS_APPROVAL_FILE']?.trim();
+  // This opt-in mutation lane cannot create or migrate its reviewed store at boot.
+  const db = approvalFile
+    ? openExistingDatabase({ path: config.dbPath, readonly: false })
+    : createDatabase({ path: config.dbPath });
 
   // Attempt to wire qmd-backed cited search. If qmd is not installed or its
   // index is unavailable, run SQLite-only so the surface still answers.
@@ -129,6 +138,7 @@ async function main(): Promise<void> {
   // serving every request as role=admin. Loopback stays the default.
   const app = buildApp({
     db,
+    reviewedStaleness: approvalFile ? { approvalFile } : undefined,
     tokens,
     qmdAdapter,
     indexRefresher,
@@ -137,6 +147,12 @@ async function main(): Promise<void> {
     allowedChannels,
     originSecret,
     importExclusions,
+    sourceGovernance:
+      process.env['TEAMKB_SOURCE_RECEIVER_ID'] === undefined
+        ? undefined
+        : {
+            receiverId: process.env['TEAMKB_SOURCE_RECEIVER_ID']!,
+          },
   });
   await app.ready();
 

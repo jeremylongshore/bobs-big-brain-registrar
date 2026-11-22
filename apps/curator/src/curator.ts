@@ -1,3 +1,5 @@
+import { requireSourceAdmission } from './origin/source-admission.js';
+import { requireLegacySourceAdmission } from './origin/source-enrollment.js';
 import { resolveCandidateMinimumSensitivity } from './recovery/sensitivity-constraint.js';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
 import {
@@ -119,6 +121,9 @@ export class Curator {
     existingHashes?: Set<string>,
     release?: HoldRelease,
   ): CurationResult {
+    requireSourceAdmission(this.deps.memoryRepo.connection, candidate);
+    if (this.config.tenantId !== candidate.tenantId)
+      requireLegacySourceAdmission(this.deps.memoryRepo.connection, this.config.tenantId);
     const minimumSensitivity = resolveCandidateMinimumSensitivity(candidate, this.deps.auditRepo);
     const contentHash = computeContentHash(candidate.content);
 

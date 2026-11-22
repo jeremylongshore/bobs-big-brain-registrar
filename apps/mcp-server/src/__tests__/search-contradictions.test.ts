@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('MCP contradiction metadata transport', () => {
   it('local mode reads scoped references without changing citations/scores or durable state', async () => {
-    const primary = makeMemory({ tenantId: 'acme' });
+    const primary = makeMemory({ tenantId: 'acme', category: 'pattern' });
     const target = makeMemory({ tenantId: 'acme', title: 'visible conflict' });
     const hidden = makeMemory({
       tenantId: 'acme',
@@ -63,7 +63,7 @@ describe('MCP contradiction metadata transport', () => {
     });
     expect(result.results[0]).toEqual({
       citation: raw.file,
-      snippet: raw.snippet,
+      snippet: primary.content.slice(0, 200),
       score: raw.score,
       collection: raw.collection,
       contradictions: {
@@ -76,7 +76,7 @@ describe('MCP contradiction metadata transport', () => {
     expect(db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
   });
 
-  it('local unknown citation and unavailable store never claim a measured zero', async () => {
+  it('local unknown citation and unavailable store withhold unverified content', async () => {
     const port = {
       makeAdapter: () => ({
         query: async () => ({
@@ -92,13 +92,11 @@ describe('MCP contradiction metadata transport', () => {
         }),
       }),
     };
-    expect((await searchTool({ query: 'x' }, config, port)).results[0]!.contradictions).toEqual({
-      status: 'unavailable',
-    });
+    expect((await searchTool({ query: 'x' }, config, port)).results).toEqual([]);
     expect(
       (await searchTool({ query: 'x' }, { ...config, dbPath: join(root, 'missing.db') }, port))
-        .results[0]!.contradictions,
-    ).toEqual({ status: 'unavailable' });
+        .results,
+    ).toEqual([]);
   });
 
   it.each(['available', 'unavailable', 'absent', 'malformed', 'duplicate'])(
@@ -143,6 +141,66 @@ describe('MCP contradiction metadata transport', () => {
       expect(result.results[0]!.score).toBe(0.5);
       expect(result.results[0]!.citation).toBe('qmd://kb-curated/a.md');
       if (kind === 'malformed') expect(JSON.stringify(result)).not.toContain('private sentinel');
+    },
+  );
+});
+
+describe('local resolved qmd hit standing', () => {
+  it.each([undefined, 'member', 'admin'] as const)(
+    'checks tenant and audience for role %s',
+    async (role) => {
+      const repo = new MemoryRepository(db);
+      const rows = [
+        makeMemory({ tenantId: 'acme', title: 'tenant' }),
+        makeMemory({
+          tenantId: 'acme',
+          title: 'admins',
+          metadata: { filePaths: [], tags: [], audience: 'admins' },
+        }),
+        makeMemory({
+          tenantId: 'acme',
+          title: 'owner',
+          metadata: { filePaths: [], tags: [], audience: 'owner' },
+        }),
+        makeMemory({ tenantId: 'elsewhere', title: 'foreign' }),
+        makeMemory({ tenantId: 'acme', title: 'confidential', sensitivity: 'confidential' }),
+        makeMemory({ tenantId: 'acme', title: 'restricted', sensitivity: 'restricted' }),
+      ];
+      rows.forEach((row) => {
+        row.content = `sentinel-${row.title}`;
+        repo.insert(row);
+      });
+      const makeAdapter = () => ({
+        query: async () => ({
+          ok: true as const,
+          value: [...rows].reverse().map((row) => ({
+            file: `qmd://kb-curated/${row.id}.md`,
+            snippet: `sentinel-${row.title}`,
+            score: 1,
+            collection: 'kb-curated',
+          })),
+        }),
+      });
+      const result = await searchTool({ query: 'needle' }, { ...config, role }, { makeAdapter });
+      const allowed = role === 'admin' ? 2 : 1;
+      expect(result.count).toBe(allowed);
+      expect(result.results.map((hit) => hit.snippet).sort()).toEqual(
+        rows
+          .slice(0, allowed)
+          .map((row) => `sentinel-${row.title}`)
+          .sort(),
+      );
+      for (const row of rows.slice(allowed)) {
+        expect(JSON.stringify(result)).not.toContain(`sentinel-${row.title}`);
+        expect(JSON.stringify(result)).not.toContain(row.id);
+      }
+      const limited = await searchTool(
+        { query: 'needle', limit: 1 },
+        { ...config, role },
+        { makeAdapter },
+      );
+      expect(limited.count).toBe(1);
+      expect(limited.results[0]!.snippet).toBe(`sentinel-${rows[allowed - 1]!.title}`);
     },
   );
 });

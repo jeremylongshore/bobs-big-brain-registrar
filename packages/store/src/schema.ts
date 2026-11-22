@@ -467,4 +467,17 @@ CREATE TABLE IF NOT EXISTS index_state (
 ALTER TABLE candidates ADD COLUMN origin_json TEXT;
     `.trim(),
   },
+  {
+    // Empty by default. Provisioning/enrollment is separate operator work.
+    // Authority for the legacy admission guard only. The source-governance
+    // context is not yet loaded from or bound to this record.
+    version: 12,
+    name: 'add_source_classification_authority',
+    sql: `
+CREATE TABLE source_classification_authority (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  registry_json TEXT NOT NULL
+);
+    `.trim(),
+  },
 ];

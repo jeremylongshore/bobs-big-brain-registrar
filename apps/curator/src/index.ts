@@ -75,7 +75,33 @@ export {
   BRAINIGNORE_PATH_ENV,
 } from './import-exclusion/load-brainignore.js';
 export type { LoadBrainignoreOptions } from './import-exclusion/load-brainignore.js';
-export { mergeGovern, MergeIdInvariantError } from './merge/merge-gate.js';
+// Compatibility API: bare rows do not authenticate source constraint completeness.
+export {
+  mergeGovern,
+  mergeGovern as legacyMergeGovern,
+  MergeIdInvariantError,
+} from './merge/merge-gate.js';
+export { exportSourceSnapshot, verifySourceSnapshot } from './merge/source-snapshot.js';
+export {
+  SignedSourceSnapshot,
+  SourceSnapshotOptions,
+  TrustedSourceCheckpoint,
+  SourceSnapshotError,
+} from './merge/source-snapshot-schema.js';
+export type { SourceSnapshotItem, SourceSnapshotPayload } from './merge/source-snapshot-schema.js';
+export { previewSourceImport, applySourceImport } from './merge/source-import.js';
+export {
+  SourceImportPlan,
+  SourceImportOutcome,
+  SourceImportError,
+} from './merge/source-import-schema.js';
+export type {
+  SourceImportContext,
+  SourceImportDependencies,
+  SourceImportResult,
+} from './merge/source-import-schema.js';
+export { runSnapshotCommand } from './merge/snapshot-command.js';
+export type { SnapshotCommandIO } from './merge/snapshot-command.js';
 export type {
   MergeGovernResult,
   MergeGovernDependencies,
@@ -215,3 +241,36 @@ export type {
   RecoveryReadinessContext,
   TrustedRecoveryReadiness,
 } from './recovery/recovery-execution.js';
+
+export { executeReviewedStaleness } from './staleness/reviewed-staleness-execution.js';
+export type {
+  ReviewedStalenessInstallation,
+  ReviewedStalenessIdentity,
+  ReviewedStalenessExecutionResult,
+} from './staleness/reviewed-staleness-execution.js';
+export {
+  parseReviewedStalenessManifest,
+  reviewedStalenessDigest,
+  reviewedStalenessSnapshot,
+  stalenessDigest,
+} from './staleness/reviewed-staleness-manifest.js';
+export type { ReviewedStalenessManifest } from './staleness/reviewed-staleness-manifest.js';
+export { ESTATE_STALENESS_RULES } from './staleness/staleness-rules.js';
+export type { StalenessRule } from './staleness/staleness-rules.js';
+export { inspectRecoveryStore } from './recovery/filesystem-boundary.js';
+
+export {
+  planHoldEscalations,
+  beginHoldEscalation,
+  completeHoldEscalation,
+} from './hold/escalation.js';
+export type { HoldEscalationPlan, HoldEscalationCompletion } from './hold/escalation.js';
+
+// Evidence-aware ingress may call governance, never registry provisioning or admission scopes.
+export { previewSourceGovernance, applySourceGovernance } from './origin/source-governance.js';
+export { SourceGovernancePlan } from './origin/source-governance-schema.js';
+export type { SourceGovernanceContext } from './origin/source-governance-schema.js';
+export {
+  SourceEnrollmentRequiredError,
+  hasSourceIngressEnrollment,
+} from './origin/source-enrollment.js';
