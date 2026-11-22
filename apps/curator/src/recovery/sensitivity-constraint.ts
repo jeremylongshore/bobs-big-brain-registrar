@@ -9,6 +9,11 @@ import {
   importedMinimumSensitivity,
 } from './imported-sensitivity-constraint.js';
 
+import {
+  PROVENANCE_FLOOR_KIND,
+  provenanceMinimumSensitivity,
+} from './provenance-sensitivity-constraint.js';
+
 const KIND = 'recovery-sensitivity-floor-v1';
 
 /** Include content-bound receipts even when their original candidate was rejected
@@ -47,10 +52,16 @@ export function resolveCandidateMinimumSensitivity(
       ('minimumSensitivity' in event.details ||
         (typeof kind === 'string' && kind.includes('sensitivity-floor'))) &&
       kind !== KIND &&
-      kind !== IMPORTED_FLOOR_KIND
+      kind !== IMPORTED_FLOOR_KIND &&
+      kind !== PROVENANCE_FLOOR_KIND
     )
       throw new Error('Unsupported stored sensitivity constraint');
 
+    if (event.action === 'governed' && kind === PROVENANCE_FLOOR_KIND) {
+      const floor = provenanceMinimumSensitivity(event, { ...candidate, id: event.memoryId });
+      minimum = minimum === undefined ? floor : effectiveSensitivity(minimum, floor);
+      continue;
+    }
     if (event.action === 'governed' && event.details['kind'] === IMPORTED_FLOOR_KIND) {
       const floor = importedMinimumSensitivity(event, { ...candidate, id: event.memoryId });
       minimum = minimum === undefined ? floor : effectiveSensitivity(minimum, floor);

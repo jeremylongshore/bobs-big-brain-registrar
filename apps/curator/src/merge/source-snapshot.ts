@@ -12,6 +12,7 @@ import {
   candidateSensitivityEvidence,
   resolveCandidateMinimumSensitivity,
 } from '../recovery/sensitivity-constraint.js';
+import { PROVENANCE_FLOOR_KIND } from '../recovery/provenance-sensitivity-constraint.js';
 import { IMPORTED_FLOOR_KIND } from '../recovery/imported-sensitivity-constraint.js';
 import {
   MAX_SOURCE_SNAPSHOT_BYTES,
@@ -195,7 +196,8 @@ export function exportSourceSnapshot(
               ('minimumSensitivity' in event.details ||
                 (typeof kind === 'string' && kind.includes('sensitivity-floor'))) &&
               kind !== 'recovery-sensitivity-floor-v1' &&
-              kind !== IMPORTED_FLOOR_KIND
+              kind !== IMPORTED_FLOOR_KIND &&
+              kind !== PROVENANCE_FLOOR_KIND
             )
               throw new SourceSnapshotError('invalid-source');
           }

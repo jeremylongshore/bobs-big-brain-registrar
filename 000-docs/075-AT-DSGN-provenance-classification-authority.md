@@ -1,8 +1,8 @@
 # Provenance classification authority
 
 **Status:** Proposed end-to-end contract with an implemented pure
-assertion-verification primitive. Durable classification enforcement, ingress
-adoption and rollout remain open.
+assertion-verification primitive and durable governance core. Ingress-wide
+enforcement, adoption and rollout remain open.
 **Date:** 2026-11-22
 **Parent:** `compile-then-govern-39z.11.4`
 **Contract/evidence task:** `compile-then-govern-39z.11.4.1`
@@ -245,8 +245,8 @@ remaining end-to-end proposal or authorize deployment enrollment:
 - The result provides a prospective profile floor and assertion/profile/registry
   digests, enrollment revision and a hashed replay identity scoped to receiver,
   tenant, producer and assertion ID. Repeated valid assertions verify again;
-  **replay settlement is not implemented here**. The next task must atomically
-  compare assertion digests, persist floors and recheck current authority.
+  **the verifier itself does not settle replays**. The durable governance core
+  below compares assertion digests, persists floors and rechecks current authority.
 
 The verifier does no environment lookup, networking, model calls, registry
 loading or durable writes. Its supplied registry and receiver context must come
@@ -254,3 +254,65 @@ from trusted integration code. A verification result is not promotion authority
 and does not preserve historical restrictions by itself. Registry digests detect
 changes only when a later consumer compares and revalidates them; they are not a
 freshness service. Returning `legacy` is explicitly outside the new protection.
+
+## Implemented durable governance core (2026-11-22)
+
+Task `compile-then-govern-39z.11.4.3` implements `previewSourceGovernance` and
+`applySourceGovernance` as database-level functions. They have no CLI, HTTP, MCP,
+collector or background-job call site. Task `.4.4` still owns actual ingress
+adoption and enrollment loading; `.4.5` owns authorized operational acceptance.
+The source assertion proves source-profile authority, not caller access standing.
+The integrating caller must establish access authorization and trusted registry,
+receiver, ingress and clock inputs independently of the captured request.
+
+Preview uses a read transaction and writes nothing. It binds the stored candidate
+and disposition, exact serialized assertion, receiver/ingress, registry/key/profile
+snapshot, current policies, candidate/memory rows and audit-chain tip. It reports
+the prospective minimum and configurable policy outcome. That policy result is
+not a promise of promotion: existing origin, exclusion, review, hold, duplicate
+and supersession controls still run during application. Multiple enabled policies
+refuse instead of selecting an ambiguous policy.
+
+Only inbox candidates can enter curation. For an already disposed candidate, the
+plan explicitly selects restriction-only processing: record the source floor and
+tighten aliases while preserving the candidate disposition and memory lifecycle.
+This includes a new private-source assertion for an already promoted public
+candidate with the same stable ID; learning that restriction must not depend on
+inventing a different candidate ID. It never reopens a rejection or releases a hold.
+
+Apply uses one immediate transaction. It refuses a changed plan, re-verifies
+current source authority, records a new `provenance-sensitivity-floor-v1` receipt,
+tightens pre-existing content aliases, and runs canonical curation with the same
+durable floor. The receipt combines the authenticated source floor with content classification,
+existing row restrictions and legacy candidate-scoped recovery floors. Rejected and
+quarantined proposals retain their restrictions. A duplicate cannot leave its
+older public row public. Audience and lifecycle do not widen; this function
+refuses unapproved supersession. Member-tagged and Registrar MCP proposals retain
+human-review quarantine; a source signature is not a human review or hold release.
+
+A final authority reload and candidate/policy/configuration/receipt/row checks
+occur inside the transaction. Failure rolls back the floor, alias tightening,
+curation, disposition and settlement together. This requires a healthy existing
+audit chain; it does not repair or excuse historical chain damage. Receipts carry
+identities, classifications and digests, not source bodies or private context.
+
+Replay identity is scoped to receiver, tenant, producer and assertion ID, and the
+floor event identity deliberately excludes candidate ID. Reuse for another
+candidate or payload refuses. An exact settled plan and identical serialized
+assertion may return its historical outcome after expiry or revocation; this is
+not a new admission, current authorization verdict, reactivation or replay of
+writes. The caller still supplies matching receiver/tenant/ingress scope. A floor
+without its enclosing settlement is incomplete and refuses admission.
+
+Settled floors resolve independently of today's key/profile registry. Deletion,
+expiry, revocation and a later weaker profile cannot erase them. Ordinary local
+merge and selected human governance consume the shared floor resolver. Signed
+snapshot export validates the new receipt kind, exports its effective restriction
+and evidence digest, and existing authenticated snapshot import preserves that
+restriction as an imported floor. Plain remote memory arrays carry no new source
+authority; callers need the authenticated transport for cross-clone guarantees.
+Unknown floor kinds still refuse.
+
+This core inspects tenant rows and audit evidence when preparing a finite plan.
+Its correctness tests do not establish sustained ingestion throughput, live
+capture coverage, registry custody, deployment readiness or production adoption.

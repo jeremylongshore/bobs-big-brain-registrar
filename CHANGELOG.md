@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add transactional source-provenance governance with durable sensitivity floors,
+  replay settlement, content-alias tightening, current-authority rechecks and
+  authenticated snapshot transport support. The core has synthetic integration
+  tests; actual ingress wiring and live enrollment remain separate work
+  (`compile-then-govern-39z.11.4.3`).
+
 - Add a pure, versioned Ed25519 source-classification assertion verifier with
   receiver-owned profile/key scope, strict canonical encoding and candidate
   content binding. This library is not wired to live ingress; durable floors,
