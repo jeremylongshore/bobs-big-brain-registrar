@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
@@ -11,7 +12,11 @@ import {
   readContradictionReferences,
 } from '@qmd-team-intent-kb/store';
 import { holdLimitsFromEnv } from '@qmd-team-intent-kb/curator';
-import type { BrainignoreRuleset, HoldLimits } from '@qmd-team-intent-kb/curator';
+import type {
+  BrainignoreRuleset,
+  HoldLimits,
+  ReviewedStalenessInstallation,
+} from '@qmd-team-intent-kb/curator';
 import { CandidateService } from './services/candidate-service.js';
 import { PromotionService } from './services/promotion-service.js';
 import { HoldService } from './services/hold-service.js';
@@ -24,6 +29,7 @@ import type { IndexRefresher } from './services/index-refresher.js';
 import { registerCandidateRoutes } from './routes/candidates.js';
 import { registerHoldRoutes } from './routes/holds.js';
 import { registerMemoryRoutes } from './routes/memories.js';
+import { registerReviewedStalenessRoutes } from './routes/reviewed-staleness.js';
 import { registerPolicyRoutes } from './routes/policies.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuditRoutes } from './routes/audit.js';
@@ -46,6 +52,8 @@ import { registerOpenApi } from './openapi.js';
 export interface AppDependencies {
   /** An open better-sqlite3 database connection (real or in-memory). */
   db: Database.Database;
+  /** Opt-in private approval configuration. Request bodies cannot select this file or store. */
+  reviewedStaleness?: Omit<ReviewedStalenessInstallation, 'databasePath'>;
   /** Suppress Fastify's built-in logger — useful in tests. Default: false. */
   silent?: boolean;
   /**
@@ -222,6 +230,16 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     registerCandidateRoutes(scope, candidateService, promotionService, deps.indexRefresher);
     registerHoldRoutes(scope, holdService, deps.indexRefresher);
     registerMemoryRoutes(scope, memoryService, memoryRepo);
+    if (deps.reviewedStaleness !== undefined) {
+      registerReviewedStalenessRoutes(
+        scope,
+        {
+          ...deps.reviewedStaleness,
+          databasePath: realpathSync(deps.db.name),
+        },
+        tokenRegistry,
+      );
+    }
     registerPolicyRoutes(scope, policyService);
     registerAuditRoutes(scope, auditRepo);
     registerSearchRoutes(scope, searchService);
