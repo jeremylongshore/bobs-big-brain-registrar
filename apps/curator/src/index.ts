@@ -215,3 +215,20 @@ export type {
   RecoveryReadinessContext,
   TrustedRecoveryReadiness,
 } from './recovery/recovery-execution.js';
+
+export { executeReviewedStaleness } from './staleness/reviewed-staleness-execution.js';
+export type {
+  ReviewedStalenessInstallation,
+  ReviewedStalenessIdentity,
+  ReviewedStalenessExecutionResult,
+} from './staleness/reviewed-staleness-execution.js';
+export {
+  parseReviewedStalenessManifest,
+  reviewedStalenessDigest,
+  reviewedStalenessSnapshot,
+  stalenessDigest,
+} from './staleness/reviewed-staleness-manifest.js';
+export type { ReviewedStalenessManifest } from './staleness/reviewed-staleness-manifest.js';
+export { ESTATE_STALENESS_RULES } from './staleness/staleness-rules.js';
+export type { StalenessRule } from './staleness/staleness-rules.js';
+export { inspectRecoveryStore } from './recovery/filesystem-boundary.js';
