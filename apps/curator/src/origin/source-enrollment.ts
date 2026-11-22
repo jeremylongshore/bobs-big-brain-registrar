@@ -38,3 +38,20 @@ export function requireLegacySourceAdmission(db: Database.Database, tenantId: st
   if (registry?.enrollments.some((entry) => entry.tenantId === tenantId && entry.required))
     throw new SourceEnrollmentRequiredError();
 }
+
+/** Capability discovery exposes only enrollment presence, never registry material. */
+export function hasSourceIngressEnrollment(
+  db: Database.Database,
+  receiverId: string,
+  tenantId: string,
+  ingressId: string,
+): boolean {
+  return (
+    readStoredSourceRegistry(db)?.enrollments.some(
+      (entry) =>
+        entry.receiverId === receiverId &&
+        entry.tenantId === tenantId &&
+        entry.ingressId === ingressId,
+    ) ?? false
+  );
+}

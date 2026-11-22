@@ -232,6 +232,31 @@ describe('authenticated source governance HTTP ingress', () => {
     expect(cap.json().enabled).toBe(false);
     expect((await request(envelope())).statusCode).toBe(503);
   });
+  it('scopes discovery to the authorized tenant and current matching enrollment', async () => {
+    await app.close();
+    await start({ tokens });
+    const discover = (token = 'synthetic-admin') =>
+      app.inject({
+        method: 'GET',
+        url: '/api/candidates/source-governance-capabilities?tenantId=synthetic',
+        headers: { authorization: `Bearer ${token}` },
+      });
+    expect((await discover('other-admin')).statusCode).toBe(403);
+    expect((await discover()).json()).toMatchObject({
+      enabled: true,
+      configured: true,
+      enrolled: true,
+    });
+    f.registry.enrollments[0]!.ingressId = 'other-ingress';
+    storeRegistry();
+    expect((await discover()).json()).toMatchObject({
+      enabled: false,
+      configured: true,
+      enrolled: false,
+    });
+    db.prepare('DELETE FROM source_classification_authority').run();
+    expect((await discover()).json().enabled).toBe(false);
+  });
   it('preserves unenrolled legacy promotion', async () => {
     db.prepare('DELETE FROM source_classification_authority').run();
     await intake();
@@ -245,7 +270,8 @@ describe('authenticated source governance HTTP ingress', () => {
   });
   it('enforces the independent disclosure floor with no enabled policy', async () => {
     await intake();
-    const content = 'deploy key ' + 'AKIAIOSFODNN7EXAMPLE' + ' for the bucket';
+    // Public AWS documentation example, deliberately credential-shaped to test the scanner.
+    const content = 'deploy key AKIAIOSFODNN7EXAMPLE for the bucket';
     db.prepare('UPDATE candidates SET content = ? WHERE id = ?').run(content, f.candidate.id);
     const before = db.serialize().toString('base64');
     const result = await request(envelope());

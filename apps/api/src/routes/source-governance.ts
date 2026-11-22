@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type Database from 'better-sqlite3';
+import { TenantId } from '@qmd-team-intent-kb/schema';
 import { CandidateRepository } from '@qmd-team-intent-kb/store';
 import { assertDisclosureClean, DisclosureRejectedError } from '@qmd-team-intent-kb/common';
 import {
+  hasSourceIngressEnrollment,
   previewSourceGovernance,
   applySourceGovernance,
   SourceGovernancePlan,
@@ -18,7 +20,7 @@ const requestSchema = z.discriminatedUnion('action', [
   z
     .object({
       version: z.literal(1),
-      tenantId: receiverIdSchema,
+      tenantId: TenantId,
       action: z.literal('preview'),
       assertion: z.string().min(1).max(16384),
     })
@@ -26,7 +28,7 @@ const requestSchema = z.discriminatedUnion('action', [
   z
     .object({
       version: z.literal(1),
-      tenantId: receiverIdSchema,
+      tenantId: TenantId,
       action: z.literal('apply'),
       assertion: z.string().min(1).max(16384),
       plan: SourceGovernancePlan,
@@ -69,9 +71,19 @@ export function registerSourceGovernanceRoutes(
   app.get('/api/candidates/source-governance-capabilities', async (request, reply) => {
     try {
       authenticate(request);
+      const parsed = z.object({ tenantId: TenantId }).safeParse(request.query);
+      if (!parsed.success)
+        throw new ApiError(400, 'A valid tenantId is required.', 'invalid_source_envelope');
+      authenticate(request, parsed.data.tenantId);
+      const configured = installation !== undefined;
+      const enrolled =
+        installation !== undefined &&
+        hasSourceIngressEnrollment(db, installation.receiverId, parsed.data.tenantId, ingressId);
       return {
         version: 1,
-        enabled: installation !== undefined,
+        enabled: configured && enrolled,
+        configured,
+        enrolled,
         ingressId,
         candidateIntake: '/api/candidates',
         endpoint: '/api/candidates/:id/source-governance',

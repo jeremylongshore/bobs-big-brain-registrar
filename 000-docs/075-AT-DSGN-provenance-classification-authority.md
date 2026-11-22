@@ -455,8 +455,11 @@ load producer keys, authorize live activation or demonstrate a deployed consumer
 
 An authenticated admin queries `GET /api/candidates/source-governance-capabilities`
 and supplies an authorized tenant as usual. The response declares protocol version
-1, enabled/disabled state, the route and the fixed ingress ID
-`api-source-governance-v1`. No profile catalog or key material is exposed.
+1, configured and enrolled booleans, enabled only when both hold for that tenant,
+the route and the fixed ingress ID
+`api-source-governance-v1`. Enrollment presence is not proof of a usable signing
+key or valid evidence; preview verifies those independently. No profile catalog
+or key material is exposed.
 
 `POST /api/candidates/:id/source-governance` accepts one strict envelope:
 
@@ -492,19 +495,19 @@ no-new-admission operation, while still requiring current request authorization.
 
 ### Supported and unsupported ingress inventory
 
-| Surface                                         | Source behavior and evidence                                                                                                                                                                     |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| API canonical intake                            | Candidate-only; reserved evidence fields refuse before parsing. Existing scan, quota and actor overrides remain. HTTP tests cover no stripping and ID collapse.                                  |
-| API source governance                           | Supported preview/apply v1 over an existing candidate; actual HTTP tests cover current evidence, access, drift, rollback and member quarantine.                                                  |
-| API legacy promotion                            | Required enrollment returns 422 `SOURCE_ENROLLMENT_REQUIRED` with the evidence route; unenrolled legacy promotion remains available.                                                             |
-| API vault import                                | Creates inbox candidates only. Reserved evidence on the request refuses before filesystem access. Later admission uses the same guarded promoter.                                                |
-| Registrar MCP propose/import                    | Does not accept source evidence. Actual SDK transport rejects reserved fields; direct helpers also refuse. Ordinary proposals remain review-bound spool entries.                                 |
-| Spool v1 writer/reader/intake                   | Reserved evidence fields refuse. Intake reports an admission rejection and retains the raw file; it does not archive it as successfully ingested. No source-evidence field is added to spool v1. |
-| Curator CLI ingest                              | Actual child-process test proves required enrollment retains inbox candidates but exits nonzero with an actionable governance refusal.                                                           |
-| Edge-daemon cycle                               | Required enrollment leaves curation incomplete and logs the evidence-route refusal; synthetic cycle test proves no promotion.                                                                    |
-| Selected recovery/manual governance             | Existing real-store test proves a historical floor cannot waive required admission. No evidence-aware recovery CLI is added.                                                                     |
-| Merge and authenticated snapshot import         | Existing source restrictions survive; required destination enrollment refuses admission. Snapshot import preserves the enrollment error and rolls back its attempted floor/row writes.           |
-| Standalone public plugin and Compiler producers | Adoption remains parent work. Frozen Plugin85 is unchanged; neither release nor installed-consumer compatibility is established here.                                                            |
+| Surface                                         | Source behavior and evidence                                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API canonical intake                            | Candidate-only; reserved evidence fields refuse before parsing. Existing scan, quota and actor overrides remain. HTTP tests cover no stripping and ID collapse.                                                                                                                           |
+| API source governance                           | Supported preview/apply v1 over an existing candidate; Fastify `inject()` route tests cover current evidence, access, drift, rollback and member quarantine.                                                                                                                              |
+| API legacy promotion                            | Required enrollment returns 422 `SOURCE_ENROLLMENT_REQUIRED` with the evidence route; unenrolled legacy promotion remains available.                                                                                                                                                      |
+| API vault import                                | Creates inbox candidates only. Reserved evidence on the request refuses before filesystem access. Later admission uses the same guarded promoter.                                                                                                                                         |
+| Registrar MCP propose/import                    | Does not accept source evidence. SDK calls over `InMemoryTransport` reject reserved fields; direct helpers also refuse. Ordinary proposals remain review-bound spool entries.                                                                                                             |
+| Spool v1 writer/reader/intake                   | Reserved evidence fields refuse. Intake reports an admission rejection and retains the raw file; it does not archive it as successfully ingested. No source-evidence field is added to spool v1.                                                                                          |
+| Curator CLI ingest                              | Actual child-process test proves required enrollment retains inbox candidates but exits nonzero with an actionable governance refusal.                                                                                                                                                    |
+| Edge-daemon cycle                               | Required enrollment leaves curation incomplete and logs the evidence-route refusal; synthetic cycle test proves no promotion.                                                                                                                                                             |
+| Selected recovery/manual governance             | [The existing real-store recovery test](../apps/curator/src/__tests__/source-governance.test.ts) (`does not let a historical source floor authorize selected human legacy admission`) proves a historical floor cannot waive required admission. No evidence-aware recovery CLI is added. |
+| Merge and authenticated snapshot import         | Existing source restrictions survive; required destination enrollment refuses admission. Snapshot import preserves the enrollment error and rolls back its attempted floor/row writes.                                                                                                    |
+| Standalone public plugin and Compiler producers | Adoption remains parent work. Frozen Plugin85 is unchanged; neither release nor installed-consumer compatibility is established here.                                                                                                                                                     |
 
 The reserved top-level names are `sourceEvidence`, `sourceAssertion`,
 `sourceClassification` and `assertion`. They are explicitly unsupported on a v1
@@ -514,6 +517,33 @@ unchanged. Documents imported as content are not themselves authenticated eviden
 
 These are source and synthetic-test boundaries. The parent retains trusted producer
 capture, distribution and actual end-to-end adoption; live registry enrollment and
-operational acceptance remain separately authorized work. The API exports the
-necessary governance functions through the curator package index, but does not
-export registry provisioning or the private admission scope.
+operational acceptance remain separately authorized work. The curator package exports
+`previewSourceGovernance` and `applySourceGovernance` for the Registrar adapter.
+The package is marked `private` in `apps/curator/package.json`, but that is a
+publication setting, not an access-control mechanism. Direct library invocation
+requires a trusted host caller with the store connection and receiver custody;
+it is not an authenticated public interface. Bearer/admin/tenant authentication
+is enforced by the HTTP route. Registry provisioning and the internal
+`withVerifiedSourceAdmission` helper remain unexported from the package index.
+The route tests use Fastify `inject()` and the MCP tests use SDK
+`InMemoryTransport`; neither establishes socket-level or installed-consumer
+behavior. The CLI test separately executes the compiled child-process entrypoint.
+
+### Coordinated compatibility policy for evidence adoption
+
+Candidate v1 remains a candidate-only protocol; the new evidence API is separately
+versioned. Rejecting previously ignored reserved extension names is an intentional
+validation tightening, not backward-compatible extension handling. A mixed fleet
+of older and current readers is unsupported for evidence-enabled operation: an old
+reader may discard these names, and binaries predating enrollment enforcement may
+promote without this admission guard.
+
+Before enabling enrollment or sending evidence, stop legacy writers and consumers,
+verify every active Registrar admission path runs the guarded implementation, and
+verify producers negotiate the tenant-specific API capability. Keep candidate v1
+files free of evidence; send assertions only through the explicit API. Preserve
+refused raw files for review rather than stripping fields or rewriting their IDs.
+Rolling back to pre-enforcement binaries requires stopping writers and a separately
+reviewed rollback plan. This PR neither performs that rollout nor establishes that
+an installed fleet meets these prerequisites. Producer adoption and operational
+acceptance remain open in the parent work.
