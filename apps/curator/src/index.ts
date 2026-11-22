@@ -75,7 +75,33 @@ export {
   BRAINIGNORE_PATH_ENV,
 } from './import-exclusion/load-brainignore.js';
 export type { LoadBrainignoreOptions } from './import-exclusion/load-brainignore.js';
-export { mergeGovern, MergeIdInvariantError } from './merge/merge-gate.js';
+// Compatibility API: bare rows do not authenticate source constraint completeness.
+export {
+  mergeGovern,
+  mergeGovern as legacyMergeGovern,
+  MergeIdInvariantError,
+} from './merge/merge-gate.js';
+export { exportSourceSnapshot, verifySourceSnapshot } from './merge/source-snapshot.js';
+export {
+  SignedSourceSnapshot,
+  SourceSnapshotOptions,
+  TrustedSourceCheckpoint,
+  SourceSnapshotError,
+} from './merge/source-snapshot-schema.js';
+export type { SourceSnapshotItem, SourceSnapshotPayload } from './merge/source-snapshot-schema.js';
+export { previewSourceImport, applySourceImport } from './merge/source-import.js';
+export {
+  SourceImportPlan,
+  SourceImportOutcome,
+  SourceImportError,
+} from './merge/source-import-schema.js';
+export type {
+  SourceImportContext,
+  SourceImportDependencies,
+  SourceImportResult,
+} from './merge/source-import-schema.js';
+export { runSnapshotCommand } from './merge/snapshot-command.js';
+export type { SnapshotCommandIO } from './merge/snapshot-command.js';
 export type {
   MergeGovernResult,
   MergeGovernDependencies,

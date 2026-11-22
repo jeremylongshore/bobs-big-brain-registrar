@@ -2,8 +2,9 @@
 
 Status: **In development**. Bead: `compile-then-govern-39z.11`.
 The authenticated source snapshot route is selected for implementation. Export
-and verification plus transactional import are implemented as internal library
-functions; the protected CLI/legacy boundary remains open. This does not change
+and verification plus transactional import are implemented. The protected
+[operator CLI and library boundary](073-OD-GUID-protected-snapshot-transport.md)
+are implemented for disposable verification; live adoption remains open. This does not change
 admission or read policy, or certify cross-clone privacy preservation.
 
 ## Existing behavior and gap
@@ -239,8 +240,9 @@ activation, production verification or full transport completion is claimed.
 Child `compile-then-govern-39z.11.1.3` adds internal `previewSourceImport` and
 `applySourceImport` in [source-import.ts](../apps/curator/src/merge/source-import.ts).
 The protected path accepts only signed snapshots and independently supplied
-trusted checkpoints. Bare rows cannot enter it. Existing merge callers have not
-been migrated; child `.4` still owns the exposed interface and compatibility work.
+trusted checkpoints. Bare rows cannot enter it. Existing bare-row callers retain
+a separately labeled legacy surface; child `.4` exposes the protected interface
+and its explicit compatibility boundary below.
 
 Preview reads a consistent destination transaction without writes. Apply refuses
 an enclosing transaction and acquires its own immediate write transaction. Memory
@@ -311,7 +313,19 @@ Changing policy creates a distinct batch identity and requires a fresh preview.
 
 The receipt chain is local and tamper-evident. It does not defend against an
 administrator replacing the entire database and its local history. External
-checkpoint authority, physical-store access controls, operator-facing locks,
-post-commit indexing, live adoption and deployment remain separate work. The
+checkpoint authority, post-commit indexing, live adoption and deployment remain
+separate work. The protected CLI adds physical-store checks and the shared
+operator write lock; lower-level library callers retain those responsibilities. The
 source exporter now recognizes imported floors so subsequent authorized exports
 preserve them; the version-1 effective-floor wire semantics are unchanged.
+
+## Operator surface implementation boundary (2026-11-22)
+
+Child `.4` exposes the snapshot/import library functions and the dedicated
+`curator-snapshot` command. It requires explicit private source/target inputs and
+independent trusted checkpoint configuration, binds preview to a physical store
+and reviewed digest, and rechecks authority under the shared write lock during
+apply. It neither enrolls a signer nor performs indexing or deployment.
+Legacy bare-row callers remain compatible and explicitly labeled unverified;
+there is no protected-to-legacy fallback. See the operator guide for custody,
+limits, uncertain commit reconciliation and current unsupported live setup.
