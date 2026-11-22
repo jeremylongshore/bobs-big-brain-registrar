@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { computeContentHash } from '@qmd-team-intent-kb/common';
-import { effectiveSensitivity } from '@qmd-team-intent-kb/policy-engine';
+import { classifyContent, effectiveSensitivity } from '@qmd-team-intent-kb/policy-engine';
 import { AuditEvent, MemoryCandidate, type Sensitivity } from '@qmd-team-intent-kb/schema';
 import {
   MemoryRepository,
@@ -28,7 +28,10 @@ export function combinedProvenanceFloor(
   sourceFloor: Sensitivity,
   audit: AuditRepository,
 ): Sensitivity {
-  let floor = sourceFloor;
+  let floor = effectiveSensitivity(
+    sourceFloor,
+    classifyContent(candidate.content).sensitivityLevel,
+  );
   const ids = new Set([candidate.id]);
   const hash = computeContentHash(candidate.content);
   for (const row of new MemoryRepository(audit.connection).findByTenant(candidate.tenantId)) {

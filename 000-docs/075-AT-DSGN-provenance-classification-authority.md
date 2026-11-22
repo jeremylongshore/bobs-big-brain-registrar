@@ -283,8 +283,8 @@ inventing a different candidate ID. It never reopens a rejection or releases a h
 Apply uses one immediate transaction. It refuses a changed plan, re-verifies
 current source authority, records a new `provenance-sensitivity-floor-v1` receipt,
 tightens pre-existing content aliases, and runs canonical curation with the same
-durable floor. The receipt combines the authenticated source floor with existing
-row restrictions and legacy candidate-scoped recovery floors. Rejected and
+durable floor. The receipt combines the authenticated source floor with content classification,
+existing row restrictions and legacy candidate-scoped recovery floors. Rejected and
 quarantined proposals retain their restrictions. A duplicate cannot leave its
 older public row public. Audience and lifecycle do not widen; this function
 refuses unapproved supersession. Member-tagged and Registrar MCP proposals retain

@@ -510,6 +510,24 @@ describe('transactional provenance governance', () => {
       expect(resolveCandidateMinimumSensitivity(f.candidate, deps.auditRepo)).toBe('confidential');
     },
   );
+  it('combines content classification with a public profile before alias deduplication', () => {
+    f.candidate.content = 'Synthetic contact jane@example.com';
+    const contentHash = computeContentHash(f.candidate.content);
+    db.prepare('UPDATE candidates SET content = ?, content_hash = ? WHERE id = ?').run(
+      f.candidate.content,
+      contentHash,
+      f.candidate.id,
+    );
+    f.registry.profiles[0]!.minimumSensitivity = 'public';
+    f.payload.contentHash = contentHash;
+    f.payload.profileDigest = sourceProfileDigest(f.registry.profiles[0]!);
+    wire = signSourceClassification(f.payload, f.keys.privateKey);
+    const row = alias();
+    expect(preview().minimumSensitivity).toBe('confidential');
+    expect(apply().settlement.outcome).toBe('duplicate');
+    expect(deps.memoryRepo.findById(row.id)?.sensitivity).toBe('confidential');
+    expect(resolveCandidateMinimumSensitivity(f.candidate, deps.auditRepo)).toBe('confidential');
+  });
   it('refuses unknown floor kinds instead of silently discarding evidence', () => {
     apply();
     db.prepare(
