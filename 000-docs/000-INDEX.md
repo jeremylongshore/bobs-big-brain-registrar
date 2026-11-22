@@ -15,6 +15,8 @@ for the current documentation audit. Historical plans are not current acceptance
 
 ### Architecture and technical
 
+- [072 Proposed cross-clone sensitivity constraint contract](072-AT-DSGN-merge-sensitivity-constraint-contract.md)
+
 - [001-AT-ARCH-repo-blueprint](001-AT-ARCH-repo-blueprint.md)
 - [002-AT-ARCH-architecture-overview](002-AT-ARCH-architecture-overview.md)
 - [003-AT-DSGN-system-thesis](003-AT-DSGN-system-thesis.md)

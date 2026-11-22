@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document a proposed cross-clone sensitivity constraint contract, including
+  source authority, evidence completeness, monotonic floors and acceptance cases.
+  Transport and live policy remain unimplemented (`compile-then-govern-39z.11`).
+
 - Add an opt-in independent hold-expiry worker with private physical-store-bound
   configuration, shared writer locking, durable transport bindings, bounded
   executable notification protocol, and reconciliation instead of blind resend.
