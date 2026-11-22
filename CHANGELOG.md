@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Specify a proposed authenticated provenance-classification contract and pin
+  the existing origin HMAC boundary with eight synthetic field-mutation cases.
+  The v1 token authenticates its identity tuple, not unsigned source context;
+  new source policies, assertions and rollout remain unimplemented
+  (`compile-then-govern-39z.11.4.1`).
+
 - Expose authenticated snapshot export, preview and apply through the curator
   library and a dedicated private-file operator CLI. Bind reviewed plans to the
   physical destination and checkpoint provider; apply under the shared write
