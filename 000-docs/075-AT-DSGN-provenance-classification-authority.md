@@ -1,7 +1,8 @@
 # Provenance classification authority
 
-**Status:** Contract with a pure assertion-verification implementation; durable
-classification enforcement, ingress adoption and rollout remain open.
+**Status:** Proposed end-to-end contract with an implemented pure
+assertion-verification primitive. Durable classification enforcement, ingress
+adoption and rollout remain open.
 **Date:** 2026-11-22
 **Parent:** `compile-then-govern-39z.11.4`
 **Contract/evidence task:** `compile-then-govern-39z.11.4.1`
@@ -203,12 +204,12 @@ or activating a consumer. Closing either bounded source task does not close
 
 ## Implemented assertion primitive (2026-11-22)
 
-Task `compile-then-govern-39z.11.4.2` adopts the assertion/profile portion of this
-contract in `apps/curator/src/origin/source-classification*.ts`. This is a library
+Task `compile-then-govern-39z.11.4.2` implements the assertion/profile primitive in `apps/curator/src/origin/source-classification*.ts`. This is a library
 primitive with synthetic tests. No running ingress calls it yet. The preceding
 end-to-end requirements remain the target for tasks `.4.3` through `.4.5`.
 
-The implementation choices are:
+The following choices describe the implemented primitive; they do not ratify the
+remaining end-to-end proposal or authorize deployment enrollment:
 
 - A separate strict v1 payload/envelope; legacy candidate and origin schemas are
   unchanged. Canonical JSON sorts object keys by ASCII order, preserves array
