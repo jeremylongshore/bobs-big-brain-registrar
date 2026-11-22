@@ -21,6 +21,11 @@
       "types": "./dist/contradiction-references.d.ts",
       "import": "./dist/contradiction-references.js",
       "default": "./dist/contradiction-references.js"
+    },
+    "./source-classification": {
+      "types": "./dist/source-classification.d.ts",
+      "import": "./dist/source-classification.js",
+      "default": "./dist/source-classification.js"
     }
   },
   "scripts": {
