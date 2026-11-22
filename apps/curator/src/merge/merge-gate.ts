@@ -292,6 +292,25 @@ export function mergeGovern(
   return options.dryRun ? run.deferred() : run.immediate();
 }
 
+function validatedDestinationRows(memoryRepo: MemoryRepository, tenantId: string): CuratedMemory[] {
+  let destinationRows: CuratedMemory[];
+  try {
+    destinationRows = memoryRepo.findByTenant(tenantId).map(normalizeMergeSnapshot);
+  } catch {
+    // Do not expose stored row contents or misidentify destination damage as input.
+    throw new Error('Merge destination rows could not be read and schema-validated');
+  }
+  for (const memory of destinationRows) {
+    if (
+      computeContentHash(memory.content) !== memory.contentHash ||
+      deriveMemoryId(memory.candidateId, memory.contentHash) !== memory.id
+    ) {
+      throw new Error('Merge destination contains an inconsistent content or identity binding');
+    }
+  }
+  return destinationRows;
+}
+
 function mergeGovernInTransaction(
   cloneA: readonly CuratedMemory[],
   cloneB: readonly CuratedMemory[],
@@ -347,21 +366,7 @@ function mergeGovernInTransaction(
     }
   }
   const incomingHashes = new Set(union.map((memory) => memory.contentHash));
-  let destinationRows: CuratedMemory[];
-  try {
-    destinationRows = deps.memoryRepo.findByTenant(options.tenantId).map(normalizeMergeSnapshot);
-  } catch {
-    // Do not expose stored row contents or misidentify destination damage as input.
-    throw new Error('Merge destination rows could not be read and schema-validated');
-  }
-  for (const memory of destinationRows) {
-    if (
-      computeContentHash(memory.content) !== memory.contentHash ||
-      deriveMemoryId(memory.candidateId, memory.contentHash) !== memory.id
-    ) {
-      throw new Error('Merge destination contains an inconsistent content or identity binding');
-    }
-  }
+  const destinationRows = validatedDestinationRows(deps.memoryRepo, options.tenantId);
   const destinationMatches = destinationRows.filter((memory) => {
     const incomingHash = candidateHashes.get(memory.candidateId);
     if (incomingHash !== undefined && incomingHash !== memory.contentHash) {
