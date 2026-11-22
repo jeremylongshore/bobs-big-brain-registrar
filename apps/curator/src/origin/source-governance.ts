@@ -1,3 +1,6 @@
+import { readSourceControlInput } from './source-control-read.js';
+import { readStoredSourceRegistry } from './source-enrollment.js';
+import { withVerifiedSourceAdmission } from './source-admission.js';
 import type Database from 'better-sqlite3';
 import { AuditEvent } from '@qmd-team-intent-kb/schema';
 import { curateSourceCandidate } from './source-governance-curation.js';
@@ -74,7 +77,12 @@ export function applySourceGovernance(
     .transaction(() => {
       const deps = sourceGovernanceRepositories(db);
       requireSourceGovernanceChain(deps.auditRepo);
-      requireScope(expected, SourceClassificationReceiver.parse(context.readAuthority().receiver));
+      requireScope(
+        expected,
+        SourceClassificationReceiver.parse(
+          readSourceControlInput(db, () => context.readReceiver()),
+        ),
+      );
       const previous = readSourceSettlement(expected, deps);
       if (previous) {
         requireSourceGovernanceChain(deps.auditRepo);
@@ -91,7 +99,13 @@ export function applySourceGovernance(
         deps.auditRepo,
       );
       const tightened = tightenSourceAliases(state.aliases, expected, state.receiver.now, deps);
-      const outcome = curateSourceCandidate(state.candidate, deps, context, state.receiver.now);
+      const outcome = withVerifiedSourceAdmission(
+        state.candidate,
+        serialized,
+        db,
+        () => context.readReceiver(),
+        () => curateSourceCandidate(state.candidate, deps, context, state.receiver.now),
+      );
       const candidateAfter = deps.candidateRepo.findById(expected.candidateId);
       const promotedAfter =
         outcome.memoryId === null ? null : deps.memoryRepo.findById(outcome.memoryId);
@@ -114,8 +128,10 @@ export function applySourceGovernance(
       deps.auditRepo.insert(event);
       // This fresh read is inside the same write transaction. Authority expiry or
       // revocation during work rolls back every row and receipt above.
-      const latest = context.readAuthority();
-      const receiver = SourceClassificationReceiver.parse(latest.receiver);
+      const receiver = SourceClassificationReceiver.parse(
+        readSourceControlInput(db, () => context.readReceiver()),
+      );
+      const latest = { registry: readStoredSourceRegistry(db), receiver };
       requireScope(expected, receiver);
       const verified = verifySourceClassification({
         ...latest,

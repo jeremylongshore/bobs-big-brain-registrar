@@ -39,8 +39,10 @@ export const SourceGovernanceSettlement = z
   })
   .strict();
 export type SourceGovernanceSettlement = z.infer<typeof SourceGovernanceSettlement>;
-/** Trusted integration supplies fresh authority. This is not request-body configuration. */
+/** Trusted integration supplies receiver identity and a fresh clock, never request fields.
+ * The registry is always loaded from the governed store.
+ */
 export interface SourceGovernanceContext {
-  readAuthority(): { registry: unknown; receiver: unknown };
+  readReceiver(): unknown;
   originSecret?: string;
 }

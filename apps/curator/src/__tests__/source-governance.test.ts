@@ -40,13 +40,19 @@ beforeEach(() => {
   deps = sourceGovernanceRepositories(db);
   f = makeSourceGovernanceFixture();
   deps.candidateRepo.insert(f.candidate, computeContentHash(f.candidate.content));
-  context = { readAuthority: () => ({ registry: f.registry, receiver: f.receiver }) };
+  saveRegistry();
+  context = { readReceiver: () => f.receiver };
   wire = signSourceClassification(f.payload, f.keys.privateKey);
 });
 afterEach(() => {
   vi.restoreAllMocks();
   db.close();
 });
+function saveRegistry() {
+  db.prepare('INSERT OR REPLACE INTO source_classification_authority VALUES (1, ?)').run(
+    JSON.stringify(f.registry),
+  );
+}
 function preview() {
   return previewSourceGovernance(f.candidate.id, wire, db, context);
 }
@@ -140,6 +146,7 @@ describe('transactional provenance governance', () => {
     apply();
     f.registry.profiles = [];
     f.registry.keys[0]!.revoked = true;
+    saveRegistry();
     f.receiver.now = '2026-11-23T09:02:00.000Z';
     expect(
       resolveCandidateMinimumSensitivity({ ...f.candidate, id: randomUUID() }, deps.auditRepo),
@@ -148,10 +155,11 @@ describe('transactional provenance governance', () => {
   });
   it('returns exact historical replay after expiry without new writes or reactivation', () => {
     const plan = preview(),
-      first = apply(plan),
-      before = fingerprint();
+      first = apply(plan);
     f.receiver.now = '2026-11-23T09:02:00.000Z';
     f.registry.keys = [];
+    saveRegistry();
+    const before = fingerprint();
     const replay = apply(plan);
     expect(replay).toEqual({ ...first, alreadySettled: true });
     expect(fingerprint()).toBe(before);
@@ -197,21 +205,23 @@ describe('transactional provenance governance', () => {
         plan.minimumSensitivity = 'public';
         break;
     }
+    saveRegistry();
     const before = fingerprint();
     expect(() => apply(plan)).toThrow();
     expect(fingerprint()).toBe(before);
   });
   it.each(['registry', 'key', 'expiry', 'candidate', 'policy'] as const)(
-    'rolls back if %s changes on final authority reload',
+    'rolls back if %s changes during an authority reload',
     (kind) => {
       const plan = preview(),
         before = fingerprint();
       let reads = 0;
-      context.readAuthority = () => {
+      context.readReceiver = () => {
         reads++;
         if (reads === 3) {
           if (kind === 'registry') f.registry.revision++;
           if (kind === 'key') f.registry.keys[0]!.revoked = true;
+          if (kind === 'registry' || kind === 'key') saveRegistry();
           if (kind === 'expiry') f.receiver.now = f.payload.expiresAt;
           if (kind === 'candidate')
             db.prepare('UPDATE candidates SET title = ? WHERE id = ?').run(
@@ -220,7 +230,7 @@ describe('transactional provenance governance', () => {
             );
           if (kind === 'policy') policy();
         }
-        return { registry: f.registry, receiver: f.receiver };
+        return f.receiver;
       };
       expect(() => apply(plan)).toThrow();
       expect(fingerprint()).toBe(before);
@@ -286,6 +296,7 @@ describe('transactional provenance governance', () => {
     f.candidate = next;
     f.registry.profiles[0]!.minimumSensitivity = 'public';
     f.registry.profiles[0]!.revision++;
+    saveRegistry();
     Object.assign(f.payload, {
       candidateId: next.id,
       assertionId: randomUUID(),
@@ -338,7 +349,9 @@ describe('transactional provenance governance', () => {
     expect(fingerprint()).toBe(before);
     expect(deps.memoryRepo.findById(row.id)?.lifecycle).toBe('archived');
   });
-  it('preserves a provenance restriction through later selected human governance', () => {
+  it('preserves a provenance restriction through legacy human governance on optional enrollment', () => {
+    f.registry.enrollments[0]!.required = false;
+    saveRegistry();
     const configured = policy();
     apply();
     // Change the synthetic policy to permit promotion; no recovery floor is supplied.
@@ -519,6 +532,7 @@ describe('transactional provenance governance', () => {
       f.candidate.id,
     );
     f.registry.profiles[0]!.minimumSensitivity = 'public';
+    saveRegistry();
     f.payload.contentHash = contentHash;
     f.payload.profileDigest = sourceProfileDigest(f.registry.profiles[0]!);
     wire = signSourceClassification(f.payload, f.keys.privateKey);
@@ -536,5 +550,102 @@ describe('transactional provenance governance', () => {
     expect(() => resolveCandidateMinimumSensitivity(f.candidate, deps.auditRepo)).toThrow(
       'Unsupported',
     );
+  });
+  it('loads the stored registry rather than a divergent in-memory registry', () => {
+    f.registry.keys = [];
+    f.registry.enrollments = [];
+    expect(apply().settlement.outcome).toBe('promoted');
+  });
+  it('refuses missing stored authority instead of falling back to a supplied registry', () => {
+    db.exec('DELETE FROM source_classification_authority');
+    expect(() => preview()).toThrow('current verified authority');
+    expect(deps.memoryRepo.count()).toBe(0);
+  });
+  it('refuses stored revocation even when the fixture registry still authorizes the key', () => {
+    const revoked = structuredClone(f.registry);
+    revoked.keys[0]!.revoked = true;
+    db.prepare('UPDATE source_classification_authority SET registry_json = ?').run(
+      JSON.stringify(revoked),
+    );
+    expect(() => preview()).toThrow('current verified authority');
+    expect(deps.memoryRepo.count()).toBe(0);
+  });
+  it('does not let a historical source floor authorize selected human legacy admission', () => {
+    const configured = policy();
+    apply();
+    db.prepare('UPDATE governance_policies SET rules_json = ? WHERE id = ?').run(
+      JSON.stringify(configured.rules.map((r) => ({ ...r, enabled: false }))),
+      configured.id,
+    );
+    const candidate = deps.candidateRepo.findById(f.candidate.id)!;
+    const before = fingerprint();
+    expect(() =>
+      governSelectedCandidates(
+        {
+          runId: randomUUID(),
+          tenantId: candidate.tenantId,
+          selections: [
+            { candidateId: candidate.id, snapshotDigest: candidateSnapshotDigest(candidate) },
+          ],
+          actor: { type: 'human', id: 'synthetic-owner' },
+          role: 'owner',
+          reason: 'Synthetic review',
+        },
+        db,
+      ),
+    ).toThrow('Source enrollment');
+    expect(fingerprint()).toBe(before);
+    expect(resolveCandidateMinimumSensitivity(candidate, deps.auditRepo)).toBe('confidential');
+  });
+  it.each(['registry', 'key', 'expiry', 'candidate', 'policy'] as const)(
+    'rolls back %s drift after settlement on the final authority reload',
+    (kind) => {
+      const plan = preview(),
+        before = fingerprint();
+      let settled = false;
+      const insert = AuditRepository.prototype.insert;
+      vi.spyOn(AuditRepository.prototype, 'insert').mockImplementation(function (
+        this: AuditRepository,
+        event,
+      ) {
+        const result = insert.call(this, event);
+        if (event.details['kind'] === 'source-governance-settlement-v1') settled = true;
+        return result;
+      });
+      context.readReceiver = () => {
+        if (settled) {
+          if (kind === 'registry') {
+            f.registry.revision++;
+            saveRegistry();
+          }
+          if (kind === 'key') {
+            f.registry.keys[0]!.revoked = true;
+            saveRegistry();
+          }
+          if (kind === 'expiry') f.receiver.now = f.payload.expiresAt;
+          if (kind === 'candidate')
+            db.prepare('UPDATE candidates SET title = ? WHERE id = ?').run(
+              'Changed',
+              f.candidate.id,
+            );
+          if (kind === 'policy') policy();
+        }
+        return f.receiver;
+      };
+      expect(() => apply(plan)).toThrow();
+      expect(settled).toBe(true);
+      expect(fingerprint()).toBe(before);
+    },
+  );
+  it('refuses provider writes even on historical replay and rolls them back', () => {
+    const plan = preview();
+    apply(plan);
+    const before = fingerprint();
+    context.readReceiver = () => {
+      db.exec('DELETE FROM source_classification_authority');
+      return f.receiver;
+    };
+    expect(() => apply(plan)).toThrow('provider wrote');
+    expect(fingerprint()).toBe(before);
   });
 });
