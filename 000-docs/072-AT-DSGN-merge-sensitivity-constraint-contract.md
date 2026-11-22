@@ -109,3 +109,17 @@ or time-based declassification. Existing audience controls must be preserved;
 confidential records must not become visible as a side effect of this work.
 Any future declassification needs separate authority and evidence rather than
 expiry silently lowering a durable floor. The parent bead remains in progress.
+
+## Implementation prerequisite: duplicate preflight
+
+The merge gate now validates every schema-normalized input before deduplication
+or writes: content-derived identity, content digest, destination tenant and active
+lifecycle. Copies sharing an identity must have identical normalized snapshots,
+including audience and sensitivity. Conflicts refuse the whole pass regardless
+of clone order; even differences in version, timestamps or policy evidence
+require reconciliation outside this bare-row path. Object-key ordering does not
+constitute a conflict. This deliberately replaces first-copy selection.
+
+This preflight does not authenticate either clone, transport source floor
+receipts, or prove that an export is complete. It is a prerequisite to the
+transport contract, whose authority and application routes remain proposed.

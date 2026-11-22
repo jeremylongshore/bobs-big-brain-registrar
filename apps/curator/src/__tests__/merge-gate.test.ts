@@ -350,6 +350,70 @@ describe('mergeGovern - govern-at-merge gate', () => {
     expect(deps.memoryRepo.count()).toBe(1);
   });
 
+  describe('whole-input preflight before duplicate collapse', () => {
+    it('accepts equivalent snapshots with reordered object keys', () => {
+      const row = makeRow('Use explicit versioned schemas for shared knowledge records.');
+      const reordered = Object.fromEntries(Object.entries(row).reverse()) as CuratedMemory;
+      const result = mergeGovern([row], [reordered], deps, { tenantId: TENANT });
+      expect(result.promoted).toHaveLength(1);
+      expect(deps.memoryRepo.count()).toBe(1);
+    });
+
+    it('validates a later malformed row before promoting any earlier clean row', () => {
+      const clean = makeRow('A valid convention that must not be partially written.');
+      const bad = {
+        ...makeRow('A malformed source record must refuse the whole batch.'),
+        title: '',
+      };
+      expect(() =>
+        mergeGovern([clean], [bad], deps, { policy: makeMergePolicy(), tenantId: TENANT }),
+      ).toThrow('invalid curated row');
+      expect(deps.memoryRepo.count()).toBe(0);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('does not disclose rejected content in a content-binding error', () => {
+      const row = makeRow('Original content with a valid source identity.');
+      const changed = { ...row, content: 'Synthetic private text that must not appear in errors.' };
+      let message = '';
+      try {
+        mergeGovern([changed], [], deps, { tenantId: TENANT });
+      } catch (error) {
+        message = String(error);
+      }
+      expect(message).toContain('declared hash');
+      expect(message).not.toContain(changed.content);
+      expect(deps.memoryRepo.count()).toBe(0);
+    });
+
+    const mutations: [string, (row: CuratedMemory) => CuratedMemory][] = [
+      ['candidate identity', (row) => ({ ...row, candidateId: randomUUID() })],
+      [
+        'content binding',
+        (row) => ({ ...row, content: 'Changed content hidden behind the same id.' }),
+      ],
+      ['tenant', (row) => ({ ...row, tenantId: 'other-tenant' })],
+      ['sensitivity', (row) => ({ ...row, sensitivity: 'confidential' })],
+      ['audience', (row) => ({ ...row, metadata: { ...row.metadata, audience: 'owner' } })],
+      ['lifecycle', (row) => ({ ...row, lifecycle: 'archived' })],
+    ];
+    for (const [field, mutate] of mutations) {
+      for (const reverse of [false, true]) {
+        it(`refuses conflicting ${field}, reverse=${reverse}, without writes`, () => {
+          const clean = makeRow(
+            'A private planning convention without recognizable personal data.',
+          );
+          const conflict = mutate(clean);
+          const first = reverse ? conflict : clean;
+          const second = reverse ? clean : conflict;
+          expect(() => mergeGovern([first], [second], deps, { tenantId: TENANT })).toThrow();
+          expect(deps.memoryRepo.count()).toBe(0);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+  });
+
   it('is commutative: A∪B and B∪A produce byte-identical governed state + identical audit outcome', () => {
     const policy = makeMergePolicy();
 
