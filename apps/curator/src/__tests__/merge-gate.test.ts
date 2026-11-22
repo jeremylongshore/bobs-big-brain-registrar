@@ -411,6 +411,44 @@ describe('mergeGovern - govern-at-merge gate', () => {
   });
 
   describe('content-duplicate constraint preflight', () => {
+    for (const corrupt of ['hash', 'id'] as const) {
+      it(`refuses destination ${corrupt} inconsistencies before writes`, () => {
+        const stored = makeRow('An existing destination record requiring integrity checks.');
+        deps.memoryRepo.insert(stored);
+        if (corrupt === 'hash')
+          db.prepare('UPDATE curated_memories SET content = ? WHERE id = ?').run(
+            'Changed stored body without updating its digest.',
+            stored.id,
+          );
+        else
+          db.prepare('UPDATE curated_memories SET id = ? WHERE id = ?').run(
+            randomUUID(),
+            stored.id,
+          );
+        expect(() =>
+          mergeGovern([makeRow('An unrelated valid source record.')], [], deps, {
+            tenantId: TENANT,
+          }),
+        ).toThrow('Merge destination contains an inconsistent content or identity binding');
+        expect(deps.memoryRepo.count()).toBe(1);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      });
+    }
+
+    it('refuses a foreign candidate binding hidden behind a legacy memory ID', () => {
+      const foreign = makeRow('A candidate already stored in another tenant.', {
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(foreign);
+      db.prepare('UPDATE curated_memories SET id = ? WHERE id = ?').run(randomUUID(), foreign.id);
+      expect(() =>
+        mergeGovern([{ ...foreign, tenantId: TENANT }], [], deps, { tenantId: TENANT }),
+      ).toThrow('conflicting candidate content binding');
+      expect(deps.memoryRepo.count()).toBe(1);
+      expect(deps.memoryRepo.findByTenant(TENANT)).toHaveLength(0);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
     it('identifies malformed unrelated destination data without changing either store', () => {
       const stored = makeRow('An unrelated destination record with synthetic damage.');
       deps.memoryRepo.insert(stored);

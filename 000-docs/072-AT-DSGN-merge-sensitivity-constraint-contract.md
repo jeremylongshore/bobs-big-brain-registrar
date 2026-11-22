@@ -168,3 +168,10 @@ reconciliation; the merge does not infer a safe transformation or repair history
 Different curated bodies under one candidate ID are conservatively ambiguous here,
 even if a future transformation could legitimately produce them. This does not
 claim to reconstruct the original spool body digest from a candidate UUID.
+
+Destination-tenant rows also revalidate content digests and derived memory IDs
+before grouping or deduplication. Incoming candidate IDs already held by another
+tenant refuse regardless of that row's stored memory ID or lifecycle, preventing
+a legacy ID from bypassing tenant isolation. Equal text with a different candidate
+ID in another tenant still does not suppress an import. Foreign rows are not
+returned or repaired by the internal conflict query.

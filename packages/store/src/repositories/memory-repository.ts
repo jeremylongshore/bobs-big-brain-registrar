@@ -223,7 +223,7 @@ export class MemoryRepository {
   private readonly stmtInsert: Database.Statement;
   private readonly stmtFindById: Database.Statement;
   private readonly stmtExistsForCandidate: Database.Statement;
-  private readonly stmtConflictingCandidateContent: Database.Statement;
+  private readonly stmtConflictingCandidateBinding: Database.Statement;
   private readonly stmtFindByTenant: Database.Statement;
   private readonly stmtFindByHash: Database.Statement;
   private readonly stmtFindByHashAndTenant: Database.Statement;
@@ -278,8 +278,8 @@ export class MemoryRepository {
       SELECT 1 FROM curated_memories WHERE candidate_id = ? AND tenant_id = ? LIMIT 1
     `);
 
-    this.stmtConflictingCandidateContent = db.prepare(`
-      SELECT 1 FROM curated_memories WHERE candidate_id = ? AND content_hash <> ? LIMIT 1
+    this.stmtConflictingCandidateBinding = db.prepare(`
+      SELECT 1 FROM curated_memories WHERE candidate_id = ? AND (content_hash <> ? OR tenant_id <> ?) LIMIT 1
     `);
 
     this.stmtFindByTenant = db.prepare(`
@@ -435,8 +435,14 @@ export class MemoryRepository {
   }
 
   /** Internal merge invariant across tenants/lifecycles; exposes no foreign row data. */
-  hasConflictingCandidateContent(candidateId: string, contentHash: string): boolean {
-    return this.stmtConflictingCandidateContent.get(candidateId, contentHash) !== undefined;
+  hasConflictingCandidateBinding(
+    candidateId: string,
+    contentHash: string,
+    tenantId: string,
+  ): boolean {
+    return (
+      this.stmtConflictingCandidateBinding.get(candidateId, contentHash, tenantId) !== undefined
+    );
   }
 
   /** Return all curated memories belonging to the given tenant. */

@@ -332,12 +332,18 @@ function mergeGovernInTransaction(
   const union = [...unionById.values()];
 
   for (const memory of union) {
-    if (deps.memoryRepo.hasConflictingCandidateContent(memory.candidateId, memory.contentHash)) {
-      throw new Error('Merge destination contains a conflicting candidate content binding');
-    }
     const existingIdentity = deps.memoryRepo.findById(memory.id);
     if (existingIdentity !== null && existingIdentity.tenantId !== options.tenantId) {
       throw new Error('Merge identity is already bound outside the destination tenant');
+    }
+    if (
+      deps.memoryRepo.hasConflictingCandidateBinding(
+        memory.candidateId,
+        memory.contentHash,
+        options.tenantId,
+      )
+    ) {
+      throw new Error('Merge destination contains a conflicting candidate content binding');
     }
   }
   const incomingHashes = new Set(union.map((memory) => memory.contentHash));
@@ -347,6 +353,14 @@ function mergeGovernInTransaction(
   } catch {
     // Do not expose stored row contents or misidentify destination damage as input.
     throw new Error('Merge destination rows could not be read and schema-validated');
+  }
+  for (const memory of destinationRows) {
+    if (
+      computeContentHash(memory.content) !== memory.contentHash ||
+      deriveMemoryId(memory.candidateId, memory.contentHash) !== memory.id
+    ) {
+      throw new Error('Merge destination contains an inconsistent content or identity binding');
+    }
   }
   const destinationMatches = destinationRows.filter((memory) => {
     const incomingHash = candidateHashes.get(memory.candidateId);
