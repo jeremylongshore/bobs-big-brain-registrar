@@ -1,8 +1,10 @@
 # Proposed cross-clone sensitivity constraint contract
 
-Status: **Proposed**. Bead: `compile-then-govern-39z.11`.
-This document specifies a review boundary; it does not implement transport,
-change admission or read policy, or certify cross-clone privacy preservation.
+Status: **In development**. Bead: `compile-then-govern-39z.11`.
+The authenticated source snapshot route is selected for implementation. Export
+and verification are implemented as internal library functions; transactional
+import and the protected CLI/legacy boundary remain open. This does not change
+admission or read policy, or certify cross-clone privacy preservation.
 
 ## Existing behavior and gap
 
@@ -70,7 +72,8 @@ the same durable enforcement path, without trusting caller metadata.
 The finite-plan route can reuse local reviewed-operation patterns without
 claiming a deployed federation trust service. It must refuse unresolved source
 restrictions or apply an explicitly reviewed conservative bound; it cannot
-silently approve an absence of evidence. Neither route is selected by this doc.
+silently approve an absence of evidence. The selected route is the authenticated
+source snapshot, subject to the authority assumptions below.
 
 The current bare-row merge API must not be relabeled as constraint-preserving.
 Before implementation, choose an explicit compatibility boundary: reject bare
@@ -122,7 +125,7 @@ constitute a conflict. This deliberately replaces first-copy selection.
 
 This preflight does not authenticate either clone, transport source floor
 receipts, or prove that an export is complete. It is a prerequisite to the
-transport contract, whose authority and application routes remain proposed.
+transport contract, whose destination application remains in development.
 
 All destination-tenant rows must schema-normalize; an unrelated malformed row
 also refuses the pass. Only matching rows participate in comparison: same-identity
@@ -175,3 +178,58 @@ tenant refuse regardless of that row's stored memory ID or lifecycle, preventing
 a legacy ID from bypassing tenant isolation. Equal text with a different candidate
 ID in another tenant still does not suppress an import. Foreign rows are not
 returned or repaired by the internal conflict query.
+
+## Source snapshot implementation boundary (2026-11-22)
+
+Child `compile-then-govern-39z.11.1.2` adds internal
+`exportSourceSnapshot` and `verifySourceSnapshot` functions in
+[source-snapshot.ts](../apps/curator/src/merge/source-snapshot.ts).
+They do not write destination state or change the existing merge API/CLI.
+Children `.3` and `.4` own transactional application and the explicit legacy
+boundary. A successful verification alone must never authorize promotion.
+
+The exporter reads all active canonical memories for one source tenant in a
+single deferred transaction, verifies the entire source audit chain strictly,
+and combines each stored sensitivity with its supported durable reviewed floor.
+Any chain break, unverified row, unknown audit hash version, malformed applicable
+floor, content/identity inconsistency or unsupported floor model refuses. Existing
+historical forks are not exempted. The canonical disclosure scanner covers the entire memory object
+before export. This is not a raw database archive or proof that every source
+row originally passed promotion. Destination admission must re-govern content.
+
+Version 1 binds the source identity, source and destination tenants, positive
+sequence, issuance/expiry, key fingerprint, audit head, exact ordered inventory,
+canonical memory fields, effective floors and candidate-scoped evidence digests.
+Object keys sort lexically, array order is significant, and UTF-8 canonical JSON
+is domain-separated with `bbb-source-constraint-snapshot:v1` followed by a NUL.
+Ed25519 signs those payload bytes. Inventory and payload use SHA-256 over the same
+domain plus their respective canonical JSON. The key ID is SHA-256 over SPKI DER.
+The wire accepts at most 10,000 items and 8 MiB. Export currently materializes
+source rows and audit history before enforcing output bounds; these limits do
+not constitute a bounded-memory database scan.
+
+A caller must independently obtain an authorized checkpoint containing the source
+and tenant scope, Ed25519 public key/fingerprint, exact snapshot digest/sequence,
+validity interval and revocation state. The verifier trusts no key embedded in an
+artifact. It rejects unknown or default-filled wire fields, mismatched inventory,
+wrong signatures, scope mismatch, revoked authority and invalid validity windows.
+The entire snapshot validity window must fit the checkpoint interval; expiry is
+exclusive. Verification uses an explicitly supplied trusted clock.
+
+A signature establishes an attestation by the configured key, not that the signer
+is honest. Completeness follows from the exporter covering its declared active
+scope and the trusted authority pinning that exact inventory. Evidence digests
+are source attestations; raw audit details are not transported or independently
+replayed by the verifier. A malicious authorized signer can still omit facts.
+An accepted checkpoint must come from a trustworthy channel that supplies the
+operator's acceptable freshness; signatures and dates cannot discover a newer
+source change or a revocation that the caller has not learned. Key enrollment,
+private-key custody, checkpoint distribution/refresh and live authority are not
+implemented here. Destination durable anti-rollback tracking belongs to child `.3`.
+
+Export contains the source memory content and metadata, including restricted and
+owner-audience rows. Only an authorized trusted local operator may call it and
+handle the artifact; this library is not a public download endpoint or an audience
+filter. It copies no raw audit reasons and returns no private key. All refusals
+are sanitized category errors. No live source keys, trust registry, runtime
+activation, production verification or full transport completion is claimed.
