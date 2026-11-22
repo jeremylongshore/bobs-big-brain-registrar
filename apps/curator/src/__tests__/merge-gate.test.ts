@@ -432,7 +432,7 @@ describe('mergeGovern - govern-at-merge gate', () => {
     }
   });
 
-  describe('whole-input preflight before duplicate collapse', () => {
+  describe('whole-input preflight before persistence', () => {
     it('keeps serialized merge results and audit records identical when nested object keys are reordered', () => {
       const row = makeRow('Use explicit versioned schemas for shared knowledge records.', {
         metadata: { filePaths: ['fixture.ts'], tags: ['fixture'], audience: 'owner' },
