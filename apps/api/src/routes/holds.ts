@@ -112,7 +112,7 @@ export function registerHoldRoutes(
           'not cover is refused 422. An audience wider than the recommended tier needs ' +
           '`acknowledgeWider: true`. `reject` retires the candidate (the row is kept). Either ' +
           'way a hash-chained `hold_resolved` receipt is written in the same transaction. ' +
-          'A hold past its expiry is closed unpromoted and refused 422 `hold_expired`. ' +
+          'A hold past its expiry is refused 422 `hold_expired`; closure is deferred when release advice lacks a final escalation attempt. ' +
           'Body: { resolution: release|reject, audience?, reason, acknowledgeWider? }.',
       },
     },

@@ -154,7 +154,7 @@ export const AuditAction = z.enum([
   // the memory's id, or the candidate's id for the candidate-copy receipt.
   'redacted',
   // Human-escalation HOLD (Epic K bead K6, decision `000-docs/053-AT-DECR`,
-  // reusing the 014-AT-DECR recommend / pipeline-owns split). Three receipts,
+  // reusing the 014-AT-DECR recommend / pipeline-owns split). Receipts,
   // all with `memoryId` = the CANDIDATE's id:
   //   - `held`             — a deterministic rule outcome put the candidate on
   //                          hold. `details` carries the triggers, the declared
@@ -170,6 +170,8 @@ export const AuditAction = z.enum([
   'held',
   'hold_recommended',
   'hold_resolved',
+  // Escalation intent/outcome; metadata only, never notification body or title.
+  'hold_escalated',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;
 
