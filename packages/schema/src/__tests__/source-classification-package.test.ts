@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -27,6 +35,13 @@ it('ships an independently consumable canonical signing protocol in the schema t
       '-C',
       installed,
     ]);
+    const manifest = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8')) as {
+      license: string;
+    };
+    expect(manifest.license).toBe('Apache-2.0');
+    expect(readFileSync(join(installed, 'LICENSE'), 'utf8')).toBe(
+      readFileSync(join(packageRoot, '../../LICENSE'), 'utf8'),
+    );
     const require = createRequire(import.meta.url);
     const zodRoot = dirname(realpathSync(require.resolve('zod/package.json')));
     cpSync(zodRoot, join(temporary, 'node_modules/zod'), { recursive: true });
