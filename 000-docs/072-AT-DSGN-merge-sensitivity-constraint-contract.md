@@ -141,3 +141,14 @@ lexicographically first identity win. Compatible content duplicates still use th
 existing policy/bare content-hash deduplication. This checks supplied rows and
 local constraints only; it does not establish omitted foreign constraints or
 source authority, and therefore does not complete transport preservation.
+
+Candidate IDs also bind one content digest across supplied and destination rows;
+a changed body cannot evade comparison by producing a different memory ID.
+This checks consistency of available snapshots, not a reconstruction of a legacy
+candidate’s original namespace/workspace/path inputs.
+
+Preflight and promotions share a database transaction. Memory and audit repositories
+must use the same connection; apply uses an immediate transaction, and preview uses
+a deferred read transaction. A later promotion failure rolls back the whole pass.
+This holds the destination snapshot through writes; it does not lock remote sources
+or authenticate source snapshots supplied by callers.

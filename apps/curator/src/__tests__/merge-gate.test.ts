@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { recordCandidateMinimumSensitivity } from '../recovery/sensitivity-constraint.js';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type Database from 'better-sqlite3';
 import {
   createTestDatabase,
@@ -351,7 +351,100 @@ describe('mergeGovern - govern-at-merge gate', () => {
     expect(deps.memoryRepo.count()).toBe(1);
   });
 
+  describe('merge snapshot and persistence transaction', () => {
+    it('rolls back the entire pass if a later promotion fails', () => {
+      const first = makeRow('First independent incoming snapshot for a transactional merge.');
+      const second = makeRow('Second independent incoming snapshot for a transactional merge.');
+      const insert = deps.memoryRepo.insert.bind(deps.memoryRepo);
+      let calls = 0;
+      const spy = vi.spyOn(deps.memoryRepo, 'insert').mockImplementation((memory) => {
+        if (++calls === 2) throw new Error('Synthetic later insert failure');
+        return insert(memory);
+      });
+      try {
+        expect(() => mergeGovern([first], [second], deps, { tenantId: TENANT })).toThrow(
+          'Synthetic later insert failure',
+        );
+        expect(calls).toBe(2);
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('refuses repositories from different connections before writes', () => {
+      const other = createTestDatabase();
+      try {
+        const auditRepo = new AuditRepository(other);
+        expect(() =>
+          mergeGovern(
+            [makeRow('A cross-connection merge must refuse before persistence.')],
+            [],
+            { ...deps, auditRepo },
+            { tenantId: TENANT },
+          ),
+        ).toThrow('share one database connection');
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(auditRepo.findAllChronological()).toHaveLength(0);
+      } finally {
+        other.close();
+      }
+    });
+
+    it('previews on a query-only connection without writes', () => {
+      db.pragma('query_only = ON');
+      try {
+        const result = mergeGovern(
+          [makeRow('A preview computes the merge without acquiring write authority.')],
+          [],
+          deps,
+          { tenantId: TENANT, dryRun: true },
+        );
+        expect(result.promoted).toHaveLength(1);
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      } finally {
+        db.pragma('query_only = OFF');
+      }
+    });
+  });
+
   describe('content-duplicate constraint preflight', () => {
+    for (const destination of [false, true]) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses one candidate bound to different bodies, destination=${destination}, policy=${withPolicy}`, () => {
+          const first = makeRow('The original content bound to this candidate identity.');
+          const changed = makeRow('Changed content retaining the original candidate identity.', {
+            candidateId: first.candidateId,
+          });
+          expect(first.id).not.toBe(changed.id);
+          if (destination) deps.memoryRepo.insert(first);
+          const before = JSON.stringify(deps.memoryRepo.findByTenant(TENANT));
+          const options = {
+            tenantId: TENANT,
+            ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+          };
+          if (destination) {
+            expect(() => mergeGovern([changed], [], deps, options)).toThrow(
+              'candidate content binding',
+            );
+          } else {
+            for (const pair of [
+              [first, changed],
+              [changed, first],
+            ]) {
+              expect(() => mergeGovern([pair[0]!], [pair[1]!], deps, options)).toThrow(
+                'candidate content binding',
+              );
+            }
+          }
+          expect(JSON.stringify(deps.memoryRepo.findByTenant(TENANT))).toBe(before);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+
     for (const sameIdentity of [false, true]) {
       for (const withPolicy of [false, true]) {
         it(`refuses destination conflicts, same identity=${sameIdentity}, policy=${withPolicy}`, () => {

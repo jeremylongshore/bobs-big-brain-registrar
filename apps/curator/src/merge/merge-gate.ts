@@ -283,6 +283,21 @@ export function mergeGovern(
   deps: MergeGovernDependencies,
   options: MergeGovernOptions,
 ): MergeGovernResult {
+  if (deps.memoryRepo.connection !== deps.auditRepo.connection) {
+    throw new Error('Merge repositories must share one database connection');
+  }
+  const run = deps.memoryRepo.connection.transaction(() =>
+    mergeGovernInTransaction(cloneA, cloneB, deps, options),
+  );
+  return options.dryRun ? run.deferred() : run.immediate();
+}
+
+function mergeGovernInTransaction(
+  cloneA: readonly CuratedMemory[],
+  cloneB: readonly CuratedMemory[],
+  deps: MergeGovernDependencies,
+  options: MergeGovernOptions,
+): MergeGovernResult {
   const dryRun = options.dryRun ?? false;
 
   // Validate EVERY supplied row before collapsing duplicates. Otherwise a valid
@@ -293,6 +308,7 @@ export function mergeGovern(
   const rows = [...cloneA, ...cloneB].map(normalizeMergeSnapshot);
   rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const unionById = new Map<string, CuratedMemory>();
+  const candidateHashes = new Map<string, string>();
   for (const memory of rows) {
     const expectedId = deriveMemoryId(memory.candidateId, memory.contentHash);
     if (memory.id !== expectedId) throw new MergeIdInvariantError(memory.id, expectedId);
@@ -302,6 +318,11 @@ export function mergeGovern(
     if (memory.tenantId !== options.tenantId || memory.lifecycle !== 'active') {
       throw new Error('Merge input requires active rows in the destination tenant');
     }
+    const previousHash = candidateHashes.get(memory.candidateId);
+    if (previousHash !== undefined && previousHash !== memory.contentHash) {
+      throw new Error('Merge input contains a conflicting candidate content binding');
+    }
+    candidateHashes.set(memory.candidateId, memory.contentHash);
     const previous = unionById.get(memory.id);
     if (previous !== undefined && !isDeepStrictEqual(previous, memory)) {
       throw new Error('Merge input contains conflicting snapshots for one memory identity');
@@ -321,6 +342,10 @@ export function mergeGovern(
     .findByTenant(options.tenantId)
     .map(normalizeMergeSnapshot)
     .filter((memory) => {
+      const incomingHash = candidateHashes.get(memory.candidateId);
+      if (incomingHash !== undefined && incomingHash !== memory.contentHash) {
+        throw new Error('Merge destination contains a conflicting candidate content binding');
+      }
       const incoming = unionById.get(memory.id);
       if (incoming !== undefined && !isDeepStrictEqual(incoming, memory)) {
         throw new Error('Merge destination contains a conflicting identity snapshot');
