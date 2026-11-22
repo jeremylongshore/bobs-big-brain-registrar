@@ -576,6 +576,121 @@ describe('transactional verified source import', () => {
       expect(() => resolveCandidateMinimumSensitivity(candidate, deps.auditRepo)).toThrow();
     },
   );
+  it('loads registered destination policy even when the caller omits it', () => {
+    new PolicyRepository(db).insert(
+      makePolicy({
+        tenantId: destination,
+        rules: [
+          {
+            id: 'gate',
+            type: 'sensitivity_gate',
+            action: 'reject',
+            priority: 0,
+            enabled: true,
+            parameters: { blockedLevels: ['confidential'] },
+          },
+        ],
+      }),
+    );
+    expect(apply(prepare(source([row({ sensitivity: 'confidential' })]))).outcomes[0]!.status).toBe(
+      'rejected',
+    );
+    expect(deps.memoryRepo.findByTenant(destination)).toEqual([]);
+  });
+  it('refuses a supplied policy that disagrees with the registered destination policy', () => {
+    new PolicyRepository(db).insert(makePolicy({ tenantId: destination }));
+    context.policy = makePolicy({ tenantId: destination });
+    expect(() => prepare(source())).toThrow();
+  });
+  it('refuses registration of a policy between preview and apply', () => {
+    const preview = prepare(source());
+    new PolicyRepository(db).insert(makePolicy({ tenantId: destination }));
+    const before = fingerprint();
+    expect(() => apply(preview)).toThrow();
+    expect(fingerprint()).toBe(before);
+  });
+  it('rolls back a policy registered during finalization', () => {
+    const preview = prepare(source());
+    const insert = deps.auditRepo.insert.bind(deps.auditRepo);
+    vi.spyOn(deps.auditRepo, 'insert').mockImplementation((event) => {
+      insert(event);
+      if (event.details['kind'] === 'source-import-settled-v1')
+        new PolicyRepository(db).insert(makePolicy({ tenantId: destination }));
+    });
+    const before = fingerprint();
+    expect(() => apply(preview)).toThrow();
+    expect(fingerprint()).toBe(before);
+  });
+  it('supplies destination hashes to configured duplicate policy while retaining stronger constraints', () => {
+    const existing = row({ tenantId: destination });
+    deps.memoryRepo.insert(existing);
+    context.policy = makePolicy({
+      tenantId: destination,
+      rules: [
+        {
+          id: 'dedup',
+          type: 'dedup_check',
+          action: 'reject',
+          priority: 0,
+          enabled: true,
+          parameters: {},
+        },
+      ],
+    });
+    const result = apply(prepare(source([row({ sensitivity: 'confidential' })])));
+    expect(result.outcomes[0]!.status).toBe('rejected');
+    expect(deps.memoryRepo.findById(existing.id)!.sensitivity).toBe('confidential');
+  });
+  it('combines stronger local pending alias floors under different candidate IDs', () => {
+    const alias = importCandidate(row(), destination);
+    new CandidateRepository(db).insert(alias, computeContentHash(alias.content));
+    strongerFloor(alias);
+    const result = apply(prepare(source()));
+    expect(result.outcomes[0]!.sensitivity).toBe('restricted');
+    expect(deps.memoryRepo.findByTenant(destination)[0]!.sensitivity).toBe('restricted');
+  });
+  it('refuses a quarantined local content alias with a different candidate ID', () => {
+    const alias = { ...importCandidate(row(), destination), status: 'quarantined' as const };
+    new CandidateRepository(db).insert(alias, computeContentHash(alias.content));
+    expect(() => prepare(source())).toThrow();
+  });
+  it('refuses pending alias state changed after preview', () => {
+    const alias = importCandidate(row(), destination);
+    const repo = new CandidateRepository(db);
+    repo.insert(alias, computeContentHash(alias.content));
+    const preview = prepare(source());
+    repo.updateStatus(alias.id, 'quarantined', destination);
+    expect(() => apply(preview)).toThrow();
+  });
+  it.each(['imported-sensitivity-floor-v2', 'unknown-floor-shape'])(
+    'refuses unsupported %s during later review',
+    (kind) => {
+      const memory = row();
+      apply(prepare(source([memory])));
+      const candidate = importCandidate(memory, destination);
+      const event = deps.auditRepo.findByMemoryAndTenant(candidate.id, destination)[0]!;
+      db.prepare('UPDATE audit_events SET details_json = ? WHERE id = ?').run(
+        JSON.stringify({ ...event.details, kind }),
+        event.id,
+      );
+      expect(() => resolveCandidateMinimumSensitivity(candidate, deps.auditRepo)).toThrow();
+    },
+  );
+  it('rolls back when a local pending alias is quarantined during finalization', () => {
+    const alias = importCandidate(row(), destination);
+    const repo = new CandidateRepository(db);
+    repo.insert(alias, computeContentHash(alias.content));
+    const preview = prepare(source());
+    const before = fingerprint();
+    const insert = deps.auditRepo.insert.bind(deps.auditRepo);
+    vi.spyOn(deps.auditRepo, 'insert').mockImplementation((event) => {
+      insert(event);
+      if (event.details['kind'] === 'source-import-settled-v1')
+        repo.updateStatus(alias.id, 'quarantined', destination);
+    });
+    expect(() => apply(preview)).toThrow();
+    expect(fingerprint()).toBe(before);
+  });
   it('rejects stripped legacy arrays on this path', () => {
     expect(() => previewSourceImport([JSON.stringify([row()])], deps, context)).toThrow();
   });

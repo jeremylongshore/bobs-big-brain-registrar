@@ -1,5 +1,5 @@
 import { GovernancePolicy } from '@qmd-team-intent-kb/schema';
-import { verifyAuditChain } from '@qmd-team-intent-kb/store';
+import { CandidateRepository, PolicyRepository, verifyAuditChain } from '@qmd-team-intent-kb/store';
 import { SourceImportError, MAX_IMPORT_SOURCES, SourceImportPlan } from './source-import-schema.js';
 import type { SourceImportContext, SourceImportDependencies } from './source-import-schema.js';
 import {
@@ -67,6 +67,35 @@ export function loadVerifiedSources(
   return { snapshots, authorityDigest: sourceSnapshotDigest(pairs.map((pair) => pair.checkpoint)) };
 }
 
+export function destinationCandidates(deps: SourceImportDependencies, tenantId: string) {
+  return new CandidateRepository(deps.memoryRepo.connection)
+    .findByTenant(tenantId)
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+function destinationPolicy(deps: SourceImportDependencies, context: SourceImportContext) {
+  const configured = new PolicyRepository(deps.memoryRepo.connection)
+    .findByTenant(context.tenantId)
+    .filter((policy) => policy.enabled);
+  if (configured.length > 1) throw new SourceImportError('invalid-destination');
+  const supplied =
+    context.policy === undefined ? undefined : GovernancePolicy.parse(context.policy);
+  if (supplied !== undefined && (!supplied.enabled || supplied.tenantId !== context.tenantId))
+    throw new SourceImportError('invalid-input');
+  const stored = configured[0];
+  if (
+    stored !== undefined &&
+    supplied !== undefined &&
+    sourceSnapshotDigest(stored) !== sourceSnapshotDigest(supplied)
+  )
+    throw new SourceImportError('stale-plan');
+  const policy = stored ?? supplied;
+  return {
+    policy,
+    policyDigest: sourceSnapshotDigest({ configured: stored ?? null, effective: policy ?? null }),
+  };
+}
+
 export function prepareSourceImportState(
   inputs: string[],
   deps: SourceImportDependencies,
@@ -76,9 +105,7 @@ export function prepareSourceImportState(
     throw new SourceImportError('invalid-input');
   if (context.tenantId.trim() !== context.tenantId || context.tenantId.length === 0)
     throw new SourceImportError('invalid-input');
-  const policy = context.policy === undefined ? undefined : GovernancePolicy.parse(context.policy);
-  if (policy !== undefined && (!policy.enabled || policy.tenantId !== context.tenantId))
-    throw new SourceImportError('invalid-input');
+  const { policy, policyDigest } = destinationPolicy(deps, context);
   const { snapshots, authorityDigest } = loadVerifiedSources(inputs, context);
   const chain = verifyAuditChain(deps.auditRepo);
   const auditRows = deps.auditRepo.findAllChronological();
@@ -92,7 +119,7 @@ export function prepareSourceImportState(
   for (const snapshot of snapshots) inspectSourceProgress(snapshot, deps.auditRepo);
   const rows = destinationRows(deps, context.tenantId);
   const sourceSnapshotDigests = snapshots.map((snapshot) => snapshot.digest);
-  const policyDigest = sourceSnapshotDigest(policy ?? null);
+  const candidates = destinationCandidates(deps, context.tenantId);
   const importDigest = sourceSnapshotDigest({
     kind: 'source-import-v1',
     tenantId: context.tenantId,
@@ -108,10 +135,11 @@ export function prepareSourceImportState(
     authorityDigest,
     destinationDigest: sourceSnapshotDigest({
       rows,
+      candidates,
       auditHead: auditRows.at(-1)?.entry_hash ?? null,
     }),
   });
-  return { plan, snapshots, rows, policy };
+  return { plan, snapshots, rows, candidates, policy };
 }
 
 export function groupsForImport(
@@ -130,19 +158,24 @@ export function groupsForImport(
       }
     }
   }
-  return prepareImportGroups(state.snapshots, state.rows, deps, state.plan.tenantId);
+  return prepareImportGroups(
+    state.snapshots,
+    state.rows,
+    state.candidates,
+    deps,
+    state.plan.tenantId,
+  );
 }
 
 export function recheckImportAuthority(
   inputs: string[],
   context: SourceImportContext,
   plan: SourceImportPlan,
+  deps: SourceImportDependencies,
 ): void {
   if (
     loadVerifiedSources(inputs, context).authorityDigest !== plan.authorityDigest ||
-    sourceSnapshotDigest(
-      context.policy === undefined ? null : GovernancePolicy.parse(context.policy),
-    ) !== plan.policyDigest
+    destinationPolicy(deps, context).policyDigest !== plan.policyDigest
   ) {
     throw new SourceImportError('stale-plan');
   }

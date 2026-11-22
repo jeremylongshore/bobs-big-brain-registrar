@@ -39,6 +39,9 @@ export interface SourceImportContext {
   loadCheckpoints: () => readonly TrustedSourceCheckpoint[];
   /** Trusted clock; validity is checked again before committing. */
   now: () => number;
+  /** Optional explicit policy only when no enabled destination policy is stored;
+   * otherwise must exactly match that policy. Omission cannot bypass stored policy.
+   */
   policy?: GovernancePolicy;
 }
 export interface SourceImportDependencies {

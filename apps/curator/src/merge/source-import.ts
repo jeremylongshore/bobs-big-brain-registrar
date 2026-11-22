@@ -25,6 +25,7 @@ import type {
 } from './source-import-schema.js';
 import {
   boundImportInputs,
+  destinationCandidates,
   prepareSourceImportState,
   groupsForImport,
   recheckImportAuthority,
@@ -54,11 +55,11 @@ function assessGroups(state: Prepared, groups: SourceImportGroup[]): AssessedGro
   for (const group of groups) {
     const candidate = group.incoming[0]!;
     // Grouping handles content duplicates after combining constraints. Evaluate
-    // every other policy rule even when this content already exists locally.
+    // policy rules with real destination evidence even when content already exists locally.
     const result = pipeline?.evaluate(candidate, {
       minimumSensitivity: group.minimumSensitivity,
       tenantId: state.plan.tenantId,
-      existingHashes: new Set(),
+      existingHashes: new Set(state.rows.map((row) => row.contentHash)),
       getActiveMemoriesInCategory: (category) => active.filter((row) => row.category === category),
     }) ?? { candidateId: candidate.id, outcome: 'approved', evaluations: [] };
     const targetId = group.existing[0]?.id ?? deriveMemoryId(candidate.id, group.contentHash);
@@ -127,7 +128,7 @@ export function previewSourceImport(
         const previous = readImportSettlement(state.plan, deps.auditRepo);
         const outcomes =
           previous?.outcomes ?? importOutcomes(assessGroups(state, groupsForImport(state, deps)));
-        recheckImportAuthority(inputs, context, state.plan);
+        recheckImportAuthority(inputs, context, state.plan, deps);
         return { plan: state.plan, outcomes, alreadyApplied: previous !== undefined };
       })
       .deferred();
@@ -299,7 +300,7 @@ export function applySourceImport(
           throw new SourceImportError('stale-plan');
         const previous = readImportSettlement(state.plan, deps.auditRepo);
         if (previous !== undefined) {
-          recheckImportAuthority(inputs, context, state.plan);
+          recheckImportAuthority(inputs, context, state.plan, deps);
           return previous;
         }
         if (expected.destinationDigest !== state.plan.destinationDigest)
@@ -311,7 +312,9 @@ export function applySourceImport(
           events.push(recordSourceProgress(snapshot, state.plan, timestamp, deps.auditRepo));
         const outcomes = importOutcomes(assessments);
         events.push(recordImportSettlement(state.plan, outcomes, timestamp, deps.auditRepo));
-        recheckImportAuthority(inputs, context, state.plan);
+        recheckImportAuthority(inputs, context, state.plan, deps);
+        if (!isDeepStrictEqual(destinationCandidates(deps, context.tenantId), state.candidates))
+          throw new SourceImportError('retention-failed');
         verifyRetainedWrites(events, memories, deps);
         verifyFinalConstraints(assessments, deps);
         return { importDigest: state.plan.importDigest, alreadyApplied: false, outcomes };

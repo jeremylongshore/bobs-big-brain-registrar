@@ -258,7 +258,9 @@ import and at finalization. No historical amnesty or repair is performed.
 
 Content, source provenance, title, category, author and metadata must agree for
 equal-content groups. Audience is part of metadata. Conflicting curated or pending
-candidate identities refuse. An existing non-inbox candidate also refuses: a
+candidate identities refuse. Equal-content pending aliases contribute their own
+floors and standing even when their IDs differ. Pending candidate state is bound
+in the preview and rechecked at finalization. An existing non-inbox candidate also refuses: a
 remote active snapshot cannot resolve a local human hold or supersede local
 terminal review standing. Source governance outputs (sensitivity, trust, policy
 evaluations, lifecycle, timestamps, promoter and version) are re-evaluated rather
@@ -267,7 +269,13 @@ destination sensitivity and supported durable alias restriction contributes to t
 maximum floor before duplicate handling. Aliases retain their own content-bound
 `imported-sensitivity-floor-v1` receipts, consumed by the shared review resolver.
 
-Optional policy still tests both original and effective classification. Without
+Registered enabled destination policy is loaded inside the transaction. An
+explicit supplied policy must agree with it; omission cannot bypass it. Multiple
+enabled policies refuse as ambiguous. Policy binding includes both configured and
+effective policy and is rechecked before commit. When no enabled policy is stored,
+a trusted local caller may supply one explicitly or use the no-policy path.
+Policy evaluation receives actual destination hashes for duplicate rules and tests
+both original and effective classification. Without
 optional policy, disclosure and constraint verification remain mandatory. The
 protected path supplies active destination content and deterministically ordered
 new approved content to contradiction checks. An admission refusal retains the
@@ -279,7 +287,8 @@ Finalization verifies every retained floor, tightening, promotion, source-progre
 and batch receipt, every affected memory snapshot, the current effective floors,
 and strict chain integrity. Missing writes or stronger constraints arriving during
 finalization roll back the whole transaction. Later human hold release and ordinary
-promotion resolve imported floors; requesting a lower floor cannot lower them.
+promotion resolve imported floors; requesting a lower floor cannot lower them. Unknown floor versions or unsupported
+constraint-shaped receipts refuse rather than being silently ignored.
 
 Accepted sequence/digest receipts are scoped to source identity and both tenants.
 Key rotation shares that sequence space. Older snapshots and same-sequence changed

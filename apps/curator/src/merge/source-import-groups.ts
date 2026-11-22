@@ -67,9 +67,27 @@ export function destinationRows(deps: SourceImportDependencies, tenantId: string
   return rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
+function includePendingAliases(
+  groups: Map<string, SourceImportGroup>,
+  semantics: Map<string, unknown>,
+  pending: MemoryCandidate[],
+): void {
+  for (const candidate of pending) {
+    const group = groups.get(computeContentHash(candidate.content));
+    if (group === undefined) continue;
+    if (
+      candidate.status !== 'inbox' ||
+      !isDeepStrictEqual(semantics.get(group.contentHash), semanticIdentity(candidate))
+    )
+      throw new SourceImportError('conflicting-content');
+    group.candidates.push(candidate);
+  }
+}
+
 export function prepareImportGroups(
   snapshots: SignedSourceSnapshot[],
   rows: CuratedMemory[],
+  pending: MemoryCandidate[],
   deps: SourceImportDependencies,
   tenantId: string,
 ): SourceImportGroup[] {
@@ -137,9 +155,11 @@ export function prepareImportGroups(
     group.existing.push(row);
     group.minimumSensitivity = effectiveSensitivity(group.minimumSensitivity, row.sensitivity);
   }
+  includePendingAliases(groups, semantics, pending);
   for (const group of groups.values()) {
     const candidates = new Map<string, MemoryCandidate>();
     for (const candidate of [
+      ...group.candidates,
       ...group.incoming,
       ...group.existing.map((row) => importCandidate(row, tenantId)),
     ]) {

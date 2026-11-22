@@ -21,6 +21,16 @@ export function resolveCandidateMinimumSensitivity(
 ): Sensitivity | undefined {
   let minimum: Sensitivity | undefined;
   for (const event of audit.findByMemoryAndTenant(candidate.id, candidate.tenantId)) {
+    const kind = event.details['kind'];
+    if (
+      event.action === 'governed' &&
+      ('minimumSensitivity' in event.details ||
+        (typeof kind === 'string' && kind.includes('sensitivity-floor'))) &&
+      kind !== KIND &&
+      kind !== IMPORTED_FLOOR_KIND
+    )
+      throw new Error('Unsupported stored sensitivity constraint');
+
     if (event.action === 'governed' && event.details['kind'] === IMPORTED_FLOOR_KIND) {
       const floor = importedMinimumSensitivity(event, candidate);
       minimum = minimum === undefined ? floor : effectiveSensitivity(minimum, floor);
