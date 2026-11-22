@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { computeContentHash, deriveAuditEventId } from '@qmd-team-intent-kb/common';
-import { AuditEvent, IsoDatetime } from '@qmd-team-intent-kb/schema';
+import { AuditEvent, IsoDatetime, Sha256Hash } from '@qmd-team-intent-kb/schema';
 import { z } from 'zod';
 import type { ActiveHold, HoldRepos } from './hold.js';
 
@@ -39,6 +39,19 @@ export function escalationId(hold: ActiveHold, digest: string, phase: Escalation
   return deriveAuditEventId(hold.candidateId, 'hold_escalated', `${phase}:${digest}`);
 }
 
+function optionalTransportFields(
+  event: AuditEvent,
+  includeReceipt = false,
+): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const key of includeReceipt
+    ? ['transportBinding', 'transportReceiptDigest']
+    : ['transportBinding']) {
+    if (event.details[key] !== undefined) fields[key] = Sha256Hash.parse(event.details[key]);
+  }
+  return fields;
+}
+
 export function isEscalationStart(
   event: AuditEvent,
   hold: ActiveHold,
@@ -51,6 +64,7 @@ export function isEscalationStart(
       phase,
       state: 'started',
       snapshotDigest: digest,
+      ...optionalTransportFields(event),
     }),
   );
 }
@@ -70,7 +84,12 @@ export function isEscalationResult(
         hold,
         deriveAuditEventId(attemptId, 'hold_escalated', 'outcome'),
         event.timestamp,
-        { attemptId, snapshotDigest: digest, outcome: parsed.data },
+        {
+          attemptId,
+          snapshotDigest: digest,
+          outcome: parsed.data,
+          ...optionalTransportFields(event, true),
+        },
       ),
     )
   );
@@ -95,6 +114,7 @@ export function finalEscalationReceipt(
     !result ||
     !isEscalationStart(start, hold, digest, 'final') ||
     !isEscalationResult(result, hold, attemptId, digest) ||
+    result.details['transportBinding'] !== start.details['transportBinding'] ||
     Date.parse(start.timestamp) < Date.parse(hold.expiresAt) ||
     Date.parse(result.timestamp) < Date.parse(start.timestamp) ||
     Date.parse(result.timestamp) > Date.parse(now)

@@ -59,7 +59,9 @@ export function beginHoldEscalation(
   plan: HoldEscalationPlan,
   repos: HoldRepos,
   now = new Date().toISOString(),
+  transportBinding?: string,
 ): { attemptId: string; alreadyStarted: boolean } {
+  if (transportBinding !== undefined) Sha256Hash.parse(transportBinding);
   requireHoldConnection(repos);
   if (repos.memoryRepo.connection.inTransaction)
     throw new Error('Escalation requires its own transaction');
@@ -82,6 +84,7 @@ export function beginHoldEscalation(
       if (existing) {
         if (
           !isEscalationStart(existing, hold, plan.snapshotDigest, plan.phase) ||
+          existing.details['transportBinding'] !== transportBinding ||
           Date.parse(existing.timestamp) > Date.parse(now)
         )
           throw new Error('Invalid escalation intent');
@@ -92,6 +95,7 @@ export function beginHoldEscalation(
           phase: plan.phase,
           state: 'started',
           snapshotDigest: plan.snapshotDigest,
+          ...(transportBinding === undefined ? {} : { transportBinding }),
         }),
         hold,
         repos,
@@ -108,6 +112,8 @@ const completion = z
     attemptId: Uuid,
     snapshotDigest: Sha256Hash,
     outcome: escalationOutcome,
+    transportBinding: Sha256Hash.optional(),
+    transportReceiptDigest: Sha256Hash.optional(),
   })
   .strict();
 export interface HoldEscalationCompletion {
@@ -116,6 +122,8 @@ export interface HoldEscalationCompletion {
   attemptId: string;
   snapshotDigest: string;
   outcome: EscalationOutcome;
+  transportBinding?: string;
+  transportReceiptDigest?: string;
 }
 
 /** Transport assertions are not human acknowledgement; unknown is never reported delivered. */
@@ -141,6 +149,7 @@ export function completeHoldEscalation(
         !start ||
         (phase !== 'warning' && phase !== 'final') ||
         !isEscalationStart(start, hold, input.snapshotDigest, phase) ||
+        start.details['transportBinding'] !== input.transportBinding ||
         Date.parse(now) < Date.parse(start.timestamp)
       )
         throw new Error('Escalation attempt missing');
@@ -150,6 +159,8 @@ export function completeHoldEscalation(
         if (
           !isEscalationResult(existing, hold, input.attemptId, input.snapshotDigest) ||
           existing.details['outcome'] !== input.outcome ||
+          existing.details['transportBinding'] !== input.transportBinding ||
+          existing.details['transportReceiptDigest'] !== input.transportReceiptDigest ||
           Date.parse(existing.timestamp) > Date.parse(now)
         )
           throw new Error('Conflicting escalation outcome');
@@ -160,6 +171,12 @@ export function completeHoldEscalation(
           attemptId: input.attemptId,
           snapshotDigest: input.snapshotDigest,
           outcome: input.outcome,
+          ...(input.transportBinding === undefined
+            ? {}
+            : { transportBinding: input.transportBinding }),
+          ...(input.transportReceiptDigest === undefined
+            ? {}
+            : { transportReceiptDigest: input.transportReceiptDigest }),
         }),
         hold,
         repos,

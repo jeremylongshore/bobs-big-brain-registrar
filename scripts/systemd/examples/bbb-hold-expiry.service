@@ -1,0 +1,14 @@
+[Unit]
+Description=Opt-in hold expiry notification worker
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/bobs-big-brain/hold-expiry.env
+ExecStart=/usr/bin/node ${BBB_HOLD_EXPIRY_ENTRY} --config ${BBB_HOLD_EXPIRY_CONFIG} --apply
+WorkingDirectory=%h
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+KillMode=control-group
+TimeoutStartSec=90s
+TimeoutStopSec=5s
