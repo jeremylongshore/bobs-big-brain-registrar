@@ -351,8 +351,7 @@ function mergeGovernInTransaction(
   const union = [...unionById.values()];
 
   for (const memory of union) {
-    const existingIdentity = deps.memoryRepo.findById(memory.id);
-    if (existingIdentity !== null && existingIdentity.tenantId !== options.tenantId) {
+    if (deps.memoryRepo.hasIdentityOutsideTenant(memory.id, options.tenantId)) {
       throw new Error('Merge identity is already bound outside the destination tenant');
     }
     if (

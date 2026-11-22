@@ -411,6 +411,32 @@ describe('mergeGovern - govern-at-merge gate', () => {
   });
 
   describe('content-duplicate constraint preflight', () => {
+    for (const foreign of [false, true]) {
+      it(`refuses a malformed matching stored identity without exposing row details, foreign=${foreign}`, () => {
+        const incoming = makeRow('A valid incoming identity with damaged destination metadata.');
+        deps.memoryRepo.insert({ ...incoming, tenantId: foreign ? 'other-tenant' : TENANT });
+        db.prepare('UPDATE curated_memories SET metadata_json = ? WHERE id = ?').run(
+          JSON.stringify({ tags: 'PRIVATE-STORED-MARKER' }),
+          incoming.id,
+        );
+        let failure: unknown;
+        try {
+          mergeGovern([incoming], [], deps, { tenantId: TENANT });
+        } catch (error) {
+          failure = error;
+        }
+        expect(failure).toBeInstanceOf(Error);
+        expect((failure as Error).message).toBe(
+          foreign
+            ? 'Merge identity is already bound outside the destination tenant'
+            : 'Merge destination rows could not be read and schema-validated',
+        );
+        expect((failure as Error).message).not.toContain('PRIVATE-STORED-MARKER');
+        expect(deps.memoryRepo.count()).toBe(1);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      });
+    }
+
     for (const corrupt of ['hash', 'id'] as const) {
       it(`refuses destination ${corrupt} inconsistencies before writes`, () => {
         const stored = makeRow('An existing destination record requiring integrity checks.');
