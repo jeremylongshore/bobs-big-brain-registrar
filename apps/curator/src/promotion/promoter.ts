@@ -1,3 +1,4 @@
+import { requireLegacySourceAdmission } from '../origin/source-enrollment.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   deriveMemoryId,
@@ -144,6 +145,7 @@ export function promote(
   evalCallback?: EvalCallback,
   now: string = new Date().toISOString(),
 ): CuratedMemory {
+  requireLegacySourceAdmission(memoryRepo.connection, input.candidate.tenantId);
   // The promoted-memory id is content-derived (UUID v5) from the candidate
   // lineage, not random, so the same logical candidate promotes to the same
   // CuratedMemory.id on every clone. It is intentionally distinct from
@@ -240,6 +242,7 @@ export function promote(
     // a savepoint inside this outer transaction (bead yxp).
     memoryRepo.connection
       .transaction((): void => {
+        requireLegacySourceAdmission(memoryRepo.connection, input.candidate.tenantId);
         if (resolveCandidateMinimumSensitivity(input.candidate, auditRepo) !== minimumSensitivity) {
           throw new Error(
             'Sensitivity constraint changed before promotion commit; retry governance',
@@ -439,6 +442,7 @@ export function promote(
             throw new Error('Promoted sensitivity constraint or its receipt was not retained');
           }
         }
+        requireLegacySourceAdmission(memoryRepo.connection, input.candidate.tenantId);
       })
       .immediate();
   }
