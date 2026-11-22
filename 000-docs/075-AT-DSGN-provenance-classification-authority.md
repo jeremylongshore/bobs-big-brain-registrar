@@ -1,6 +1,8 @@
 # Provenance classification authority
 
-**Status:** Proposed contract; classification implementation and rollout are open.
+**Status:** Proposed end-to-end contract with an implemented pure
+assertion-verification primitive. Durable classification enforcement, ingress
+adoption and rollout remain open.
 **Date:** 2026-11-22
 **Parent:** `compile-then-govern-39z.11.4`
 **Contract/evidence task:** `compile-then-govern-39z.11.4.1`
@@ -192,9 +194,63 @@ restriction preservation. Use synthetic sources and private disposable stores.
 
 ## Evidence and limits
 
-Current source implements v1 tuple verification, reviewed/imported floors and
-current-store search authorization. This document and its boundary tests do not
-implement new assertions, enroll a producer, classify any real document, grant a
-business role, migrate a spool, change an origin secret or activate a consumer.
-Closing the contract task does not close `compile-then-govern-39z.11.4` or the
-broader privacy parent.
+At the contract milestone (PR469), source implemented v1 tuple verification,
+reviewed/imported floors and current-store search authorization. That milestone
+added no assertion implementation or enrollment. The subsequent primitive below
+extends source capabilities without enrolling a producer, classifying a real
+document, granting a business role, migrating a spool, changing an origin secret
+or activating a consumer. Closing either bounded source task does not close
+`compile-then-govern-39z.11.4` or the broader privacy parent.
+
+## Implemented assertion primitive (2026-11-22)
+
+Task `compile-then-govern-39z.11.4.2` implements the assertion/profile primitive in `apps/curator/src/origin/source-classification*.ts`. This is a library
+primitive with synthetic tests. No running ingress calls it yet. The preceding
+end-to-end requirements remain the target for tasks `.4.3` through `.4.5`.
+
+The following choices describe the implemented primitive; they do not ratify the
+remaining end-to-end proposal or authorize deployment enrollment:
+
+- A separate strict v1 payload/envelope; legacy candidate and origin schemas are
+  unchanged. Canonical JSON sorts object keys by ASCII order, preserves array
+  order and uses explicit nulls for absent repository/principal bindings. Raw
+  input must exactly match canonical serialization, rejecting duplicate keys,
+  alternate escapes, whitespace and unknown fields. The envelope is at most
+  16 KiB; content and title are each at most 1 MiB of round-trippable UTF-8.
+- Ed25519 over `bbb-source-classification-assertion:v1` followed by NUL and the
+  canonical payload. A registry key is exactly 32 raw public-key bytes encoded
+  as lowercase hex; signatures are 64 bytes encoded as lowercase hex. Profile
+  and registry digests use separate versioned domain prefixes. Canonical profile
+  and payload fixtures pin byte ordering and hashes.
+- ASCII identifiers are 1–128 characters. Profiles, keys and ingress enrollments
+  each have at most 256 entries. Profile IDs are unique across a registry; keys
+  are unique by producer/key ID; enrollments by receiver/tenant/ingress. Duplicate
+  identities or scopes refuse, rather than selecting an arbitrary entry.
+- Trusted receiver context supplies receiver, tenant, ingress and current time.
+  All protocol timestamps use UTC with three fractional digits. No clock skew
+  is allowed: issue time is inclusive, expiry exclusive, capture cannot follow
+  issuance, and the assertion window is at most one hour and contained in the
+  authorized key lifetime. These are new-protocol constraints, not v1 changes.
+- The receiver registry independently authorizes the profile and producer key
+  for that tenant, receiver and ingress. The current profile digest, revision
+  and exact source context must match. Candidate content/title hashes, source,
+  identity and capture time are checked directly. Author names, paths and
+  member/admin quarantine labels supply no classification authority.
+- Any required enrollment for a receiver/tenant makes missing evidence refuse
+  even through another optional or unlisted ingress. Absent evidence is legacy
+  only when that receiver/tenant has no required enrollment. Present evidence
+  always needs an authorized ingress/profile and valid signature, even where
+  enrollment is optional. This protects callers of the primitive; complete
+  ingress coverage still requires `.4.4`.
+- The result provides a prospective profile floor and assertion/profile/registry
+  digests, enrollment revision and a hashed replay identity scoped to receiver,
+  tenant, producer and assertion ID. Repeated valid assertions verify again;
+  **replay settlement is not implemented here**. The next task must atomically
+  compare assertion digests, persist floors and recheck current authority.
+
+The verifier does no environment lookup, networking, model calls, registry
+loading or durable writes. Its supplied registry and receiver context must come
+from trusted integration code. A verification result is not promotion authority
+and does not preserve historical restrictions by itself. Registry digests detect
+changes only when a later consumer compares and revalidates them; they are not a
+freshness service. Returning `legacy` is explicitly outside the new protection.

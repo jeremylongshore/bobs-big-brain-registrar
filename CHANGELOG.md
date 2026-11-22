@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a pure, versioned Ed25519 source-classification assertion verifier with
+  receiver-owned profile/key scope, strict canonical encoding and candidate
+  content binding. This library is not wired to live ingress; durable floors,
+  replay settlement and caller adoption remain separate work
+  (`compile-then-govern-39z.11.4.2`).
+
 - Specify a proposed authenticated provenance-classification contract and pin
   the existing origin HMAC boundary with eight synthetic field-mutation cases.
   The v1 token authenticates its identity tuple, not unsigned source context;
