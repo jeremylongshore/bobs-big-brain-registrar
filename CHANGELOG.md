@@ -82,6 +82,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refuse affected candidate-ID/digest binding conflicts across destination tenants and lifecycles before merge writes, without exposing foreign row data or rewriting history.
+
+- Preflight every merge input before promotion or persistence. Refuse content
+  hash, tenant, lifecycle and duplicate snapshot conflicts instead of silently
+  choosing the first clone. Preflight content-hash groups across distinct IDs
+  for conflicting semantic fields and destination-local floors before deduplication,
+  including matching destination rows. Scope the dedupe seed to the requested tenant.
+  Refuse conflicting candidate-to-content bindings and keep preflight/promotions
+  in one transaction, rolling back the pass on a later promotion failure.
+  Cross-clone constraint transport remains open under
+  `compile-then-govern-39z.11.1`.
+
 - Associate Heroku UUID context with the original occurrence's source lines or
   an immediately preceding credential-specific label, preserving labeled split and encoded
   keys while excluding unrelated API-guide lines. Repeated encoded occurrences

@@ -109,3 +109,69 @@ or time-based declassification. Existing audience controls must be preserved;
 confidential records must not become visible as a side effect of this work.
 Any future declassification needs separate authority and evidence rather than
 expiry silently lowering a durable floor. The parent bead remains in progress.
+
+## Implementation prerequisite: duplicate preflight
+
+The merge gate preflights every schema-normalized input before promotion
+or persistence: content-derived identity, content digest, destination tenant and active
+lifecycle. Copies sharing an identity must have identical normalized snapshots,
+including audience and sensitivity. Conflicts refuse the whole pass regardless
+of clone order; even differences in version, timestamps or policy evidence
+require reconciliation outside this bare-row path. Object-key ordering does not
+constitute a conflict. This deliberately replaces first-copy selection.
+
+This preflight does not authenticate either clone, transport source floor
+receipts, or prove that an export is complete. It is a prerequisite to the
+transport contract, whose authority and application routes remain proposed.
+
+All destination-tenant rows must schema-normalize; an unrelated malformed row
+also refuses the pass. Only matching rows participate in comparison: same-identity
+snapshots must agree, and content-hash groups include existing destination copies.
+Schema-normalized snapshots are compared in their JSON representation, so optional
+undefined properties and absent JSON fields do not create false conflicts. An
+identity already bound to another tenant refuses before persistence.
+The dedupe seed is tenant-scoped; equal text in another tenant cannot suppress
+this tenant’s import.
+
+Content-hash deduplication also requires preflight: distinct identities with equal
+content must agree on their schema-normalized semantic fields and destination-local
+reviewed floors. The comparison excludes IDs, promotion/update timestamps and row
+versions; it retains provenance, metadata, sensitivity and policy evidence.
+Disagreement refuses the entire pass before persistence instead of letting the
+lexicographically first identity win. Compatible content duplicates still use the
+existing policy/bare content-hash deduplication. This checks supplied rows and
+local constraints only; it does not establish omitted foreign constraints or
+source authority, and therefore does not complete transport preservation.
+
+Candidate IDs also bind one content digest across supplied and destination rows,
+including destination rows in other tenants or non-active lifecycles;
+a changed body cannot evade comparison by producing a different memory ID.
+This checks consistency of available snapshots, not a reconstruction of a legacy
+candidate’s original namespace/workspace/path inputs.
+
+Preflight and promotions share a database transaction. Memory and audit repositories
+must use the same connection. Apply starts an immediate transaction before preflight
+and holds its write lock through promotion. Preview starts a deferred transaction;
+the dry-run path performs no writes. Deferred mode itself is not a read-only guard. A later promotion failure rolls back the whole pass.
+This holds the destination snapshot through writes; it does not lock remote sources
+or authenticate source snapshots supplied by callers.
+
+The merge checks affected candidate bindings across the destination store and
+refuses pre-existing conflicts without rewriting either row. This is a merge
+preflight, not a global write constraint or a migration of historical records.
+
+Preflight refusals throw to the caller without appending a destination audit event;
+this preserves the no-write refusal contract. Destination decoding failures are
+identified as destination-side errors without including stored content. Affected
+legacy snapshots that cannot meet this contract require separately reviewed
+reconciliation; the merge does not infer a safe transformation or repair history.
+Different curated bodies under one candidate ID are conservatively ambiguous here,
+even if a future transformation could legitimately produce them. This does not
+claim to reconstruct the original spool body digest from a candidate UUID.
+
+Destination-tenant rows also revalidate content digests and derived memory IDs
+before grouping or deduplication. Incoming candidate IDs already held by another
+tenant refuse regardless of that row's stored memory ID or lifecycle, preventing
+a legacy ID from bypassing tenant isolation. Equal text with a different candidate
+ID in another tenant still does not suppress an import. Foreign rows are not
+returned or repaired by the internal conflict query.

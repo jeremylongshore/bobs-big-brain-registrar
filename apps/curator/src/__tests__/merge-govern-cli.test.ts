@@ -76,7 +76,11 @@ const fileDeps: CuratorCliDeps = {
  *  entry invariant) and a receipt on the clone's own audit chain. Pass the SAME
  *  candidate object to two clones to model the same logical memory promoted on
  *  both sides (identical content-derived id → collapsed by union id-dedup). */
-function buildClone(path: string, candidates: ReturnType<typeof makeCandidate>[]): void {
+function buildClone(
+  path: string,
+  candidates: ReturnType<typeof makeCandidate>[],
+  promotionTime?: string,
+): void {
   const db = createDatabase({ path });
   const memoryRepo = new MemoryRepository(db);
   const auditRepo = new AuditRepository(db);
@@ -89,6 +93,10 @@ function buildClone(path: string, candidates: ReturnType<typeof makeCandidate>[]
       },
       memoryRepo,
       auditRepo,
+      false,
+      undefined,
+      undefined,
+      promotionTime ?? candidate.capturedAt,
     );
   }
   db.close();
@@ -144,6 +152,32 @@ describe('merge-govern — argument refusals', () => {
 });
 
 describe('merge-govern — governed round-trip', () => {
+  it.each([false, true])(
+    'refuses differing clone snapshots before writes (reverse=%s)',
+    async (reverse) => {
+      const aPath = join(workDir, 'a.db');
+      const bPath = join(workDir, 'b.db');
+      const targetPath = join(workDir, 'target.db');
+      const shared = cand('Shared candidate independently promoted at different times.');
+      buildClone(aPath, [shared], '2026-01-01T00:00:00.000Z');
+      buildClone(bPath, [shared], '2026-01-02T00:00:00.000Z');
+      const paths = reverse ? [bPath, aPath] : [aPath, bPath];
+      const code = await dispatch(
+        ['merge-govern', ...paths, '--db', targetPath, '--tenant', TENANT],
+        fileDeps,
+      );
+      expect(code).toBe(1);
+      expect(stderrText()).toContain('conflicting snapshots');
+      const target = createDatabase({ path: targetPath });
+      try {
+        expect(new MemoryRepository(target).count()).toBe(0);
+        expect(new AuditRepository(target).findAllChronological()).toHaveLength(0);
+      } finally {
+        target.close();
+      }
+    },
+  );
+
   it('governs the union of two clones into the target and quarantines a secret-bearing row', async () => {
     const aPath = join(workDir, 'clone-a.db');
     const bPath = join(workDir, 'clone-b.db');

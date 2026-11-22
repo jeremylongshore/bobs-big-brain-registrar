@@ -17,7 +17,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { recordCandidateMinimumSensitivity } from '../recovery/sensitivity-constraint.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type Database from 'better-sqlite3';
 import {
   createTestDatabase,
@@ -348,6 +349,489 @@ describe('mergeGovern - govern-at-merge gate', () => {
     expect(ok.promoted).toHaveLength(1);
     expect(ok.quarantined).toHaveLength(0);
     expect(deps.memoryRepo.count()).toBe(1);
+  });
+
+  describe('merge snapshot and persistence transaction', () => {
+    it('rolls back the entire pass if a later promotion fails', () => {
+      const first = makeRow('First independent incoming snapshot for a transactional merge.');
+      const second = makeRow('Second independent incoming snapshot for a transactional merge.');
+      const insert = deps.memoryRepo.insert.bind(deps.memoryRepo);
+      let calls = 0;
+      const spy = vi.spyOn(deps.memoryRepo, 'insert').mockImplementation((memory) => {
+        if (++calls === 2) throw new Error('Synthetic later insert failure');
+        return insert(memory);
+      });
+      try {
+        expect(() => mergeGovern([first], [second], deps, { tenantId: TENANT })).toThrow(
+          'Synthetic later insert failure',
+        );
+        expect(calls).toBe(2);
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('refuses repositories from different connections before writes', () => {
+      const other = createTestDatabase();
+      try {
+        const auditRepo = new AuditRepository(other);
+        expect(() =>
+          mergeGovern(
+            [makeRow('A cross-connection merge must refuse before persistence.')],
+            [],
+            { ...deps, auditRepo },
+            { tenantId: TENANT },
+          ),
+        ).toThrow('share one database connection');
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(auditRepo.findAllChronological()).toHaveLength(0);
+      } finally {
+        other.close();
+      }
+    });
+
+    it('previews on a query-only connection without writes', () => {
+      db.pragma('query_only = ON');
+      try {
+        const result = mergeGovern(
+          [makeRow('A preview computes the merge without acquiring write authority.')],
+          [],
+          deps,
+          { tenantId: TENANT, dryRun: true },
+        );
+        expect(result.promoted).toHaveLength(1);
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      } finally {
+        db.pragma('query_only = OFF');
+      }
+    });
+  });
+
+  describe('content-duplicate constraint preflight', () => {
+    for (const foreign of [false, true]) {
+      it(`refuses a malformed matching stored identity without exposing row details, foreign=${foreign}`, () => {
+        const incoming = makeRow('A valid incoming identity with damaged destination metadata.');
+        deps.memoryRepo.insert({ ...incoming, tenantId: foreign ? 'other-tenant' : TENANT });
+        db.prepare('UPDATE curated_memories SET metadata_json = ? WHERE id = ?').run(
+          JSON.stringify({ tags: 'PRIVATE-STORED-MARKER' }),
+          incoming.id,
+        );
+        let failure: unknown;
+        try {
+          mergeGovern([incoming], [], deps, { tenantId: TENANT });
+        } catch (error) {
+          failure = error;
+        }
+        expect(failure).toBeInstanceOf(Error);
+        expect((failure as Error).message).toBe(
+          foreign
+            ? 'Merge identity is already bound outside the destination tenant'
+            : 'Merge destination rows could not be read and schema-validated',
+        );
+        expect((failure as Error).message).not.toContain('PRIVATE-STORED-MARKER');
+        expect(deps.memoryRepo.count()).toBe(1);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      });
+    }
+
+    for (const corrupt of ['hash', 'id'] as const) {
+      it(`refuses destination ${corrupt} inconsistencies before writes`, () => {
+        const stored = makeRow('An existing destination record requiring integrity checks.');
+        deps.memoryRepo.insert(stored);
+        if (corrupt === 'hash')
+          db.prepare('UPDATE curated_memories SET content = ? WHERE id = ?').run(
+            'Changed stored body without updating its digest.',
+            stored.id,
+          );
+        else
+          db.prepare('UPDATE curated_memories SET id = ? WHERE id = ?').run(
+            randomUUID(),
+            stored.id,
+          );
+        expect(() =>
+          mergeGovern([makeRow('An unrelated valid source record.')], [], deps, {
+            tenantId: TENANT,
+          }),
+        ).toThrow('Merge destination contains an inconsistent content or identity binding');
+        expect(deps.memoryRepo.count()).toBe(1);
+        expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+      });
+    }
+
+    it('refuses a foreign candidate binding hidden behind a legacy memory ID', () => {
+      const foreign = makeRow('A candidate already stored in another tenant.', {
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(foreign);
+      db.prepare('UPDATE curated_memories SET id = ? WHERE id = ?').run(randomUUID(), foreign.id);
+      expect(() =>
+        mergeGovern([{ ...foreign, tenantId: TENANT }], [], deps, { tenantId: TENANT }),
+      ).toThrow('conflicting candidate content binding');
+      expect(deps.memoryRepo.count()).toBe(1);
+      expect(deps.memoryRepo.findByTenant(TENANT)).toHaveLength(0);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('identifies malformed unrelated destination data without changing either store', () => {
+      const stored = makeRow('An unrelated destination record with synthetic damage.');
+      deps.memoryRepo.insert(stored);
+      db.prepare("UPDATE curated_memories SET content = '' WHERE id = ?").run(stored.id);
+      expect(() =>
+        mergeGovern([makeRow('A valid independent incoming record.')], [], deps, {
+          tenantId: TENANT,
+        }),
+      ).toThrow('Merge destination rows could not be read and schema-validated');
+      expect(deps.memoryRepo.count()).toBe(1);
+      expect(
+        db.prepare('SELECT content FROM curated_memories WHERE id = ?').get(stored.id),
+      ).toEqual({ content: '' });
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    for (const lifecycle of ['active', 'superseded'] as const) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses changed candidate content in another tenant, lifecycle=${lifecycle}, policy=${withPolicy}`, () => {
+          const foreign = makeRow('Original body in a separate tenant.', {
+            tenantId: 'other-tenant',
+            lifecycle,
+            ...(lifecycle === 'superseded'
+              ? {
+                  supersession: {
+                    supersededBy: randomUUID(),
+                    reason: 'Synthetic prior replacement',
+                    linkedAt: NOW,
+                  },
+                }
+              : {}),
+          });
+          deps.memoryRepo.insert(foreign);
+          const incoming = makeRow('Changed body reusing the foreign candidate identity.', {
+            candidateId: foreign.candidateId,
+          });
+          const before = JSON.stringify(deps.memoryRepo.findByTenant('other-tenant'));
+          expect(() =>
+            mergeGovern([incoming], [], deps, {
+              tenantId: TENANT,
+              ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+            }),
+          ).toThrow('candidate content binding');
+          expect(deps.memoryRepo.count()).toBe(1);
+          expect(JSON.stringify(deps.memoryRepo.findByTenant('other-tenant'))).toBe(before);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+
+    it('refuses pre-existing cross-tenant candidate conflicts without rewriting either row', () => {
+      const incoming = makeRow('Existing destination body with an ambiguous candidate binding.');
+      const foreign = makeRow('Conflicting historical body for that same candidate.', {
+        candidateId: incoming.candidateId,
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(incoming);
+      deps.memoryRepo.insert(foreign);
+      const before = JSON.stringify([
+        deps.memoryRepo.findById(incoming.id),
+        deps.memoryRepo.findById(foreign.id),
+      ]);
+      expect(() => mergeGovern([incoming], [], deps, { tenantId: TENANT })).toThrow(
+        'candidate content binding',
+      );
+      expect(
+        JSON.stringify([
+          deps.memoryRepo.findById(incoming.id),
+          deps.memoryRepo.findById(foreign.id),
+        ]),
+      ).toBe(before);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    for (const destination of [false, true]) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses one candidate bound to different bodies, destination=${destination}, policy=${withPolicy}`, () => {
+          const first = makeRow('The original content bound to this candidate identity.');
+          const changed = makeRow('Changed content retaining the original candidate identity.', {
+            candidateId: first.candidateId,
+          });
+          expect(first.id).not.toBe(changed.id);
+          if (destination) deps.memoryRepo.insert(first);
+          const before = JSON.stringify(deps.memoryRepo.findByTenant(TENANT));
+          const options = {
+            tenantId: TENANT,
+            ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+          };
+          if (destination) {
+            expect(() => mergeGovern([changed], [], deps, options)).toThrow(
+              'candidate content binding',
+            );
+          } else {
+            for (const pair of [
+              [first, changed],
+              [changed, first],
+            ]) {
+              expect(() => mergeGovern([pair[0]!], [pair[1]!], deps, options)).toThrow(
+                'candidate content binding',
+              );
+            }
+          }
+          expect(JSON.stringify(deps.memoryRepo.findByTenant(TENANT))).toBe(before);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+
+    for (const sameIdentity of [false, true]) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses destination conflicts, same identity=${sameIdentity}, policy=${withPolicy}`, () => {
+          const stored = makeRow('A planning record already present in the destination.');
+          deps.memoryRepo.insert(stored);
+          const incoming = sameIdentity
+            ? { ...stored, sensitivity: 'confidential' as const }
+            : makeRow(stored.content, {
+                sensitivity: 'confidential',
+                metadata: { filePaths: [], tags: [], audience: 'owner' },
+              });
+          const unrelated = makeRow('An unrelated valid incoming row must not be partly written.');
+          const before = JSON.stringify(deps.memoryRepo.findByTenant(TENANT));
+          expect(() =>
+            mergeGovern([unrelated], [incoming], deps, {
+              tenantId: TENANT,
+              ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+            }),
+          ).toThrow(/conflicting.*(?:snapshot|constraint)/);
+          expect(JSON.stringify(deps.memoryRepo.findByTenant(TENANT))).toBe(before);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
+
+    it('deduplicates an identical destination snapshot without changing it', () => {
+      const stored = makeRow(
+        'An identical source and destination snapshot needs no new promotion.',
+      );
+      deps.memoryRepo.insert(stored);
+      const result = mergeGovern([stored], [], deps, { tenantId: TENANT });
+      expect(result.promoted).toHaveLength(0);
+      expect(result.quarantined).toHaveLength(1);
+      expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('refuses a cross-tenant identity collision before writing another incoming row', () => {
+      const stored = makeRow('A globally keyed identity already belongs to another tenant.', {
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(stored);
+      const incoming = { ...stored, tenantId: TENANT };
+      const unrelated = makeRow('Another incoming record must remain unwritten on collision.');
+      expect(() => mergeGovern([unrelated], [incoming], deps, { tenantId: TENANT })).toThrow(
+        'outside the destination tenant',
+      );
+      expect(deps.memoryRepo.count()).toBe(1);
+      expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('does not deduplicate against another tenant content', () => {
+      const stored = makeRow('Equal text in another tenant must not suppress this tenant import.', {
+        tenantId: 'other-tenant',
+      });
+      deps.memoryRepo.insert(stored);
+      const incoming = makeRow(stored.content);
+      const result = mergeGovern([incoming], [], deps, { tenantId: TENANT });
+      expect(result.promoted).toHaveLength(1);
+      expect(deps.memoryRepo.findByTenant(TENANT)).toHaveLength(1);
+      expect(deps.memoryRepo.count()).toBe(2);
+      expect(deps.memoryRepo.findById(incoming.id)?.content).toBe(incoming.content);
+      expect(deps.memoryRepo.findById(stored.id)).toEqual(stored);
+    });
+
+    it('refuses when distinct identities have different destination-local reviewed floors', () => {
+      const first = makeRow('Identical content with a reviewed local privacy floor.');
+      const second = makeRow(first.content);
+      const candidate = MemoryCandidateSchema.parse({
+        id: first.candidateId,
+        status: 'inbox',
+        source: first.source,
+        content: first.content,
+        title: first.title,
+        category: first.category,
+        trustLevel: 'untrusted',
+        author: first.author,
+        tenantId: TENANT,
+        metadata: first.metadata,
+        capturedAt: NOW,
+        prePolicyFlags: { potentialSecret: false, lowConfidence: false, duplicateSuspect: false },
+      });
+      recordCandidateMinimumSensitivity(
+        candidate,
+        'confidential',
+        {
+          runId: randomUUID(),
+          manifestDigest: computeContentHash('fixture manifest'),
+          candidateSnapshotDigest: computeContentHash('fixture snapshot'),
+          actor: { type: 'human', id: 'fixture-owner' },
+          role: 'owner',
+          reason: 'Synthetic review',
+        },
+        deps.auditRepo,
+      );
+      const before = JSON.stringify(deps.auditRepo.findAllChronological());
+      for (const pair of [
+        [first, second],
+        [second, first],
+      ]) {
+        expect(() => mergeGovern([pair[0]!], [pair[1]!], deps, { tenantId: TENANT })).toThrow(
+          'conflicting content constraints',
+        );
+        expect(deps.memoryRepo.count()).toBe(0);
+        expect(JSON.stringify(deps.auditRepo.findAllChronological())).toBe(before);
+      }
+    });
+
+    for (const field of ['sensitivity', 'audience', 'policy evidence'] as const) {
+      for (const withPolicy of [false, true]) {
+        it(`refuses distinct identities with different ${field}, policy=${withPolicy}`, () => {
+          const content = 'The same planning text must not erase a stricter source restriction.';
+          const first = makeRow(content);
+          const second = makeRow(content);
+          if (field === 'sensitivity') second.sensitivity = 'confidential';
+          if (field === 'audience') second.metadata = { ...second.metadata, audience: 'owner' };
+          if (field === 'policy evidence')
+            second.policyEvaluations = [
+              {
+                policyId: randomUUID(),
+                ruleId: 'fixture',
+                result: 'flag',
+                reason: 'review',
+                evaluatedAt: NOW,
+              },
+            ];
+          const options = {
+            tenantId: TENANT,
+            ...(withPolicy ? { policy: makeMergePolicy() } : {}),
+          };
+          for (const pair of [
+            [first, second],
+            [second, first],
+          ]) {
+            expect(() => mergeGovern([pair[0]!], [pair[1]!], deps, options)).toThrow(
+              'conflicting content constraints',
+            );
+            expect(deps.memoryRepo.count()).toBe(0);
+            expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+          }
+        });
+      }
+    }
+  });
+
+  describe('whole-input preflight before persistence', () => {
+    it('keeps serialized merge results and audit records identical when nested object keys are reordered', () => {
+      const row = makeRow('Use explicit versioned schemas for shared knowledge records.', {
+        metadata: { filePaths: ['fixture.ts'], tags: ['fixture'], audience: 'owner' },
+      });
+      function reverseKeys(value: unknown): unknown {
+        if (Array.isArray(value)) return value.map(reverseKeys);
+        if (value !== null && typeof value === 'object') {
+          return Object.fromEntries(
+            Object.entries(value)
+              .reverse()
+              .map(([key, item]) => [key, reverseKeys(item)]),
+          );
+        }
+        return value;
+      }
+      const reordered = reverseKeys(row) as CuratedMemory;
+      const otherDb = createTestDatabase();
+      try {
+        const other = makeDeps(otherDb);
+        const forward = mergeGovern([row], [reordered], deps, { tenantId: TENANT });
+        const reverse = mergeGovern([reordered], [row], other, { tenantId: TENANT });
+        expect(forward.promoted).toHaveLength(1);
+        expect(JSON.stringify(forward)).toBe(JSON.stringify(reverse));
+        expect(JSON.stringify(deps.auditRepo.findAllChronological())).toBe(
+          JSON.stringify(other.auditRepo.findAllChronological()),
+        );
+        expect(verifyAuditChain(deps.auditRepo)).toEqual(verifyAuditChain(other.auditRepo));
+      } finally {
+        otherDb.close();
+      }
+    });
+
+    it('validates a later malformed row before promoting any earlier clean row', () => {
+      const clean = makeRow('A valid convention that must not be partially written.');
+      const bad = {
+        ...makeRow('A malformed source record must refuse the whole batch.'),
+        title: '',
+      };
+      expect(() =>
+        mergeGovern([clean], [bad], deps, { policy: makeMergePolicy(), tenantId: TENANT }),
+      ).toThrow('invalid curated row');
+      expect(deps.memoryRepo.count()).toBe(0);
+      expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+    });
+
+    it('does not disclose rejected content in a content-binding error', () => {
+      const row = makeRow('Original content with a valid source identity.');
+      const changed = { ...row, content: 'Synthetic private text that must not appear in errors.' };
+      let message = '';
+      try {
+        mergeGovern([changed], [], deps, { tenantId: TENANT });
+      } catch (error) {
+        message = String(error);
+      }
+      expect(message).toContain('declared hash');
+      expect(message).not.toContain(changed.content);
+      expect(deps.memoryRepo.count()).toBe(0);
+    });
+
+    const mutations: [string, (row: CuratedMemory) => CuratedMemory][] = [
+      ['candidate identity', (row) => ({ ...row, candidateId: randomUUID() })],
+      [
+        'content binding',
+        (row) => ({ ...row, content: 'Changed content hidden behind the same id.' }),
+      ],
+      ['tenant', (row) => ({ ...row, tenantId: 'other-tenant' })],
+      ['sensitivity', (row) => ({ ...row, sensitivity: 'confidential' })],
+      ['audience', (row) => ({ ...row, metadata: { ...row.metadata, audience: 'owner' } })],
+      ['lifecycle', (row) => ({ ...row, lifecycle: 'archived' })],
+      ['version', (row) => ({ ...row, version: row.version + 1 })],
+      ['timestamp', (row) => ({ ...row, updatedAt: '2026-12-01T00:00:00.000Z' })],
+      [
+        'policy evidence',
+        (row) => ({
+          ...row,
+          policyEvaluations: [
+            {
+              policyId: randomUUID(),
+              ruleId: 'fixture-rule',
+              result: 'pass',
+              reason: 'fixture',
+              evaluatedAt: NOW,
+            },
+          ],
+        }),
+      ],
+    ];
+    for (const [field, mutate] of mutations) {
+      for (const reverse of [false, true]) {
+        it(`refuses conflicting ${field}, reverse=${reverse}, without writes`, () => {
+          const clean = makeRow(
+            'A private planning convention without recognizable personal data.',
+          );
+          const conflict = mutate(clean);
+          const first = reverse ? conflict : clean;
+          const second = reverse ? clean : conflict;
+          expect(() => mergeGovern([first], [second], deps, { tenantId: TENANT })).toThrow();
+          expect(deps.memoryRepo.count()).toBe(0);
+          expect(deps.auditRepo.findAllChronological()).toHaveLength(0);
+        });
+      }
+    }
   });
 
   it('is commutative: A∪B and B∪A produce byte-identical governed state + identical audit outcome', () => {
