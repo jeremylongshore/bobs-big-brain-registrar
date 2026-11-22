@@ -264,6 +264,11 @@ function normalizeMergeSnapshot(input: unknown): CuratedMemory {
 /**
  * Run the govern-at-merge gate over the UNION of two clones' promoted rows.
  *
+ * @deprecated Legacy unverified source transport. Bare rows cannot authenticate
+ * source authority or complete source sensitivity constraints. For protected
+ * transport use exportSourceSnapshot / previewSourceImport / applySourceImport.
+ * This compatibility API only re-governs supplied rows and destination evidence.
+ *
  * Every row is re-governed as UNTRUSTED: the disclosure / secret choke point runs
  * first, then the full policy pipeline with an accreting content-hash dedupe set.
  * Survivors are promoted through the canonical path; failures are quarantined.

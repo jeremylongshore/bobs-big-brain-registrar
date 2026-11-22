@@ -214,6 +214,10 @@ describe('merge-govern — governed round-trip', () => {
     // 5 rows across clones; the shared note is the same logical memory (same
     // content-derived id) → union of 4.
     expect(out.union_size).toBe(4);
+    expect(out).toMatchObject({
+      transport: 'legacy-unverified',
+      source_constraints_verified: false,
+    });
     expect(out.promoted_count).toBe(3);
     expect(out.quarantined_count).toBe(1);
     expect(out.quarantined[0]!.category).toBe('disclosure');

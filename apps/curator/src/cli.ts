@@ -274,7 +274,10 @@ Options for 'secret-sweep':
                   every pattern. An unknown id is a usage error.
   --json          Emit a structured JSON envelope in place of the summary.
 
-Options for 'merge-govern':
+Options for 'merge-govern' (legacy unverified source transport):
+  Bare rows do not prove source restriction completeness. Use curator-snapshot
+  for authenticated snapshots and durable imported floors. A destination anchor
+  does not authenticate source constraints. This command remains compatible.
   --db <path>     Target (merged) SQLite path — the ONLY db written (required).
   --tenant <id>   Tenant scope for policy + audit events (required).
   --dry-run       Run the full gate but write nothing (merge preview).
@@ -1999,6 +2002,8 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
           dry_run: opts.dryRun,
           tenant_id: opts.tenantId,
           clone_a: { path: opts.cloneAPath, rows: cloneAMemories.length, chain_head: parentA },
+          transport: 'legacy-unverified',
+          source_constraints_verified: false,
           clone_b: { path: opts.cloneBPath, rows: cloneBMemories.length, chain_head: parentB },
           policy: policy?.name ?? null,
           union_size: result.unionSize,
@@ -2031,7 +2036,8 @@ async function cmdMergeGovern(args: string[], deps: CuratorCliDeps): Promise<num
     }
 
     process.stdout.write(
-      `merge-govern ${opts.dryRun ? '(dry-run) ' : ''}complete\n` +
+      `merge-govern ${opts.dryRun ? '(dry-run) ' : ''}complete (legacy unverified source transport)\n` +
+        `Source restrictions are not authenticated; use curator-snapshot for protected transport.\n` +
         `Clone A:      ${cloneAMemories.length} active row(s) from ${opts.cloneAPath}\n` +
         `Clone B:      ${cloneBMemories.length} active row(s) from ${opts.cloneBPath}\n` +
         `Policy:       ${policy?.name ?? '(none enabled — disclosure + dedupe only)'}\n` +

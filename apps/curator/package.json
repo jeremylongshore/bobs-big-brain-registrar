@@ -8,6 +8,7 @@
   "bin": {
     "curator-cli": "./dist/main.js",
     "curator-recovery": "./dist/recovery/main.js",
+    "curator-snapshot": "./dist/merge/snapshot-main.js",
     "curator-hold-expiry": "./dist/hold/expiry-main.js"
   },
   "exports": {
