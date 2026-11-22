@@ -344,3 +344,100 @@ member once receipts exist. Removing the expiry safeguard would restore the
 old silent-closure behavior and is not a substitute for deploying the worker.
 Until authorized worker installation, a release-advised expired hold will remain
 listed as expired and deferred; no delivery is implied by this source update.
+
+## 14. Independent worker source and opt-in scheduling
+
+`curator-hold-expiry --config /absolute/private/worker.json` previews the current
+plans without a write lock, receipt or notification process. Explicit `--apply`
+permits at most one new external attempt per invocation, independently of the
+compile loop. The worker does not run the expiry sweep or promote a candidate.
+This source implementation and its disposable transport fixtures do not establish
+installation, provider delivery, or production verification.
+
+The strict version-1 configuration supplies `tenantId`, approval `expiresAt`, an
+opaque `destinationId`, absolute `reviewExecutable`, `operatorId`, and `store`
+with `databasePath`, `basePath`, `baseDevice`, `baseInode`, `databaseDevice` and
+`databaseInode`. `transport` supplies an absolute canonical `executable`, its
+`sha256`, and `timeoutMs` (1–30000). Optional `lockTimeoutMs` defaults to zero and
+is bounded at 30000. Obtain physical-store values from the existing recovery
+inspection interface against the intended store. The configuration must be a
+private regular file in a private directory owned by the invoking user. Approval
+expires, is reread before actions, and does not authorize other destinations or
+stores. This is trusted local operator configuration, not protection against a
+malicious process running as that operator.
+
+Apply validates the executable and physical store, obtains the shared recovery
+write lock, validates the notification payload, and persists intent before
+external I/O. The durable attempt binds tenant, physical store, destination,
+transport path and digest, review executable and operator. Renewing only the
+approval expiry does not change that binding. Changing a bound setting does not
+resend an existing attempt or reinterpret its outcome. Completed outcomes carry
+the binding and, when a valid adapter receipt exists, its digest. Readers handling
+these receipts must retain support for the optional transport fields on rollback.
+
+The trusted Linux adapter receives one JSON line on stdin:
+
+```json
+{
+  "version": 1,
+  "attemptId": "<UUID>",
+  "destinationId": "<approved-id>",
+  "message": "<metadata-only review instructions>"
+}
+```
+
+It must exit zero and return exactly one strict JSON object on stdout:
+
+```json
+{
+  "version": 1,
+  "mode": "live",
+  "attemptId": "<same UUID>",
+  "destinationId": "<same approved-id>",
+  "outcome": "delivered"
+}
+```
+
+`outcome` may instead be `failed` or `unknown`. Exit zero alone, dry-run or spool
+results, extra fields, mismatched IDs, invalid output, process failure and timeout
+cannot establish delivery. Combined stdout/stderr is capped at 16 KiB; raw output
+and error text are not copied to the audit log. Receipt semantics are assertions
+by the trusted adapter, not independently authenticated provider evidence.
+
+The adapter entry must be a regular, singly linked executable owned by root or
+the current user, without group/other write permission, no larger than 1 MiB.
+Execution uses the verified open descriptor through `/proc/self/fd/3`, so replacing
+the pathname after verification does not select different entry bytes. Use an
+absolute interpreter and absolute dependency paths; relative entry-directory
+resolution is unsuitable. Interpreter, dependencies, environment and same-user
+in-place file mutation remain trust boundaries. The adapter must not daemonize
+or escape its process group. The worker kills its group on timeout/exit and waits
+for the direct child before completing the attempt.
+
+Warning messages contain only candidate ID, phase, deadline, remaining window and
+a shell-quoted `holds resolve ... --dry-run` command scoped to the approved store,
+tenant, operator and recommended audience. Final messages offer a scoped listing
+command and explicitly state that the release window has closed. Private titles,
+bodies and classifier explanations remain in the governed store.
+
+A started-only, failed or unknown attempt requires reconciliation; automatic
+invocations never blindly resend it. Changing an unknown outcome to delivered
+is not supported by ordinary replay. The worker reports reconciliation IDs and
+continues considering other eligible holds. CLI exit 3 indicates reconciliation
+is needed; exit 1 indicates refusal or cleanup failure. Neither means it is safe
+to resend. Retain receipts and provider evidence for an explicitly reviewed
+reconciliation procedure. A cleanup failure preserves any recorded outcome in
+the result instead of implying that delivery did not occur.
+
+Uninstalled examples live in `scripts/systemd/examples/`: a user oneshot service,
+a five-minute timer, and a placeholder environment file. Review absolute runtime
+and configuration paths, approved recipients and every fallback channel before
+installing or enabling them. No installation command runs as part of the build.
+At one new attempt per invocation, operators must account for backlog and the
+warning window when selecting a schedule. Disabling the timer stops future
+scheduled attempts; retain compatible receipt readers and the expiry safeguard.
+
+An estate-specific adapter for Intent OS's governed notification interface belongs
+in Intent OS, not in this public repository. Its real status mapping, dry-run
+handling, fallback authorization and staged delivery evidence are separate work.
+Do not substitute a fixture's `mode: live` receipt for an actual delivery test.

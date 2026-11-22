@@ -1,0 +1,11 @@
+[Unit]
+Description=Independent five-minute hold expiry scan (opt-in example)
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+RandomizedDelaySec=15s
+Unit=bbb-hold-expiry.service
+
+[Install]
+WantedBy=timers.target

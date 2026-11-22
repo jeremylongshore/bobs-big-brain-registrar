@@ -110,6 +110,35 @@ function final(outcome: 'delivered' | 'failed' | 'unknown' = 'delivered') {
 }
 
 describe('durable hold expiry escalation', () => {
+  it('refuses altered transport bindings and receipt digests without changing durable evidence', () => {
+    const plan = planHoldEscalations(TENANT, repos, EXPIRY)[0]!;
+    const binding = 'a'.repeat(64);
+    beginHoldEscalation(plan, repos, EXPIRY, binding);
+    const intentState = state();
+    expect(() => beginHoldEscalation(plan, repos, EXPIRY)).toThrow();
+    expect(() => beginHoldEscalation(plan, repos, EXPIRY, 'b'.repeat(64))).toThrow();
+    const input = {
+      candidateId: id,
+      tenantId: TENANT,
+      attemptId: plan.attemptId,
+      snapshotDigest: plan.snapshotDigest,
+      outcome: 'delivered' as const,
+      transportBinding: binding,
+      transportReceiptDigest: 'c'.repeat(64),
+    };
+    expect(() =>
+      completeHoldEscalation({ ...input, transportBinding: 'b'.repeat(64) }, repos, EXPIRY),
+    ).toThrow();
+    expect(state()).toEqual(intentState);
+    const receipt = completeHoldEscalation(input, repos, EXPIRY);
+    const completedState = state();
+    expect(completeHoldEscalation(input, repos, EXPIRY)).toBe(receipt);
+    expect(() =>
+      completeHoldEscalation({ ...input, transportReceiptDigest: 'd'.repeat(64) }, repos, EXPIRY),
+    ).toThrow();
+    expect(state()).toEqual(completedState);
+  });
+
   it('plans exactly at 24h, isolates tenants, never exposes content, and writes nothing', () => {
     const before = state();
     expect(planHoldEscalations(TENANT, repos, '2026-01-01T23:59:59.999Z')).toEqual([]);
