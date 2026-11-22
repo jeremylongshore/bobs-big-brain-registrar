@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
@@ -36,5 +37,6 @@
   },
   "dependencies": {
     "zod": "^4.6.7"
-  }
+  },
+  "license": "Apache-2.0"
 }
