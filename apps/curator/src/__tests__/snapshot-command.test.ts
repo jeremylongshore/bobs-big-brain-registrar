@@ -256,7 +256,7 @@ describe('protected snapshot operator CLI', () => {
             type: 'sensitivity_gate',
             action: 'reject',
             enabled: true,
-            config: { blockedLevels: ['confidential'] },
+            parameters: { blockedLevels: ['confidential'] },
           },
         ],
       }),
@@ -334,6 +334,38 @@ describe('protected snapshot operator CLI', () => {
     put(artifactPath, []);
     expect(apply(digest).code).toBe(1);
     expect(state().audit).toHaveLength(0);
+  });
+  it('refuses a changed applicable pin even when its extended validity still verifies the artifact', () => {
+    const digest = plan();
+    pins({ validUntil: new Date(Date.parse(snapshot.payload.expiresAt) + 60000).toISOString() });
+    const before = state();
+    expect(apply(digest).code).toBe(1);
+    expect(state()).toEqual(before);
+  });
+  it('accepts a private checkpoint file rewrite with identical trusted pin values', () => {
+    const digest = plan();
+    writeFileSync(
+      pinsPath,
+      JSON.stringify(JSON.parse(readFileSync(pinsPath, 'utf8')), null, 2) + '\n',
+    );
+    expect(apply(digest)).toMatchObject({ code: 0, output: { committed: true } });
+    expect(state().memories[0]!.sensitivity).toBe('confidential');
+  });
+  it('refuses a policy registered after preview', () => {
+    const digest = plan();
+    const db = openExistingDatabase({ path: targetPath, readonly: false });
+    new PolicyRepository(db).insert(makePolicy({ tenantId: destination }));
+    db.close();
+    const before = state();
+    expect(apply(digest).code).toBe(1);
+    expect(state()).toEqual(before);
+  });
+  it('rechecks destination permissions during apply after a valid preview', () => {
+    const digest = plan();
+    const before = state();
+    chmodSync(targetPath, 0o644);
+    expect(apply(digest)).toMatchObject({ code: 1, output: { committed: false } });
+    expect(state()).toEqual(before);
   });
   it.each(['digest', 'envelope', 'physical-store', 'destination-state'])(
     'refuses stale review binding: %s',

@@ -119,7 +119,8 @@ new read-only preview with the same artifacts and still-valid authorized pins to
 observe `alreadyApplied`, and inspect the durable settlement receipts when
 reconciling uncertain operations. Do not weaken or replace trust to force a replay.
 
-Anchoring, filesystem exports and search indexing are **not performed**. The
+Post-apply anchoring, downstream filesystem exports and search indexing are
+**not performed**. The separate snapshot export command is described above. The
 command reports those post-commit states as `not_verified`. Existing indexing and
 read-policy integration must be assessed separately before live adoption.
 
@@ -151,3 +152,30 @@ actual compiled executable for export, preview, apply, replay and refusal paths;
 legacy CLI tests assert the compatibility label. These tests do not establish
 live source enrollment, independent checkpoint freshness, operator authorization,
 deployment or end-to-end retrieval after an import.
+
+The inherited controls and their executable evidence are:
+
+- [Source exporter/verifier](../apps/curator/src/merge/source-snapshot.ts) and
+  [source snapshot tests](../apps/curator/src/__tests__/source-snapshot.test.ts):
+  complete active inventory, read-only export, strict corruption and signature
+  checks, evidence omission, scoped pins and floor retention.
+- [Transactional importer](../apps/curator/src/merge/source-import.ts),
+  [authority and policy binding](../apps/curator/src/merge/source-import-prepare.ts)
+  and [import tests](../apps/curator/src/__tests__/source-import.test.ts):
+  the plan binds the complete applicable checkpoint values through
+  `authorityDigest`; changes are compared during apply. Tests cover pre-commit
+  rollback faults, source order, pending and audit-only aliases, original/effective
+  policy refusal, monotonic replay and synthetic human-role hold/release.
+- [Filesystem boundary](../apps/curator/src/recovery/filesystem-boundary.ts):
+  `lock.verify()` calls `requireRecoveryStore`, which re-inspects owner, mode,
+  single-link and device/inode identity as well as the canonical lock path.
+- [CLI tests](../apps/curator/src/__tests__/snapshot-command.test.ts):
+  executable export/preview/apply, valid changed authority versus unchanged pin
+  rewrites, policy mutation and apply-time permission changes, in addition to
+  the malformed-input and custody refusal matrix.
+
+The snapshot and transactional import suites passed together in the merged
+[PR 465 validation run](https://github.com/jeremylongshore/bobs-big-brain-registrar/actions/runs/44998620744/job/137135003559)
+(4,887 passing tests and 5 optional skips on `bf9a70b8a392aeb4442a46eaee289839b9866978`).
+CLI-specific validation is recorded with its owning PR; the earlier run does not
+certify code added after that commit.

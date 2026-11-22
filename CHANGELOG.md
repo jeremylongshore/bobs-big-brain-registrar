@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add internal transactional verified-source import with durable alias sensitivity
   floors, monotonic source checkpoint receipts, idempotent settlement and complete
-  rollback on authority, snapshot or receipt drift. Re-govern imports and tighten
+  transactional rollback for pre-commit authority, snapshot or receipt drift.
+  Post-commit uncertainty is reported without claiming rollback. Re-govern imports and tighten
   matching destination rows without widening audience or reactivating archives.
   Live rollout remains open
   (`compile-then-govern-39z.11.1.3`).
