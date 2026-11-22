@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Add an empty-by-default stored source registry and refuse legacy curator and
+  shared promotion paths for tenants with required source enrollment. Invalid
+  authority refuses admission; promotion rechecks inside its transaction.
+  This is a source-only guard: evidence-capable adapters, reviewed provisioning
+  and live enrollment remain unfinished (`compile-then-govern-39z.11.4.4.1`).
+
 - Resolve API and local MCP qmd hits against current governed rows before
   returning content. Withhold unresolved or unreadable authority, use current
   snippets after redaction, and enforce current lifecycle/bulk scope independent

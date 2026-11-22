@@ -316,3 +316,42 @@ Unknown floor kinds still refuse.
 This core inspects tenant rows and audit evidence when preparing a finite plan.
 Its correctness tests do not establish sustained ingestion throughput, live
 capture coverage, registry custody, deployment readiness or production adoption.
+
+## Implemented legacy enrollment guard (2026-11-22)
+
+Task `compile-then-govern-39z.11.4.4.1` adds schema migration 12 and an
+empty-by-default `source_classification_authority` singleton record. The record
+holds the existing strict versioned registry; it is independent of candidates,
+request metadata and policy selection. This milestone has no provisioning API,
+CLI, migration of existing authority, or operational enrollment. Tests populate
+only disposable synthetic databases.
+
+Before deduplication, `Curator.processSingle` refuses a tenant with any required
+stored enrollment. `promote` repeats that check before preparing its result,
+after acquiring the write transaction and before commit. The candidate and
+configured curator tenant cannot select around each other's requirement. A
+required enrollment applies across receiver/ingress names, so an optional or
+unlisted alternate route cannot select legacy behavior. The refusal is
+`SourceEnrollmentRequiredError` with code `SOURCE_ENROLLMENT_REQUIRED`.
+Malformed registry data, an unreadable or missing table, and unknown schemas
+refuse rather than treating authority as absent. Errors do not include registry
+contents. A genuinely empty record set or a valid registry with no required
+enrollment for that tenant preserves legacy admission outside the new guarantee.
+
+This deliberately has **no evidence-capable exception yet**. Even the existing
+source-governance core cannot promote an enrolled tenant through its curator
+call; its enclosing transaction rolls back. Restriction-only processing and
+quarantine are not new admissions. A prior floor receipt or a human hold release
+does not waive enrollment. Preview's configurable policy result remains distinct
+from the admission result, as documented above.
+
+The next source milestone must integrate current assertion verification with
+this stored authority transactionally, implement reviewed provisioning, and
+exercise actual API/MCP/spool/import/recovery/background endpoints. This guard's
+unit/integration evidence does not establish every endpoint's error mapping or
+capture capability. Do not enroll a live tenant until those adapters and their
+operational acceptance exist. Unsupported consumers, including frozen Plugin85,
+remain held. Older binaries do not read this new record: rolling code back after
+enrollment requires stopping writers and an approved compatibility plan, not
+assuming the table alone enforces admission. Raw privileged SQLite writes remain
+outside the application boundary and its tamper-evident trust model.

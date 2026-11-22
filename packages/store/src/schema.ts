@@ -467,4 +467,17 @@ CREATE TABLE IF NOT EXISTS index_state (
 ALTER TABLE candidates ADD COLUMN origin_json TEXT;
     `.trim(),
   },
+  {
+    // Empty by default. Provisioning/enrollment is separate operator work.
+    // Keeping authority in the governed store makes all owning processes read
+    // the same registry instead of choosing a request-supplied configuration.
+    version: 12,
+    name: 'add_source_classification_authority',
+    sql: `
+CREATE TABLE source_classification_authority (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  registry_json TEXT NOT NULL
+);
+    `.trim(),
+  },
 ];
