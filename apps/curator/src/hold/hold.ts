@@ -33,10 +33,16 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
-import { AUDIENCE_RANK, deriveAuditEventId, resolveAudience } from '@qmd-team-intent-kb/common';
+import {
+  AUDIENCE_RANK,
+  computeContentHash,
+  deriveAuditEventId,
+  resolveAudience,
+} from '@qmd-team-intent-kb/common';
 import type { HoldDecision } from '@qmd-team-intent-kb/policy-engine';
-import { AuditEvent as AuditEventSchema } from '@qmd-team-intent-kb/schema';
+import { AuditEvent as AuditEventSchema, IsoDatetime } from '@qmd-team-intent-kb/schema';
 import type {
   AuditEvent,
   Author,
@@ -48,6 +54,13 @@ import type {
   CandidateRepository,
   MemoryRepository,
 } from '@qmd-team-intent-kb/store';
+
+import {
+  finalEscalationReceipt,
+  storedHoldCandidate,
+  holdEscalationDigest,
+  requireHoldConnection,
+} from './escalation-receipts.js';
 
 /** The candidate status a hold uses: the existing "awaiting a human" marker. */
 export const HOLD_STATUS: CandidateStatus = 'quarantined';
@@ -517,47 +530,80 @@ export function writeHoldResolved(
   now: string,
 ): string {
   const auditEventId = deriveAuditEventId(hold.candidateId, 'hold_resolved');
-  auditRepo.insert(
-    AuditEventSchema.parse({
-      // Content-derived: a hold is resolved exactly once.
-      id: auditEventId,
-      action: 'hold_resolved',
-      memoryId: hold.candidateId,
-      tenantId: hold.tenantId,
-      actor,
-      reason,
-      details: {
-        candidateId: hold.candidateId,
-        holdEventId: hold.holdEventId,
-        resolution,
-        declaredAudience: hold.declaredAudience,
-        recommendedAudience: hold.recommendedAudience,
-        ...details,
-      },
-      timestamp: now,
-    }),
-  );
+  const event = AuditEventSchema.parse({
+    // Content-derived: a hold is resolved exactly once.
+    id: auditEventId,
+    action: 'hold_resolved',
+    memoryId: hold.candidateId,
+    tenantId: hold.tenantId,
+    actor,
+    reason,
+    details: {
+      candidateId: hold.candidateId,
+      holdEventId: hold.holdEventId,
+      resolution,
+      declaredAudience: hold.declaredAudience,
+      recommendedAudience: hold.recommendedAudience,
+      ...details,
+    },
+    timestamp: now,
+  });
+  auditRepo.insert(event);
+  const stored = auditRepo
+    .findByMemoryAndTenant(hold.candidateId, hold.tenantId)
+    .find((item) => item.id === auditEventId);
+  if (!isDeepStrictEqual(stored, event)) throw new Error('Hold resolution receipt changed');
   return auditEventId;
 }
 
 /**
  * Close one expired hold to the SAFE DEFAULT: the candidate is stamped
  * `rejected` (never promoted, never deleted) with an `expired` receipt, in one
- * transaction. The caller has already established that the hold is expired.
+ * transaction. Recheck expiry and current release advice under the write lock.
+ * Return null when a completed final escalation attempt is still required.
  */
-export function expireHold(hold: ActiveHold, repos: HoldRepos, now: string): string {
+export function expireHold(hold: ActiveHold, repos: HoldRepos, now: string): string | null {
+  IsoDatetime.parse(now);
+  requireHoldConnection(repos);
   return repos.memoryRepo.connection
-    .transaction((): string => {
-      repos.candidateRepo.updateStatus(hold.candidateId, 'rejected', hold.tenantId);
-      return writeHoldResolved(
-        hold,
+    .transaction((): string | null => {
+      const current = findActiveHold(hold.candidateId, hold.tenantId, repos, now);
+      if (!current || !current.expired) throw new Error('Hold is not currently expired');
+      const finalReceipt = finalEscalationReceipt(current, repos, now);
+      const releases = current.recommendations
+        .filter((item) => item.verdict === 'release')
+        .map((item) => item.auditEventId);
+      if (releases.length > 0 && finalReceipt === null) return null;
+      const candidate = repos.candidateRepo.findById(current.candidateId)!;
+      const snapshotDigest = holdEscalationDigest(current, repos);
+      const before = storedHoldCandidate(current, repos);
+      repos.candidateRepo.updateStatus(current.candidateId, 'rejected', current.tenantId);
+      const id = writeHoldResolved(
+        current,
         'expired',
         HOLD_EXPIRY_ACTOR,
-        `Hold expired unresolved at ${hold.expiresAt}: not promoted`,
-        { expiresAt: hold.expiresAt },
+        `Hold expired unresolved at ${current.expiresAt}: not promoted`,
+        {
+          expiresAt: current.expiresAt,
+          candidateSnapshotDigest: snapshotDigest,
+          contentDigest: computeContentHash(candidate.content),
+          unreleasedReleaseRecommendationIds: releases,
+          finalEscalationReceiptId: finalReceipt,
+        },
         repos.auditRepo,
         now,
       );
+      if (
+        !isDeepStrictEqual(storedHoldCandidate(current, repos), {
+          ...before,
+          status: 'rejected',
+        }) ||
+        !repos.auditRepo
+          .findByMemoryAndTenant(current.candidateId, current.tenantId)
+          .some((event) => event.id === id)
+      )
+        throw new Error('Expiry state or receipt missing');
+      return id;
     })
     .immediate();
 }
@@ -566,8 +612,10 @@ export function expireHold(hold: ActiveHold, repos: HoldRepos, now: string): str
 export interface ExpiredHold {
   candidateId: string;
   expiresAt: string;
-  /** The `hold_resolved` receipt's id; null in dry-run. */
+  /** The `hold_resolved` receipt's id; null in dry-run or deferred closure. */
   auditEventId: string | null;
+  /** Remains quarantined and non-releasable until a final attempt is recorded. */
+  escalationRequired?: true;
 }
 
 /**
@@ -581,11 +629,20 @@ export function expireHolds(
   options: { now?: string; dryRun?: boolean } = {},
 ): ExpiredHold[] {
   const now = options.now ?? new Date().toISOString();
+  IsoDatetime.parse(now);
   return listActiveHolds(tenantId, repos, now)
     .filter((hold) => hold.expired)
-    .map((hold) => ({
-      candidateId: hold.candidateId,
-      expiresAt: hold.expiresAt,
-      auditEventId: options.dryRun === true ? null : expireHold(hold, repos, now),
-    }));
+    .map((hold) => {
+      const blocked =
+        hold.recommendations.some((item) => item.verdict === 'release') &&
+        finalEscalationReceipt(hold, repos, now) === null;
+      const auditEventId = options.dryRun === true || blocked ? null : expireHold(hold, repos, now);
+      const escalationRequired = blocked || (options.dryRun !== true && auditEventId === null);
+      return {
+        candidateId: hold.candidateId,
+        expiresAt: hold.expiresAt,
+        auditEventId,
+        ...(escalationRequired ? { escalationRequired: true as const } : {}),
+      };
+    });
 }

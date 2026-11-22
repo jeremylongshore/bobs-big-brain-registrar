@@ -232,3 +232,10 @@ export type { ReviewedStalenessManifest } from './staleness/reviewed-staleness-m
 export { ESTATE_STALENESS_RULES } from './staleness/staleness-rules.js';
 export type { StalenessRule } from './staleness/staleness-rules.js';
 export { inspectRecoveryStore } from './recovery/filesystem-boundary.js';
+
+export {
+  planHoldEscalations,
+  beginHoldEscalation,
+  completeHoldEscalation,
+} from './hold/escalation.js';
+export type { HoldEscalationPlan, HoldEscalationCompletion } from './hold/escalation.js';
